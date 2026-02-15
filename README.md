@@ -70,8 +70,18 @@ nr-learn/
     - （任意）`python scripts/run_backtest.py --config configs/model.yaml --predictions-file artifacts/predictions/predictions_20210731.csv`
     - レポートJSON: `artifacts/reports/backtest_YYYYMMDD.json`
     - 可視化PNG: `artifacts/reports/backtest_YYYYMMDD.png`
-6. 実データで重い場合
+6. ダッシュボード（Notebookが止まるときのCLI代替）
+    - `python scripts/run_dashboard.py`
+    - 概要JSON: `artifacts/reports/dashboard/dashboard_summary_YYYYMMDD.json`
+    - 可視化PNG: `artifacts/reports/dashboard/dashboard_YYYYMMDD.png`
+    - Top20 CSV: `artifacts/reports/dashboard/dashboard_top20_YYYYMMDD.csv`
+7. 実データで重い場合
     - `configs/model.yaml` の `training.max_train_rows` / `training.max_valid_rows` で学習件数を調整
+
+## Notebookトラブルシュート
+- `dashboard.ipynb` が止まる場合は、まずカーネルを `.venv` に再選択して先頭セルから順に実行
+- それでも止まる場合は Notebook を使わず `python scripts/run_dashboard.py` で同等の集計・可視化を生成
+- CLI実行はすべてエラーハンドリング済みで、失敗時は原因を標準出力に表示
 
 ## 注意
 - これは投資助言ではなく、機械学習の学習プロジェクトです。

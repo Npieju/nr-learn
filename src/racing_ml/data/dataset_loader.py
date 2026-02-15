@@ -69,9 +69,10 @@ def _ensure_minimum_columns(frame: pd.DataFrame) -> pd.DataFrame:
 
     frame["date"] = pd.to_datetime(frame["date"], errors="coerce")
     frame = frame.dropna(subset=["date"])
+    date_series = pd.to_datetime(frame["date"], errors="coerce")
 
     if "race_id" not in frame.columns:
-        frame["race_id"] = frame["date"].dt.strftime("%Y%m%d") + "_" + frame.index.astype(str)
+        frame["race_id"] = date_series.dt.strftime("%Y%m%d") + "_" + frame.index.astype(str)
 
     if "horse_id" not in frame.columns:
         if "horse_name" in frame.columns:

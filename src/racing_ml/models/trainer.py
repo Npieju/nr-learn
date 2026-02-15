@@ -33,13 +33,12 @@ def _build_model(model_name: str, params: dict) -> object:
         except Exception:
             pass
 
-    fallback_params = {
-        "n_estimators": 300,
-        "max_depth": 10,
-        "n_jobs": -1,
-        "random_state": 42,
-    }
-    return RandomForestClassifier(**fallback_params)
+    return RandomForestClassifier(
+        n_estimators=300,
+        max_depth=10,
+        n_jobs=-1,
+        random_state=42,
+    )
 
 
 def _time_split(
