@@ -1,0 +1,11 @@
+dataset:
+  source_dataset: "takamotoki/jra-horse-racing-dataset"
+  raw_dir: "data/raw"
+  interim_dir: "data/interim"
+  processed_dir: "data/processed"
+
+split:
+  method: "time_series"
+  train_end: "2022-12-31"
+  valid_start: "2023-01-01"
+  valid_end: "2023-12-31"
