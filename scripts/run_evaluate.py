@@ -307,14 +307,14 @@ def optimize_roi_strategy(
     valid_df["market_prob"] = compute_market_prob(valid_df, odds_col=odds_col)
 
     if mode == "full":
-        blend_candidates = [round(x, 2) for x in np.linspace(0.1, 0.9, 9)]
-        edge_candidates = [0.01, 0.02, 0.03, 0.05]
-        min_prob_candidates = [0.03, 0.05, 0.08]
-        kelly_frac_candidates = [0.25, 0.5, 0.75]
+        blend_candidates = [0.2, 0.4, 0.6, 0.8]
+        edge_candidates = [0.01, 0.03, 0.05]
+        min_prob_candidates = [0.03, 0.05]
+        kelly_frac_candidates = [0.25, 0.5]
         max_frac_candidates = [0.02, 0.05]
-        odds_min_candidates = [1.0, 1.5]
-        odds_max_candidates = [15.0, 25.0, 40.0, 80.0]
-        top_k_candidates = [1, 2, 3]
+        odds_min_candidates = [1.0]
+        odds_max_candidates = [25.0, 40.0, 80.0]
+        top_k_candidates = [1, 2]
         min_ev_candidates = [1.0, 1.05, 1.10]
     else:
         blend_candidates = [0.2, 0.4, 0.6]
