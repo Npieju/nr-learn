@@ -6,10 +6,10 @@ model:
   params:
     objective: "binary"
     device_type: "cuda"
-    learning_rate: 0.03
-    num_leaves: 64
-    min_data_in_leaf: 50
-    feature_fraction: 0.8
+    learning_rate: 0.02
+    num_leaves: 96
+    min_data_in_leaf: 40
+    feature_fraction: 0.85
     bagging_fraction: 0.8
     bagging_freq: 1
     n_estimators: 2000
