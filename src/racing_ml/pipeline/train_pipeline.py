@@ -26,6 +26,7 @@ def run_train(model_config_path: str, data_config_path: str, feature_config_path
     feature_columns = features_cfg.get("base", []) + features_cfg.get("history", [])
 
     label_column = model_config.get("label", "is_win")
+    task = str(model_config.get("task", "classification"))
     model_cfg = model_config.get("model", {})
     output_cfg = model_config.get("output", {})
     model_name = model_cfg.get("name", "lightgbm")
@@ -36,6 +37,7 @@ def run_train(model_config_path: str, data_config_path: str, feature_config_path
     early_stopping_rounds = training_cfg.get("early_stopping_rounds")
 
     print(f"[train] model: {model_name}")
+    print(f"[train] task: {task}")
     print(f"[train] device_type: {device_type}")
     print(f"[train] allow_fallback_model: {allow_fallback}")
     print(f"[train] early_stopping_rounds: {early_stopping_rounds}")
@@ -44,6 +46,7 @@ def run_train(model_config_path: str, data_config_path: str, feature_config_path
         frame=frame,
         feature_columns=feature_columns,
         label_column=label_column,
+        task=task,
         model_name=model_name,
         model_params=model_params,
         train_end=split_cfg.get("train_end", "2022-12-31"),
@@ -55,6 +58,8 @@ def run_train(model_config_path: str, data_config_path: str, feature_config_path
         allow_fallback=allow_fallback,
         model_dir=output_cfg.get("model_dir", "artifacts/models"),
         report_dir=output_cfg.get("report_dir", "artifacts/reports"),
+        model_file_name=output_cfg.get("model_file", "baseline_model.joblib"),
+        report_file_name=output_cfg.get("report_file", "train_metrics.json"),
     )
 
     print(f"[train] model saved: {result.model_path}")

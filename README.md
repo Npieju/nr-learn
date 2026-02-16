@@ -58,6 +58,7 @@ nr-learn/
     - Kaggle認証が未設定 / データ取得失敗時は、学習確認用の `data/raw/sample_races.csv` を自動生成
 2. 学習
     - `python scripts/run_train.py --config configs/model.yaml --data-config configs/data.yaml --feature-config configs/features.yaml`
+    - （Ranker）`python scripts/run_train.py --config configs/model_ranker.yaml --data-config configs/data.yaml --feature-config configs/features.yaml`
 3. 生成物確認
     - モデル: `artifacts/models/baseline_model.joblib`
     - レポート: `artifacts/reports/train_metrics.json`
@@ -79,12 +80,15 @@ nr-learn/
             - `ev_top1_roi`: `score × odds` が最大の馬を毎レース購入
             - `ev_threshold_1_0_roi`: 期待値1.0以上のみ購入
             - `ev_threshold_1_2_roi`: 期待値1.2以上のみ購入
-7. ダッシュボード（Notebookが止まるときのCLI代替）
+7. ベースライン vs Ranker 比較（同一データでA/B）
+    - `python scripts/run_ab_compare.py --base-config configs/model.yaml --challenger-config configs/model_ranker.yaml --max-rows 30000`
+    - 比較サマリ: `artifacts/reports/ab_compare_summary.json`
+8. ダッシュボード（Notebookが止まるときのCLI代替）
     - `python scripts/run_dashboard.py`
     - 概要JSON: `artifacts/reports/dashboard/dashboard_summary_YYYYMMDD.json`
     - 可視化PNG: `artifacts/reports/dashboard/dashboard_YYYYMMDD.png`
     - Top20 CSV: `artifacts/reports/dashboard/dashboard_top20_YYYYMMDD.csv`
-8. 実データで重い場合
+9. 実データで重い場合
     - `configs/model.yaml` の `training.max_train_rows` / `training.max_valid_rows` で学習件数を調整
 
 ## Notebookトラブルシュート

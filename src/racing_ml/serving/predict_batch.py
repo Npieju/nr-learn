@@ -4,11 +4,20 @@ from pathlib import Path
 
 import joblib
 import matplotlib.pyplot as plt
+import numpy as np
 import pandas as pd
 
 from racing_ml.common.config import load_yaml
 from racing_ml.data.dataset_loader import load_training_table
 from racing_ml.features.builder import build_features
+
+
+def _predict_score(model: object, frame: pd.DataFrame) -> np.ndarray:
+    if hasattr(model, "predict_proba"):
+        return model.predict_proba(frame)[:, 1]
+    if hasattr(model, "predict"):
+        return model.predict(frame)
+    raise RuntimeError("Loaded model does not support predict/predict_proba")
 
 
 def _resolve_target_date(frame: pd.DataFrame, race_date: str | None) -> pd.Timestamp:
@@ -81,12 +90,12 @@ def run_predict(
         raise ValueError("No feature columns available for prediction")
 
     model_dir = Path(model_config.get("output", {}).get("model_dir", "artifacts/models"))
-    model_path = model_dir / "baseline_model.joblib"
+    model_path = model_dir / model_config.get("output", {}).get("model_file", "baseline_model.joblib")
     if not model_path.exists():
         raise FileNotFoundError(f"Model file not found: {model_path}")
 
     model = joblib.load(model_path)
-    pred_frame["score"] = model.predict_proba(pred_frame[available_features])[:, 1]
+    pred_frame["score"] = _predict_score(model, pred_frame[available_features])
     pred_frame["pred_rank"] = (
         pred_frame.groupby("race_id")["score"]
         .rank(method="first", ascending=False)

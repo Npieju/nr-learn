@@ -21,6 +21,14 @@ from racing_ml.data.dataset_loader import load_training_table
 from racing_ml.features.builder import build_features
 
 
+def predict_score(model: object, frame: pd.DataFrame) -> np.ndarray:
+    if hasattr(model, "predict_proba"):
+        return model.predict_proba(frame)[:, 1]
+    if hasattr(model, "predict"):
+        return np.asarray(model.predict(frame), dtype=float)
+    raise RuntimeError("Loaded model does not support predict/predict_proba")
+
+
 def topk_hit_rate(frame: pd.DataFrame, k: int) -> float:
     hits: list[int] = []
     for _, group in frame.groupby("race_id"):
@@ -594,12 +602,13 @@ def main() -> int:
         if label_col not in frame.columns:
             raise RuntimeError(f"Missing label column: {label_col}")
 
-        model_path = ROOT / model_cfg.get("output", {}).get("model_dir", "artifacts/models") / "baseline_model.joblib"
+        output_cfg = model_cfg.get("output", {})
+        model_path = ROOT / output_cfg.get("model_dir", "artifacts/models") / output_cfg.get("model_file", "baseline_model.joblib")
         model = joblib.load(model_path)
 
         x_eval = frame[available_features]
         y_eval = frame[label_col].astype(int).to_numpy()
-        y_score = model.predict_proba(x_eval)[:, 1]
+        y_score = predict_score(model, x_eval)
 
         pred = frame.copy()
         pred["score"] = y_score
@@ -613,12 +622,14 @@ def main() -> int:
 
         base_metrics = evaluate_frame(pred, score_col="score", odds_col=odds_col)
 
+        score_is_prob = bool(np.nanmin(y_score) >= 0.0 and np.nanmax(y_score) <= 1.0)
         summary = {
             "n_rows": int(len(pred)),
             "n_races": int(pred["race_id"].nunique()),
             "n_dates": int(pred["date"].nunique()) if "date" in pred.columns else None,
             "auc": float(roc_auc_score(y_eval, y_score)) if len(np.unique(y_eval)) > 1 else None,
-            "logloss": float(log_loss(y_eval, np.clip(y_score, 1e-12, 1 - 1e-12), labels=[0, 1])),
+            "logloss": float(log_loss(y_eval, np.clip(y_score, 1e-12, 1 - 1e-12), labels=[0, 1])) if score_is_prob else None,
+            "score_is_probability": score_is_prob,
             **base_metrics,
         }
 

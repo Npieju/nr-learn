@@ -10,7 +10,7 @@ import pandas as pd
 from sklearn.compose import ColumnTransformer
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.impute import SimpleImputer
-from sklearn.metrics import log_loss, roc_auc_score
+from sklearn.metrics import log_loss, ndcg_score, roc_auc_score
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import OneHotEncoder
 
@@ -31,8 +31,8 @@ def _is_gpu_requested(model_name: str, params: dict) -> bool:
     return device_type in {"gpu", "cuda"}
 
 
-def _validate_lightgbm_gpu_runtime(params: dict) -> None:
-    from lightgbm import LGBMClassifier
+def _validate_lightgbm_gpu_runtime(params: dict, task: str) -> None:
+    from lightgbm import LGBMClassifier, LGBMRanker
     device_type = str(params.get("device_type", "gpu")).strip().lower() or "gpu"
 
     test_params = {k: v for k, v in params.items() if k != "objective"}
@@ -55,8 +55,12 @@ def _validate_lightgbm_gpu_runtime(params: dict) -> None:
     y = np.array([0, 1, 0, 1, 0, 1], dtype=np.int32)
 
     try:
-        model = LGBMClassifier(**test_params)
-        model.fit(x, y)
+        if task == "ranking":
+            model = LGBMRanker(**test_params)
+            model.fit(x, y, group=[3, 3])
+        else:
+            model = LGBMClassifier(**test_params)
+            model.fit(x, y)
     except Exception as error:
         if device_type == "cuda":
             raise RuntimeError(
@@ -77,12 +81,14 @@ def _validate_lightgbm_gpu_runtime(params: dict) -> None:
         ) from error
 
 
-def _build_model(model_name: str, params: dict) -> object:
+def _build_model(model_name: str, params: dict, task: str) -> object:
     if model_name.lower() == "lightgbm":
         try:
-            from lightgbm import LGBMClassifier
+            from lightgbm import LGBMClassifier, LGBMRanker
 
             clean_params = {k: v for k, v in params.items() if k != "objective"}
+            if task == "ranking":
+                return LGBMRanker(**clean_params)
             return LGBMClassifier(**clean_params)
         except Exception as error:
             raise RuntimeError(f"Failed to initialize LightGBM: {error}") from error
@@ -90,9 +96,9 @@ def _build_model(model_name: str, params: dict) -> object:
     raise ValueError(f"Unsupported model name: {model_name}")
 
 
-def _build_model_with_optional_fallback(model_name: str, params: dict, allow_fallback: bool) -> object:
+def _build_model_with_optional_fallback(model_name: str, params: dict, task: str, allow_fallback: bool) -> object:
     try:
-        return _build_model(model_name, params)
+        return _build_model(model_name, params, task=task)
     except Exception:
         if not allow_fallback:
             raise
@@ -146,10 +152,40 @@ def _safe_logloss(y_true: np.ndarray, y_pred_proba: np.ndarray) -> float:
     return float(log_loss(y_true, y_pred_proba, labels=[0, 1]))
 
 
+def _group_sizes(group_ids: pd.Series) -> list[int]:
+    return [int(size) for size in group_ids.groupby(group_ids).size().tolist()]
+
+
+def _mean_ndcg_at_k(y_true: np.ndarray, y_score: np.ndarray, group_ids: pd.Series, k: int) -> float:
+    values: list[float] = []
+    for group_id in pd.unique(group_ids):
+        mask = (group_ids == group_id).to_numpy()
+        truth = y_true[mask]
+        pred = y_score[mask]
+        if len(truth) <= 1:
+            continue
+        values.append(float(ndcg_score([truth], [pred], k=k)))
+    return float(np.mean(values)) if values else float("nan")
+
+
+def _top1_hit_rate_by_group(y_true: np.ndarray, y_score: np.ndarray, group_ids: pd.Series) -> float:
+    hits: list[int] = []
+    for group_id in pd.unique(group_ids):
+        mask = (group_ids == group_id).to_numpy()
+        truth = y_true[mask]
+        pred = y_score[mask]
+        if len(pred) == 0:
+            continue
+        top_index = int(np.argmax(pred))
+        hits.append(int(truth[top_index] >= 1))
+    return float(np.mean(hits)) if hits else float("nan")
+
+
 def train_and_evaluate(
     frame: pd.DataFrame,
     feature_columns: list[str],
     label_column: str,
+    task: str,
     model_name: str,
     model_params: dict,
     train_end: str,
@@ -161,6 +197,8 @@ def train_and_evaluate(
     allow_fallback: bool,
     model_dir: str,
     report_dir: str,
+    model_file_name: str,
+    report_file_name: str,
 ) -> TrainResult:
     available_features = [column for column in feature_columns if column in frame.columns]
     if not available_features:
@@ -169,8 +207,12 @@ def train_and_evaluate(
     if label_column not in frame.columns:
         raise ValueError(f"Label column '{label_column}' not found")
 
+    task = str(task).strip().lower() or "classification"
+    if task not in {"classification", "ranking"}:
+        raise ValueError(f"Unsupported task: {task}")
+
     if _is_gpu_requested(model_name, model_params):
-        _validate_lightgbm_gpu_runtime(model_params)
+        _validate_lightgbm_gpu_runtime(model_params, task=task)
 
     train, valid = _time_split(frame, train_end, valid_start, valid_end)
 
@@ -211,7 +253,12 @@ def train_and_evaluate(
         ]
     )
 
-    model = _build_model_with_optional_fallback(model_name, model_params, allow_fallback=allow_fallback)
+    model = _build_model_with_optional_fallback(
+        model_name,
+        model_params,
+        task=task,
+        allow_fallback=allow_fallback,
+    )
 
     try:
         preprocessor.fit(x_train)
@@ -228,13 +275,26 @@ def train_and_evaluate(
             callbacks.insert(0, early_stopping(stopping_rounds=int(early_stopping_rounds), verbose=False))
 
         try:
-            model.fit(
-                x_train_processed,
-                y_train,
-                eval_set=[(x_valid_processed, y_valid)],
-                eval_metric="auc",
-                callbacks=callbacks,
-            )
+            if task == "ranking":
+                train_groups = _group_sizes(train["race_id"])
+                valid_groups = _group_sizes(valid["race_id"])
+                model.fit(
+                    x_train_processed,
+                    y_train,
+                    group=train_groups,
+                    eval_set=[(x_valid_processed, y_valid)],
+                    eval_group=[valid_groups],
+                    eval_metric="ndcg",
+                    callbacks=callbacks,
+                )
+            else:
+                model.fit(
+                    x_train_processed,
+                    y_train,
+                    eval_set=[(x_valid_processed, y_valid)],
+                    eval_metric="auc",
+                    callbacks=callbacks,
+                )
         except Exception as error:
             raise RuntimeError(
                 "LightGBM training failed. If using GPU, verify CUDA/OpenCL runtime and container GPU access. "
@@ -251,18 +311,35 @@ def train_and_evaluate(
 
     pipeline = Pipeline(steps=[("prep", preprocessor), ("model", model)])
 
-    try:
-        valid_proba = model.predict_proba(x_valid_processed)[:, 1]
-    except Exception as error:
-        raise RuntimeError(f"Validation prediction failed: {error}") from error
+    if task == "ranking":
+        try:
+            valid_score = np.asarray(model.predict(x_valid_processed), dtype=float)
+        except Exception as error:
+            raise RuntimeError(f"Validation ranking prediction failed: {error}") from error
 
-    metrics = {
-        "auc": _safe_auc(y_valid, valid_proba),
-        "logloss": _safe_logloss(y_valid, valid_proba),
-        "valid_samples": float(len(y_valid)),
-        "positive_rate": float(np.mean(y_valid)),
-        "gpu_enabled": float(_is_gpu_requested(model_name, model_params)),
-    }
+        valid_groups = valid["race_id"].astype(str)
+        metrics = {
+            "ndcg_at_1": _mean_ndcg_at_k(y_valid, valid_score, valid_groups, k=1),
+            "ndcg_at_3": _mean_ndcg_at_k(y_valid, valid_score, valid_groups, k=3),
+            "ndcg_at_5": _mean_ndcg_at_k(y_valid, valid_score, valid_groups, k=5),
+            "top1_hit_rate": _top1_hit_rate_by_group(y_valid, valid_score, valid_groups),
+            "valid_samples": float(len(y_valid)),
+            "positive_rate": float(np.mean(y_valid)),
+            "gpu_enabled": float(_is_gpu_requested(model_name, model_params)),
+        }
+    else:
+        try:
+            valid_proba = model.predict_proba(x_valid_processed)[:, 1]
+        except Exception as error:
+            raise RuntimeError(f"Validation prediction failed: {error}") from error
+
+        metrics = {
+            "auc": _safe_auc(y_valid, valid_proba),
+            "logloss": _safe_logloss(y_valid, valid_proba),
+            "valid_samples": float(len(y_valid)),
+            "positive_rate": float(np.mean(y_valid)),
+            "gpu_enabled": float(_is_gpu_requested(model_name, model_params)),
+        }
 
     if hasattr(model, "best_iteration_") and getattr(model, "best_iteration_", None) is not None:
         metrics["best_iteration"] = float(getattr(model, "best_iteration_"))
@@ -272,8 +349,8 @@ def train_and_evaluate(
     report_path = Path(report_dir)
     report_path.mkdir(parents=True, exist_ok=True)
 
-    model_file = model_path / "baseline_model.joblib"
-    report_file = report_path / "train_metrics.json"
+    model_file = model_path / model_file_name
+    report_file = report_path / report_file_name
 
     joblib.dump(pipeline, model_file)
     with report_file.open("w", encoding="utf-8") as file:
