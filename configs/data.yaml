@@ -6,6 +6,6 @@ dataset:
 
 split:
   method: "time_series"
-  train_end: "2022-12-31"
-  valid_start: "2023-01-01"
-  valid_end: "2023-12-31"
+  train_end: "2019-12-31"
+  valid_start: "2020-01-01"
+  valid_end: "2021-07-31"
