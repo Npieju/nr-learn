@@ -22,7 +22,7 @@ def objective_score(metrics: dict[str, float]) -> float:
     return (0.80 * rank1) + (0.15 * rank2) + (0.05 * rank3)
 
 
-def build_candidates(base_params: dict) -> list[dict]:
+def build_model_candidates(base_params: dict) -> list[dict]:
     candidates = [
         {},
         {"learning_rate": 0.02, "num_leaves": 96, "min_data_in_leaf": 40, "feature_fraction": 0.85},
@@ -45,12 +45,35 @@ def build_candidates(base_params: dict) -> list[dict]:
     return merged
 
 
+def build_row_profiles(training_cfg: dict) -> list[dict[str, int]]:
+    base_train = int(training_cfg.get("max_train_rows", 300000) or 300000)
+    base_valid = int(training_cfg.get("max_valid_rows", 100000) or 100000)
+
+    profiles = [
+        {"max_train_rows": base_train, "max_valid_rows": base_valid},
+        {"max_train_rows": max(200000, int(base_train * 0.75)), "max_valid_rows": max(80000, int(base_valid * 0.8))},
+        {"max_train_rows": min(700000, int(base_train * 1.5)), "max_valid_rows": min(220000, int(base_valid * 1.6))},
+    ]
+
+    unique_profiles: list[dict[str, int]] = []
+    seen: set[tuple[int, int]] = set()
+    for profile in profiles:
+        key = (int(profile["max_train_rows"]), int(profile["max_valid_rows"]))
+        if key in seen:
+            continue
+        seen.add(key)
+        unique_profiles.append(profile)
+    return unique_profiles
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--config", default="configs/model_top3.yaml")
     parser.add_argument("--data-config", default="configs/data.yaml")
     parser.add_argument("--feature-config", default="configs/features.yaml")
-    parser.add_argument("--max-candidates", type=int, default=6)
+    parser.add_argument("--max-candidates", type=int, default=8)
+    parser.add_argument("--max-row-profiles", type=int, default=3)
+    parser.add_argument("--max-trials", type=int, default=16)
     args = parser.parse_args()
 
     model_cfg = load_yaml(ROOT / args.config)
@@ -71,16 +94,26 @@ def main() -> int:
     output_cfg = model_cfg.get("output", {})
     model_name = model_cfg.get("model", {}).get("name", "lightgbm")
 
-    candidates = build_candidates(base_params)[: max(1, args.max_candidates)]
+    model_candidates = build_model_candidates(base_params)[: max(1, args.max_candidates)]
+    row_profiles = build_row_profiles(training_cfg)[: max(1, args.max_row_profiles)]
+
+    trial_plan: list[tuple[dict, dict[str, int]]] = []
+    for model_candidate in model_candidates:
+        for row_profile in row_profiles:
+            trial_plan.append((model_candidate, row_profile))
+    trial_plan = trial_plan[: max(1, args.max_trials)]
 
     run_rows: list[dict] = []
     best_row: dict | None = None
     best_score = -1.0
 
-    for idx, params in enumerate(candidates, start=1):
+    for idx, (params, row_profile) in enumerate(trial_plan, start=1):
         model_file = f"tune_top3_{idx}.joblib"
         report_file = f"tune_top3_{idx}.json"
-        print(f"[tune] candidate {idx}/{len(candidates)}: {params}")
+        print(
+            f"[tune] candidate {idx}/{len(trial_plan)}: "
+            f"params={params}, rows={row_profile}"
+        )
 
         result = train_and_evaluate(
             frame=frame,
@@ -92,8 +125,8 @@ def main() -> int:
             train_end=split_cfg.get("train_end", "2022-12-31"),
             valid_start=split_cfg.get("valid_start", "2023-01-01"),
             valid_end=split_cfg.get("valid_end", "2023-12-31"),
-            max_train_rows=training_cfg.get("max_train_rows", 300000),
-            max_valid_rows=training_cfg.get("max_valid_rows", 100000),
+            max_train_rows=int(row_profile["max_train_rows"]),
+            max_valid_rows=int(row_profile["max_valid_rows"]),
             early_stopping_rounds=training_cfg.get("early_stopping_rounds", 120),
             allow_fallback=bool(training_cfg.get("allow_fallback_model", False)),
             model_dir=output_cfg.get("model_dir", "artifacts/models"),
@@ -107,6 +140,7 @@ def main() -> int:
             "candidate": idx,
             "score": score,
             "params": params,
+            "training": row_profile,
             "metrics": result.metrics,
             "model_file": model_file,
             "report_file": report_file,
@@ -124,6 +158,9 @@ def main() -> int:
     summary = {
         "base_config": args.config,
         "objective": "0.80*auc_rank1 + 0.15*auc_rank2 + 0.05*auc_rank3",
+        "n_model_candidates": len(model_candidates),
+        "n_row_profiles": len(row_profiles),
+        "n_trials": len(trial_plan),
         "n_candidates": len(run_rows),
         "best": best_row,
         "runs": run_rows,
