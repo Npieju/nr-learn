@@ -1,0 +1,26 @@
+{
+  "name": "nr-learn",
+  "build": {
+    "dockerfile": "Dockerfile",
+    "context": ".."
+  },
+  "runArgs": [
+    "--gpus=all"
+  ],
+  "mounts": [
+    "source=/usr/lib/wsl,target=/usr/lib/wsl,type=bind,readonly",
+    "source=nr-learn-pip-cache,target=/home/vscode/.cache/pip,type=volume"
+  ],
+  "containerEnv": {
+    "NVIDIA_VISIBLE_DEVICES": "all",
+    "NVIDIA_DRIVER_CAPABILITIES": "all",
+    "LD_LIBRARY_PATH": "/usr/lib/wsl/lib:/usr/lib/wsl/drivers:/usr/local/cuda/lib64"
+  },
+  "customizations": {
+    "vscode": {
+      "settings": {
+        "python.defaultInterpreterPath": "/opt/venv/bin/python"
+      }
+    }
+  }
+}

@@ -70,18 +70,69 @@ nr-learn/
     - （任意）`python scripts/run_backtest.py --config configs/model.yaml --predictions-file artifacts/predictions/predictions_20210731.csv`
     - レポートJSON: `artifacts/reports/backtest_YYYYMMDD.json`
     - 可視化PNG: `artifacts/reports/backtest_YYYYMMDD.png`
-6. ダッシュボード（Notebookが止まるときのCLI代替）
+6. モデル評価（全体＋日別）
+    - `python scripts/run_evaluate.py --config configs/model.yaml --data-config configs/data.yaml --feature-config configs/features.yaml --max-rows 80000`
+    - 全体指標: `artifacts/reports/evaluation_summary.json`
+    - 日別指標: `artifacts/reports/evaluation_by_date.csv`
+        - 回収率指標（主目的）:
+            - `top1_roi`: スコア1位を毎レース購入
+            - `ev_top1_roi`: `score × odds` が最大の馬を毎レース購入
+            - `ev_threshold_1_0_roi`: 期待値1.0以上のみ購入
+            - `ev_threshold_1_2_roi`: 期待値1.2以上のみ購入
+7. ダッシュボード（Notebookが止まるときのCLI代替）
     - `python scripts/run_dashboard.py`
     - 概要JSON: `artifacts/reports/dashboard/dashboard_summary_YYYYMMDD.json`
     - 可視化PNG: `artifacts/reports/dashboard/dashboard_YYYYMMDD.png`
     - Top20 CSV: `artifacts/reports/dashboard/dashboard_top20_YYYYMMDD.csv`
-7. 実データで重い場合
+8. 実データで重い場合
     - `configs/model.yaml` の `training.max_train_rows` / `training.max_valid_rows` で学習件数を調整
 
 ## Notebookトラブルシュート
 - `dashboard.ipynb` が止まる場合は、まずカーネルを `.venv` に再選択して先頭セルから順に実行
 - それでも止まる場合は Notebook を使わず `python scripts/run_dashboard.py` で同等の集計・可視化を生成
 - CLI実行はすべてエラーハンドリング済みで、失敗時は原因を標準出力に表示
+
+## LightGBM / GPUメモ
+- 現在は `configs/model.yaml` の `training.allow_fallback_model: false` により、LightGBMが使えない場合は明示的に失敗します（精度劣化フォールバック防止）。
+- Docker Desktop + WSL2 を使っている場合は、WSL内に `nvidia-container-toolkit` を別途入れなくてもGPU利用できます（Windows側ドライバ + Docker DesktopのWSL連携前提）。
+- LinuxネイティブのDocker Engineを使う場合のみ、host側で `nvidia-container-toolkit` が必要です。
+- コンテナ内で `nvidia-smi` が見えない場合、コード側ではGPU利用できません。
+- このプロジェクトでは LightGBM の `device_type: "cuda"` を使用します。
+- Docker Desktop + WSL2 で `cuInit rc=500` が出る場合は、`/usr/lib/wsl` をコンテナにマウントして `LD_LIBRARY_PATH=/usr/lib/wsl/lib:/usr/lib/wsl/drivers:/usr/local/cuda/lib64` を設定します（`docker-compose.yml` に反映済み）。
+
+### LightGBMをCUDA有効で入れ直す（重要）
+- `pip install lightgbm` の標準wheelは、環境によってはCUDA無効ビルドです。
+- `CUDA Tree Learner was not enabled in this build` が出る場合は、`.venv` でソースビルドしてください。
+    - `CC=/usr/bin/gcc-13 CXX=/usr/bin/g++-13 CUDACXX=/usr/bin/nvcc /workspaces/nr-learn/.venv/bin/python -m pip install --force-reinstall --no-binary lightgbm lightgbm --config-settings=cmake.define.USE_CUDA=ON --config-settings=cmake.define.CMAKE_C_COMPILER=/usr/bin/gcc-13 --config-settings=cmake.define.CMAKE_CXX_COMPILER=/usr/bin/g++-13 --config-settings=cmake.define.CMAKE_CUDA_HOST_COMPILER=/usr/bin/g++-13`
+- 上記は CUDA 12.4 + GCC 13 の組み合わせを前提にしています（GCC 14 だと `nvcc` 側で失敗する場合があります）。
+
+### `nvidia-smi` は見えるのに学習でGPUが使えない場合
+- 症状例:
+    - `clinfo` が `Number of platforms 0`
+    - LightGBM(OpenCL) が `No OpenCL device found`
+    - CUDA初期化テストが `cuInit rc=500`
+- これはコンテナ設定だけではなく、WSL/Windows側のGPUコンピュート提供が不足している状態です。
+- 対応:
+    - Windows側NVIDIAドライバをWSL対応の最新版へ更新
+    - `wsl --update` 実行後に Windows 再起動
+    - Docker Desktop の WSL Integration / GPU利用設定を有効化
+    - `docker run --rm --gpus all nvidia/cuda:12.4.1-runtime-ubuntu22.04 nvidia-smi` を再確認
+- 補足: WSL側に `libnvidia-opencl.so` が存在しない環境では、LightGBM の OpenCL (`device_type: "gpu"`) は使用できません。
+
+### Docker(WSL)での権限トラブル回避
+- `docker-compose.yml` の `nr-learn-gpu` は `UID/GID` を引き継いで起動する設定です。
+- `UID` はbashのreadonly変数のため、起動時は `env UID=... GID=... docker compose ...` 形式を使います。
+- 以前に `root` 所有で生成されたファイルがあると `unable to write` になるため、最初に一度だけ所有者を戻します。
+    - `sudo chown -R $(id -u):$(id -g) artifacts data`
+- GPUコンテナ起動例:
+    - `DOCKER_BUILDKIT=1 COMPOSE_DOCKER_CLI_BUILD=1 env UID=$(id -u) GID=$(id -g) docker compose up -d --build nr-learn-gpu`
+    - `docker compose exec nr-learn-gpu nvidia-smi`
+
+### ビルド高速化（BuildKitキャッシュ）
+- `Dockerfile.gpu` は BuildKit cache mount（apt/pip）を使用しています。
+- 初回ビルド後は同一依存で再ビルドが高速化されます。
+- 例:
+    - `DOCKER_BUILDKIT=1 COMPOSE_DOCKER_CLI_BUILD=1 docker compose build nr-learn-gpu`
 
 ## 注意
 - これは投資助言ではなく、機械学習の学習プロジェクトです。
