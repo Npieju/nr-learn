@@ -31,11 +31,14 @@ def run_train(model_config_path: str, data_config_path: str, feature_config_path
     model_name = model_cfg.get("name", "lightgbm")
     model_params = model_cfg.get("params", {})
     device_type = str(model_params.get("device_type", "cpu")).strip().lower() or "cpu"
-    allow_fallback = bool(model_config.get("training", {}).get("allow_fallback_model", False))
+    training_cfg = model_config.get("training", {})
+    allow_fallback = bool(training_cfg.get("allow_fallback_model", False))
+    early_stopping_rounds = training_cfg.get("early_stopping_rounds")
 
     print(f"[train] model: {model_name}")
     print(f"[train] device_type: {device_type}")
     print(f"[train] allow_fallback_model: {allow_fallback}")
+    print(f"[train] early_stopping_rounds: {early_stopping_rounds}")
 
     result = train_and_evaluate(
         frame=frame,
@@ -46,8 +49,9 @@ def run_train(model_config_path: str, data_config_path: str, feature_config_path
         train_end=split_cfg.get("train_end", "2022-12-31"),
         valid_start=split_cfg.get("valid_start", "2023-01-01"),
         valid_end=split_cfg.get("valid_end", "2023-12-31"),
-        max_train_rows=model_config.get("training", {}).get("max_train_rows"),
-        max_valid_rows=model_config.get("training", {}).get("max_valid_rows"),
+        max_train_rows=training_cfg.get("max_train_rows"),
+        max_valid_rows=training_cfg.get("max_valid_rows"),
+        early_stopping_rounds=early_stopping_rounds,
         allow_fallback=allow_fallback,
         model_dir=output_cfg.get("model_dir", "artifacts/models"),
         report_dir=output_cfg.get("report_dir", "artifacts/reports"),

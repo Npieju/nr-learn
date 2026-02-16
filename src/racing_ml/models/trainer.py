@@ -157,6 +157,7 @@ def train_and_evaluate(
     valid_end: str,
     max_train_rows: int | None,
     max_valid_rows: int | None,
+    early_stopping_rounds: int | None,
     allow_fallback: bool,
     model_dir: str,
     report_dir: str,
@@ -211,16 +212,49 @@ def train_and_evaluate(
     )
 
     model = _build_model_with_optional_fallback(model_name, model_params, allow_fallback=allow_fallback)
-    pipeline = Pipeline(steps=[("prep", preprocessor), ("model", model)])
-    try:
-        pipeline.fit(x_train, y_train)
-    except Exception as error:
-        raise RuntimeError(
-            "Model training failed. If using GPU, verify LightGBM/OpenCL runtime and container GPU access. "
-            f"Original error: {error}"
-        ) from error
 
-    valid_proba = pipeline.predict_proba(x_valid)[:, 1]
+    try:
+        preprocessor.fit(x_train)
+        x_train_processed = preprocessor.transform(x_train)
+        x_valid_processed = preprocessor.transform(x_valid)
+    except Exception as error:
+        raise RuntimeError(f"Feature preprocessing failed: {error}") from error
+
+    if model_name.lower() == "lightgbm":
+        from lightgbm import early_stopping, log_evaluation
+
+        callbacks = [log_evaluation(period=200)]
+        if early_stopping_rounds and early_stopping_rounds > 0:
+            callbacks.insert(0, early_stopping(stopping_rounds=int(early_stopping_rounds), verbose=False))
+
+        try:
+            model.fit(
+                x_train_processed,
+                y_train,
+                eval_set=[(x_valid_processed, y_valid)],
+                eval_metric="auc",
+                callbacks=callbacks,
+            )
+        except Exception as error:
+            raise RuntimeError(
+                "LightGBM training failed. If using GPU, verify CUDA/OpenCL runtime and container GPU access. "
+                f"Original error: {error}"
+            ) from error
+    else:
+        try:
+            model.fit(x_train_processed, y_train)
+        except Exception as error:
+            raise RuntimeError(
+                "Model training failed. "
+                f"Original error: {error}"
+            ) from error
+
+    pipeline = Pipeline(steps=[("prep", preprocessor), ("model", model)])
+
+    try:
+        valid_proba = model.predict_proba(x_valid_processed)[:, 1]
+    except Exception as error:
+        raise RuntimeError(f"Validation prediction failed: {error}") from error
 
     metrics = {
         "auc": _safe_auc(y_valid, valid_proba),
@@ -229,6 +263,9 @@ def train_and_evaluate(
         "positive_rate": float(np.mean(y_valid)),
         "gpu_enabled": float(_is_gpu_requested(model_name, model_params)),
     }
+
+    if hasattr(model, "best_iteration_") and getattr(model, "best_iteration_", None) is not None:
+        metrics["best_iteration"] = float(getattr(model, "best_iteration_"))
 
     model_path = Path(model_dir)
     model_path.mkdir(parents=True, exist_ok=True)
