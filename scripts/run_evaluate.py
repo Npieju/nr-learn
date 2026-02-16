@@ -23,20 +23,24 @@ from racing_ml.data.dataset_loader import load_training_table
 from racing_ml.features.builder import build_features
 
 
-def predict_score(model: object, frame: pd.DataFrame) -> np.ndarray:
+def predict_score(model: object, frame: pd.DataFrame, race_ids: pd.Series | None = None) -> np.ndarray:
     if hasattr(model, "predict_proba"):
         return model.predict_proba(frame)[:, 1]
     if hasattr(model, "predict"):
         return np.asarray(model.predict(frame), dtype=float)
     if isinstance(model, dict) and model.get("kind") == "multi_position_top3":
-        probs = predict_top3_probs(model, frame)
+        probs = predict_top3_probs(model, frame, race_ids=race_ids)
         if probs is None:
             raise RuntimeError("Invalid multi_position model bundle")
         return probs["p_rank1"]
     raise RuntimeError("Loaded model does not support predict/predict_proba")
 
 
-def predict_top3_probs(model: Any, frame: pd.DataFrame) -> dict[str, np.ndarray] | None:
+def predict_top3_probs(
+    model: Any,
+    frame: pd.DataFrame,
+    race_ids: pd.Series | None = None,
+) -> dict[str, np.ndarray] | None:
     if not (isinstance(model, dict) and model.get("kind") == "multi_position_top3"):
         return None
     prep = model.get("prep")
@@ -51,7 +55,12 @@ def predict_top3_probs(model: Any, frame: pd.DataFrame) -> dict[str, np.ndarray]
             return None
         output[key] = model_obj.predict_proba(transformed)[:, 1]
 
-    work = frame[["race_id"]].copy()
+    if race_ids is None:
+        if "race_id" not in frame.columns:
+            raise RuntimeError("race_ids are required for multi_position probability normalization")
+        race_ids = frame["race_id"]
+
+    work = pd.DataFrame({"race_id": race_ids.to_numpy(copy=False)})
     work["p_rank1_raw"] = output["p_rank1"]
     work["p_rank2_raw"] = output["p_rank2"]
     work["p_rank3_raw"] = output["p_rank3"]
@@ -647,8 +656,8 @@ def main() -> int:
 
         x_eval = frame[available_features]
         y_eval = frame[label_col].astype(int).to_numpy()
-        y_score = predict_score(model, x_eval)
-        top3_probs = predict_top3_probs(model, x_eval)
+        y_score = predict_score(model, x_eval, race_ids=frame["race_id"])
+        top3_probs = predict_top3_probs(model, x_eval, race_ids=frame["race_id"])
 
         pred = frame.copy()
         pred["score"] = y_score
