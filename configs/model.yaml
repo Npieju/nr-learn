@@ -5,6 +5,8 @@ model:
   name: "lightgbm"
   params:
     objective: "binary"
+    # GPUを使う場合は以下を有効化（コンテナでGPUが見えていることが前提）
+    device_type: "cuda"
     learning_rate: 0.03
     num_leaves: 64
     min_data_in_leaf: 50
@@ -18,6 +20,7 @@ training:
   early_stopping_rounds: 100
   max_train_rows: 300000
   max_valid_rows: 100000
+  allow_fallback_model: false
 
 output:
   model_dir: "artifacts/models"

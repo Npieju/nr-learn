@@ -93,12 +93,22 @@ def run_predict(
         .astype(int)
     )
 
+    if "odds" in pred_frame.columns:
+        pred_frame["odds"] = pd.to_numeric(pred_frame["odds"], errors="coerce")
+        pred_frame["expected_value"] = pred_frame["score"] * pred_frame["odds"]
+        ev_rank = pred_frame.groupby("race_id")["expected_value"].rank(method="first", ascending=False)
+        pred_frame["ev_rank"] = ev_rank.astype("Int64")
+
     columns = ["date", "race_id", "horse_id"]
     if "horse_name" in pred_frame.columns:
         columns.append("horse_name")
     if "rank" in pred_frame.columns:
         columns.append("rank")
+    if "odds" in pred_frame.columns:
+        columns.append("odds")
     columns += ["score", "pred_rank"]
+    if "expected_value" in pred_frame.columns:
+        columns += ["expected_value", "ev_rank"]
 
     out_dir = Path("artifacts/predictions")
     out_dir.mkdir(parents=True, exist_ok=True)

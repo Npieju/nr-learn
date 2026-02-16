@@ -46,6 +46,31 @@ def _simple_win_roi(frame: pd.DataFrame, stake_per_race: float = 100.0) -> float
     return float(total_return / total_bet)
 
 
+def _ev_top1_roi(frame: pd.DataFrame, stake_per_race: float = 100.0) -> float:
+    if "rank" not in frame.columns or "expected_value" not in frame.columns:
+        return float("nan")
+
+    total_bet = 0.0
+    total_return = 0.0
+
+    for _, group in frame.groupby("race_id"):
+        valid = group.dropna(subset=["expected_value"]) 
+        if valid.empty:
+            continue
+        pick = valid.sort_values("expected_value", ascending=False).iloc[0]
+        total_bet += stake_per_race
+        rank = pd.to_numeric(pick.get("rank"), errors="coerce")
+        if pd.notna(rank) and int(rank) == 1:
+            odds = pd.to_numeric(pick.get("odds", 0), errors="coerce")
+            if pd.isna(odds) or odds <= 0:
+                odds = 1.0
+            total_return += float(stake_per_race * odds)
+
+    if total_bet == 0:
+        return float("nan")
+    return float(total_return / total_bet)
+
+
 def _plot_backtest(frame: pd.DataFrame, out_path: Path) -> None:
     mean_scores = (
         frame.sort_values("pred_rank")
@@ -94,6 +119,10 @@ def run_backtest(config_path: str, predictions_file: str | None = None) -> None:
 
     frame["pred_rank"] = pd.to_numeric(frame["pred_rank"], errors="coerce")
     frame["score"] = pd.to_numeric(frame["score"], errors="coerce")
+    if "odds" in frame.columns:
+        frame["odds"] = pd.to_numeric(frame["odds"], errors="coerce")
+    if "expected_value" not in frame.columns and "odds" in frame.columns:
+        frame["expected_value"] = frame["score"] * frame["odds"]
     frame = frame.dropna(subset=["pred_rank", "score"])
 
     metrics = {
@@ -104,6 +133,7 @@ def run_backtest(config_path: str, predictions_file: str | None = None) -> None:
         "top3_hit_rate": _topk_hit_rate(frame, 3),
         "top5_hit_rate": _topk_hit_rate(frame, 5),
         "simple_top1_win_roi": _simple_win_roi(frame),
+        "ev_top1_win_roi": _ev_top1_roi(frame),
     }
 
     report_dir = Path("artifacts/reports")

@@ -23,6 +23,60 @@ class TrainResult:
     used_features: list[str]
 
 
+def _is_gpu_requested(model_name: str, params: dict) -> bool:
+    if model_name.lower() != "lightgbm":
+        return False
+
+    device_type = str(params.get("device_type", "")).strip().lower()
+    return device_type in {"gpu", "cuda"}
+
+
+def _validate_lightgbm_gpu_runtime(params: dict) -> None:
+    from lightgbm import LGBMClassifier
+    device_type = str(params.get("device_type", "gpu")).strip().lower() or "gpu"
+
+    test_params = {k: v for k, v in params.items() if k != "objective"}
+    test_params["n_estimators"] = min(int(test_params.get("n_estimators", 10)), 10)
+    test_params.setdefault("num_leaves", 8)
+    test_params.setdefault("min_data_in_leaf", 1)
+    test_params.setdefault("verbosity", -1)
+
+    x = np.array(
+        [
+            [0.0, 0.0],
+            [1.0, 0.0],
+            [0.0, 1.0],
+            [1.0, 1.0],
+            [0.2, 0.8],
+            [0.8, 0.2],
+        ],
+        dtype=np.float32,
+    )
+    y = np.array([0, 1, 0, 1, 0, 1], dtype=np.int32)
+
+    try:
+        model = LGBMClassifier(**test_params)
+        model.fit(x, y)
+    except Exception as error:
+        if device_type == "cuda":
+            raise RuntimeError(
+                "LightGBM CUDA validation failed. "
+                "Current LightGBM wheel is likely not built with CUDA support. "
+                "Rebuild/install LightGBM with CUDA enabled (-DUSE_CUDA=1), "
+                "or switch model.params.device_type to 'gpu' (OpenCL) / CPU. "
+                f"Original error: {error}"
+            ) from error
+
+        raise RuntimeError(
+            "LightGBM GPU validation failed. "
+            "Set container GPU allocation (e.g. --gpus all), "
+            "install OpenCL runtime in the container (e.g. ocl-icd-libopencl1), "
+            "confirm OpenCL device visibility, "
+            "or remove model.params.device_type='gpu' to run on CPU. "
+            f"Original error: {error}"
+        ) from error
+
+
 def _build_model(model_name: str, params: dict) -> object:
     if model_name.lower() == "lightgbm":
         try:
@@ -30,8 +84,18 @@ def _build_model(model_name: str, params: dict) -> object:
 
             clean_params = {k: v for k, v in params.items() if k != "objective"}
             return LGBMClassifier(**clean_params)
-        except Exception:
-            pass
+        except Exception as error:
+            raise RuntimeError(f"Failed to initialize LightGBM: {error}") from error
+
+    raise ValueError(f"Unsupported model name: {model_name}")
+
+
+def _build_model_with_optional_fallback(model_name: str, params: dict, allow_fallback: bool) -> object:
+    try:
+        return _build_model(model_name, params)
+    except Exception:
+        if not allow_fallback:
+            raise
 
     return RandomForestClassifier(
         n_estimators=300,
@@ -93,6 +157,7 @@ def train_and_evaluate(
     valid_end: str,
     max_train_rows: int | None,
     max_valid_rows: int | None,
+    allow_fallback: bool,
     model_dir: str,
     report_dir: str,
 ) -> TrainResult:
@@ -102,6 +167,9 @@ def train_and_evaluate(
 
     if label_column not in frame.columns:
         raise ValueError(f"Label column '{label_column}' not found")
+
+    if _is_gpu_requested(model_name, model_params):
+        _validate_lightgbm_gpu_runtime(model_params)
 
     train, valid = _time_split(frame, train_end, valid_start, valid_end)
 
@@ -142,9 +210,15 @@ def train_and_evaluate(
         ]
     )
 
-    model = _build_model(model_name, model_params)
+    model = _build_model_with_optional_fallback(model_name, model_params, allow_fallback=allow_fallback)
     pipeline = Pipeline(steps=[("prep", preprocessor), ("model", model)])
-    pipeline.fit(x_train, y_train)
+    try:
+        pipeline.fit(x_train, y_train)
+    except Exception as error:
+        raise RuntimeError(
+            "Model training failed. If using GPU, verify LightGBM/OpenCL runtime and container GPU access. "
+            f"Original error: {error}"
+        ) from error
 
     valid_proba = pipeline.predict_proba(x_valid)[:, 1]
 
@@ -153,6 +227,7 @@ def train_and_evaluate(
         "logloss": _safe_logloss(y_valid, valid_proba),
         "valid_samples": float(len(y_valid)),
         "positive_rate": float(np.mean(y_valid)),
+        "gpu_enabled": float(_is_gpu_requested(model_name, model_params)),
     }
 
     model_path = Path(model_dir)
