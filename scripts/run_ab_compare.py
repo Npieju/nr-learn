@@ -16,15 +16,37 @@ if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
 from racing_ml.common.config import load_yaml
+from racing_ml.common.probability import normalize_position_probabilities
 from racing_ml.data.dataset_loader import load_training_table
 from racing_ml.features.builder import build_features
 
 
-def predict_score(model: Any, frame: pd.DataFrame) -> np.ndarray:
+def predict_score(model: Any, features: pd.DataFrame, race_ids: pd.Series | None = None) -> np.ndarray:
     if hasattr(model, "predict_proba"):
-        return model.predict_proba(frame)[:, 1]
+        return model.predict_proba(features)[:, 1]
     if hasattr(model, "predict"):
-        return np.asarray(model.predict(frame), dtype=float)
+        return np.asarray(model.predict(features), dtype=float)
+    if isinstance(model, dict) and model.get("kind") == "multi_position_top3":
+        prep = model.get("prep")
+        models = model.get("models", {})
+        if prep is None or not isinstance(models, dict):
+            raise RuntimeError("Invalid multi_position model bundle")
+        rank1_model = models.get("p_rank1")
+        if rank1_model is None:
+            raise RuntimeError("Missing p_rank1 model in bundle")
+        if race_ids is None:
+            raise RuntimeError("race_ids are required for multi_position model scoring")
+        transformed = prep.transform(features)
+        raw = rank1_model.predict_proba(transformed)[:, 1]
+        work = pd.DataFrame({"race_id": race_ids.to_numpy(copy=False)})
+        work["p_rank1_raw"] = raw
+        work = normalize_position_probabilities(
+            work,
+            raw_columns=["p_rank1_raw"],
+            race_id_col="race_id",
+            output_prefix="",
+        )
+        return work["p_rank1_raw"].to_numpy(dtype=float)
     raise RuntimeError("Loaded model does not support predict/predict_proba")
 
 
@@ -77,7 +99,7 @@ def evaluate_model(name: str, model_cfg: dict, frame: pd.DataFrame, feature_colu
     model = joblib.load(model_path)
     eval_frame = frame.copy()
     x_eval = eval_frame[feature_columns]
-    eval_frame["score"] = predict_score(model, x_eval)
+    eval_frame["score"] = predict_score(model, x_eval, eval_frame["race_id"])
     eval_frame = rank_by_score(eval_frame, score_col="score")
 
     metrics = {

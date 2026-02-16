@@ -59,13 +59,17 @@ nr-learn/
 2. 学習
     - `python scripts/run_train.py --config configs/model.yaml --data-config configs/data.yaml --feature-config configs/features.yaml`
     - （Ranker）`python scripts/run_train.py --config configs/model_ranker.yaml --data-config configs/data.yaml --feature-config configs/features.yaml`
+    - （Top3確率）`python scripts/run_train.py --config configs/model_top3.yaml --data-config configs/data.yaml --feature-config configs/features.yaml`
 3. 生成物確認
     - モデル: `artifacts/models/baseline_model.joblib`
     - レポート: `artifacts/reports/train_metrics.json`
 4. 予測と可視化
     - `python scripts/run_predict.py --config configs/model.yaml --data-config configs/data.yaml --feature-config configs/features.yaml --race-date 2021-07-31`
+    - （Top3確率）`python scripts/run_predict.py --config configs/model_top3.yaml --data-config configs/data.yaml --feature-config configs/features.yaml --race-date 2021-07-31`
     - 予測CSV: `artifacts/predictions/predictions_YYYYMMDD.csv`
     - 可視化PNG: `artifacts/predictions/predictions_YYYYMMDD.png`
+    - Top3確率モデルでは `p_rank1 / p_rank2 / p_rank3` 列が出力されます（各レース内で正規化済み）
+    - `p_top3`（= `p_rank1 + p_rank2 + p_rank3`）も出力され、複勝系の期待値計算に利用できます
 5. バックテスト
     - `python scripts/run_backtest.py --config configs/model.yaml`
     - （任意）`python scripts/run_backtest.py --config configs/model.yaml --predictions-file artifacts/predictions/predictions_20210731.csv`
@@ -83,6 +87,7 @@ nr-learn/
 7. ベースライン vs Ranker 比較（同一データでA/B）
     - `python scripts/run_ab_compare.py --base-config configs/model.yaml --challenger-config configs/model_ranker.yaml --max-rows 30000`
     - 比較サマリ: `artifacts/reports/ab_compare_summary.json`
+    - Top3確率モデルを比較する場合は `--challenger-config configs/model_top3.yaml` を指定
 8. ダッシュボード（Notebookが止まるときのCLI代替）
     - `python scripts/run_dashboard.py`
     - 概要JSON: `artifacts/reports/dashboard/dashboard_summary_YYYYMMDD.json`

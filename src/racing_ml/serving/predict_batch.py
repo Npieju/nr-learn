@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Any
 
 import joblib
 import matplotlib.pyplot as plt
@@ -8,6 +9,7 @@ import numpy as np
 import pandas as pd
 
 from racing_ml.common.config import load_yaml
+from racing_ml.common.probability import normalize_position_probabilities
 from racing_ml.data.dataset_loader import load_training_table
 from racing_ml.features.builder import build_features
 
@@ -18,6 +20,22 @@ def _predict_score(model: object, frame: pd.DataFrame) -> np.ndarray:
     if hasattr(model, "predict"):
         return model.predict(frame)
     raise RuntimeError("Loaded model does not support predict/predict_proba")
+
+
+def _predict_multi_position(model_bundle: dict[str, Any], frame: pd.DataFrame) -> dict[str, np.ndarray]:
+    prep = model_bundle.get("prep")
+    models = model_bundle.get("models", {})
+    if prep is None or not isinstance(models, dict):
+        raise RuntimeError("Invalid multi_position model bundle")
+
+    transformed = prep.transform(frame)
+    outputs: dict[str, np.ndarray] = {}
+    for key in ("p_rank1", "p_rank2", "p_rank3"):
+        model = models.get(key)
+        if model is None:
+            raise RuntimeError(f"Missing model in bundle: {key}")
+        outputs[key] = model.predict_proba(transformed)[:, 1]
+    return outputs
 
 
 def _resolve_target_date(frame: pd.DataFrame, race_date: str | None) -> pd.Timestamp:
@@ -95,7 +113,28 @@ def run_predict(
         raise FileNotFoundError(f"Model file not found: {model_path}")
 
     model = joblib.load(model_path)
-    pred_frame["score"] = _predict_score(model, pred_frame[available_features])
+    if isinstance(model, dict) and model.get("kind") == "multi_position_top3":
+        outputs = _predict_multi_position(model, pred_frame[available_features])
+        pred_frame["p_rank1_raw"] = outputs["p_rank1"]
+        pred_frame["p_rank2_raw"] = outputs["p_rank2"]
+        pred_frame["p_rank3_raw"] = outputs["p_rank3"]
+        pred_frame = normalize_position_probabilities(
+            pred_frame,
+            raw_columns=["p_rank1_raw", "p_rank2_raw", "p_rank3_raw"],
+            race_id_col="race_id",
+            output_prefix="",
+        )
+        pred_frame = pred_frame.rename(
+            columns={
+                "p_rank1_raw": "p_rank1",
+                "p_rank2_raw": "p_rank2",
+                "p_rank3_raw": "p_rank3",
+            }
+        )
+        pred_frame["p_top3"] = (pred_frame["p_rank1"] + pred_frame["p_rank2"] + pred_frame["p_rank3"]).clip(0.0, 1.0)
+        pred_frame["score"] = pred_frame["p_rank1"]
+    else:
+        pred_frame["score"] = _predict_score(model, pred_frame[available_features])
     pred_frame["pred_rank"] = (
         pred_frame.groupby("race_id")["score"]
         .rank(method="first", ascending=False)
@@ -116,6 +155,9 @@ def run_predict(
     if "odds" in pred_frame.columns:
         columns.append("odds")
     columns += ["score", "pred_rank"]
+    for extra_col in ["p_rank1", "p_rank2", "p_rank3", "p_top3"]:
+        if extra_col in pred_frame.columns:
+            columns.append(extra_col)
     if "expected_value" in pred_frame.columns:
         columns += ["expected_value", "ev_rank"]
 

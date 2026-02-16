@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 import json
 from pathlib import Path
+from typing import Any
 
 import joblib
 import numpy as np
@@ -181,6 +182,12 @@ def _top1_hit_rate_by_group(y_true: np.ndarray, y_score: np.ndarray, group_ids: 
     return float(np.mean(hits)) if hits else float("nan")
 
 
+def _safe_auc_binary(y_true: np.ndarray, y_pred: np.ndarray) -> float:
+    if len(np.unique(y_true)) < 2:
+        return float("nan")
+    return float(roc_auc_score(y_true, y_pred))
+
+
 def train_and_evaluate(
     frame: pd.DataFrame,
     feature_columns: list[str],
@@ -208,7 +215,7 @@ def train_and_evaluate(
         raise ValueError(f"Label column '{label_column}' not found")
 
     task = str(task).strip().lower() or "classification"
-    if task not in {"classification", "ranking"}:
+    if task not in {"classification", "ranking", "multi_position"}:
         raise ValueError(f"Unsupported task: {task}")
 
     if _is_gpu_requested(model_name, model_params):
@@ -256,7 +263,7 @@ def train_and_evaluate(
     model = _build_model_with_optional_fallback(
         model_name,
         model_params,
-        task=task,
+        task=("classification" if task == "multi_position" else task),
         allow_fallback=allow_fallback,
     )
 
@@ -267,7 +274,77 @@ def train_and_evaluate(
     except Exception as error:
         raise RuntimeError(f"Feature preprocessing failed: {error}") from error
 
-    if model_name.lower() == "lightgbm":
+    if task == "multi_position":
+        if "rank" not in train.columns or "rank" not in valid.columns:
+            raise ValueError("multi_position task requires 'rank' column")
+
+        from lightgbm import early_stopping, log_evaluation
+
+        position_models: dict[str, Any] = {}
+        rank_train = pd.to_numeric(train["rank"], errors="coerce")
+        rank_valid = pd.to_numeric(valid["rank"], errors="coerce")
+        pred_valid: dict[str, np.ndarray] = {}
+
+        for position in (1, 2, 3):
+            pos_label = f"p_rank{position}"
+            y_train_pos = (rank_train == position).astype(int).to_numpy()
+            y_valid_pos = (rank_valid == position).astype(int).to_numpy()
+
+            model_pos = _build_model_with_optional_fallback(
+                model_name,
+                model_params,
+                task="classification",
+                allow_fallback=allow_fallback,
+            )
+
+            callbacks = [log_evaluation(period=200)]
+            if early_stopping_rounds and early_stopping_rounds > 0 and model_name.lower() == "lightgbm":
+                callbacks.insert(0, early_stopping(stopping_rounds=int(early_stopping_rounds), verbose=False))
+
+            if model_name.lower() == "lightgbm":
+                model_pos.fit(
+                    x_train_processed,
+                    y_train_pos,
+                    eval_set=[(x_valid_processed, y_valid_pos)],
+                    eval_metric="auc",
+                    callbacks=callbacks,
+                )
+            else:
+                model_pos.fit(x_train_processed, y_train_pos)
+
+            pred_valid[pos_label] = model_pos.predict_proba(x_valid_processed)[:, 1]
+            position_models[pos_label] = model_pos
+
+        metrics = {
+            "auc_rank1": _safe_auc_binary((rank_valid == 1).astype(int).to_numpy(), pred_valid["p_rank1"]),
+            "auc_rank2": _safe_auc_binary((rank_valid == 2).astype(int).to_numpy(), pred_valid["p_rank2"]),
+            "auc_rank3": _safe_auc_binary((rank_valid == 3).astype(int).to_numpy(), pred_valid["p_rank3"]),
+            "logloss_rank1": _safe_logloss((rank_valid == 1).astype(int).to_numpy(), pred_valid["p_rank1"]),
+            "logloss_rank2": _safe_logloss((rank_valid == 2).astype(int).to_numpy(), pred_valid["p_rank2"]),
+            "logloss_rank3": _safe_logloss((rank_valid == 3).astype(int).to_numpy(), pred_valid["p_rank3"]),
+            "valid_samples": float(len(rank_valid)),
+            "gpu_enabled": float(_is_gpu_requested(model_name, model_params)),
+            "avg_top3_mass": float(np.mean(pred_valid["p_rank1"] + pred_valid["p_rank2"] + pred_valid["p_rank3"])),
+        }
+
+        top1_truth = (rank_valid == 1).astype(int).to_numpy()
+        metrics["top1_hit_rate"] = _top1_hit_rate_by_group(top1_truth, pred_valid["p_rank1"], valid["race_id"].astype(str))
+
+        best_iterations = [
+            float(getattr(model_obj, "best_iteration_"))
+            for model_obj in position_models.values()
+            if hasattr(model_obj, "best_iteration_") and getattr(model_obj, "best_iteration_", None) is not None
+        ]
+        if best_iterations:
+            metrics["best_iteration_mean"] = float(np.mean(best_iterations))
+
+        trained_model: Any = {
+            "kind": "multi_position_top3",
+            "prep": preprocessor,
+            "models": position_models,
+            "feature_columns": available_features,
+        }
+    elif model_name.lower() == "lightgbm":
         from lightgbm import early_stopping, log_evaluation
 
         callbacks = [log_evaluation(period=200)]
@@ -300,6 +377,7 @@ def train_and_evaluate(
                 "LightGBM training failed. If using GPU, verify CUDA/OpenCL runtime and container GPU access. "
                 f"Original error: {error}"
             ) from error
+        trained_model = Pipeline(steps=[("prep", preprocessor), ("model", model)])
     else:
         try:
             model.fit(x_train_processed, y_train)
@@ -309,7 +387,7 @@ def train_and_evaluate(
                 f"Original error: {error}"
             ) from error
 
-    pipeline = Pipeline(steps=[("prep", preprocessor), ("model", model)])
+        trained_model = Pipeline(steps=[("prep", preprocessor), ("model", model)])
 
     if task == "ranking":
         try:
@@ -327,7 +405,7 @@ def train_and_evaluate(
             "positive_rate": float(np.mean(y_valid)),
             "gpu_enabled": float(_is_gpu_requested(model_name, model_params)),
         }
-    else:
+    elif task == "classification":
         try:
             valid_proba = model.predict_proba(x_valid_processed)[:, 1]
         except Exception as error:
@@ -341,7 +419,7 @@ def train_and_evaluate(
             "gpu_enabled": float(_is_gpu_requested(model_name, model_params)),
         }
 
-    if hasattr(model, "best_iteration_") and getattr(model, "best_iteration_", None) is not None:
+    if task in {"classification", "ranking"} and hasattr(model, "best_iteration_") and getattr(model, "best_iteration_", None) is not None:
         metrics["best_iteration"] = float(getattr(model, "best_iteration_"))
 
     model_path = Path(model_dir)
@@ -352,7 +430,7 @@ def train_and_evaluate(
     model_file = model_path / model_file_name
     report_file = report_path / report_file_name
 
-    joblib.dump(pipeline, model_file)
+    joblib.dump(trained_model, model_file)
     with report_file.open("w", encoding="utf-8") as file:
         json.dump(metrics, file, ensure_ascii=False, indent=2)
 

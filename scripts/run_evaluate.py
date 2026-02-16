@@ -3,6 +3,7 @@ import json
 from pathlib import Path
 import sys
 import traceback
+from typing import Any
 
 import joblib
 import numpy as np
@@ -17,6 +18,7 @@ if str(SRC) not in sys.path:
     sys.path.append(str(SRC))
 
 from racing_ml.common.config import load_yaml
+from racing_ml.common.probability import normalize_position_probabilities
 from racing_ml.data.dataset_loader import load_training_table
 from racing_ml.features.builder import build_features
 
@@ -26,7 +28,44 @@ def predict_score(model: object, frame: pd.DataFrame) -> np.ndarray:
         return model.predict_proba(frame)[:, 1]
     if hasattr(model, "predict"):
         return np.asarray(model.predict(frame), dtype=float)
+    if isinstance(model, dict) and model.get("kind") == "multi_position_top3":
+        probs = predict_top3_probs(model, frame)
+        if probs is None:
+            raise RuntimeError("Invalid multi_position model bundle")
+        return probs["p_rank1"]
     raise RuntimeError("Loaded model does not support predict/predict_proba")
+
+
+def predict_top3_probs(model: Any, frame: pd.DataFrame) -> dict[str, np.ndarray] | None:
+    if not (isinstance(model, dict) and model.get("kind") == "multi_position_top3"):
+        return None
+    prep = model.get("prep")
+    models = model.get("models", {})
+    if prep is None or not isinstance(models, dict):
+        return None
+    transformed = prep.transform(frame)
+    output: dict[str, np.ndarray] = {}
+    for key in ["p_rank1", "p_rank2", "p_rank3"]:
+        model_obj = models.get(key)
+        if model_obj is None:
+            return None
+        output[key] = model_obj.predict_proba(transformed)[:, 1]
+
+    work = frame[["race_id"]].copy()
+    work["p_rank1_raw"] = output["p_rank1"]
+    work["p_rank2_raw"] = output["p_rank2"]
+    work["p_rank3_raw"] = output["p_rank3"]
+    work = normalize_position_probabilities(
+        work,
+        raw_columns=["p_rank1_raw", "p_rank2_raw", "p_rank3_raw"],
+        race_id_col="race_id",
+        output_prefix="",
+    )
+    return {
+        "p_rank1": work["p_rank1_raw"].to_numpy(dtype=float),
+        "p_rank2": work["p_rank2_raw"].to_numpy(dtype=float),
+        "p_rank3": work["p_rank3_raw"].to_numpy(dtype=float),
+    }
 
 
 def topk_hit_rate(frame: pd.DataFrame, k: int) -> float:
@@ -609,6 +648,7 @@ def main() -> int:
         x_eval = frame[available_features]
         y_eval = frame[label_col].astype(int).to_numpy()
         y_score = predict_score(model, x_eval)
+        top3_probs = predict_top3_probs(model, x_eval)
 
         pred = frame.copy()
         pred["score"] = y_score
@@ -632,6 +672,13 @@ def main() -> int:
             "score_is_probability": score_is_prob,
             **base_metrics,
         }
+
+        if top3_probs is not None and "rank" in pred.columns:
+            rank_series = pd.to_numeric(pred["rank"], errors="coerce")
+            for pos, key in [(1, "p_rank1"), (2, "p_rank2"), (3, "p_rank3")]:
+                y_pos = (rank_series == pos).astype(int).to_numpy()
+                if len(np.unique(y_pos)) > 1:
+                    summary[f"auc_rank{pos}"] = float(roc_auc_score(y_pos, top3_probs[key]))
 
         calib_train, calib_test = split_for_calibration(pred, date_col="date", train_ratio=0.7)
         if len(calib_train) >= 1000 and len(calib_test) >= 1000:
