@@ -2,8 +2,10 @@ import argparse
 import json
 from pathlib import Path
 import sys
+import time
 import traceback
 from typing import Any
+import warnings
 
 import joblib
 import numpy as np
@@ -20,7 +22,22 @@ if str(SRC) not in sys.path:
 from racing_ml.common.config import load_yaml
 from racing_ml.common.probability import normalize_position_probabilities
 from racing_ml.data.dataset_loader import load_training_table
+from racing_ml.evaluation.leakage import run_leakage_audit
 from racing_ml.features.builder import build_features
+
+
+def log_progress(message: str) -> None:
+    now = time.strftime("%H:%M:%S")
+    print(f"[evaluate {now}] {message}", flush=True)
+
+
+def format_duration(seconds: float) -> str:
+    seconds_int = max(int(seconds), 0)
+    minutes, sec = divmod(seconds_int, 60)
+    hours, minutes = divmod(minutes, 60)
+    if hours > 0:
+        return f"{hours:d}h{minutes:02d}m{sec:02d}s"
+    return f"{minutes:d}m{sec:02d}s"
 
 
 def predict_score(model: object, frame: pd.DataFrame, race_ids: pd.Series | None = None) -> np.ndarray:
@@ -277,6 +294,58 @@ def split_three_way_time(
     return train_df, valid_df, test_df
 
 
+def build_nested_wf_slices(
+    frame: pd.DataFrame,
+    date_col: str = "date",
+    n_folds: int = 3,
+    valid_ratio: float = 0.15,
+    test_ratio: float = 0.15,
+    min_train_rows: int = 1000,
+    min_valid_rows: int = 500,
+    min_test_rows: int = 500,
+) -> list[tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]]:
+    if date_col not in frame.columns:
+        return []
+
+    date_series = pd.to_datetime(frame[date_col], errors="coerce")
+    valid_dates = pd.Series(date_series.dropna().unique()).sort_values().reset_index(drop=True)
+    if len(valid_dates) < 20:
+        return []
+
+    n_folds = max(int(n_folds), 1)
+    valid_span = max(int(len(valid_dates) * valid_ratio), 1)
+    test_span = max(int(len(valid_dates) * test_ratio), 1)
+    min_train_span = max(int(len(valid_dates) * 0.3), 3)
+
+    latest_start = len(valid_dates) - (valid_span + test_span)
+    earliest_start = min_train_span
+    if latest_start <= earliest_start:
+        return []
+
+    if n_folds == 1:
+        train_end_indices = [latest_start]
+    else:
+        train_end_indices = np.linspace(earliest_start, latest_start, num=n_folds, dtype=int).tolist()
+
+    slices: list[tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]] = []
+    for train_end_idx in train_end_indices:
+        train_cut = pd.to_datetime(valid_dates.iloc[train_end_idx])
+        valid_end_idx = min(train_end_idx + valid_span, len(valid_dates) - 2)
+        test_end_idx = min(valid_end_idx + test_span, len(valid_dates) - 1)
+        valid_cut = pd.to_datetime(valid_dates.iloc[valid_end_idx])
+        test_cut = pd.to_datetime(valid_dates.iloc[test_end_idx])
+
+        train_df = frame[date_series <= train_cut].copy()
+        valid_df = frame[(date_series > train_cut) & (date_series <= valid_cut)].copy()
+        test_df = frame[(date_series > valid_cut) & (date_series <= test_cut)].copy()
+
+        if len(train_df) < min_train_rows or len(valid_df) < min_valid_rows or len(test_df) < min_test_rows:
+            continue
+        slices.append((train_df, valid_df, test_df))
+
+    return slices
+
+
 def fit_platt(train_scores: np.ndarray, train_labels: np.ndarray, test_scores: np.ndarray) -> np.ndarray:
     model = LogisticRegression(max_iter=1000)
     model.fit(train_scores.reshape(-1, 1), train_labels)
@@ -295,6 +364,10 @@ def optimize_roi_strategy(
     label_col: str,
     odds_col: str,
     mode: str = "fast",
+    progress_interval_sec: float = 5.0,
+    max_drawdown: float = 0.35,
+    min_final_bankroll: float = 0.85,
+    min_bets: int = 50,
 ) -> tuple[dict[str, float], dict[str, float | int | None]]:
     train_scores = train_df["score"].to_numpy()
     train_labels = train_df[label_col].astype(int).to_numpy()
@@ -341,6 +414,37 @@ def optimize_roi_strategy(
     }
     best_score = -1e9
     best_metrics: dict[str, float | int | None] = {}
+    total_trials = (
+        len(blend_candidates) * len(edge_candidates) * len(min_prob_candidates) * len(odds_min_candidates) * len(odds_max_candidates) * len(kelly_frac_candidates) * len(max_frac_candidates)
+        + len(blend_candidates) * len(edge_candidates) * len(min_prob_candidates) * len(odds_min_candidates) * len(odds_max_candidates) * len(top_k_candidates) * len(min_ev_candidates)
+    )
+    completed = 0
+    started_at = time.perf_counter()
+    last_logged_at = started_at
+
+    log_progress(
+        "WF strategy search started: "
+        f"mode={mode}, total_trials={total_trials}, "
+        f"max_drawdown<={max_drawdown:.3f}, min_final_bankroll>={min_final_bankroll:.3f}, min_bets>={min_bets}"
+    )
+
+    def maybe_log_progress(force: bool = False) -> None:
+        nonlocal last_logged_at
+        now = time.perf_counter()
+        if not force and (now - last_logged_at) < max(progress_interval_sec, 0.5):
+            return
+        elapsed = now - started_at
+        ratio = (completed / total_trials) if total_trials > 0 else 1.0
+        rate = (completed / elapsed) if elapsed > 0 else 0.0
+        remaining = (total_trials - completed)
+        eta = (remaining / rate) if rate > 0 else float("inf")
+        eta_text = format_duration(eta) if eta != float("inf") else "--"
+        log_progress(
+            "WF strategy search progress: "
+            f"{completed}/{total_trials} ({ratio:.1%}), "
+            f"elapsed={format_duration(elapsed)}, eta={eta_text}, best_score={best_score:.4f}"
+        )
+        last_logged_at = now
 
     for blend_weight in blend_candidates:
         valid_df["blend_prob"] = blend_prob(valid_df["iso_prob"], valid_df["market_prob"], blend_weight)
@@ -361,18 +465,26 @@ def optimize_roi_strategy(
                                     "odds_max": float(odds_max),
                                 }
                                 metrics = run_strategy(valid_df, prob_col="blend_prob", odds_col=odds_col, params=params)
+                                completed += 1
                                 roi = metrics.get("kelly_roi")
                                 bets = int(metrics.get("kelly_bets") or 0)
                                 hit = float(metrics.get("kelly_hit_rate") or 0.0)
+                                drawdown = float(metrics.get("kelly_max_drawdown") or 1.0)
+                                final_bankroll = float(metrics.get("kelly_final_bankroll") or 0.0)
                                 if roi is None:
+                                    maybe_log_progress()
+                                    continue
+                                if drawdown > max_drawdown or final_bankroll < min_final_bankroll:
+                                    maybe_log_progress()
                                     continue
                                 score = float(roi) + 0.10 * hit
-                                if bets < 50:
+                                if bets < int(min_bets):
                                     score -= 0.15
                                 if score > best_score:
                                     best_score = score
                                     best_params = params
                                     best_metrics = dict(metrics)
+                                maybe_log_progress()
 
                         for top_k in top_k_candidates:
                             for min_ev in min_ev_candidates:
@@ -386,18 +498,33 @@ def optimize_roi_strategy(
                                     "min_expected_value": float(min_ev),
                                 }
                                 metrics = run_strategy(valid_df, prob_col="blend_prob", odds_col=odds_col, params=params)
+                                completed += 1
                                 roi = metrics.get("portfolio_roi")
                                 bets = int(metrics.get("portfolio_bets") or 0)
                                 hit = float(metrics.get("portfolio_hit_rate") or 0.0)
+                                drawdown = float(metrics.get("portfolio_max_drawdown") or 1.0)
+                                final_bankroll = float(metrics.get("portfolio_final_bankroll") or 0.0)
                                 if roi is None:
+                                    maybe_log_progress()
+                                    continue
+                                if drawdown > max_drawdown or final_bankroll < min_final_bankroll:
+                                    maybe_log_progress()
                                     continue
                                 score = float(roi) + 0.20 * hit
-                                if bets < 50:
+                                if bets < int(min_bets):
                                     score -= 0.15
                                 if score > best_score:
                                     best_score = score
                                     best_params = params
                                     best_metrics = dict(metrics)
+                                maybe_log_progress()
+
+    maybe_log_progress(force=True)
+    log_progress(
+        "WF strategy search finished: "
+        f"best_strategy={best_params.get('strategy_kind', 'unknown')}, "
+        f"best_score={best_score:.4f}"
+    )
 
     return best_params, best_metrics
 
@@ -466,9 +593,12 @@ def simulate_fractional_kelly(
             "kelly_bets": 0,
             "kelly_hit_rate": None,
             "kelly_final_bankroll": initial_bankroll,
+            "kelly_max_drawdown": None,
         }
 
     bankroll = float(initial_bankroll)
+    peak_bankroll = float(initial_bankroll)
+    max_drawdown = 0.0
     total_bet = 0.0
     total_return = 0.0
     hits = 0
@@ -511,6 +641,10 @@ def simulate_fractional_kelly(
             payout = stake * odds
         total_return += payout
         bankroll = bankroll - stake + payout
+        peak_bankroll = max(peak_bankroll, bankroll)
+        if peak_bankroll > 0:
+            drawdown = max((peak_bankroll - bankroll) / peak_bankroll, 0.0)
+            max_drawdown = max(max_drawdown, drawdown)
 
     roi = (total_return / total_bet) if total_bet > 0 else None
     hit_rate = (hits / bets) if bets > 0 else None
@@ -519,6 +653,7 @@ def simulate_fractional_kelly(
         "kelly_bets": int(bets),
         "kelly_hit_rate": float(hit_rate) if hit_rate is not None else None,
         "kelly_final_bankroll": float(bankroll),
+        "kelly_max_drawdown": float(max_drawdown),
     }
 
 
@@ -532,6 +667,7 @@ def simulate_ev_portfolio(
     odds_min: float = 1.0,
     odds_max: float = 50.0,
     stake_per_race: float = 1.0,
+    initial_bankroll: float = 1.0,
 ) -> dict[str, float | int | None]:
     if odds_col is None or "rank" not in frame.columns:
         return {
@@ -539,8 +675,13 @@ def simulate_ev_portfolio(
             "portfolio_bets": 0,
             "portfolio_hit_rate": None,
             "portfolio_avg_synthetic_odds": None,
+            "portfolio_final_bankroll": initial_bankroll,
+            "portfolio_max_drawdown": None,
         }
 
+    bankroll = float(initial_bankroll)
+    peak_bankroll = float(initial_bankroll)
+    max_drawdown = 0.0
     total_bet = 0.0
     total_return = 0.0
     race_bets = 0
@@ -579,6 +720,11 @@ def simulate_ev_portfolio(
             race_hits += 1
             synthetic_odds_hits.append(float(payout / stake_per_race))
         total_return += payout
+        bankroll = bankroll - stake_per_race + payout
+        peak_bankroll = max(peak_bankroll, bankroll)
+        if peak_bankroll > 0:
+            drawdown = max((peak_bankroll - bankroll) / peak_bankroll, 0.0)
+            max_drawdown = max(max_drawdown, drawdown)
 
     roi = (total_return / total_bet) if total_bet > 0 else None
     hit_rate = (race_hits / race_bets) if race_bets > 0 else None
@@ -588,6 +734,8 @@ def simulate_ev_portfolio(
         "portfolio_bets": int(race_bets),
         "portfolio_hit_rate": float(hit_rate) if hit_rate is not None else None,
         "portfolio_avg_synthetic_odds": avg_synth_odds,
+        "portfolio_final_bankroll": float(bankroll),
+        "portfolio_max_drawdown": float(max_drawdown),
     }
 
 
@@ -604,6 +752,7 @@ def run_strategy(frame: pd.DataFrame, prob_col: str, odds_col: str, params: dict
             odds_min=float(params.get("odds_min", 1.0)),
             odds_max=float(params.get("odds_max", 50.0)),
             stake_per_race=1.0,
+            initial_bankroll=float(params.get("initial_bankroll", 1.0)),
         )
 
     return simulate_fractional_kelly(
@@ -616,29 +765,39 @@ def run_strategy(frame: pd.DataFrame, prob_col: str, odds_col: str, params: dict
         max_fraction=float(params.get("max_fraction", 0.05)),
         odds_min=float(params.get("odds_min", 1.0)),
         odds_max=float(params.get("odds_max", 50.0)),
-        initial_bankroll=1.0,
+        initial_bankroll=float(params.get("initial_bankroll", 1.0)),
     )
 
 
 def main() -> int:
+    warnings.filterwarnings("ignore", message="X does not have valid feature names, but LGBMClassifier was fitted with feature names")
+
     parser = argparse.ArgumentParser()
     parser.add_argument("--config", default="configs/model.yaml")
     parser.add_argument("--data-config", default="configs/data.yaml")
     parser.add_argument("--feature-config", default="configs/features.yaml")
     parser.add_argument("--max-rows", type=int, default=120000)
     parser.add_argument("--wf-mode", choices=["off", "fast", "full"], default="fast")
+    parser.add_argument("--wf-scheme", choices=["single", "nested"], default="nested")
+    parser.add_argument("--progress-interval-sec", type=float, default=5.0)
     args = parser.parse_args()
 
     try:
         model_cfg = load_yaml(ROOT / args.config)
         data_cfg = load_yaml(ROOT / args.data_config)
         feature_cfg = load_yaml(ROOT / args.feature_config)
+        task = str(model_cfg.get("task", "classification")).strip().lower()
+        evaluation_cfg = model_cfg.get("evaluation", {})
+        leakage_cfg = evaluation_cfg.get("leakage_audit", {})
+        leakage_enabled = bool(leakage_cfg.get("enabled", True))
 
         raw_dir = data_cfg.get("dataset", {}).get("raw_dir", "data/raw")
         label_col = model_cfg.get("label", "is_win")
         feature_columns = feature_cfg.get("features", {}).get("base", []) + feature_cfg.get("features", {}).get("history", [])
 
+        log_progress("Loading training table...")
         frame = load_training_table(str(ROOT / raw_dir))
+        log_progress("Building features...")
         frame = build_features(frame)
         if args.max_rows and len(frame) > args.max_rows:
             frame = frame.tail(args.max_rows).copy()
@@ -656,6 +815,7 @@ def main() -> int:
 
         x_eval = frame[available_features]
         y_eval = frame[label_col].astype(int).to_numpy()
+        log_progress("Running model inference...")
         y_score = predict_score(model, x_eval, race_ids=frame["race_id"])
         top3_probs = predict_top3_probs(model, x_eval, race_ids=frame["race_id"])
 
@@ -672,15 +832,49 @@ def main() -> int:
         base_metrics = evaluate_frame(pred, score_col="score", odds_col=odds_col)
 
         score_is_prob = bool(np.nanmin(y_score) >= 0.0 and np.nanmax(y_score) <= 1.0)
+        compute_prob_metrics = task in {"classification", "ranking", "multi_position"}
+        probabilistic_flow = bool(compute_prob_metrics and score_is_prob)
         summary = {
             "n_rows": int(len(pred)),
             "n_races": int(pred["race_id"].nunique()),
             "n_dates": int(pred["date"].nunique()) if "date" in pred.columns else None,
-            "auc": float(roc_auc_score(y_eval, y_score)) if len(np.unique(y_eval)) > 1 else None,
-            "logloss": float(log_loss(y_eval, np.clip(y_score, 1e-12, 1 - 1e-12), labels=[0, 1])) if score_is_prob else None,
+            "auc": float(roc_auc_score(y_eval, y_score)) if (compute_prob_metrics and len(np.unique(y_eval)) > 1) else None,
+            "logloss": float(log_loss(y_eval, np.clip(y_score, 1e-12, 1 - 1e-12), labels=[0, 1])) if (compute_prob_metrics and score_is_prob) else None,
             "score_is_probability": score_is_prob,
+            "task": task,
+            "evaluation_flow": ("probability_market" if probabilistic_flow else "roi_direct"),
             **base_metrics,
         }
+
+        summary["run_context"] = {
+            "config": str(args.config),
+            "data_config": str(args.data_config),
+            "feature_config": str(args.feature_config),
+            "task": task,
+            "label_column": label_col,
+            "max_rows": int(args.max_rows),
+            "wf_mode": args.wf_mode,
+            "wf_scheme": args.wf_scheme,
+            "progress_interval_sec": float(args.progress_interval_sec),
+            "rows_total_after_tail": int(len(frame)),
+        }
+
+        summary["leakage_audit"] = (
+            run_leakage_audit(frame=frame, feature_columns=available_features, label_column=label_col)
+            if leakage_enabled
+            else {"enabled": False}
+        )
+
+        if odds_col is not None and probabilistic_flow:
+            market_prob = compute_market_prob(pred, odds_col=odds_col).to_numpy(dtype=float)
+            model_prob = np.clip(np.asarray(y_score, dtype=float), 1e-6, 1 - 1e-6)
+            market_prob_clip = np.clip(market_prob, 1e-6, 1 - 1e-6)
+            edge = model_prob * pd.to_numeric(pred[odds_col], errors="coerce").to_numpy(dtype=float) - 1.0
+            delta_logit = np.log(model_prob / (1.0 - model_prob)) - np.log(market_prob_clip / (1.0 - market_prob_clip))
+
+            summary["market_prob_corr"] = float(np.corrcoef(model_prob, market_prob_clip)[0, 1]) if len(model_prob) > 1 else None
+            summary["edge_mean"] = float(np.nanmean(edge)) if np.isfinite(np.nanmean(edge)) else None
+            summary["delta_logit_mean"] = float(np.nanmean(delta_logit)) if np.isfinite(np.nanmean(delta_logit)) else None
 
         if top3_probs is not None and "rank" in pred.columns:
             rank_series = pd.to_numeric(pred["rank"], errors="coerce")
@@ -689,8 +883,9 @@ def main() -> int:
                 if len(np.unique(y_pos)) > 1:
                     summary[f"auc_rank{pos}"] = float(roc_auc_score(y_pos, top3_probs[key]))
 
+        log_progress("Starting calibration/evaluation block...")
         calib_train, calib_test = split_for_calibration(pred, date_col="date", train_ratio=0.7)
-        if len(calib_train) >= 1000 and len(calib_test) >= 1000:
+        if probabilistic_flow and len(calib_train) >= 1000 and len(calib_test) >= 1000:
             train_scores = calib_train["score"].to_numpy()
             train_labels = calib_train[label_col].astype(int).to_numpy()
             test_scores = calib_test["score"].to_numpy()
@@ -718,6 +913,11 @@ def main() -> int:
                 summary["isotonic_top1_roi_lift"] = float(summary["isotonic_top1_roi"] - summary["top1_roi"])
 
             if odds_col is not None:
+                strategy_constraints_cfg = evaluation_cfg.get("strategy_constraints", {})
+                wf_max_drawdown = float(strategy_constraints_cfg.get("max_drawdown", 0.45))
+                wf_min_final_bankroll = float(strategy_constraints_cfg.get("min_final_bankroll", 0.85))
+                wf_min_bets = int(strategy_constraints_cfg.get("min_bets", 50))
+
                 calib_train_b = calib_train.copy()
                 calib_test_b = calib_test.copy()
                 calib_train_b["isotonic_prob"] = fit_isotonic(train_scores, train_labels, train_scores)
@@ -757,61 +957,200 @@ def main() -> int:
                 summary["benter_kelly_bets"] = kelly["kelly_bets"]
                 summary["benter_kelly_hit_rate"] = kelly["kelly_hit_rate"]
                 summary["benter_kelly_final_bankroll"] = kelly["kelly_final_bankroll"]
+                summary["benter_kelly_max_drawdown"] = kelly.get("kelly_max_drawdown")
 
                 wf_train, wf_valid, wf_test = split_three_way_time(pred, date_col="date", train_ratio=0.5, valid_ratio=0.25)
                 summary["wf_train_rows"] = int(len(wf_train))
                 summary["wf_valid_rows"] = int(len(wf_valid))
                 summary["wf_test_rows"] = int(len(wf_test))
                 summary["wf_mode"] = args.wf_mode
+                summary["wf_scheme"] = args.wf_scheme
+                summary["wf_constraints_max_drawdown"] = wf_max_drawdown
+                summary["wf_constraints_min_final_bankroll"] = wf_min_final_bankroll
+                summary["wf_constraints_min_bets"] = wf_min_bets
                 summary["wf_enabled"] = bool(args.wf_mode != "off" and len(wf_train) >= 1000 and len(wf_valid) >= 500 and len(wf_test) >= 500)
                 if args.wf_mode != "off" and len(wf_train) >= 1000 and len(wf_valid) >= 500 and len(wf_test) >= 500:
-                    best_params, best_valid_metrics = optimize_roi_strategy(
-                        train_df=wf_train,
-                        valid_df=wf_valid,
-                        label_col=label_col,
-                        odds_col=odds_col,
-                        mode=args.wf_mode,
-                    )
+                    if args.wf_scheme == "single":
+                        log_progress("Walk-forward optimization started (single split)...")
+                        best_params, best_valid_metrics = optimize_roi_strategy(
+                            train_df=wf_train,
+                            valid_df=wf_valid,
+                            label_col=label_col,
+                            odds_col=odds_col,
+                            mode=args.wf_mode,
+                            progress_interval_sec=float(args.progress_interval_sec),
+                            max_drawdown=wf_max_drawdown,
+                            min_final_bankroll=wf_min_final_bankroll,
+                            min_bets=wf_min_bets,
+                        )
 
-                    wf_train_scores = wf_train["score"].to_numpy()
-                    wf_train_labels = wf_train[label_col].astype(int).to_numpy()
-                    wf_test = wf_test.copy()
-                    wf_test["iso_prob"] = fit_isotonic(wf_train_scores, wf_train_labels, wf_test["score"].to_numpy())
-                    wf_test["market_prob"] = compute_market_prob(wf_test, odds_col=odds_col)
-                    wf_test["blend_prob"] = blend_prob(
-                        wf_test["iso_prob"],
-                        wf_test["market_prob"],
-                        weight=float(best_params["blend_weight"]),
-                    )
-                    wf_test_metrics = run_strategy(wf_test, prob_col="blend_prob", odds_col=odds_col, params=best_params)
+                        wf_train_scores = wf_train["score"].to_numpy()
+                        wf_train_labels = wf_train[label_col].astype(int).to_numpy()
+                        wf_test = wf_test.copy()
+                        wf_test["iso_prob"] = fit_isotonic(wf_train_scores, wf_train_labels, wf_test["score"].to_numpy())
+                        wf_test["market_prob"] = compute_market_prob(wf_test, odds_col=odds_col)
+                        wf_test["blend_prob"] = blend_prob(
+                            wf_test["iso_prob"],
+                            wf_test["market_prob"],
+                            weight=float(best_params["blend_weight"]),
+                        )
+                        wf_test_metrics = run_strategy(wf_test, prob_col="blend_prob", odds_col=odds_col, params=best_params)
+                        log_progress("Walk-forward optimization finished (single split).")
 
-                    summary["wf_strategy_kind"] = str(best_params.get("strategy_kind", "kelly"))
-                    summary["wf_best_blend_weight"] = float(best_params["blend_weight"])
-                    summary["wf_best_min_prob"] = float(best_params["min_prob"])
-                    summary["wf_best_odds_min"] = float(best_params.get("odds_min", 1.0))
-                    summary["wf_best_odds_max"] = float(best_params.get("odds_max", 999.0))
+                        summary["wf_strategy_kind"] = str(best_params.get("strategy_kind", "kelly"))
+                        summary["wf_best_blend_weight"] = float(best_params["blend_weight"])
+                        summary["wf_best_min_prob"] = float(best_params["min_prob"])
+                        summary["wf_best_odds_min"] = float(best_params.get("odds_min", 1.0))
+                        summary["wf_best_odds_max"] = float(best_params.get("odds_max", 999.0))
 
-                    if summary["wf_strategy_kind"] == "kelly":
-                        summary["wf_best_min_edge"] = float(best_params.get("min_edge", 0.03))
-                        summary["wf_best_fractional_kelly"] = float(best_params.get("fractional_kelly", 0.5))
-                        summary["wf_best_max_fraction"] = float(best_params.get("max_fraction", 0.05))
-                        summary["wf_valid_roi"] = best_valid_metrics.get("kelly_roi")
-                        summary["wf_valid_bets"] = best_valid_metrics.get("kelly_bets")
-                        summary["wf_valid_hit_rate"] = best_valid_metrics.get("kelly_hit_rate")
-                        summary["wf_test_roi"] = wf_test_metrics.get("kelly_roi")
-                        summary["wf_test_bets"] = wf_test_metrics.get("kelly_bets")
-                        summary["wf_test_hit_rate"] = wf_test_metrics.get("kelly_hit_rate")
-                        summary["wf_test_final_bankroll"] = wf_test_metrics.get("kelly_final_bankroll")
+                        if summary["wf_strategy_kind"] == "kelly":
+                            summary["wf_best_min_edge"] = float(best_params.get("min_edge", 0.03))
+                            summary["wf_best_fractional_kelly"] = float(best_params.get("fractional_kelly", 0.5))
+                            summary["wf_best_max_fraction"] = float(best_params.get("max_fraction", 0.05))
+                            summary["wf_valid_roi"] = best_valid_metrics.get("kelly_roi")
+                            summary["wf_valid_bets"] = best_valid_metrics.get("kelly_bets")
+                            summary["wf_valid_hit_rate"] = best_valid_metrics.get("kelly_hit_rate")
+                            summary["wf_test_roi"] = wf_test_metrics.get("kelly_roi")
+                            summary["wf_test_bets"] = wf_test_metrics.get("kelly_bets")
+                            summary["wf_test_hit_rate"] = wf_test_metrics.get("kelly_hit_rate")
+                            summary["wf_test_final_bankroll"] = wf_test_metrics.get("kelly_final_bankroll")
+                            summary["wf_valid_max_drawdown"] = best_valid_metrics.get("kelly_max_drawdown")
+                            summary["wf_test_max_drawdown"] = wf_test_metrics.get("kelly_max_drawdown")
+                        else:
+                            summary["wf_best_top_k"] = int(best_params.get("top_k", 2))
+                            summary["wf_best_min_expected_value"] = float(best_params.get("min_expected_value", 1.0))
+                            summary["wf_valid_roi"] = best_valid_metrics.get("portfolio_roi")
+                            summary["wf_valid_bets"] = best_valid_metrics.get("portfolio_bets")
+                            summary["wf_valid_hit_rate"] = best_valid_metrics.get("portfolio_hit_rate")
+                            summary["wf_test_roi"] = wf_test_metrics.get("portfolio_roi")
+                            summary["wf_test_bets"] = wf_test_metrics.get("portfolio_bets")
+                            summary["wf_test_hit_rate"] = wf_test_metrics.get("portfolio_hit_rate")
+                            summary["wf_test_avg_synthetic_odds"] = wf_test_metrics.get("portfolio_avg_synthetic_odds")
+                            summary["wf_valid_final_bankroll"] = best_valid_metrics.get("portfolio_final_bankroll")
+                            summary["wf_test_final_bankroll"] = wf_test_metrics.get("portfolio_final_bankroll")
+                            summary["wf_valid_max_drawdown"] = best_valid_metrics.get("portfolio_max_drawdown")
+                            summary["wf_test_max_drawdown"] = wf_test_metrics.get("portfolio_max_drawdown")
                     else:
-                        summary["wf_best_top_k"] = int(best_params.get("top_k", 2))
-                        summary["wf_best_min_expected_value"] = float(best_params.get("min_expected_value", 1.0))
-                        summary["wf_valid_roi"] = best_valid_metrics.get("portfolio_roi")
-                        summary["wf_valid_bets"] = best_valid_metrics.get("portfolio_bets")
-                        summary["wf_valid_hit_rate"] = best_valid_metrics.get("portfolio_hit_rate")
-                        summary["wf_test_roi"] = wf_test_metrics.get("portfolio_roi")
-                        summary["wf_test_bets"] = wf_test_metrics.get("portfolio_bets")
-                        summary["wf_test_hit_rate"] = wf_test_metrics.get("portfolio_hit_rate")
-                        summary["wf_test_avg_synthetic_odds"] = wf_test_metrics.get("portfolio_avg_synthetic_odds")
+                        n_folds = 5 if args.wf_mode == "full" else 3
+                        nested_slices = build_nested_wf_slices(
+                            pred,
+                            date_col="date",
+                            n_folds=n_folds,
+                            valid_ratio=0.15,
+                            test_ratio=0.15,
+                            min_train_rows=1000,
+                            min_valid_rows=500,
+                            min_test_rows=500,
+                        )
+                        summary["wf_nested_target_folds"] = int(n_folds)
+                        summary["wf_nested_actual_folds"] = int(len(nested_slices))
+
+                        if nested_slices:
+                            fold_rows: list[dict[str, float | int | str | None]] = []
+                            log_progress(f"Nested WF started: folds={len(nested_slices)}")
+                            for fold_index, (fold_train, fold_valid, fold_test) in enumerate(nested_slices, start=1):
+                                log_progress(f"Nested WF fold {fold_index}/{len(nested_slices)}: optimizing on inner valid...")
+                                best_params, best_valid_metrics = optimize_roi_strategy(
+                                    train_df=fold_train,
+                                    valid_df=fold_valid,
+                                    label_col=label_col,
+                                    odds_col=odds_col,
+                                    mode=args.wf_mode,
+                                    progress_interval_sec=float(args.progress_interval_sec),
+                                    max_drawdown=wf_max_drawdown,
+                                    min_final_bankroll=wf_min_final_bankroll,
+                                    min_bets=wf_min_bets,
+                                )
+
+                                fold_train_scores = fold_train["score"].to_numpy()
+                                fold_train_labels = fold_train[label_col].astype(int).to_numpy()
+                                fold_test = fold_test.copy()
+                                fold_test["iso_prob"] = fit_isotonic(fold_train_scores, fold_train_labels, fold_test["score"].to_numpy())
+                                fold_test["market_prob"] = compute_market_prob(fold_test, odds_col=odds_col)
+                                fold_test["blend_prob"] = blend_prob(
+                                    fold_test["iso_prob"],
+                                    fold_test["market_prob"],
+                                    weight=float(best_params["blend_weight"]),
+                                )
+                                fold_test_metrics = run_strategy(fold_test, prob_col="blend_prob", odds_col=odds_col, params=best_params)
+
+                                strategy_kind = str(best_params.get("strategy_kind", "kelly"))
+                                if strategy_kind == "kelly":
+                                    fold_valid_roi = best_valid_metrics.get("kelly_roi")
+                                    fold_valid_bets = best_valid_metrics.get("kelly_bets")
+                                    fold_valid_hit_rate = best_valid_metrics.get("kelly_hit_rate")
+                                    fold_test_roi = fold_test_metrics.get("kelly_roi")
+                                    fold_test_bets = fold_test_metrics.get("kelly_bets")
+                                    fold_test_hit_rate = fold_test_metrics.get("kelly_hit_rate")
+                                    fold_valid_final_bankroll = best_valid_metrics.get("kelly_final_bankroll")
+                                    fold_valid_max_drawdown = best_valid_metrics.get("kelly_max_drawdown")
+                                    fold_test_final_bankroll = fold_test_metrics.get("kelly_final_bankroll")
+                                    fold_test_max_drawdown = fold_test_metrics.get("kelly_max_drawdown")
+                                else:
+                                    fold_valid_roi = best_valid_metrics.get("portfolio_roi")
+                                    fold_valid_bets = best_valid_metrics.get("portfolio_bets")
+                                    fold_valid_hit_rate = best_valid_metrics.get("portfolio_hit_rate")
+                                    fold_test_roi = fold_test_metrics.get("portfolio_roi")
+                                    fold_test_bets = fold_test_metrics.get("portfolio_bets")
+                                    fold_test_hit_rate = fold_test_metrics.get("portfolio_hit_rate")
+                                    fold_valid_final_bankroll = best_valid_metrics.get("portfolio_final_bankroll")
+                                    fold_valid_max_drawdown = best_valid_metrics.get("portfolio_max_drawdown")
+                                    fold_test_final_bankroll = fold_test_metrics.get("portfolio_final_bankroll")
+                                    fold_test_max_drawdown = fold_test_metrics.get("portfolio_max_drawdown")
+
+                                fold_row: dict[str, float | int | str | None] = {
+                                    "fold": int(fold_index),
+                                    "strategy_kind": strategy_kind,
+                                    "valid_roi": fold_valid_roi,
+                                    "valid_bets": fold_valid_bets,
+                                    "valid_hit_rate": fold_valid_hit_rate,
+                                    "valid_final_bankroll": fold_valid_final_bankroll,
+                                    "valid_max_drawdown": fold_valid_max_drawdown,
+                                    "test_roi": fold_test_roi,
+                                    "test_bets": fold_test_bets,
+                                    "test_hit_rate": fold_test_hit_rate,
+                                    "test_final_bankroll": fold_test_final_bankroll,
+                                    "test_max_drawdown": fold_test_max_drawdown,
+                                    "blend_weight": float(best_params.get("blend_weight", 0.0)),
+                                }
+                                fold_rows.append(fold_row)
+
+                            summary["wf_nested_folds"] = fold_rows
+
+                            test_roi_values = [float(row["test_roi"]) for row in fold_rows if row.get("test_roi") is not None]
+                            test_bets_values = [int(row["test_bets"] or 0) for row in fold_rows]
+                            weighted_numerator = 0.0
+                            weighted_denominator = 0.0
+                            for row in fold_rows:
+                                row_roi = row.get("test_roi")
+                                row_bets = int(row.get("test_bets") or 0)
+                                if row_roi is None or row_bets <= 0:
+                                    continue
+                                weighted_numerator += float(row_roi) * row_bets
+                                weighted_denominator += row_bets
+
+                            summary["wf_nested_test_roi_mean"] = float(np.mean(test_roi_values)) if test_roi_values else None
+                            summary["wf_nested_test_roi_weighted"] = float(weighted_numerator / weighted_denominator) if weighted_denominator > 0 else None
+                            summary["wf_nested_test_bets_total"] = int(np.sum(test_bets_values))
+                            summary["wf_nested_test_bets_mean"] = float(np.mean(test_bets_values)) if test_bets_values else None
+                            summary["wf_nested_completed"] = True
+                            log_progress("Nested WF finished.")
+                        else:
+                            summary["wf_nested_completed"] = False
+                            summary["wf_nested_reason"] = "insufficient_data_for_nested_folds"
+        else:
+            if not probabilistic_flow:
+                summary["calibration_skipped_reason"] = "non_probability_task_or_score"
+                summary["wf_enabled"] = False
+                summary["wf_mode"] = args.wf_mode
+                summary["wf_scheme"] = args.wf_scheme
+                summary["wf_skipped_reason"] = "non_probability_task_or_score"
+            else:
+                summary["calibration_skipped_reason"] = "insufficient_calibration_rows"
+                summary["wf_enabled"] = False
+                summary["wf_mode"] = args.wf_mode
+                summary["wf_scheme"] = args.wf_scheme
+                summary["wf_skipped_reason"] = "insufficient_calibration_rows"
 
         by_date_rows: list[dict] = []
         if "date" in pred.columns:

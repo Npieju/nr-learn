@@ -60,6 +60,8 @@ nr-learn/
     - `python scripts/run_train.py --config configs/model.yaml --data-config configs/data.yaml --feature-config configs/features.yaml`
     - （Ranker）`python scripts/run_train.py --config configs/model_ranker.yaml --data-config configs/data.yaml --feature-config configs/features.yaml`
     - （Top3確率）`python scripts/run_train.py --config configs/model_top3.yaml --data-config configs/data.yaml --feature-config configs/features.yaml`
+    - （ROI回帰）`python scripts/run_train.py --config configs/model_roi.yaml --data-config configs/data.yaml --feature-config configs/features.yaml`
+    - （市場乖離/Layer2）`python scripts/run_train.py --config configs/model_alpha.yaml --data-config configs/data.yaml --feature-config configs/features.yaml`
 3. 生成物確認
     - モデル: `artifacts/models/baseline_model.joblib`
     - レポート: `artifacts/reports/train_metrics.json`
@@ -77,7 +79,11 @@ nr-learn/
     - 可視化PNG: `artifacts/reports/backtest_YYYYMMDD.png`
 6. モデル評価（全体＋日別）
     - `python scripts/run_evaluate.py --config configs/model.yaml --data-config configs/data.yaml --feature-config configs/features.yaml --max-rows 80000`
+    - （ROI回帰）`python scripts/run_evaluate.py --config configs/model_roi.yaml --data-config configs/data.yaml --feature-config configs/features.yaml --max-rows 80000`
+    - （市場乖離/Layer2）`python scripts/run_evaluate.py --config configs/model_alpha.yaml --data-config configs/data.yaml --feature-config configs/features.yaml --max-rows 80000`
     - 全体指標: `artifacts/reports/evaluation_summary.json`
+            - `run_context`: 実行条件（config, max_rows, wf設定 など）
+            - `leakage_audit`: 特徴量リーク疑義の自動点検結果
     - 日別指標: `artifacts/reports/evaluation_by_date.csv`
         - 回収率指標（主目的）:
             - `top1_roi`: スコア1位を毎レース購入
@@ -88,6 +94,7 @@ nr-learn/
     - `python scripts/run_ab_compare.py --base-config configs/model.yaml --challenger-config configs/model_ranker.yaml --max-rows 30000`
     - 比較サマリ: `artifacts/reports/ab_compare_summary.json`
     - Top3確率モデルを比較する場合は `--challenger-config configs/model_top3.yaml` を指定
+    - Top3チューニング結果（`artifacts/reports/tune_top3_summary.json`）には `run_context` / `leakage_audit` / `strategy_constraints` が保存されます
 8. ダッシュボード（Notebookが止まるときのCLI代替）
     - `python scripts/run_dashboard.py`
     - 概要JSON: `artifacts/reports/dashboard/dashboard_summary_YYYYMMDD.json`

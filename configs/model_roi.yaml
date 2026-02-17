@@ -1,25 +1,26 @@
-task: "classification"
+task: "roi_regression"
 label: "is_win"
 
 model:
   name: "lightgbm"
   params:
-    objective: "binary"
-    # GPUを使う場合は以下を有効化（コンテナでGPUが見えていることが前提）
+    objective: "regression"
     device_type: "cuda"
     learning_rate: 0.03
     num_leaves: 64
-    min_data_in_leaf: 50
+    min_data_in_leaf: 80
     feature_fraction: 0.8
-    bagging_fraction: 0.8
+    bagging_fraction: 0.9
     bagging_freq: 1
-    n_estimators: 2000
+    lambda_l2: 2.0
+    odds_clip: 30.0
+    n_estimators: 2500
 
 training:
   cv: "expanding_window"
-  early_stopping_rounds: 100
-  max_train_rows: 300000
-  max_valid_rows: 100000
+  early_stopping_rounds: 150
+  max_train_rows: 350000
+  max_valid_rows: 120000
   allow_fallback_model: false
 
 evaluation:
@@ -33,3 +34,5 @@ evaluation:
 output:
   model_dir: "artifacts/models"
   report_dir: "artifacts/reports"
+  model_file: "roi_model.joblib"
+  report_file: "train_metrics_roi.json"

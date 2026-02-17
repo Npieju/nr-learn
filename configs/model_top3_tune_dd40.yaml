@@ -26,10 +26,9 @@ evaluation:
   leakage_audit:
     enabled: true
   strategy_constraints:
-    selection_mode: "roi_first"
-    max_drawdown: 0.60
-    min_final_bankroll: 0.50
-    min_bets: 20
+    max_drawdown: 0.40
+    min_final_bankroll: 0.85
+    min_bets: 50
 
 output:
   model_dir: "artifacts/models"

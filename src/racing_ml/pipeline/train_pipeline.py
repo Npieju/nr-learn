@@ -1,4 +1,7 @@
+import json
 from pathlib import Path
+
+from racing_ml.evaluation.leakage import run_leakage_audit
 
 from racing_ml.common.config import load_yaml
 from racing_ml.data.dataset_loader import load_training_table
@@ -33,14 +36,23 @@ def run_train(model_config_path: str, data_config_path: str, feature_config_path
     model_params = model_cfg.get("params", {})
     device_type = str(model_params.get("device_type", "cpu")).strip().lower() or "cpu"
     training_cfg = model_config.get("training", {})
+    evaluation_cfg = model_config.get("evaluation", {})
     allow_fallback = bool(training_cfg.get("allow_fallback_model", False))
     early_stopping_rounds = training_cfg.get("early_stopping_rounds")
+    leakage_cfg = evaluation_cfg.get("leakage_audit", {})
+    leakage_enabled = bool(leakage_cfg.get("enabled", True))
 
     print(f"[train] model: {model_name}")
     print(f"[train] task: {task}")
     print(f"[train] device_type: {device_type}")
     print(f"[train] allow_fallback_model: {allow_fallback}")
     print(f"[train] early_stopping_rounds: {early_stopping_rounds}")
+
+    leakage_report = (
+        run_leakage_audit(frame=frame, feature_columns=feature_columns, label_column=label_column)
+        if leakage_enabled
+        else {"enabled": False}
+    )
 
     result = train_and_evaluate(
         frame=frame,
@@ -62,7 +74,30 @@ def run_train(model_config_path: str, data_config_path: str, feature_config_path
         report_file_name=output_cfg.get("report_file", "train_metrics.json"),
     )
 
+    report_payload = dict(result.metrics)
+    report_payload["run_context"] = {
+        "model_config": str(model_path),
+        "data_config": str(data_path),
+        "feature_config": str(feature_path),
+        "task": task,
+        "label_column": label_column,
+        "model_name": model_name,
+        "device_type": device_type,
+        "raw_dir": str(raw_dir),
+        "rows_total": int(len(frame)),
+        "rows_train_max": training_cfg.get("max_train_rows"),
+        "rows_valid_max": training_cfg.get("max_valid_rows"),
+        "split_train_end": split_cfg.get("train_end", "2022-12-31"),
+        "split_valid_start": split_cfg.get("valid_start", "2023-01-01"),
+        "split_valid_end": split_cfg.get("valid_end", "2023-12-31"),
+    }
+    report_payload["leakage_audit"] = leakage_report
+
+    with result.report_path.open("w", encoding="utf-8") as file:
+        json.dump(report_payload, file, ensure_ascii=False, indent=2)
+
     print(f"[train] model saved: {result.model_path}")
     print(f"[train] report saved: {result.report_path}")
     print(f"[train] metrics: {result.metrics}")
+    print(f"[train] leakage_audit: {leakage_report}")
     print(f"[train] used features: {result.used_features}")

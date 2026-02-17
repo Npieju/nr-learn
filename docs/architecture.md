@@ -1,5 +1,9 @@
 # 競馬予想MLアーキテクチャ（学習用）
 
+## 補足（ROI再整備方針）
+- ROI最大化の基礎設計と実装順序は [roi_foundation_design.md](roi_foundation_design.md) を参照。
+- 以後の改善はこの方針を優先し、チューニングは最終段階で実施する。
+
 ## 1. なぜ `takamotoki/jra-horse-racing-dataset` が良いか
 - JRAのレース/馬/騎手などの構造化データがまとまっている
 - 学習用として「前処理・特徴量設計・時系列評価」を一通り学べる

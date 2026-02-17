@@ -10,6 +10,7 @@ import numpy as np
 import pandas as pd
 from sklearn.compose import ColumnTransformer
 from sklearn.ensemble import RandomForestClassifier
+from sklearn.ensemble import RandomForestRegressor
 from sklearn.impute import SimpleImputer
 from sklearn.metrics import log_loss, ndcg_score, roc_auc_score
 from sklearn.pipeline import Pipeline
@@ -33,10 +34,14 @@ def _is_gpu_requested(model_name: str, params: dict) -> bool:
 
 
 def _validate_lightgbm_gpu_runtime(params: dict, task: str) -> None:
-    from lightgbm import LGBMClassifier, LGBMRanker
+    from lightgbm import LGBMClassifier, LGBMRanker, LGBMRegressor
     device_type = str(params.get("device_type", "gpu")).strip().lower() or "gpu"
 
-    test_params = {k: v for k, v in params.items() if k != "objective"}
+    test_params = {
+        k: v
+        for k, v in params.items()
+        if k not in {"objective", "odds_clip", "market_prob_floor", "target_clip"}
+    }
     test_params["n_estimators"] = min(int(test_params.get("n_estimators", 10)), 10)
     test_params.setdefault("num_leaves", 8)
     test_params.setdefault("min_data_in_leaf", 1)
@@ -59,6 +64,10 @@ def _validate_lightgbm_gpu_runtime(params: dict, task: str) -> None:
         if task == "ranking":
             model = LGBMRanker(**test_params)
             model.fit(x, y, group=[3, 3])
+        elif task in {"roi_regression", "market_deviation"}:
+            y_reg = np.array([0.2, -0.3, 0.1, -0.1, 0.4, -0.2], dtype=np.float32)
+            model = LGBMRegressor(**test_params)
+            model.fit(x, y_reg)
         else:
             model = LGBMClassifier(**test_params)
             model.fit(x, y)
@@ -85,11 +94,17 @@ def _validate_lightgbm_gpu_runtime(params: dict, task: str) -> None:
 def _build_model(model_name: str, params: dict, task: str) -> object:
     if model_name.lower() == "lightgbm":
         try:
-            from lightgbm import LGBMClassifier, LGBMRanker
+            from lightgbm import LGBMClassifier, LGBMRanker, LGBMRegressor
 
-            clean_params = {k: v for k, v in params.items() if k != "objective"}
+            clean_params = {
+                k: v
+                for k, v in params.items()
+                if k not in {"objective", "odds_clip", "market_prob_floor", "target_clip"}
+            }
             if task == "ranking":
                 return LGBMRanker(**clean_params)
+            if task in {"roi_regression", "market_deviation"}:
+                return LGBMRegressor(**clean_params)
             return LGBMClassifier(**clean_params)
         except Exception as error:
             raise RuntimeError(f"Failed to initialize LightGBM: {error}") from error
@@ -103,6 +118,14 @@ def _build_model_with_optional_fallback(model_name: str, params: dict, task: str
     except Exception:
         if not allow_fallback:
             raise
+
+    if task in {"roi_regression", "market_deviation"}:
+        return RandomForestRegressor(
+            n_estimators=300,
+            max_depth=10,
+            n_jobs=-1,
+            random_state=42,
+        )
 
     return RandomForestClassifier(
         n_estimators=300,
@@ -188,6 +211,71 @@ def _safe_auc_binary(y_true: np.ndarray, y_pred: np.ndarray) -> float:
     return float(roc_auc_score(y_true, y_pred))
 
 
+def _compute_roi_target(frame: pd.DataFrame, odds_clip: float = 30.0) -> np.ndarray:
+    if "rank" not in frame.columns or "odds" not in frame.columns:
+        raise ValueError("roi_regression task requires 'rank' and 'odds' columns")
+
+    rank = pd.to_numeric(frame["rank"], errors="coerce")
+    odds = pd.to_numeric(frame["odds"], errors="coerce")
+    odds = odds.clip(lower=0.0, upper=float(odds_clip))
+
+    target = np.where(rank.to_numpy() == 1, odds.to_numpy() - 1.0, -1.0)
+    target = np.nan_to_num(target, nan=-1.0, posinf=float(odds_clip - 1.0), neginf=-1.0)
+    return target.astype(float)
+
+
+def _compute_market_deviation_target(
+    frame: pd.DataFrame,
+    label_column: str,
+    odds_clip: float = 30.0,
+    market_prob_floor: float = 1e-4,
+    target_clip: float = 8.0,
+) -> np.ndarray:
+    if "odds" not in frame.columns:
+        raise ValueError("market_deviation task requires 'odds' column")
+
+    if "rank" in frame.columns:
+        win_label = (pd.to_numeric(frame["rank"], errors="coerce") == 1).astype(float)
+    elif label_column in frame.columns:
+        win_label = pd.to_numeric(frame[label_column], errors="coerce").fillna(0.0).clip(0.0, 1.0)
+    else:
+        raise ValueError("market_deviation task requires 'rank' or label column")
+
+    odds = pd.to_numeric(frame["odds"], errors="coerce").clip(lower=1.01, upper=float(odds_clip))
+    implied = 1.0 / odds.replace(0, np.nan)
+    denom = implied.groupby(frame["race_id"]).transform("sum")
+    market_prob = (implied / denom.replace(0, np.nan)).clip(lower=float(market_prob_floor), upper=1.0 - float(market_prob_floor))
+
+    eps = float(market_prob_floor)
+    observed_prob = win_label.clip(lower=eps, upper=1.0 - eps)
+
+    observed_logit = np.log(observed_prob / (1.0 - observed_prob))
+    market_logit = np.log(market_prob / (1.0 - market_prob))
+    target = (observed_logit - market_logit).astype(float)
+    target = target.clip(lower=-float(target_clip), upper=float(target_clip))
+    target = target.replace([np.inf, -np.inf], np.nan).fillna(0.0)
+    return target.to_numpy(dtype=float)
+
+
+def _top1_roi_by_group(rank: np.ndarray, odds: np.ndarray, score: np.ndarray, group_ids: pd.Series) -> float:
+    total_bet = 0.0
+    total_return = 0.0
+    for group_id in pd.unique(group_ids):
+        mask = (group_ids == group_id).to_numpy()
+        if not np.any(mask):
+            continue
+        rank_group = rank[mask]
+        odds_group = odds[mask]
+        score_group = score[mask]
+        top_index = int(np.argmax(score_group))
+        total_bet += 1.0
+        if not np.isnan(rank_group[top_index]) and int(rank_group[top_index]) == 1 and not np.isnan(odds_group[top_index]) and odds_group[top_index] > 0:
+            total_return += float(odds_group[top_index])
+    if total_bet == 0:
+        return float("nan")
+    return float(total_return / total_bet)
+
+
 def train_and_evaluate(
     frame: pd.DataFrame,
     feature_columns: list[str],
@@ -211,12 +299,12 @@ def train_and_evaluate(
     if not available_features:
         raise ValueError("No configured feature columns found in dataset")
 
-    if label_column not in frame.columns:
-        raise ValueError(f"Label column '{label_column}' not found")
-
     task = str(task).strip().lower() or "classification"
-    if task not in {"classification", "ranking", "multi_position"}:
+    if task not in {"classification", "ranking", "multi_position", "roi_regression", "market_deviation"}:
         raise ValueError(f"Unsupported task: {task}")
+
+    if task not in {"roi_regression", "market_deviation"} and label_column not in frame.columns:
+        raise ValueError(f"Label column '{label_column}' not found")
 
     if _is_gpu_requested(model_name, model_params):
         _validate_lightgbm_gpu_runtime(model_params, task=task)
@@ -229,9 +317,33 @@ def train_and_evaluate(
         valid = valid.tail(max_valid_rows).copy()
 
     x_train = train[available_features].copy()
-    y_train = train[label_column].astype(int).to_numpy()
+    if task == "roi_regression":
+        odds_clip = float(model_params.get("odds_clip", 30.0))
+        y_train = _compute_roi_target(train, odds_clip=odds_clip)
+    elif task == "market_deviation":
+        y_train = _compute_market_deviation_target(
+            train,
+            label_column=label_column,
+            odds_clip=float(model_params.get("odds_clip", 30.0)),
+            market_prob_floor=float(model_params.get("market_prob_floor", 1e-4)),
+            target_clip=float(model_params.get("target_clip", 8.0)),
+        )
+    else:
+        y_train = train[label_column].astype(int).to_numpy()
     x_valid = valid[available_features].copy()
-    y_valid = valid[label_column].astype(int).to_numpy()
+    if task == "roi_regression":
+        odds_clip = float(model_params.get("odds_clip", 30.0))
+        y_valid = _compute_roi_target(valid, odds_clip=odds_clip)
+    elif task == "market_deviation":
+        y_valid = _compute_market_deviation_target(
+            valid,
+            label_column=label_column,
+            odds_clip=float(model_params.get("odds_clip", 30.0)),
+            market_prob_floor=float(model_params.get("market_prob_floor", 1e-4)),
+            target_clip=float(model_params.get("target_clip", 8.0)),
+        )
+    else:
+        y_valid = valid[label_column].astype(int).to_numpy()
 
     numeric_columns = [column for column in available_features if pd.api.types.is_numeric_dtype(x_train[column])]
     categorical_columns = [column for column in available_features if column not in numeric_columns]
@@ -364,6 +476,14 @@ def train_and_evaluate(
                     eval_metric="ndcg",
                     callbacks=callbacks,
                 )
+            elif task in {"roi_regression", "market_deviation"}:
+                model.fit(
+                    x_train_processed,
+                    y_train,
+                    eval_set=[(x_valid_processed, y_valid)],
+                    eval_metric="l2",
+                    callbacks=callbacks,
+                )
             else:
                 model.fit(
                     x_train_processed,
@@ -418,8 +538,53 @@ def train_and_evaluate(
             "positive_rate": float(np.mean(y_valid)),
             "gpu_enabled": float(_is_gpu_requested(model_name, model_params)),
         }
+    elif task == "roi_regression":
+        try:
+            valid_score = np.asarray(model.predict(x_valid_processed), dtype=float)
+        except Exception as error:
+            raise RuntimeError(f"Validation ROI prediction failed: {error}") from error
 
-    if task in {"classification", "ranking"} and hasattr(model, "best_iteration_") and getattr(model, "best_iteration_", None) is not None:
+        rank_valid = pd.to_numeric(valid["rank"], errors="coerce").to_numpy(dtype=float)
+        odds_valid = pd.to_numeric(valid["odds"], errors="coerce").to_numpy(dtype=float)
+        group_ids = valid["race_id"].astype(str)
+        top1_truth = (rank_valid == 1).astype(int)
+
+        metrics = {
+            "roi_target_mean": float(np.mean(y_valid)),
+            "pred_mean": float(np.mean(valid_score)),
+            "top1_hit_rate": _top1_hit_rate_by_group(top1_truth, valid_score, group_ids),
+            "top1_roi": _top1_roi_by_group(rank_valid, odds_valid, valid_score, group_ids),
+            "valid_samples": float(len(y_valid)),
+            "gpu_enabled": float(_is_gpu_requested(model_name, model_params)),
+        }
+    elif task == "market_deviation":
+        try:
+            valid_score = np.asarray(model.predict(x_valid_processed), dtype=float)
+        except Exception as error:
+            raise RuntimeError(f"Validation market deviation prediction failed: {error}") from error
+
+        rank_valid = pd.to_numeric(valid["rank"], errors="coerce").to_numpy(dtype=float) if "rank" in valid.columns else np.full(len(valid), np.nan)
+        odds_valid = pd.to_numeric(valid["odds"], errors="coerce").to_numpy(dtype=float) if "odds" in valid.columns else np.full(len(valid), np.nan)
+        group_ids = valid["race_id"].astype(str)
+        top1_truth = (rank_valid == 1).astype(int)
+
+        finite_mask = np.isfinite(y_valid) & np.isfinite(valid_score)
+        corr = float(np.corrcoef(y_valid[finite_mask], valid_score[finite_mask])[0, 1]) if int(np.sum(finite_mask)) >= 2 else float("nan")
+
+        metrics = {
+            "alpha_target_mean": float(np.mean(y_valid)),
+            "pred_mean": float(np.mean(valid_score)),
+            "alpha_target_std": float(np.std(y_valid)),
+            "pred_std": float(np.std(valid_score)),
+            "alpha_pred_corr": corr,
+            "positive_signal_rate": float(np.mean(valid_score > 0.0)),
+            "top1_hit_rate": _top1_hit_rate_by_group(top1_truth, valid_score, group_ids),
+            "top1_roi": _top1_roi_by_group(rank_valid, odds_valid, valid_score, group_ids),
+            "valid_samples": float(len(y_valid)),
+            "gpu_enabled": float(_is_gpu_requested(model_name, model_params)),
+        }
+
+    if task in {"classification", "ranking", "roi_regression", "market_deviation"} and hasattr(model, "best_iteration_") and getattr(model, "best_iteration_", None) is not None:
         metrics["best_iteration"] = float(getattr(model, "best_iteration_"))
 
     model_path = Path(model_dir)
