@@ -18,8 +18,8 @@ model:
 training:
   cv: "expanding_window"
   early_stopping_rounds: 120
-  max_train_rows: 450000
-  max_valid_rows: 160000
+  max_train_rows: 337500
+  max_valid_rows: 128000
   allow_fallback_model: false
 
 output:
