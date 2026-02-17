@@ -20,6 +20,7 @@ COLUMN_ALIASES = {
     "sex": ["sex", "gender", "性別"],
     "weight": ["weight", "horse_weight", "body_weight", "馬体重", "斤量"],
     "odds": ["odds", "単勝", "単勝オッズ"],
+    "popularity": ["popularity", "人気", "人気順"],
 }
 
 
@@ -99,6 +100,14 @@ def _ensure_minimum_columns(frame: pd.DataFrame) -> pd.DataFrame:
             .str.extract(r"(\d+(?:\.\d+)?)", expand=False)
         )
         frame["odds"] = pd.to_numeric(frame["odds"], errors="coerce")
+
+    if "popularity" in frame.columns:
+        frame["popularity"] = (
+            frame["popularity"]
+            .astype(str)
+            .str.extract(r"(\d+)", expand=False)
+        )
+        frame["popularity"] = pd.to_numeric(frame["popularity"], errors="coerce")
 
     if "is_win" not in frame.columns and "rank" in frame.columns:
         frame["is_win"] = (frame["rank"] == 1).astype(int)

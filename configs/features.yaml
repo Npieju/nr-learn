@@ -7,6 +7,8 @@ features:
     - distance
     - weather
     - ground_condition
+    - odds
+    - popularity
   history:
     - horse_last_3_avg_rank
     - horse_last_5_win_rate
