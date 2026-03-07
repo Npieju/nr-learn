@@ -3,6 +3,8 @@
 ## 補足（ROI再整備方針）
 - ROI最大化の基礎設計と実装順序は [roi_foundation_design.md](roi_foundation_design.md) を参照。
 - 以後の改善はこの方針を優先し、チューニングは最終段階で実施する。
+- 長期運用向けの責務分割は [architecture_long_term.md](architecture_long_term.md) を参照。
+- 学習成果物と bundle の運用は [model_artifacts.md](model_artifacts.md) を参照。
 
 ## 1. なぜ `takamotoki/jra-horse-racing-dataset` が良いか
 - JRAのレース/馬/騎手などの構造化データがまとまっている

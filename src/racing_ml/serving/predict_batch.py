@@ -8,34 +8,24 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 
+from racing_ml.common.artifacts import resolve_output_artifacts
 from racing_ml.common.config import load_yaml
-from racing_ml.common.probability import normalize_position_probabilities
 from racing_ml.data.dataset_loader import load_training_table
+from racing_ml.evaluation.scoring import generate_prediction_outputs
 from racing_ml.features.builder import build_features
 
 
 def _predict_score(model: object, frame: pd.DataFrame) -> np.ndarray:
-    if hasattr(model, "predict_proba"):
-        return model.predict_proba(frame)[:, 1]
-    if hasattr(model, "predict"):
-        return model.predict(frame)
-    raise RuntimeError("Loaded model does not support predict/predict_proba")
+    return generate_prediction_outputs(model, frame).score
 
 
 def _predict_multi_position(model_bundle: dict[str, Any], frame: pd.DataFrame) -> dict[str, np.ndarray]:
-    prep = model_bundle.get("prep")
-    models = model_bundle.get("models", {})
-    if prep is None or not isinstance(models, dict):
+    race_ids = frame["race_id"] if "race_id" in frame.columns else None
+    feature_frame = frame.drop(columns=["race_id"], errors="ignore")
+    outputs = generate_prediction_outputs(model_bundle, feature_frame, race_ids=race_ids)
+    if outputs.top3_probs is None:
         raise RuntimeError("Invalid multi_position model bundle")
-
-    transformed = prep.transform(frame)
-    outputs: dict[str, np.ndarray] = {}
-    for key in ("p_rank1", "p_rank2", "p_rank3"):
-        model = models.get(key)
-        if model is None:
-            raise RuntimeError(f"Missing model in bundle: {key}")
-        outputs[key] = model.predict_proba(transformed)[:, 1]
-    return outputs
+    return outputs.top3_probs
 
 
 def _resolve_target_date(frame: pd.DataFrame, race_date: str | None) -> pd.Timestamp:
@@ -107,23 +97,20 @@ def run_predict(
     if not available_features:
         raise ValueError("No feature columns available for prediction")
 
-    model_dir = Path(model_config.get("output", {}).get("model_dir", "artifacts/models"))
-    model_path = model_dir / model_config.get("output", {}).get("model_file", "baseline_model.joblib")
+    output_artifacts = resolve_output_artifacts(model_config.get("output", {}))
+    workspace_root = Path.cwd()
+    model_path = output_artifacts.model_path if output_artifacts.model_path.is_absolute() else (workspace_root / output_artifacts.model_path)
+    manifest_path = output_artifacts.manifest_path if output_artifacts.manifest_path.is_absolute() else (workspace_root / output_artifacts.manifest_path)
     if not model_path.exists():
         raise FileNotFoundError(f"Model file not found: {model_path}")
 
     model = joblib.load(model_path)
     if isinstance(model, dict) and model.get("kind") == "multi_position_top3":
-        outputs = _predict_multi_position(model, pred_frame[available_features])
+        scoring_frame = pred_frame[["race_id", *available_features]].copy() if "race_id" in pred_frame.columns else pred_frame[available_features].copy()
+        outputs = _predict_multi_position(model, scoring_frame)
         pred_frame["p_rank1_raw"] = outputs["p_rank1"]
         pred_frame["p_rank2_raw"] = outputs["p_rank2"]
         pred_frame["p_rank3_raw"] = outputs["p_rank3"]
-        pred_frame = normalize_position_probabilities(
-            pred_frame,
-            raw_columns=["p_rank1_raw", "p_rank2_raw", "p_rank3_raw"],
-            race_id_col="race_id",
-            output_prefix="",
-        )
         pred_frame = pred_frame.rename(
             columns={
                 "p_rank1_raw": "p_rank1",
@@ -175,4 +162,6 @@ def run_predict(
     print(f"[predict] target date: {pd.Timestamp(target_date).date()}")
     print(f"[predict] predictions saved: {csv_path}")
     print(f"[predict] chart saved: {png_path}")
+    if manifest_path.exists():
+        print(f"[predict] manifest: {manifest_path}")
     print(f"[predict] records: {len(output)}")

@@ -25,13 +25,16 @@ training:
 evaluation:
   leakage_audit:
     enabled: true
-  strategy_constraints:
+  policy:
+    selection_mode: "gate_then_roi"
+    min_bet_ratio: 0.02
+    min_bets_abs: 10
     max_drawdown: 0.60
     min_final_bankroll: 0.50
-    min_bets: 10
 
 output:
   model_dir: "artifacts/models"
   report_dir: "artifacts/reports"
   model_file: "top3_tune_smoke_model.joblib"
   report_file: "top3_tune_smoke_report.json"
+  manifest_file: "top3_tune_smoke_model.manifest.json"

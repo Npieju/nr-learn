@@ -23,8 +23,19 @@ training:
   max_valid_rows: 100000
   allow_fallback_model: false
 
+evaluation:
+  leakage_audit:
+    enabled: true
+  policy:
+    selection_mode: "gate_then_roi"
+    min_bet_ratio: 0.05
+    min_bets_abs: 100
+    max_drawdown: 0.45
+    min_final_bankroll: 0.85
+
 output:
   model_dir: "artifacts/models"
   report_dir: "artifacts/reports"
   model_file: "ranker_model.joblib"
   report_file: "train_metrics_ranker.json"
+  manifest_file: "ranker_model.manifest.json"

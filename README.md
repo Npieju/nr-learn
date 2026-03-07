@@ -10,12 +10,14 @@ JRA競馬予想の**学習用**プロジェクトです。
 
 ## アーキテクチャ概要
 - **Data Layer**: 生データ取得・正規化・特徴量生成
-- **Model Layer**: Baseline（LightGBM分類）→ Ranker（LightGBM LambdaRank）
-- **Evaluation Layer**: AUC / NDCG / 回収率 / 的中率
-- **Serving Layer**: 次レースの予測バッチ出力（CSV/JSON）
-- **Ops Layer**: 設定管理、実験ログ、モデルレジストリ（ローカル）
+- **Model Layer**: classification / ranking / Top3 / ROI / alpha の学習
+- **Scoring Layer**: モデル出力と Top3 正規化を共通 API 化
+- **Policy Layer**: ROI評価、market signal、gating、Kelly / portfolio を統一
+- **Walk-Forward Layer**: calibration / blend / nested WF 最適化を統一
+- **Artifact Layer**: train manifest と stack bundle manifest を管理
+- **Serving Layer**: 次レース予測バッチ出力（CSV/PNG）
 
-詳細は [docs/architecture.md](docs/architecture.md) を参照。
+詳細は [docs/architecture.md](docs/architecture.md)、[docs/architecture_long_term.md](docs/architecture_long_term.md)、[docs/model_artifacts.md](docs/model_artifacts.md) を参照。
 
 ## ディレクトリ
 ```text
@@ -29,10 +31,13 @@ nr-learn/
 │   ├── interim/
 │   └── processed/
 ├── docs/
-│   └── architecture.md
+│   ├── architecture.md
+│   ├── architecture_long_term.md
+│   └── model_artifacts.md
 ├── notebooks/
 ├── src/
 │   └── racing_ml/
+│       ├── common/
 │       ├── data/
 │       ├── features/
 │       ├── models/
@@ -40,6 +45,7 @@ nr-learn/
 │       ├── serving/
 │       └── pipeline/
 └── scripts/
+    ├── run_bundle_models.py
     ├── run_train.py
     ├── run_backtest.py
     └── run_predict.py
@@ -65,24 +71,32 @@ nr-learn/
 3. 生成物確認
     - モデル: `artifacts/models/baseline_model.joblib`
     - レポート: `artifacts/reports/train_metrics.json`
-4. 予測と可視化
+    - manifest: `artifacts/models/baseline_model.manifest.json`
+    - 各 train レポートには `run_context` / `leakage_audit` / `policy_constraints` が保存されます
+4. stack bundle 作成
+    - `python scripts/run_bundle_models.py --bundle-name policy_stack_v1 --primary-component win --component win=configs/model.yaml --component top3=configs/model_top3.yaml --component alpha=configs/model_alpha.yaml --component roi=configs/model_roi.yaml`
+    - bundle manifest: `artifacts/models/policy_stack_v1.bundle.json`
+    - 現時点の bundle は registry / orchestration 用の束ね方であり、学習済み meta-model ではありません
+5. 予測と可視化
     - `python scripts/run_predict.py --config configs/model.yaml --data-config configs/data.yaml --feature-config configs/features.yaml --race-date 2021-07-31`
     - （Top3確率）`python scripts/run_predict.py --config configs/model_top3.yaml --data-config configs/data.yaml --feature-config configs/features.yaml --race-date 2021-07-31`
     - 予測CSV: `artifacts/predictions/predictions_YYYYMMDD.csv`
     - 可視化PNG: `artifacts/predictions/predictions_YYYYMMDD.png`
+    - 対応する manifest が存在する場合は利用 artifact も出力されます
     - Top3確率モデルでは `p_rank1 / p_rank2 / p_rank3` 列が出力されます（各レース内で正規化済み）
     - `p_top3`（= `p_rank1 + p_rank2 + p_rank3`）も出力され、複勝系の期待値計算に利用できます
-5. バックテスト
+6. バックテスト
     - `python scripts/run_backtest.py --config configs/model.yaml`
     - （任意）`python scripts/run_backtest.py --config configs/model.yaml --predictions-file artifacts/predictions/predictions_20210731.csv`
     - レポートJSON: `artifacts/reports/backtest_YYYYMMDD.json`
     - 可視化PNG: `artifacts/reports/backtest_YYYYMMDD.png`
-6. モデル評価（全体＋日別）
+7. モデル評価（全体＋日別）
     - `python scripts/run_evaluate.py --config configs/model.yaml --data-config configs/data.yaml --feature-config configs/features.yaml --max-rows 80000`
     - （ROI回帰）`python scripts/run_evaluate.py --config configs/model_roi.yaml --data-config configs/data.yaml --feature-config configs/features.yaml --max-rows 80000`
     - （市場乖離/Layer2）`python scripts/run_evaluate.py --config configs/model_alpha.yaml --data-config configs/data.yaml --feature-config configs/features.yaml --max-rows 80000`
     - 全体指標: `artifacts/reports/evaluation_summary.json`
             - `run_context`: 実行条件（config, max_rows, wf設定 など）
+            - `artifact_manifest`: 利用モデルの manifest パス
             - `leakage_audit`: 特徴量リーク疑義の自動点検結果
     - 日別指標: `artifacts/reports/evaluation_by_date.csv`
         - 回収率指標（主目的）:
@@ -90,18 +104,25 @@ nr-learn/
             - `ev_top1_roi`: `score × odds` が最大の馬を毎レース購入
             - `ev_threshold_1_0_roi`: 期待値1.0以上のみ購入
             - `ev_threshold_1_2_roi`: 期待値1.2以上のみ購入
-7. ベースライン vs Ranker 比較（同一データでA/B）
+8. ベースライン vs Ranker 比較（同一データでA/B）
     - `python scripts/run_ab_compare.py --base-config configs/model.yaml --challenger-config configs/model_ranker.yaml --max-rows 30000`
     - 比較サマリ: `artifacts/reports/ab_compare_summary.json`
     - Top3確率モデルを比較する場合は `--challenger-config configs/model_top3.yaml` を指定
-    - Top3チューニング結果（`artifacts/reports/tune_top3_summary.json`）には `run_context` / `leakage_audit` / `strategy_constraints` が保存されます
-8. ダッシュボード（Notebookが止まるときのCLI代替）
+    - Top3チューニング結果（`artifacts/reports/tune_top3_summary.json`）には `run_context` / `leakage_audit` / `policy_constraints` が保存されます
+    - 互換のため `strategy_constraints` も同時に残します
+9. ダッシュボード（Notebookが止まるときのCLI代替）
     - `python scripts/run_dashboard.py`
     - 概要JSON: `artifacts/reports/dashboard/dashboard_summary_YYYYMMDD.json`
     - 可視化PNG: `artifacts/reports/dashboard/dashboard_YYYYMMDD.png`
     - Top20 CSV: `artifacts/reports/dashboard/dashboard_top20_YYYYMMDD.csv`
-9. 実データで重い場合
+10. 実データで重い場合
     - `configs/model.yaml` の `training.max_train_rows` / `training.max_valid_rows` で学習件数を調整
+
+## Artifact運用
+- 学習ごとに `model_file` / `report_file` / `manifest_file` の3点が揃います
+- manifest には task、config パス、used_features、metrics、policy_constraints、run_context が保存されます
+- stack bundle は複数 manifest / model を運用単位として束ねるための JSON です
+- 推奨運用順: `run_train` 群 → `run_bundle_models.py` → `run_predict` / `run_evaluate` / `run_ab_compare`
 
 ## Notebookトラブルシュート
 - `dashboard.ipynb` が止まる場合は、まずカーネルを `.venv` に再選択して先頭セルから順に実行

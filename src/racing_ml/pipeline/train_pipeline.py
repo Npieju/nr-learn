@@ -1,7 +1,13 @@
-import json
 from pathlib import Path
 
+from racing_ml.common.artifacts import (
+    build_model_manifest,
+    build_training_report_payload,
+    resolve_output_artifacts,
+    write_json,
+)
 from racing_ml.evaluation.leakage import run_leakage_audit
+from racing_ml.evaluation.policy import PolicyConstraints
 
 from racing_ml.common.config import load_yaml
 from racing_ml.data.dataset_loader import load_training_table
@@ -32,6 +38,7 @@ def run_train(model_config_path: str, data_config_path: str, feature_config_path
     task = str(model_config.get("task", "classification"))
     model_cfg = model_config.get("model", {})
     output_cfg = model_config.get("output", {})
+    output_artifacts = resolve_output_artifacts(output_cfg)
     model_name = model_cfg.get("name", "lightgbm")
     model_params = model_cfg.get("params", {})
     device_type = str(model_params.get("device_type", "cpu")).strip().lower() or "cpu"
@@ -74,8 +81,8 @@ def run_train(model_config_path: str, data_config_path: str, feature_config_path
         report_file_name=output_cfg.get("report_file", "train_metrics.json"),
     )
 
-    report_payload = dict(result.metrics)
-    report_payload["run_context"] = {
+    policy_constraints = PolicyConstraints.from_config(evaluation_cfg).to_dict()
+    run_context = {
         "model_config": str(model_path),
         "data_config": str(data_path),
         "feature_config": str(feature_path),
@@ -90,14 +97,41 @@ def run_train(model_config_path: str, data_config_path: str, feature_config_path
         "split_train_end": split_cfg.get("train_end", "2022-12-31"),
         "split_valid_start": split_cfg.get("valid_start", "2023-01-01"),
         "split_valid_end": split_cfg.get("valid_end", "2023-12-31"),
+        "artifact_model": output_artifacts.model_path.as_posix(),
+        "artifact_report": output_artifacts.report_path.as_posix(),
+        "artifact_manifest": output_artifacts.manifest_path.as_posix(),
     }
-    report_payload["leakage_audit"] = leakage_report
+    report_payload = build_training_report_payload(
+        metrics=result.metrics,
+        run_context=run_context,
+        leakage_audit=leakage_report,
+        policy_constraints=policy_constraints,
+    )
+    write_json(result.report_path, report_payload)
 
-    with result.report_path.open("w", encoding="utf-8") as file:
-        json.dump(report_payload, file, ensure_ascii=False, indent=2)
+    workspace_root = Path.cwd()
+    manifest_path = output_artifacts.manifest_path if output_artifacts.manifest_path.is_absolute() else (workspace_root / output_artifacts.manifest_path)
+    manifest_payload = build_model_manifest(
+        workspace_root=workspace_root,
+        model_config_path=model_path,
+        data_config_path=data_path,
+        feature_config_path=feature_path,
+        model_path=result.model_path,
+        report_path=result.report_path,
+        task=task,
+        label_column=label_column,
+        model_name=model_name,
+        used_features=result.used_features,
+        metrics=result.metrics,
+        run_context=run_context,
+        leakage_audit=leakage_report,
+        policy_constraints=policy_constraints,
+    )
+    write_json(manifest_path, manifest_payload)
 
     print(f"[train] model saved: {result.model_path}")
     print(f"[train] report saved: {result.report_path}")
+    print(f"[train] manifest saved: {manifest_path}")
     print(f"[train] metrics: {result.metrics}")
     print(f"[train] leakage_audit: {leakage_report}")
     print(f"[train] used features: {result.used_features}")

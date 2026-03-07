@@ -7,9 +7,7 @@ import traceback
 import warnings
 
 import joblib
-import numpy as np
 import pandas as pd
-
 
 ROOT = Path(__file__).resolve().parents[1]
 SRC = ROOT / "src"
@@ -17,12 +15,19 @@ if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
 from racing_ml.common.config import load_yaml
-from racing_ml.common.probability import normalize_position_probabilities
+from racing_ml.common.artifacts import (
+    build_model_manifest,
+    build_training_report_payload,
+    derive_manifest_file_name,
+    resolve_output_artifacts,
+    write_json,
+)
 from racing_ml.data.dataset_loader import load_training_table
 from racing_ml.evaluation.leakage import run_leakage_audit
+from racing_ml.evaluation.policy import PolicyConstraints, add_market_signals, evaluate_flat_strategy_catalog
+from racing_ml.evaluation.scoring import generate_prediction_outputs, prepare_scored_frame, resolve_odds_column
 from racing_ml.features.builder import build_features
 from racing_ml.models.trainer import train_and_evaluate
-from racing_ml.serving.predict_batch import _predict_multi_position
 
 
 def log_progress(message: str) -> None:
@@ -39,6 +44,16 @@ def format_duration(seconds: float) -> str:
     return f"{minutes:d}m{sec:02d}s"
 
 
+def _override_constraints(base: PolicyConstraints, args: argparse.Namespace) -> PolicyConstraints:
+    return PolicyConstraints(
+        min_bet_ratio=float(args.min_bet_ratio) if args.min_bet_ratio is not None else float(base.min_bet_ratio),
+        min_bets_abs=int(args.min_bets_abs) if args.min_bets_abs is not None else int(base.min_bets_abs),
+        max_drawdown=float(base.max_drawdown),
+        min_final_bankroll=float(base.min_final_bankroll),
+        selection_mode=str(base.selection_mode),
+    )
+
+
 def _time_valid_slice(
     frame: pd.DataFrame,
     valid_start: str,
@@ -53,271 +68,64 @@ def _time_valid_slice(
     return work
 
 
-def _predict_top1_score(model: object, features: pd.DataFrame, race_ids: pd.Series) -> np.ndarray:
-    if isinstance(model, dict) and model.get("kind") == "multi_position_top3":
-        outputs = _predict_multi_position(model, features)
-        work = pd.DataFrame({"race_id": race_ids.to_numpy(copy=False)})
-        work["p_rank1_raw"] = outputs["p_rank1"]
-        work = normalize_position_probabilities(
-            work,
-            raw_columns=["p_rank1_raw"],
-            race_id_col="race_id",
-            output_prefix="",
-        )
-        return work["p_rank1_raw"].to_numpy(dtype=float)
-
-    if hasattr(model, "predict_proba"):
-        return model.predict_proba(features)[:, 1]
-    if hasattr(model, "predict"):
-        return np.asarray(model.predict(features), dtype=float)
-    raise RuntimeError("Model does not support prediction for ROI tuning")
-
-
-def _strategy_roi(
-    scored: pd.DataFrame,
-    mode: str,
-    threshold: float = 1.0,
-    odds_min: float = 1.0,
-    odds_max: float = 80.0,
-    min_score: float = 0.0,
-) -> tuple[float | None, int, float | None, float, float]:
-    total_bet = 0.0
-    total_return = 0.0
-    bets = 0
-    hits = 0
-    bankroll = 1.0
-    peak_bankroll = 1.0
-    max_drawdown = 0.0
-
-    for _, group in scored.groupby("race_id"):
-        if bankroll <= 0:
-            break
-
-        if mode == "top1":
-            pick = group.sort_values("score", ascending=False).iloc[0]
-        elif mode == "top1_filtered":
-            pick = group.sort_values("score", ascending=False).iloc[0]
-            score_value = pd.to_numeric(pd.Series([pick.get("score")]), errors="coerce").iloc[0]
-            odds_value = pd.to_numeric(pd.Series([pick.get("odds")]), errors="coerce").iloc[0]
-            if pd.isna(score_value) or pd.isna(odds_value):
-                continue
-            if float(score_value) < float(min_score):
-                continue
-            if float(odds_value) < float(odds_min) or float(odds_value) > float(odds_max):
-                continue
-        elif mode == "ev":
-            candidates = group[(group["expected_value"] >= threshold) & (group["odds"] >= odds_min) & (group["odds"] <= odds_max)]
-            if candidates.empty:
-                continue
-            pick = candidates.sort_values("expected_value", ascending=False).iloc[0]
-        elif mode == "edge":
-            candidates = group[(group["edge"] >= threshold) & (group["odds"] >= odds_min) & (group["odds"] <= odds_max)]
-            if candidates.empty:
-                continue
-            pick = candidates.sort_values("edge", ascending=False).iloc[0]
-        else:
-            raise ValueError(f"Unsupported strategy mode: {mode}")
-
-        stake = min(1.0, float(bankroll))
-        if stake <= 0:
-            break
-
-        bets += 1
-        total_bet += stake
-        rank = pd.to_numeric(pd.Series([pick.get("rank")]), errors="coerce").iloc[0]
-        odds = pd.to_numeric(pd.Series([pick.get("odds")]), errors="coerce").iloc[0]
-        payout = 0.0
-        if pd.notna(rank) and int(rank) == 1 and pd.notna(odds) and float(odds) > 0:
-            hits += 1
-            payout = float(odds) * stake
-            total_return += payout
-
-        bankroll = bankroll - stake + payout
-        bankroll = max(float(bankroll), 0.0)
-        peak_bankroll = max(peak_bankroll, bankroll)
-        if peak_bankroll > 0:
-            drawdown = max((peak_bankroll - bankroll) / peak_bankroll, 0.0)
-            max_drawdown = max(max_drawdown, min(drawdown, 1.0))
-
-    if total_bet == 0:
-        return None, 0, None, float(bankroll), float(max_drawdown)
-    roi = float(total_return / total_bet)
-    hit_rate = float(hits / bets) if bets > 0 else None
-    return roi, int(bets), hit_rate, float(bankroll), float(max_drawdown)
-
-
 def objective_score(
     model_path: Path,
     valid_frame: pd.DataFrame,
     feature_columns: list[str],
-    min_bet_ratio: float = 0.02,
-    min_bets_abs: int = 30,
-    max_drawdown: float = 0.45,
-    min_final_bankroll: float = 0.85,
-    selection_mode: str = "roi_first",
+    constraints: PolicyConstraints,
 ) -> tuple[float, dict[str, float | int | str | None]]:
-    model = joblib.load(model_path)
-    x_valid = valid_frame[feature_columns]
-    score = _predict_top1_score(model, x_valid, valid_frame["race_id"])
-
-    scored = valid_frame.copy()
-    scored["score"] = score
-    scored["odds"] = pd.to_numeric(scored.get("odds"), errors="coerce")
-    scored["expected_value"] = scored["score"] * scored["odds"]
-    implied = 1.0 / scored["odds"].replace(0, np.nan)
-    market_prob = implied / implied.groupby(scored["race_id"]).transform("sum")
-    scored["market_prob"] = market_prob.fillna(0.0)
-    scored["edge"] = scored["score"] - scored["market_prob"]
-
-    n_races = int(scored["race_id"].nunique())
-    min_bets = max(int(n_races * min_bet_ratio), int(min_bets_abs))
-
-    candidates: list[dict[str, float | int | str | None]] = []
-
-    top1_roi, top1_bets, top1_hit, top1_final_bankroll, top1_max_drawdown = _strategy_roi(scored, mode="top1")
-    candidates.append(
-        {
+    if valid_frame.empty:
+        return float("-inf"), {
             "strategy": "top1",
             "threshold": None,
-            "roi": top1_roi,
-            "bets": top1_bets,
-            "hit_rate": top1_hit,
-            "final_bankroll": top1_final_bankroll,
-            "max_drawdown": top1_max_drawdown,
+            "roi": None,
+            "bets": 0,
+            "hit_rate": None,
+            "final_bankroll": 1.0,
+            "max_drawdown": 0.0,
+            "selection_score": None,
+            "is_feasible": False,
+            "gate_failures": ["empty_validation_slice"],
         }
+
+    odds_col = resolve_odds_column(valid_frame)
+    if odds_col is None:
+        return float("-inf"), {
+            "strategy": "top1",
+            "threshold": None,
+            "roi": None,
+            "bets": 0,
+            "hit_rate": None,
+            "final_bankroll": 1.0,
+            "max_drawdown": 0.0,
+            "selection_score": None,
+            "is_feasible": False,
+            "gate_failures": ["missing_odds_column"],
+        }
+
+    model = joblib.load(model_path)
+    x_valid = valid_frame[feature_columns]
+    outputs = generate_prediction_outputs(model, x_valid, race_ids=valid_frame["race_id"])
+    scored = prepare_scored_frame(valid_frame, outputs.score, odds_col=odds_col, score_col="score")
+    scored = add_market_signals(scored, score_col="score", odds_col=odds_col)
+
+    best_detail, candidate_rows = evaluate_flat_strategy_catalog(
+        scored,
+        constraints=constraints,
+        score_col="score",
+        odds_col=odds_col,
+        stake_per_bet=1.0,
     )
+    best_detail = dict(best_detail)
+    best_detail["candidate_count"] = int(len(candidate_rows))
 
-    for min_score in [0.16, 0.18, 0.20, 0.22, 0.24, 0.27]:
-        for odds_min in [1.5, 2.0, 3.0]:
-            for odds_max in [30.0, 50.0, 80.0]:
-                roi, bets, hit, final_bankroll, candidate_drawdown = _strategy_roi(
-                    scored,
-                    mode="top1_filtered",
-                    min_score=min_score,
-                    odds_min=odds_min,
-                    odds_max=odds_max,
-                )
-                candidates.append(
-                    {
-                        "strategy": "top1_filtered",
-                        "threshold": float(min_score),
-                        "odds_min": float(odds_min),
-                        "odds_max": float(odds_max),
-                        "roi": roi,
-                        "bets": bets,
-                        "hit_rate": hit,
-                        "final_bankroll": final_bankroll,
-                        "max_drawdown": candidate_drawdown,
-                    }
-                )
-
-    for threshold in [1.00, 1.05, 1.10, 1.20, 1.30, 1.40, 1.60, 1.80, 2.00]:
-        for odds_min in [1.2, 1.5, 2.0, 3.0]:
-            for odds_max in [30.0, 50.0, 80.0]:
-                roi, bets, hit, final_bankroll, candidate_drawdown = _strategy_roi(
-                    scored,
-                    mode="ev",
-                    threshold=threshold,
-                    odds_min=odds_min,
-                    odds_max=odds_max,
-                )
-                candidates.append(
-                    {
-                        "strategy": "ev",
-                        "threshold": float(threshold),
-                        "odds_min": float(odds_min),
-                        "odds_max": float(odds_max),
-                        "roi": roi,
-                        "bets": bets,
-                        "hit_rate": hit,
-                        "final_bankroll": final_bankroll,
-                        "max_drawdown": candidate_drawdown,
-                    }
-                )
-
-    for edge_threshold in [0.01, 0.02, 0.03, 0.05, 0.08]:
-        for odds_min in [1.2, 1.5, 2.0, 3.0]:
-            for odds_max in [30.0, 50.0, 80.0]:
-                roi, bets, hit, final_bankroll, candidate_drawdown = _strategy_roi(
-                    scored,
-                    mode="edge",
-                    threshold=edge_threshold,
-                    odds_min=odds_min,
-                    odds_max=odds_max,
-                )
-                candidates.append(
-                    {
-                        "strategy": "edge",
-                        "threshold": float(edge_threshold),
-                        "odds_min": float(odds_min),
-                        "odds_max": float(odds_max),
-                        "roi": roi,
-                        "bets": bets,
-                        "hit_rate": hit,
-                        "final_bankroll": final_bankroll,
-                        "max_drawdown": candidate_drawdown,
-                    }
-                )
-
-    best = {
-        "strategy": "top1",
-        "threshold": None,
-        "roi": 0.0,
-        "bets": 0,
-        "hit_rate": None,
-        "final_bankroll": 1.0,
-        "max_drawdown": 0.0,
-    }
-    fallback_best = dict(best)
-    fallback_score = -1e9
-    best_score = -1e9
-    feasible_count = 0
-    for row in candidates:
-        roi = row["roi"]
-        bets = int(row["bets"] or 0)
-        candidate_drawdown = float(row.get("max_drawdown") or 1.0)
-        candidate_final_bankroll = float(row.get("final_bankroll") or 0.0)
-        if roi is None:
-            continue
-        unconstrained_score = float(roi)
-        if bets < min_bets:
-            unconstrained_score -= 1.0
-        if unconstrained_score > fallback_score:
-            fallback_score = unconstrained_score
-            fallback_best = row
-        score_value = float(roi)
-        if bets < min_bets:
-            score_value -= 1.0
-
-        risk_ok = (candidate_drawdown <= max_drawdown) and (candidate_final_bankroll >= min_final_bankroll)
-        if risk_ok:
-            feasible_count += 1
-
-        if selection_mode == "risk_first":
-            if not risk_ok:
-                continue
-        else:
-            if candidate_drawdown > max_drawdown:
-                score_value -= 0.10 * float(candidate_drawdown - max_drawdown)
-            if candidate_final_bankroll < min_final_bankroll:
-                score_value -= 0.20 * float(min_final_bankroll - candidate_final_bankroll)
-
-        if score_value > best_score:
-            best_score = score_value
-            best = row
-
-    if selection_mode == "risk_first" and feasible_count == 0:
-        best = fallback_best
-        best_score = fallback_score
-
-    best["min_bets_required"] = int(min_bets)
-    best["n_races"] = int(n_races)
-    best["constraints_max_drawdown"] = float(max_drawdown)
-    best["constraints_min_final_bankroll"] = float(min_final_bankroll)
-    best["selection_mode"] = selection_mode
-    best["feasible_candidate_count"] = int(feasible_count)
-    best["is_feasible"] = bool(feasible_count > 0)
-    return float(best_score), best
+    selection_score = best_detail.get("selection_score")
+    if selection_score is None:
+        roi_value = best_detail.get("roi")
+        if roi_value is None:
+            return float("-inf"), best_detail
+        return float(roi_value), best_detail
+    return float(selection_score), best_detail
 
 
 def build_model_candidates(base_params: dict) -> list[dict]:
@@ -388,23 +196,22 @@ def _write_summary(
     failures: list[dict],
     run_context: dict,
     leakage_audit: dict,
-    strategy_constraints: dict,
+    policy_constraints: dict,
 ) -> None:
     summary = {
         "base_config": args.config,
-        "objective": "validation_roi_with_min_bets_constraint",
+        "objective": "validation_policy_gate_then_roi",
         "n_model_candidates": len(model_candidates),
         "n_row_profiles": len(row_profiles),
         "n_trials": len(trial_plan),
-        "min_bet_ratio": float(args.min_bet_ratio),
-        "min_bets_abs": int(args.min_bets_abs),
         "n_candidates": len(run_rows),
         "best": best_row,
         "runs": run_rows,
         "failures": failures,
         "run_context": run_context,
         "leakage_audit": leakage_audit,
-        "strategy_constraints": strategy_constraints,
+        "policy_constraints": policy_constraints,
+        "strategy_constraints": policy_constraints,
     }
     out_path.parent.mkdir(parents=True, exist_ok=True)
     with out_path.open("w", encoding="utf-8") as file:
@@ -421,8 +228,8 @@ def main() -> int:
     parser.add_argument("--max-candidates", type=int, default=8)
     parser.add_argument("--max-row-profiles", type=int, default=3)
     parser.add_argument("--max-trials", type=int, default=16)
-    parser.add_argument("--min-bet-ratio", type=float, default=0.02)
-    parser.add_argument("--min-bets-abs", type=int, default=30)
+    parser.add_argument("--min-bet-ratio", type=float)
+    parser.add_argument("--min-bets-abs", type=int)
     parser.add_argument("--resume", action="store_true")
     parser.add_argument("--summary-path", default="artifacts/reports/tune_top3_summary.json")
     args = parser.parse_args()
@@ -447,17 +254,14 @@ def main() -> int:
     training_cfg = model_cfg.get("training", {})
     evaluation_cfg = model_cfg.get("evaluation", {})
     output_cfg = model_cfg.get("output", {})
+    output_artifacts = resolve_output_artifacts(output_cfg)
     model_name = model_cfg.get("model", {}).get("name", "lightgbm")
     device_type = str(base_params.get("device_type", "cpu")).strip().lower() or "cpu"
-    strategy_constraints_cfg = evaluation_cfg.get("strategy_constraints", {})
     leakage_cfg = evaluation_cfg.get("leakage_audit", {})
     leakage_enabled = bool(leakage_cfg.get("enabled", True))
 
-    constraints = {
-        "max_drawdown": float(strategy_constraints_cfg.get("max_drawdown", 0.45)),
-        "min_final_bankroll": float(strategy_constraints_cfg.get("min_final_bankroll", 0.85)),
-        "selection_mode": str(strategy_constraints_cfg.get("selection_mode", "roi_first")),
-    }
+    base_constraints = PolicyConstraints.from_config(evaluation_cfg)
+    constraints = _override_constraints(base_constraints, args)
 
     leakage_audit = (
         run_leakage_audit(frame=frame, feature_columns=feature_columns, label_column=label_column)
@@ -474,10 +278,11 @@ def main() -> int:
         "max_candidates": int(args.max_candidates),
         "max_row_profiles": int(args.max_row_profiles),
         "max_trials": int(args.max_trials),
-        "min_bet_ratio": float(args.min_bet_ratio),
-        "min_bets_abs": int(args.min_bets_abs),
         "rows_total": int(len(frame)),
         "device_type": device_type,
+        "artifact_model_dir": output_artifacts.model_dir.as_posix(),
+        "artifact_report_dir": output_artifacts.report_dir.as_posix(),
+        **constraints.to_dict(),
     }
 
     log_progress(f"Runtime device_type from config: {device_type}")
@@ -513,7 +318,7 @@ def main() -> int:
                 if isinstance(row, dict) and isinstance(row.get("candidate"), int):
                     run_rows.append(row)
                     completed_candidates.add(int(row["candidate"]))
-                    row_score = float(row.get("score", -1e9))
+                    row_score = float(row.get("score", float("-inf")))
                     if row_score > best_score:
                         best_score = row_score
                         best_row = row
@@ -546,6 +351,11 @@ def main() -> int:
 
             model_file = f"tune_top3_{idx}.joblib"
             report_file = f"tune_top3_{idx}.json"
+            candidate_output_cfg = dict(output_cfg)
+            candidate_output_cfg["model_file"] = model_file
+            candidate_output_cfg["report_file"] = report_file
+            candidate_output_cfg["manifest_file"] = derive_manifest_file_name(model_file)
+            candidate_artifacts = resolve_output_artifacts(candidate_output_cfg)
             candidate_started_at = time.perf_counter()
             log_progress(
                 f"Candidate {idx}/{total_trials} started: "
@@ -574,23 +384,72 @@ def main() -> int:
                     report_file_name=report_file,
                 )
 
-                model_path = ROOT / output_cfg.get("model_dir", "artifacts/models") / model_file
+                model_path = result.model_path if result.model_path.is_absolute() else (ROOT / result.model_path)
                 valid_frame = _time_valid_slice(
                     frame,
                     valid_start=split_cfg.get("valid_start", "2020-01-01"),
                     valid_end=split_cfg.get("valid_end", "2021-07-31"),
                     max_valid_rows=int(row_profile["max_valid_rows"]),
                 )
+                available_features = [column for column in feature_columns if column in valid_frame.columns]
                 score, roi_detail = objective_score(
                     model_path,
                     valid_frame,
-                    feature_columns=[c for c in feature_columns if c in valid_frame.columns],
-                    min_bet_ratio=float(args.min_bet_ratio),
-                    min_bets_abs=int(args.min_bets_abs),
-                    max_drawdown=constraints["max_drawdown"],
-                    min_final_bankroll=constraints["min_final_bankroll"],
-                    selection_mode=constraints["selection_mode"],
+                    feature_columns=available_features,
+                    constraints=constraints,
                 )
+
+                candidate_run_context = {
+                    **run_context,
+                    "candidate": int(idx),
+                    "params": params,
+                    "rows_train_max": int(row_profile["max_train_rows"]),
+                    "rows_valid_max": int(row_profile["max_valid_rows"]),
+                    "split_train_end": split_cfg.get("train_end", "2022-12-31"),
+                    "split_valid_start": split_cfg.get("valid_start", "2023-01-01"),
+                    "split_valid_end": split_cfg.get("valid_end", "2023-12-31"),
+                    "artifact_model": candidate_artifacts.model_path.as_posix(),
+                    "artifact_report": candidate_artifacts.report_path.as_posix(),
+                    "artifact_manifest": candidate_artifacts.manifest_path.as_posix(),
+                }
+                report_payload = build_training_report_payload(
+                    metrics=result.metrics,
+                    run_context=candidate_run_context,
+                    leakage_audit=leakage_audit,
+                    policy_constraints=constraints.to_dict(),
+                    extra_metadata={
+                        "objective": "validation_policy_gate_then_roi",
+                        "training_profile": row_profile,
+                        "roi_detail": roi_detail,
+                    },
+                )
+                write_json(result.report_path, report_payload)
+
+                manifest_abs = candidate_artifacts.manifest_path if candidate_artifacts.manifest_path.is_absolute() else (ROOT / candidate_artifacts.manifest_path)
+                manifest_payload = build_model_manifest(
+                    workspace_root=ROOT,
+                    model_config_path=ROOT / args.config,
+                    data_config_path=ROOT / args.data_config,
+                    feature_config_path=ROOT / args.feature_config,
+                    model_path=result.model_path,
+                    report_path=result.report_path,
+                    task=task,
+                    label_column=label_column,
+                    model_name=model_name,
+                    used_features=result.used_features,
+                    metrics=result.metrics,
+                    run_context=candidate_run_context,
+                    leakage_audit=leakage_audit,
+                    policy_constraints=constraints.to_dict(),
+                    extra_metadata={
+                        "candidate": int(idx),
+                        "params": params,
+                        "training_profile": row_profile,
+                        "objective": "validation_policy_gate_then_roi",
+                        "roi_detail": roi_detail,
+                    },
+                )
+                write_json(manifest_abs, manifest_payload)
 
                 row = {
                     "candidate": idx,
@@ -601,6 +460,7 @@ def main() -> int:
                     "metrics": result.metrics,
                     "model_file": model_file,
                     "report_file": report_file,
+                    "manifest_file": candidate_artifacts.manifest_path.as_posix(),
                     "status": "ok",
                 }
                 run_rows.append(row)
@@ -609,8 +469,7 @@ def main() -> int:
                     f"roi={roi_detail.get('roi')}, bets={roi_detail.get('bets')}, "
                     f"dd={roi_detail.get('max_drawdown')}, feasible={roi_detail.get('is_feasible')}"
                 )
-                gpu_flag = result.metrics.get("gpu_enabled")
-                log_progress(f"Candidate {idx}/{total_trials}: gpu_enabled={gpu_flag}")
+                log_progress(f"Candidate {idx}/{total_trials}: gpu_enabled={result.metrics.get('gpu_enabled')}")
 
                 row_feasible = bool((row.get("roi_detail") or {}).get("is_feasible"))
                 current_best_feasible = bool((best_row or {}).get("roi_detail", {}).get("is_feasible")) if isinstance(best_row, dict) else False
@@ -618,7 +477,7 @@ def main() -> int:
                 should_update = False
                 if best_row is None:
                     should_update = True
-                elif row_feasible and (not current_best_feasible):
+                elif row_feasible and not current_best_feasible:
                     should_update = True
                 elif row_feasible == current_best_feasible and score > best_score:
                     should_update = True
@@ -661,7 +520,7 @@ def main() -> int:
                     failures=failures,
                     run_context=run_context,
                     leakage_audit=leakage_audit,
-                    strategy_constraints=constraints,
+                    policy_constraints=constraints.to_dict(),
                 )
     except KeyboardInterrupt:
         log_progress("Interrupted by user; partial summary saved")
@@ -681,7 +540,7 @@ def main() -> int:
         failures=failures,
         run_context=run_context,
         leakage_audit=leakage_audit,
-        strategy_constraints=constraints,
+        policy_constraints=constraints.to_dict(),
     )
 
     total_elapsed = time.perf_counter() - started_at

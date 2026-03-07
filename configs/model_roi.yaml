@@ -26,13 +26,16 @@ training:
 evaluation:
   leakage_audit:
     enabled: true
-  strategy_constraints:
+  policy:
+    selection_mode: "gate_then_roi"
+    min_bet_ratio: 0.05
+    min_bets_abs: 100
     max_drawdown: 0.45
     min_final_bankroll: 0.85
-    min_bets: 50
 
 output:
   model_dir: "artifacts/models"
   report_dir: "artifacts/reports"
   model_file: "roi_model.joblib"
   report_file: "train_metrics_roi.json"
+  manifest_file: "roi_model.manifest.json"
