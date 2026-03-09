@@ -79,6 +79,9 @@ nr-learn/
     - （推奨 / CatBoost ROI）`python scripts/run_train.py --config configs/model_catboost_roi.yaml --data-config configs/data.yaml --feature-config configs/features_catboost_rich.yaml`
     - （推奨 / CatBoost alpha）`python scripts/run_train.py --config configs/model_catboost_alpha.yaml --data-config configs/data.yaml --feature-config configs/features_catboost_rich.yaml`
     - （長期ROI向け stack build）`python scripts/run_build_value_stack.py --config configs/model_catboost_value_stack.yaml --data-config configs/data.yaml --feature-config configs/features_catboost_rich.yaml`
+    - （GPU / win component）`python scripts/run_train.py --config configs/model_catboost_gpu.yaml --data-config configs/data.yaml --feature-config configs/features_catboost_rich.yaml`
+    - （GPU / time-deviation component）`python scripts/run_train.py --config configs/model_catboost_time_deviation_gpu.yaml --data-config configs/data.yaml --feature-config configs/features_catboost_rich.yaml`
+    - （GPU / ROI mainline stack build）`python scripts/run_build_value_stack.py --config configs/model_catboost_value_stack_time_gpu.yaml --data-config configs/data.yaml --feature-config configs/features_catboost_rich.yaml`
     - （Ranker）`python scripts/run_train.py --config configs/model_ranker.yaml --data-config configs/data.yaml --feature-config configs/features.yaml`
     - （Top3確率）`python scripts/run_train.py --config configs/model_top3.yaml --data-config configs/data.yaml --feature-config configs/features.yaml`
     - （ROI回帰）`python scripts/run_train.py --config configs/model_roi.yaml --data-config configs/data.yaml --feature-config configs/features.yaml`
@@ -113,6 +116,7 @@ nr-learn/
     - （CatBoost ROI）`python scripts/run_evaluate.py --config configs/model_catboost_roi.yaml --data-config configs/data.yaml --feature-config configs/features_catboost_rich.yaml --max-rows 200000 --wf-mode off`
     - （CatBoost alpha）`python scripts/run_evaluate.py --config configs/model_catboost_alpha.yaml --data-config configs/data.yaml --feature-config configs/features_catboost_rich.yaml --max-rows 150000 --wf-mode off`
     - （長期ROI向け stack）`python scripts/run_evaluate.py --config configs/model_catboost_value_stack.yaml --data-config configs/data.yaml --feature-config configs/features_catboost_rich.yaml --max-rows 150000 --wf-mode fast`
+    - （GPU / ROI mainline stack）`python scripts/run_evaluate.py --config configs/model_catboost_value_stack_time_gpu.yaml --data-config configs/data.yaml --feature-config configs/features_catboost_rich.yaml --max-rows 100000 --wf-mode off`
     - （ROI回帰）`python scripts/run_evaluate.py --config configs/model_roi.yaml --data-config configs/data.yaml --feature-config configs/features.yaml --max-rows 80000`
     - （市場乖離/Layer2）`python scripts/run_evaluate.py --config configs/model_alpha.yaml --data-config configs/data.yaml --feature-config configs/features.yaml --max-rows 80000`
     - 全体指標: `artifacts/reports/evaluation_summary.json`（常に最新実行）
@@ -151,6 +155,7 @@ nr-learn/
 
 ## CatBoost長期運用メモ
 - 現在の本命系は `configs/model_catboost*.yaml` と `configs/features_catboost_rich.yaml` の組み合わせです
+- GPU 用の CatBoost config は `configs/model_catboost_*_gpu.yaml` を使います。CatBoost GPU は pairwise 以外で `rsm` 非対応なので、CPU config をそのまま流用せず GPU 専用 config を使ってください
 - `features_catboost_rich.yaml` は `selection.mode: all_safe` を使い、`horse_id`、`horse_name`、`レース名`、`馬主` のような超高カーディナリティ列や払戻系列を除外します
 - public benchmark を測るときは `configs/model_catboost_fundamental.yaml` と `configs/features_catboost_fundamental.yaml` を使い、`odds` / `popularity` を切った fundamental model を別管理します
 - 学習済みCatBoost bundle には `feature_columns` と `categorical_columns` が埋め込まれるため、推論・評価側は model metadata を優先して同じ入力列を再現します

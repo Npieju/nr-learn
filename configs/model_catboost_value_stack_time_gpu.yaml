@@ -1,0 +1,32 @@
+task: "classification"
+label: "is_win"
+
+model:
+  name: "value_blend"
+  params:
+    time_weight: 0.35
+    time_scale: 3.0
+    time_positive_only: true
+    market_blend_weight: 0.90
+    odds_column: "odds"
+
+components:
+  win: "configs/model_catboost_gpu.yaml"
+  time: "configs/model_catboost_time_deviation_gpu.yaml"
+
+evaluation:
+  leakage_audit:
+    enabled: true
+  policy:
+    selection_mode: "gate_then_roi"
+    min_bet_ratio: 0.05
+    min_bets_abs: 100
+    max_drawdown: 0.40
+    min_final_bankroll: 0.90
+
+output:
+  model_dir: "artifacts/models"
+  report_dir: "artifacts/reports"
+  model_file: "catboost_value_stack_time_gpu_model.joblib"
+  report_file: "train_metrics_catboost_value_stack_time_gpu.json"
+  manifest_file: "catboost_value_stack_time_gpu_model.manifest.json"
