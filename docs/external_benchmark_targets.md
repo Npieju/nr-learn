@@ -136,6 +136,27 @@
   - `top1_roi` はわずかに上がった一方で、`model_pseudo_r2` は `0.139080 -> 0.137177` と微減した。
   - したがって次の優先課題は corner 補完の深掘りではなく、gap report が示した pedigree / breeder 系 raw columns の投入である。
 
+### 6.6 entity-conditioned key の補正と track-distance 履歴の再評価
+- config: `configs/model_catboost_fundamental_enriched.yaml`
+- feature config: `configs/features_catboost_fundamental_enriched.yaml`
+- 変更点:
+  - `sire_track_distance_last_80_win_rate` は `sire_name` が存在するときだけ生成するように補正した。
+  - `horse / jockey / trainer` の `track + distance` 条件付き履歴を追加した。
+  - `trainer` 系履歴は row-level rolling ではなく race-level rolling に寄せ、同一レース複数頭ケースでのリーク余地を塞いだ。
+- 100k rows 評価:
+  - `auc = 0.756706`
+  - `logloss = 0.230484`
+  - `top1_roi = 0.747868`
+  - `model_pseudo_r2 = 0.130494`
+  - `public_pseudo_r2 = 0.253913`
+  - `benter_combined_pseudo_r2 = 0.253913`
+  - `benter_delta_pseudo_r2 ≈ 0`
+  - fitted `α = 0.0`, `β = 1.0`
+- 解釈:
+  - benchmark は改善しなかった。主因は新規 `track_distance` 履歴の弱さではなく、`sire_name` 不在でも擬似的に作られていた `sire_track_distance_last_80_win_rate` を正しく欠損扱いへ戻したことにある。
+  - 追加した `horse / jockey / trainer` の `track_distance` 履歴は coverage 1.0 だが importance はすべて `0.04` 未満で、現状データでは決定打になっていない。
+  - この補正により「pedigree raw がない限り sire 条件付き特徴は立たない」という feature contract が明確になった。次の優先課題は変わらず pedigree / breeder の外部 pre-race 情報である。
+
 ## 7. 当面の採用基準
 1. `public_pseudo_r2` は参考値として記録する。
 2. 採用判定は `benter_delta_pseudo_r2` を最優先にする。
@@ -156,3 +177,4 @@
   - horse corner style history: `horse_last_3_avg_corner_2_ratio`, `horse_last_3_avg_corner_4_ratio`, `horse_last_3_avg_corner_gain_2_to_4`
   - course pace baseline: `course_baseline_race_pace_front3f`, `course_baseline_race_pace_back3f`, `course_baseline_race_pace_balance_3f`
   - jockey / trainer style aggregates: `*_last_30_avg_corner_gain_2_to_4`, `*_last_30_avg_closing_time_3f`
+  - entity-conditioned track-distance history: `horse_track_distance_last_3_avg_rank`, `horse_track_distance_last_5_win_rate`, `jockey_track_distance_last_50_*`, `trainer_track_distance_last_50_*`

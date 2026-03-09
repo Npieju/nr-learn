@@ -31,6 +31,9 @@ DEFAULT_SAFE_EXCLUDE_COLUMNS = {
     "sire_name",
     "dam_name",
     "damsire_name",
+    "horse_track_distance_key",
+    "jockey_track_distance_key",
+    "trainer_track_distance_key",
     "sire_track_distance_key",
 }
 
