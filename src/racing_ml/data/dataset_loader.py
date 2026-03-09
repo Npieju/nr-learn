@@ -241,6 +241,15 @@ def _iter_csv_candidates(search_roots: list[Path], pattern: str) -> list[Path]:
     return output
 
 
+def _display_path(path: Path, base_dir: Path | None) -> str:
+    if base_dir is None:
+        return str(path)
+    try:
+        return str(path.relative_to(base_dir))
+    except Exception:
+        return str(path)
+
+
 def _select_table_columns(frame: pd.DataFrame, keep_columns: list[str], join_on: list[str]) -> pd.DataFrame:
     if not keep_columns:
         return frame.copy()
@@ -274,6 +283,75 @@ def _load_matching_table(
         return _select_table_columns(table, keep_columns=keep_columns, join_on=join_on)
 
     return None
+
+
+def _inspect_table_sources(
+    *,
+    table_cfg: dict[str, Any],
+    default_search_roots: list[Path],
+    base_dir: Path | None,
+) -> dict[str, Any]:
+    search_dirs = _normalize_string_list(table_cfg.get("search_dirs"))
+    if search_dirs:
+        search_roots = [_resolve_path(search_dir, base_dir) for search_dir in search_dirs]
+    else:
+        search_roots = default_search_roots
+
+    join_on = _normalize_string_list(table_cfg.get("join_on"))
+    required_columns = _normalize_string_list(table_cfg.get("required_columns")) or join_on
+    pattern = str(table_cfg.get("pattern", table_cfg.get("path_glob", ""))).strip()
+    candidates = _iter_csv_candidates(search_roots, pattern) if pattern else []
+
+    result: dict[str, Any] = {
+        "name": str(table_cfg.get("name", "unnamed")),
+        "pattern": pattern,
+        "search_roots": [_display_path(path, base_dir) for path in search_roots],
+        "matched_file_count": int(len(candidates)),
+        "matched_files": [_display_path(path, base_dir) for path in candidates[:10]],
+        "join_on": join_on,
+        "required_columns": required_columns,
+        "status": "missing",
+    }
+    if not candidates:
+        return result
+
+    for candidate in candidates:
+        try:
+            table = pd.read_csv(candidate, low_memory=False)
+            table = _normalize_columns(table, extra_aliases=table_cfg.get("column_aliases"))
+        except Exception as error:
+            result["status"] = "read_error"
+            result["active_file"] = _display_path(candidate, base_dir)
+            result["error"] = str(error)
+            continue
+
+        missing_required = [column for column in required_columns if column not in table.columns]
+        missing_join = [column for column in join_on if column not in table.columns]
+        if missing_required or missing_join:
+            result["status"] = "invalid_schema"
+            result["active_file"] = _display_path(candidate, base_dir)
+            result["missing_required_columns"] = missing_required
+            result["missing_join_columns"] = missing_join
+            result["canonical_columns"] = [str(column) for column in table.columns[:50]]
+            continue
+
+        dedupe_on = _normalize_string_list(table_cfg.get("dedupe_on")) or join_on
+        dedupe_on = [column for column in dedupe_on if column in table.columns]
+        duplicate_rows = int(table.duplicated(subset=dedupe_on).sum()) if dedupe_on else 0
+        result.update(
+            {
+                "status": "ok",
+                "active_file": _display_path(candidate, base_dir),
+                "row_count": int(len(table)),
+                "column_count": int(len(table.columns)),
+                "dedupe_on": dedupe_on,
+                "duplicate_rows_on_key": duplicate_rows,
+                "canonical_columns": [str(column) for column in table.columns[:50]],
+            }
+        )
+        return result
+
+    return result
 
 
 def _merge_table(
@@ -499,3 +577,76 @@ def load_training_table(
     frame = _ensure_minimum_columns(frame)
     frame = frame.sort_values(["date", "race_id"]).reset_index(drop=True)
     return frame
+
+
+def inspect_dataset_sources(
+    raw_dir: str | Path,
+    dataset_config: dict[str, Any] | None = None,
+    base_dir: str | Path | None = None,
+) -> dict[str, Any]:
+    base_path = Path(base_dir) if base_dir is not None else None
+    raw_path = _resolve_path(raw_dir, base_path)
+    dataset_cfg = _resolve_dataset_config(dataset_config)
+
+    summary: dict[str, Any] = {
+        "raw_dir": _display_path(raw_path, base_path),
+        "raw_dir_exists": bool(raw_path.exists()),
+        "external_raw_dirs": [],
+        "primary_dataset": None,
+        "append_tables": [],
+        "supplemental_tables": [],
+    }
+
+    for external_dir in _resolve_external_raw_dirs(dataset_cfg, base_path):
+        csv_count = len(list(external_dir.glob("**/*.csv"))) if external_dir.exists() else 0
+        summary["external_raw_dirs"].append(
+            {
+                "path": _display_path(external_dir, base_path),
+                "exists": bool(external_dir.exists()),
+                "csv_file_count": int(csv_count),
+            }
+        )
+
+    try:
+        primary_path = _pick_dataset(raw_path)
+        summary["primary_dataset"] = {
+            "status": "ok",
+            "path": _display_path(primary_path, base_path),
+        }
+    except Exception as error:
+        summary["primary_dataset"] = {
+            "status": "missing",
+            "error": str(error),
+        }
+
+    append_defaults = _resolve_search_roots(
+        raw_dir=raw_path,
+        dataset_config=dataset_cfg,
+        base_dir=base_path,
+        include_raw_dir=False,
+    )
+    supplemental_defaults = _resolve_search_roots(
+        raw_dir=raw_path,
+        dataset_config=dataset_cfg,
+        base_dir=base_path,
+        include_raw_dir=True,
+    )
+
+    append_tables = dataset_cfg.get("append_tables", [])
+    if isinstance(append_tables, list):
+        summary["append_tables"] = [
+            _inspect_table_sources(table_cfg=table_cfg, default_search_roots=append_defaults, base_dir=base_path)
+            for table_cfg in append_tables
+            if isinstance(table_cfg, dict)
+        ]
+
+    supplemental_tables = dataset_cfg.get("supplemental_tables")
+    if not isinstance(supplemental_tables, list) or not supplemental_tables:
+        supplemental_tables = DEFAULT_SUPPLEMENTAL_TABLES
+    summary["supplemental_tables"] = [
+        _inspect_table_sources(table_cfg=table_cfg, default_search_roots=supplemental_defaults, base_dir=base_path)
+        for table_cfg in supplemental_tables
+        if isinstance(table_cfg, dict)
+    ]
+
+    return summary

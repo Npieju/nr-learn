@@ -66,6 +66,7 @@ nr-learn/
     - Kaggle認証が未設定 / データ取得失敗時は、学習確認用の `data/raw/sample_races.csv` を自動生成
     - `configs/data.yaml` の `dataset.external_raw_dirs` に定義した外部 raw dir も同時に作成されます
     - 外部サイト由来CSVを後から足す場合は、`append_tables` で行追加、`supplemental_tables` で列追加を定義します
+    - 取り込み前の整合確認: `python scripts/run_validate_data_sources.py --config configs/data.yaml`
 2. 学習
     - `python scripts/run_train.py --config configs/model.yaml --data-config configs/data.yaml --feature-config configs/features.yaml`
     - （推奨 / CatBoost win）`python scripts/run_train.py --config configs/model_catboost.yaml --data-config configs/data.yaml --feature-config configs/features_catboost_rich.yaml`

@@ -65,3 +65,12 @@ column_aliases:
 - crawler 実装前に、保存先 CSV の列名をこの template に合わせる。
 - pedigree や owner のような高カーディナリティ列は、まず raw のまま保持し、採用は feature selection 側で制御する。
 - 追加データ導入後の採用判定は raw ROI ではなく `benter_delta_pseudo_r2` を優先する。
+
+## 7. 運用チェック
+- validation CLI: [scripts/run_validate_data_sources.py](../scripts/run_validate_data_sources.py)
+- 出力: `artifacts/reports/data_source_validation.json`
+- 確認内容:
+  - primary dataset が存在するか
+  - append / supplemental table が見つかるか
+  - required columns / join keys が足りているか
+  - dedupe key 上の重複がどの程度あるか
