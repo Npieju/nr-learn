@@ -17,6 +17,13 @@ from racing_ml.features.selection import resolve_feature_selection, summarize_fe
 from racing_ml.models.trainer import train_and_evaluate
 
 
+def _resolve_model_device_label(model_name: str, model_params: dict[str, object]) -> str:
+    normalized_name = str(model_name).strip().lower()
+    if normalized_name == "catboost":
+        return str(model_params.get("task_type", model_params.get("device_type", "cpu"))).strip().lower() or "cpu"
+    return str(model_params.get("device_type", model_params.get("task_type", "cpu"))).strip().lower() or "cpu"
+
+
 def run_train(model_config_path: str, data_config_path: str, feature_config_path: str) -> None:
     model_path = Path(model_config_path)
     data_path = Path(data_config_path)
@@ -56,7 +63,7 @@ def run_train(model_config_path: str, data_config_path: str, feature_config_path
     output_artifacts = resolve_output_artifacts(output_cfg)
     model_name = model_cfg.get("name", "lightgbm")
     model_params = model_cfg.get("params", {})
-    device_type = str(model_params.get("device_type", "cpu")).strip().lower() or "cpu"
+    device_type = _resolve_model_device_label(model_name, model_params)
     training_cfg = model_config.get("training", {})
     evaluation_cfg = model_config.get("evaluation", {})
     allow_fallback = bool(training_cfg.get("allow_fallback_model", False))
