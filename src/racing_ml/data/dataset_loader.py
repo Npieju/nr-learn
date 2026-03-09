@@ -72,11 +72,33 @@ def _pick_dataset(raw_dir: Path) -> Path:
     return sorted(csv_files, key=score, reverse=True)[0]
 
 
-def _normalize_columns(frame: pd.DataFrame) -> pd.DataFrame:
+def _resolve_column_aliases(extra_aliases: dict[str, Any] | None = None) -> dict[str, list[str]]:
+    resolved: dict[str, list[str]] = {
+        canonical: [str(alias).strip().lower() for alias in aliases if str(alias).strip()]
+        for canonical, aliases in COLUMN_ALIASES.items()
+    }
+
+    if not isinstance(extra_aliases, dict):
+        return resolved
+
+    for canonical, aliases in extra_aliases.items():
+        canonical_name = str(canonical).strip().lower()
+        if not canonical_name:
+            continue
+
+        resolved.setdefault(canonical_name, [])
+        for alias in _normalize_string_list(aliases):
+            alias_name = alias.strip().lower()
+            if alias_name and alias_name not in resolved[canonical_name]:
+                resolved[canonical_name].append(alias_name)
+    return resolved
+
+
+def _normalize_columns(frame: pd.DataFrame, extra_aliases: dict[str, Any] | None = None) -> pd.DataFrame:
     frame = frame.copy()
     frame.columns = [str(column).strip().lower() for column in frame.columns]
 
-    for canonical, aliases in COLUMN_ALIASES.items():
+    for canonical, aliases in _resolve_column_aliases(extra_aliases).items():
         if canonical in frame.columns:
             continue
         for alias in aliases:
@@ -237,7 +259,7 @@ def _load_matching_table(
 
     for candidate in _iter_csv_candidates(search_roots, pattern):
         table = pd.read_csv(candidate, low_memory=False)
-        table = _normalize_columns(table)
+        table = _normalize_columns(table, extra_aliases=table_cfg.get("column_aliases"))
         if required_columns and not all(column in table.columns for column in required_columns):
             continue
         if join_on and not all(column in table.columns for column in join_on):

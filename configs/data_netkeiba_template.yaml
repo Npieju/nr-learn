@@ -1,0 +1,189 @@
+dataset:
+  source_dataset: "takamotoki/jra-horse-racing-dataset"
+  raw_dir: "data/raw"
+  interim_dir: "data/interim"
+  processed_dir: "data/processed"
+  external_raw_dirs:
+    - "data/external/netkeiba/results"
+    - "data/external/netkeiba/racecard"
+    - "data/external/netkeiba/pedigree"
+  append_tables:
+    - name: "netkeiba_race_result"
+      search_dirs:
+        - "data/external/netkeiba/results"
+      pattern: "**/*.csv"
+      required_columns:
+        - "date"
+        - "race_id"
+        - "horse_id"
+      dedupe_on:
+        - "race_id"
+        - "horse_id"
+      column_aliases:
+        date:
+          - "レース日"
+          - "開催日"
+        race_id:
+          - "race_key"
+          - "レースID"
+        horse_id:
+          - "horse_key"
+          - "horse_uuid"
+          - "出走馬ID"
+        horse_name:
+          - "馬名"
+        jockey_id:
+          - "騎手ID"
+          - "騎手コード"
+        trainer_id:
+          - "調教師ID"
+          - "調教師コード"
+        rank:
+          - "着順"
+        odds:
+          - "単勝"
+          - "単勝オッズ"
+        popularity:
+          - "人気"
+        finish_time:
+          - "タイム"
+        closing_time_3f:
+          - "上り"
+        corner_1_position:
+          - "1C"
+          - "1コーナー"
+        corner_2_position:
+          - "2C"
+          - "2コーナー"
+        corner_3_position:
+          - "3C"
+          - "3コーナー"
+        corner_4_position:
+          - "4C"
+          - "4コーナー"
+    - name: "netkeiba_race_card_history"
+      search_dirs:
+        - "data/external/netkeiba/racecard"
+      pattern: "**/*history*.csv"
+      required_columns:
+        - "date"
+        - "race_id"
+        - "horse_id"
+      dedupe_on:
+        - "race_id"
+        - "horse_id"
+      column_aliases:
+        date:
+          - "レース日"
+        race_id:
+          - "race_key"
+        horse_id:
+          - "horse_key"
+        horse_name:
+          - "馬名"
+        jockey_id:
+          - "騎手ID"
+        trainer_id:
+          - "調教師ID"
+        track:
+          - "競馬場"
+        distance:
+          - "距離"
+        weather:
+          - "天候"
+        ground_condition:
+          - "馬場"
+        age:
+          - "馬齢"
+        sex:
+          - "性別"
+        weight:
+          - "斤量"
+  supplemental_tables:
+    - name: "laptime"
+      pattern: "**/*laptime*.csv"
+      join_on:
+        - "race_id"
+      required_columns:
+        - "race_id"
+      keep_columns:
+        - "race_id"
+        - "race_pace_front3f"
+        - "race_pace_back3f"
+      dedupe_on:
+        - "race_id"
+      merge_mode: "fill_missing"
+    - name: "netkeiba_race_card"
+      search_dirs:
+        - "data/external/netkeiba/racecard"
+      pattern: "**/*racecard*.csv"
+      join_on:
+        - "race_id"
+        - "horse_id"
+      required_columns:
+        - "race_id"
+        - "horse_id"
+      keep_columns:
+        - "race_id"
+        - "horse_id"
+        - "frame_no"
+        - "gate_no"
+        - "owner_name"
+        - "breeder_name"
+      dedupe_on:
+        - "race_id"
+        - "horse_id"
+      merge_mode: "prefer_supplemental"
+      column_aliases:
+        race_id:
+          - "race_key"
+          - "レースID"
+        horse_id:
+          - "horse_key"
+          - "出走馬ID"
+        frame_no:
+          - "枠番"
+        gate_no:
+          - "馬番"
+        owner_name:
+          - "馬主"
+        breeder_name:
+          - "生産者"
+    - name: "netkeiba_pedigree"
+      search_dirs:
+        - "data/external/netkeiba/pedigree"
+      pattern: "**/*pedigree*.csv"
+      join_on:
+        - "horse_id"
+      required_columns:
+        - "horse_id"
+      keep_columns:
+        - "horse_id"
+        - "sire_name"
+        - "dam_name"
+        - "damsire_name"
+        - "owner_name"
+        - "breeder_name"
+      dedupe_on:
+        - "horse_id"
+      merge_mode: "prefer_supplemental"
+      column_aliases:
+        horse_id:
+          - "horse_key"
+          - "horse_uuid"
+        sire_name:
+          - "父"
+        dam_name:
+          - "母"
+        damsire_name:
+          - "母父"
+        owner_name:
+          - "馬主"
+        breeder_name:
+          - "生産者"
+
+split:
+  method: "time_series"
+  train_end: "2019-12-31"
+  valid_start: "2020-01-01"
+  valid_end: "2021-07-31"
