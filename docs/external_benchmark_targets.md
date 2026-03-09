@@ -103,6 +103,22 @@
   - 現在の safe feature set だけでは public を補完できない。
   - second-stage fit が public-only を選んでおり、fundamental signal が不足している。
 
+### 6.4 pace-corner enriched fundamental model
+- config: `configs/model_catboost_fundamental_enriched.yaml`
+- feature config: `configs/features_catboost_fundamental_enriched.yaml`
+- 100k rows 評価:
+  - `auc = 0.760024`
+  - `logloss = 0.229481`
+  - `model_pseudo_r2 = 0.139080`
+  - `public_pseudo_r2 = 0.253913`
+  - `benter_combined_pseudo_r2 = 0.253913`
+  - `benter_delta_pseudo_r2 ≈ 0`
+  - fitted `α = 0.0`, `β = 1.0`
+- 解釈:
+  - standalone の fundamental signal は改善しており、`model_pseudo_r2` は `0.116563 -> 0.139080` まで上がった。
+  - ただし market を補完するほどではなく、Benter second-stage はまだ public-only を選ぶ。
+  - 今回効いたのは `horse_last_3_avg_corner_4_ratio`、`horse_last_3_avg_closing_time_3f`、`horse_last_3_avg_race_pace_back3f`、`jockey_last_30_avg_closing_time_3f` などの pre-race pace / running-style 系だった。
+
 ## 7. 当面の採用基準
 1. `public_pseudo_r2` は参考値として記録する。
 2. 採用判定は `benter_delta_pseudo_r2` を最優先にする。
@@ -110,7 +126,16 @@
 4. `ΔR² > 0.009` を超えるまで、market-blend の微調整より feature enrichment を優先する。
 
 ## 8. 次にやるべき改善
-1. `laptime` と `corner_passing_order` 由来の pre-race 集約特徴を追加し、fundamental model を強化する。
+1. 今回入れた pace / corner enriched profile を土台に、pedigree・racecard・owner/breeder の外部 pre-race 情報を足して、market を補完できる水準まで fundamental model を引き上げる。
 2. `odds` / `popularity` を含む model は「policy model」として扱い、fundamental benchmark とは分離する。
 3. `value_blend_model` を使う場合も、土台 win model は market-free fundamental 系に差し替えて再検証する。
 4. 外部CSVを `data/external/...` に受けられる multi-source loader を前提にし、netkeiba 等の将来ソース追加を loader 改修なしで試せる状態を維持する。
+
+### 8.1 実装済みの enriched benchmark profile
+- config: `configs/model_catboost_fundamental_enriched.yaml`
+- feature config: `configs/features_catboost_fundamental_enriched.yaml`
+- 追加対象:
+  - horse pace history: `horse_last_3_avg_race_pace_front3f`, `horse_last_3_avg_race_pace_back3f`, `horse_last_3_avg_race_pace_balance_3f`
+  - horse corner style history: `horse_last_3_avg_corner_2_ratio`, `horse_last_3_avg_corner_4_ratio`, `horse_last_3_avg_corner_gain_2_to_4`
+  - course pace baseline: `course_baseline_race_pace_front3f`, `course_baseline_race_pace_back3f`, `course_baseline_race_pace_balance_3f`
+  - jockey / trainer style aggregates: `*_last_30_avg_corner_gain_2_to_4`, `*_last_30_avg_closing_time_3f`

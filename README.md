@@ -71,6 +71,7 @@ nr-learn/
     - `python scripts/run_train.py --config configs/model.yaml --data-config configs/data.yaml --feature-config configs/features.yaml`
     - （推奨 / CatBoost win）`python scripts/run_train.py --config configs/model_catboost.yaml --data-config configs/data.yaml --feature-config configs/features_catboost_rich.yaml`
     - （benchmark 用 / CatBoost fundamental win）`python scripts/run_train.py --config configs/model_catboost_fundamental.yaml --data-config configs/data.yaml --feature-config configs/features_catboost_fundamental.yaml`
+    - （benchmark 拡張 / pace-corner enriched）`python scripts/run_train.py --config configs/model_catboost_fundamental_enriched.yaml --data-config configs/data.yaml --feature-config configs/features_catboost_fundamental_enriched.yaml`
     - （推奨 / CatBoost Top3）`python scripts/run_train.py --config configs/model_catboost_top3.yaml --data-config configs/data.yaml --feature-config configs/features_catboost_rich.yaml`
     - （推奨 / CatBoost Ranker）`python scripts/run_train.py --config configs/model_catboost_ranker.yaml --data-config configs/data.yaml --feature-config configs/features_catboost_rich.yaml`
     - （推奨 / CatBoost ROI）`python scripts/run_train.py --config configs/model_catboost_roi.yaml --data-config configs/data.yaml --feature-config configs/features_catboost_rich.yaml`

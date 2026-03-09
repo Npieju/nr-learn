@@ -106,7 +106,8 @@ def _entity_race_shifted_rolling_mean(
     lookup = race_group[["race_id", group_col, "_feature_value"]]
     joined = frame[["race_id", group_col]].copy()
     joined[group_col] = _clean_group_series(joined, group_col)
-    joined = joined.merge(lookup, on=["race_id", group_col], how="left")
+    joined = joined.merge(lookup, on=["race_id", group_col], how="left", sort=False)
+    joined.index = frame.index
     return joined["_feature_value"].astype(float)
 
 
@@ -181,6 +182,12 @@ def build_features(frame: pd.DataFrame) -> pd.DataFrame:
         approx_frame_count = np.ceil(data["field_size"] / 2.0)
         data["frame_ratio"] = np.where(approx_frame_count > 0, data["frame_no"] / approx_frame_count, np.nan)
 
+    if {"corner_2_position", "field_size"}.issubset(data.columns):
+        data["corner_2_ratio"] = np.where(data["field_size"] > 0, data["corner_2_position"] / data["field_size"], np.nan)
+
+    if {"corner_4_position", "field_size"}.issubset(data.columns):
+        data["corner_4_ratio"] = np.where(data["field_size"] > 0, data["corner_4_position"] / data["field_size"], np.nan)
+
     if "finish_time_sec" in data.columns:
         data["finish_time_sec"] = pd.to_numeric(data["finish_time_sec"], errors="coerce")
 
@@ -190,6 +197,12 @@ def build_features(frame: pd.DataFrame) -> pd.DataFrame:
     for column in ["corner_1_position", "corner_2_position", "corner_3_position", "corner_4_position", "race_pace_front3f", "race_pace_back3f"]:
         if column in data.columns:
             data[column] = pd.to_numeric(data[column], errors="coerce")
+
+    if {"corner_2_position", "corner_4_position"}.issubset(data.columns):
+        data["corner_gain_2_to_4"] = data["corner_2_position"] - data["corner_4_position"]
+
+    if {"race_pace_front3f", "race_pace_back3f"}.issubset(data.columns):
+        data["race_pace_balance_3f"] = data["race_pace_back3f"] - data["race_pace_front3f"]
 
     if {"finish_time_sec", "distance"}.issubset(data.columns):
         distance_km = data["distance"] / 1000.0
@@ -210,6 +223,22 @@ def build_features(frame: pd.DataFrame) -> pd.DataFrame:
         )
         data["time_deviation"] = data["time_per_1000m"] - data["course_baseline_time_per_1000m"]
 
+    course_pace_specs = [
+        ("race_pace_front3f", "course_baseline_race_pace_front3f"),
+        ("race_pace_back3f", "course_baseline_race_pace_back3f"),
+        ("race_pace_balance_3f", "course_baseline_race_pace_balance_3f"),
+    ]
+    if "course_history_key" in data.columns:
+        for source_col, output_col in course_pace_specs:
+            if source_col in data.columns:
+                data[output_col] = _race_level_shifted_rolling_mean(
+                    data,
+                    "course_history_key",
+                    source_col,
+                    window=120,
+                    min_periods=3,
+                )
+
     horse_history_key, horse_key_source = _build_horse_history_key(data)
     if horse_history_key is not None:
         data["horse_history_key"] = horse_history_key
@@ -226,9 +255,13 @@ def build_features(frame: pd.DataFrame) -> pd.DataFrame:
         ("time_margin_sec", "horse_last_3_avg_time_margin_sec", 3),
         ("closing_time_3f", "horse_last_3_avg_closing_time_3f", 3),
         ("corner_2_position", "horse_last_3_avg_corner_2_position", 3),
+        ("corner_2_ratio", "horse_last_3_avg_corner_2_ratio", 3),
         ("corner_4_position", "horse_last_3_avg_corner_4_position", 3),
+        ("corner_4_ratio", "horse_last_3_avg_corner_4_ratio", 3),
+        ("corner_gain_2_to_4", "horse_last_3_avg_corner_gain_2_to_4", 3),
         ("race_pace_front3f", "horse_last_3_avg_race_pace_front3f", 3),
         ("race_pace_back3f", "horse_last_3_avg_race_pace_back3f", 3),
+        ("race_pace_balance_3f", "horse_last_3_avg_race_pace_balance_3f", 3),
         ("field_size", "horse_last_3_avg_field_size", 3),
     ]
     if horse_history_key is not None:
@@ -249,6 +282,16 @@ def build_features(frame: pd.DataFrame) -> pd.DataFrame:
 
     if {"trainer_id", "is_win"}.issubset(data.columns):
         data["trainer_last_30_win_rate"] = _group_shifted_rolling_mean(data, "trainer_id", "is_win", window=30).fillna(0.0)
+
+    jockey_trainer_style_specs = [
+        ("jockey_id", "corner_gain_2_to_4", "jockey_last_30_avg_corner_gain_2_to_4", 30),
+        ("trainer_id", "corner_gain_2_to_4", "trainer_last_30_avg_corner_gain_2_to_4", 30),
+        ("jockey_id", "closing_time_3f", "jockey_last_30_avg_closing_time_3f", 30),
+        ("trainer_id", "closing_time_3f", "trainer_last_30_avg_closing_time_3f", 30),
+    ]
+    for group_col, value_col, output_col, window in jockey_trainer_style_specs:
+        if {group_col, value_col}.issubset(data.columns):
+            data[output_col] = _group_shifted_rolling_mean(data, group_col, value_col, window=window)
 
     pedigree_history_specs = [
         ("owner_name", "is_win", "owner_last_50_win_rate", 50, 3, 0.0),
