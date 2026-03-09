@@ -32,6 +32,13 @@ COLUMN_ALIASES = {
     "corner_4_position": ["corner_4_position", "4コーナー"],
     "race_pace_front3f": ["race_pace_front3f", "前半3ハロン"],
     "race_pace_back3f": ["race_pace_back3f", "上がり3ハロン"],
+    "frame_no": ["frame_no", "frame_number", "枠番"],
+    "gate_no": ["gate_no", "gate_number", "馬番"],
+    "owner_name": ["owner_name", "owner", "馬主"],
+    "breeder_name": ["breeder_name", "breeder", "生産者"],
+    "sire_name": ["sire_name", "sire", "父"],
+    "dam_name": ["dam_name", "dam", "母"],
+    "damsire_name": ["damsire_name", "dam_sire", "mother_father", "母父"],
 }
 
 TIME_PATTERN = re.compile(r"^(?:(?P<minutes>\d+):)?(?P<seconds>\d+(?:\.\d+)?)$")
@@ -430,6 +437,11 @@ def _ensure_minimum_columns(frame: pd.DataFrame) -> pd.DataFrame:
     if "distance" in frame.columns:
         frame["distance"] = frame["distance"].astype(str).str.extract(r"(\d+)", expand=False)
         frame["distance"] = pd.to_numeric(frame["distance"], errors="coerce")
+
+    for column in ["frame_no", "gate_no"]:
+        if column in frame.columns:
+            frame[column] = frame[column].astype(str).str.extract(r"(\d+)", expand=False)
+            frame[column] = pd.to_numeric(frame[column], errors="coerce")
 
     if "weight" in frame.columns:
         frame["weight"] = (

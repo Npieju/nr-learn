@@ -64,6 +64,52 @@ def _compose_key(frame: pd.DataFrame, columns: list[str], out_col: str) -> None:
     frame[out_col] = key.astype(str)
 
 
+def _clean_group_series(frame: pd.DataFrame, column: str) -> pd.Series:
+    return frame[column].astype("string").str.strip().replace({"": pd.NA, "nan": pd.NA, "None": pd.NA})
+
+
+def _entity_race_shifted_rolling_mean(
+    frame: pd.DataFrame,
+    group_col: str,
+    value_col: str,
+    window: int,
+    min_periods: int = 1,
+) -> pd.Series:
+    required = {"race_id", group_col, value_col}
+    if not required.issubset(frame.columns):
+        return pd.Series(np.nan, index=frame.index, dtype=float)
+
+    work = frame[["race_id", group_col, value_col]].copy()
+    work[group_col] = _clean_group_series(work, group_col)
+    work[value_col] = pd.to_numeric(work[value_col], errors="coerce")
+    work["_row_order"] = np.arange(len(work), dtype=int)
+    work = work.dropna(subset=[group_col])
+    if work.empty:
+        return pd.Series(np.nan, index=frame.index, dtype=float)
+
+    race_group = (
+        work.groupby(["race_id", group_col], sort=False)
+        .agg({value_col: "mean", "_row_order": "min"})
+        .reset_index()
+        .sort_values("_row_order")
+        .reset_index(drop=True)
+    )
+    shifted = race_group.groupby(group_col, sort=False)[value_col].shift(1)
+    rolled = (
+        shifted.groupby(race_group[group_col], sort=False)
+        .rolling(window=window, min_periods=min_periods)
+        .mean()
+        .reset_index(level=0, drop=True)
+    )
+    race_group["_feature_value"] = rolled.to_numpy(dtype=float)
+
+    lookup = race_group[["race_id", group_col, "_feature_value"]]
+    joined = frame[["race_id", group_col]].copy()
+    joined[group_col] = _clean_group_series(joined, group_col)
+    joined = joined.merge(lookup, on=["race_id", group_col], how="left")
+    return joined["_feature_value"].astype(float)
+
+
 def _select_horse_key(frame: pd.DataFrame) -> str | None:
     has_horse_id = "horse_id" in frame.columns
     has_horse_name = "horse_name" in frame.columns
@@ -123,6 +169,17 @@ def build_features(frame: pd.DataFrame) -> pd.DataFrame:
 
     if "race_id" in data.columns:
         data["field_size"] = data.groupby("race_id", sort=False)["race_id"].transform("size").astype(float)
+
+    for column in ["frame_no", "gate_no"]:
+        if column in data.columns:
+            data[column] = pd.to_numeric(data[column], errors="coerce")
+
+    if {"gate_no", "field_size"}.issubset(data.columns):
+        data["gate_ratio"] = np.where(data["field_size"] > 0, data["gate_no"] / data["field_size"], np.nan)
+
+    if {"frame_no", "field_size"}.issubset(data.columns):
+        approx_frame_count = np.ceil(data["field_size"] / 2.0)
+        data["frame_ratio"] = np.where(approx_frame_count > 0, data["frame_no"] / approx_frame_count, np.nan)
 
     if "finish_time_sec" in data.columns:
         data["finish_time_sec"] = pd.to_numeric(data["finish_time_sec"], errors="coerce")
@@ -192,6 +249,35 @@ def build_features(frame: pd.DataFrame) -> pd.DataFrame:
 
     if {"trainer_id", "is_win"}.issubset(data.columns):
         data["trainer_last_30_win_rate"] = _group_shifted_rolling_mean(data, "trainer_id", "is_win", window=30).fillna(0.0)
+
+    pedigree_history_specs = [
+        ("owner_name", "is_win", "owner_last_50_win_rate", 50, 3, 0.0),
+        ("breeder_name", "is_win", "breeder_last_50_win_rate", 50, 3, 0.0),
+        ("sire_name", "is_win", "sire_last_100_win_rate", 100, 5, 0.0),
+        ("sire_name", "rank", "sire_last_100_avg_rank", 100, 5, float(data["rank"].median()) if "rank" in data.columns and data["rank"].notna().any() else np.nan),
+        ("damsire_name", "is_win", "damsire_last_100_win_rate", 100, 5, 0.0),
+    ]
+    for group_col, value_col, output_col, window, min_periods, fill_value in pedigree_history_specs:
+        if {group_col, value_col}.issubset(data.columns):
+            data[output_col] = _entity_race_shifted_rolling_mean(
+                data,
+                group_col,
+                value_col,
+                window=window,
+                min_periods=min_periods,
+            )
+            if pd.notna(fill_value):
+                data[output_col] = data[output_col].fillna(float(fill_value))
+
+    _compose_key(data, ["sire_name", "track", "distance"], "sire_track_distance_key")
+    if {"sire_track_distance_key", "is_win"}.issubset(data.columns):
+        data["sire_track_distance_last_80_win_rate"] = _entity_race_shifted_rolling_mean(
+            data,
+            "sire_track_distance_key",
+            "is_win",
+            window=80,
+            min_periods=3,
+        ).fillna(0.0)
 
     for column in data.columns:
         if data[column].dtype == "object":

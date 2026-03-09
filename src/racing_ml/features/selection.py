@@ -26,6 +26,12 @@ DEFAULT_SAFE_EXCLUDE_COLUMNS = {
     "time_per_1000m",
     "time_margin_sec",
     "time_deviation",
+    "owner_name",
+    "breeder_name",
+    "sire_name",
+    "dam_name",
+    "damsire_name",
+    "sire_track_distance_key",
 }
 
 DEFAULT_SAFE_EXCLUDE_KEYWORDS = [

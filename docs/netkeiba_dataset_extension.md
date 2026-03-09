@@ -33,6 +33,15 @@
   - `append_tables`
   - `supplemental_tables`
   - table 単位の `column_aliases`
+- [src/racing_ml/features/builder.py](/workspaces/nr-learn/src/racing_ml/features/builder.py)
+  - `gate_ratio`
+  - `frame_ratio`
+  - `owner_last_50_win_rate`
+  - `breeder_last_50_win_rate`
+  - `sire_last_100_win_rate`
+  - `sire_last_100_avg_rank`
+  - `damsire_last_100_win_rate`
+  - `sire_track_distance_last_80_win_rate`
 - テンプレート config: [configs/data_netkeiba_template.yaml](/workspaces/nr-learn/configs/data_netkeiba_template.yaml)
 
 ## 5. column_aliases の書き方
