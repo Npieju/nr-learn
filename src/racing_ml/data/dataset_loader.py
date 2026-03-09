@@ -42,6 +42,7 @@ COLUMN_ALIASES = {
 }
 
 TIME_PATTERN = re.compile(r"^(?:(?P<minutes>\d+):)?(?P<seconds>\d+(?:\.\d+)?)$")
+PASSING_ORDER_NUMBER_PATTERN = re.compile(r"\d+")
 
 DEFAULT_SUPPLEMENTAL_TABLES: list[dict[str, Any]] = [
     {
@@ -52,6 +53,23 @@ DEFAULT_SUPPLEMENTAL_TABLES: list[dict[str, Any]] = [
         "keep_columns": ["race_id", "race_pace_front3f", "race_pace_back3f"],
         "dedupe_on": ["race_id"],
         "merge_mode": "fill_missing",
+    },
+    {
+        "name": "corner_passing_order",
+        "pattern": "**/*corner_passing_order*.csv",
+        "join_on": ["race_id", "gate_no"],
+        "required_columns": ["race_id", "gate_no"],
+        "keep_columns": [
+            "race_id",
+            "gate_no",
+            "corner_1_position",
+            "corner_2_position",
+            "corner_3_position",
+            "corner_4_position",
+        ],
+        "dedupe_on": ["race_id", "gate_no"],
+        "merge_mode": "fill_missing",
+        "table_loader": "corner_passing_order",
     }
 ]
 
@@ -169,6 +187,59 @@ def _load_laptime_summary(raw_dir: Path) -> pd.DataFrame | None:
     return frame
 
 
+def _parse_passing_order_positions(value: object) -> dict[int, int]:
+    if value is None or (isinstance(value, float) and np.isnan(value)):
+        return {}
+
+    text = str(value).strip()
+    if not text or text.lower() in {"nan", "none"}:
+        return {}
+
+    output: dict[int, int] = {}
+    for token in PASSING_ORDER_NUMBER_PATTERN.findall(text):
+        gate_no = int(token)
+        if gate_no not in output:
+            output[gate_no] = len(output) + 1
+    return output
+
+
+def _expand_corner_passing_order(frame: pd.DataFrame) -> pd.DataFrame:
+    work = _normalize_columns(frame)
+    if "race_id" not in work.columns:
+        return pd.DataFrame()
+
+    corner_columns = [
+        column
+        for column in ["corner_1_position", "corner_2_position", "corner_3_position", "corner_4_position"]
+        if column in work.columns
+    ]
+    if not corner_columns:
+        return pd.DataFrame()
+
+    rows: list[dict[str, Any]] = []
+    for values in work[["race_id", *corner_columns]].itertuples(index=False, name=None):
+        race_id = values[0]
+        maps = {
+            column: _parse_passing_order_positions(value)
+            for column, value in zip(corner_columns, values[1:])
+        }
+        gate_nos = sorted({gate_no for mapping in maps.values() for gate_no in mapping.keys()})
+        for gate_no in gate_nos:
+            row: dict[str, Any] = {"race_id": race_id, "gate_no": gate_no}
+            for column in corner_columns:
+                row[column] = maps[column].get(gate_no)
+            rows.append(row)
+
+    if not rows:
+        return pd.DataFrame(columns=["race_id", "gate_no", *corner_columns])
+
+    expanded = pd.DataFrame(rows)
+    expanded["race_id"] = pd.to_numeric(expanded["race_id"], errors="coerce")
+    expanded["gate_no"] = pd.to_numeric(expanded["gate_no"], errors="coerce")
+    expanded = expanded.dropna(subset=["race_id", "gate_no"])
+    return expanded.reset_index(drop=True)
+
+
 def _normalize_string_list(values: object) -> list[str]:
     if values is None:
         return []
@@ -261,6 +332,17 @@ def _select_table_columns(frame: pd.DataFrame, keep_columns: list[str], join_on:
     return frame[selected].copy()
 
 
+def _load_candidate_table(candidate: Path, table_cfg: dict[str, Any]) -> pd.DataFrame:
+    table = pd.read_csv(candidate, low_memory=False)
+    table = _normalize_columns(table, extra_aliases=table_cfg.get("column_aliases"))
+
+    table_loader = str(table_cfg.get("table_loader", "")).strip().lower()
+    if table_loader == "corner_passing_order":
+        table = _expand_corner_passing_order(table)
+
+    return table
+
+
 def _load_matching_table(
     *,
     table_cfg: dict[str, Any],
@@ -274,8 +356,7 @@ def _load_matching_table(
         return None
 
     for candidate in _iter_csv_candidates(search_roots, pattern):
-        table = pd.read_csv(candidate, low_memory=False)
-        table = _normalize_columns(table, extra_aliases=table_cfg.get("column_aliases"))
+        table = _load_candidate_table(candidate, table_cfg)
         if required_columns and not all(column in table.columns for column in required_columns):
             continue
         if join_on and not all(column in table.columns for column in join_on):
@@ -317,8 +398,7 @@ def _inspect_table_sources(
 
     for candidate in candidates:
         try:
-            table = pd.read_csv(candidate, low_memory=False)
-            table = _normalize_columns(table, extra_aliases=table_cfg.get("column_aliases"))
+            table = _load_candidate_table(candidate, table_cfg)
         except Exception as error:
             result["status"] = "read_error"
             result["active_file"] = _display_path(candidate, base_dir)

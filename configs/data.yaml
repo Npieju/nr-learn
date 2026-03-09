@@ -30,6 +30,26 @@ dataset:
       dedupe_on:
         - "race_id"
       merge_mode: "fill_missing"
+    - name: "corner_passing_order"
+      pattern: "**/*corner_passing_order*.csv"
+      join_on:
+        - "race_id"
+        - "gate_no"
+      required_columns:
+        - "race_id"
+        - "gate_no"
+      keep_columns:
+        - "race_id"
+        - "gate_no"
+        - "corner_1_position"
+        - "corner_2_position"
+        - "corner_3_position"
+        - "corner_4_position"
+      dedupe_on:
+        - "race_id"
+        - "gate_no"
+      merge_mode: "fill_missing"
+      table_loader: "corner_passing_order"
 
 split:
   method: "time_series"

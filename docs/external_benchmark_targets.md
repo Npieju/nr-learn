@@ -119,6 +119,23 @@
   - ただし market を補完するほどではなく、Benter second-stage はまだ public-only を選ぶ。
   - 今回効いたのは `horse_last_3_avg_corner_4_ratio`、`horse_last_3_avg_closing_time_3f`、`horse_last_3_avg_race_pace_back3f`、`jockey_last_30_avg_closing_time_3f` などの pre-race pace / running-style 系だった。
 
+### 6.5 corner_passing_order 補完後の再評価
+- config: `configs/model_catboost_fundamental_enriched.yaml`
+- data config: `configs/data.yaml` with `corner_passing_order` supplemental enabled
+- 100k rows 評価:
+  - `auc = 0.759210`
+  - `logloss = 0.229734`
+  - `top1_roi = 0.743231`
+  - `model_pseudo_r2 = 0.137177`
+  - `public_pseudo_r2 = 0.253913`
+  - `benter_combined_pseudo_r2 = 0.253913`
+  - `benter_delta_pseudo_r2 ≈ 0`
+  - fitted `α = 0.0`, `β = 1.0`
+- 解釈:
+  - `corner_passing_order.csv` から horse-level の corner position 補完はできたが、coverage 改善は小さく、benchmark 指標は実質不変だった。
+  - `top1_roi` はわずかに上がった一方で、`model_pseudo_r2` は `0.139080 -> 0.137177` と微減した。
+  - したがって次の優先課題は corner 補完の深掘りではなく、gap report が示した pedigree / breeder 系 raw columns の投入である。
+
 ## 7. 当面の採用基準
 1. `public_pseudo_r2` は参考値として記録する。
 2. 採用判定は `benter_delta_pseudo_r2` を最優先にする。
