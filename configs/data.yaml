@@ -3,6 +3,33 @@ dataset:
   raw_dir: "data/raw"
   interim_dir: "data/interim"
   processed_dir: "data/processed"
+  external_raw_dirs:
+    - "data/external/netkeiba"
+  append_tables:
+    - name: "netkeiba_race_result"
+      search_dirs:
+        - "data/external/netkeiba"
+      pattern: "**/*race_result*.csv"
+      required_columns:
+        - "date"
+        - "race_id"
+      dedupe_on:
+        - "race_id"
+        - "horse_id"
+  supplemental_tables:
+    - name: "laptime"
+      pattern: "**/*laptime*.csv"
+      join_on:
+        - "race_id"
+      required_columns:
+        - "race_id"
+      keep_columns:
+        - "race_id"
+        - "race_pace_front3f"
+        - "race_pace_back3f"
+      dedupe_on:
+        - "race_id"
+      merge_mode: "fill_missing"
 
 split:
   method: "time_series"

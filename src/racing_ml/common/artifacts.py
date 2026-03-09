@@ -105,6 +105,7 @@ def build_model_manifest(
     label_column: str,
     model_name: str,
     used_features: list[str],
+    categorical_columns: list[str] | None = None,
     metrics: dict[str, Any],
     run_context: dict[str, Any],
     leakage_audit: dict[str, Any] | None,
@@ -133,6 +134,8 @@ def build_model_manifest(
         "features": {
             "count": int(len(used_features)),
             "columns": list(used_features),
+            "categorical_count": int(len(categorical_columns or [])),
+            "categorical_columns": list(categorical_columns or []),
         },
         "metrics": dict(metrics),
         "run_context": dict(run_context),

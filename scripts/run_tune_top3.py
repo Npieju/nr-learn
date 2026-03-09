@@ -22,11 +22,13 @@ from racing_ml.common.artifacts import (
     resolve_output_artifacts,
     write_json,
 )
+from racing_ml.common.progress import Heartbeat, ProgressBar
 from racing_ml.data.dataset_loader import load_training_table
 from racing_ml.evaluation.leakage import run_leakage_audit
 from racing_ml.evaluation.policy import PolicyConstraints, add_market_signals, evaluate_flat_strategy_catalog
 from racing_ml.evaluation.scoring import generate_prediction_outputs, prepare_scored_frame, resolve_odds_column
 from racing_ml.features.builder import build_features
+from racing_ml.features.selection import FeatureSelection, prepare_model_input_frame, resolve_feature_selection, resolve_model_feature_selection
 from racing_ml.models.trainer import train_and_evaluate
 
 
@@ -71,7 +73,7 @@ def _time_valid_slice(
 def objective_score(
     model_path: Path,
     valid_frame: pd.DataFrame,
-    feature_columns: list[str],
+    fallback_selection: FeatureSelection,
     constraints: PolicyConstraints,
 ) -> tuple[float, dict[str, float | int | str | None]]:
     if valid_frame.empty:
@@ -104,7 +106,8 @@ def objective_score(
         }
 
     model = joblib.load(model_path)
-    x_valid = valid_frame[feature_columns]
+    feature_selection = resolve_model_feature_selection(model, fallback_selection)
+    x_valid = prepare_model_input_frame(valid_frame, feature_selection.feature_columns, feature_selection.categorical_columns)
     outputs = generate_prediction_outputs(model, x_valid, race_ids=valid_frame["race_id"])
     scored = prepare_scored_frame(valid_frame, outputs.score, odds_col=odds_col, score_col="score")
     scored = add_market_signals(scored, score_col="score", odds_col=odds_col)
@@ -128,7 +131,24 @@ def objective_score(
     return float(selection_score), best_detail
 
 
-def build_model_candidates(base_params: dict) -> list[dict]:
+def build_model_candidates(base_params: dict, model_name: str) -> list[dict]:
+    if model_name.lower() == "catboost":
+        candidates = [
+            {},
+            {"learning_rate": 0.03, "depth": 8, "l2_leaf_reg": 5.0, "rsm": 0.85},
+            {"learning_rate": 0.02, "depth": 10, "l2_leaf_reg": 6.0, "bootstrap_type": "Bayesian", "bagging_temperature": 1.0, "rsm": 0.80},
+            {"learning_rate": 0.04, "depth": 6, "l2_leaf_reg": 4.0, "rsm": 0.90},
+            {"learning_rate": 0.025, "depth": 8, "l2_leaf_reg": 8.0, "random_strength": 1.5, "bootstrap_type": "Bernoulli", "subsample": 0.9},
+            {"learning_rate": 0.02, "depth": 10, "l2_leaf_reg": 10.0, "bootstrap_type": "Bernoulli", "subsample": 0.85, "rsm": 0.75},
+            {"learning_rate": 0.035, "depth": 7, "l2_leaf_reg": 3.0, "bootstrap_type": "Bayesian", "bagging_temperature": 0.5, "rsm": 0.90},
+        ]
+        merged: list[dict] = []
+        for patch in candidates:
+            params = dict(base_params)
+            params.update(patch)
+            merged.append(params)
+        return merged
+
     candidates = [
         {},
         {"learning_rate": 0.02, "num_leaves": 96, "min_data_in_leaf": 40, "feature_fraction": 0.85},
@@ -239,15 +259,17 @@ def main() -> int:
     data_cfg = load_yaml(ROOT / args.data_config)
     feature_cfg = load_yaml(ROOT / args.feature_config)
 
-    raw_dir = data_cfg.get("dataset", {}).get("raw_dir", "data/raw")
+    dataset_cfg = data_cfg.get("dataset", {})
+    raw_dir = dataset_cfg.get("raw_dir", "data/raw")
     split_cfg = data_cfg.get("split", {})
-    log_progress("Loading training table...")
-    frame = load_training_table(str(ROOT / raw_dir))
-    log_progress("Building features...")
-    frame = build_features(frame)
+    with Heartbeat("[tune]", "loading training table", logger=log_progress):
+        frame = load_training_table(raw_dir, dataset_config=dataset_cfg, base_dir=ROOT)
+    with Heartbeat("[tune]", "building features", logger=log_progress):
+        frame = build_features(frame)
 
-    feature_columns = feature_cfg.get("features", {}).get("base", []) + feature_cfg.get("features", {}).get("history", [])
     label_column = model_cfg.get("label", "is_win")
+    feature_selection = resolve_feature_selection(frame, feature_cfg, label_column=label_column)
+    feature_columns = feature_selection.feature_columns
     task = str(model_cfg.get("task", "multi_position"))
 
     base_params = model_cfg.get("model", {}).get("params", {})
@@ -263,11 +285,11 @@ def main() -> int:
     base_constraints = PolicyConstraints.from_config(evaluation_cfg)
     constraints = _override_constraints(base_constraints, args)
 
-    leakage_audit = (
-        run_leakage_audit(frame=frame, feature_columns=feature_columns, label_column=label_column)
-        if leakage_enabled
-        else {"enabled": False}
-    )
+    if leakage_enabled:
+        with Heartbeat("[tune]", "running leakage audit", logger=log_progress):
+            leakage_audit = run_leakage_audit(frame=frame, feature_columns=feature_columns, label_column=label_column)
+    else:
+        leakage_audit = {"enabled": False}
 
     run_context = {
         "config": str(args.config),
@@ -280,6 +302,9 @@ def main() -> int:
         "max_trials": int(args.max_trials),
         "rows_total": int(len(frame)),
         "device_type": device_type,
+        "feature_selection_mode": feature_selection.mode,
+        "feature_count": int(len(feature_selection.feature_columns)),
+        "categorical_feature_count": int(len(feature_selection.categorical_columns)),
         "artifact_model_dir": output_artifacts.model_dir.as_posix(),
         "artifact_report_dir": output_artifacts.report_dir.as_posix(),
         **constraints.to_dict(),
@@ -287,7 +312,7 @@ def main() -> int:
 
     log_progress(f"Runtime device_type from config: {device_type}")
 
-    model_candidates = build_model_candidates(base_params)[: max(1, args.max_candidates)]
+    model_candidates = build_model_candidates(base_params, model_name)[: max(1, args.max_candidates)]
     row_profiles = build_row_profiles(training_cfg)[: max(1, args.max_row_profiles)]
 
     trial_plan: list[tuple[dict, dict[str, int]]] = []
@@ -332,6 +357,8 @@ def main() -> int:
     started_at = time.perf_counter()
     total_trials = len(trial_plan)
     attempted_trials = 0
+    trial_progress = ProgressBar(total=max(total_trials, 1), prefix="[tune trials]", logger=log_progress, min_interval_sec=0.0)
+    trial_progress.start(message="candidate execution started")
     log_progress("Tuning started.")
 
     try:
@@ -347,6 +374,7 @@ def main() -> int:
                     f"Skip candidate {idx}/{total_trials} (already completed), "
                     f"progress={attempted_trials}/{total_trials}, elapsed={format_duration(elapsed)}, eta={eta_text}"
                 )
+                trial_progress.update(message=f"candidate {idx} skipped")
                 continue
 
             model_file = f"tune_top3_{idx}.joblib"
@@ -382,6 +410,7 @@ def main() -> int:
                     report_dir=output_cfg.get("report_dir", "artifacts/reports"),
                     model_file_name=model_file,
                     report_file_name=report_file,
+                    categorical_features=feature_selection.categorical_columns,
                 )
 
                 model_path = result.model_path if result.model_path.is_absolute() else (ROOT / result.model_path)
@@ -391,13 +420,13 @@ def main() -> int:
                     valid_end=split_cfg.get("valid_end", "2021-07-31"),
                     max_valid_rows=int(row_profile["max_valid_rows"]),
                 )
-                available_features = [column for column in feature_columns if column in valid_frame.columns]
-                score, roi_detail = objective_score(
-                    model_path,
-                    valid_frame,
-                    feature_columns=available_features,
-                    constraints=constraints,
-                )
+                with Heartbeat("[tune]", f"candidate {idx}: policy scoring", logger=log_progress):
+                    score, roi_detail = objective_score(
+                        model_path,
+                        valid_frame,
+                        fallback_selection=feature_selection,
+                        constraints=constraints,
+                    )
 
                 candidate_run_context = {
                     **run_context,
@@ -437,6 +466,7 @@ def main() -> int:
                     label_column=label_column,
                     model_name=model_name,
                     used_features=result.used_features,
+                    categorical_columns=result.categorical_features,
                     metrics=result.metrics,
                     run_context=candidate_run_context,
                     leakage_audit=leakage_audit,
@@ -508,6 +538,7 @@ def main() -> int:
                     f"Progress {attempted_trials}/{total_trials} ({(attempted_trials / total_trials):.1%}), "
                     f"candidate_elapsed={format_duration(candidate_elapsed)}, total_elapsed={format_duration(elapsed)}, eta={eta_text}"
                 )
+                trial_progress.update(message=f"candidate {idx} done, eta={eta_text}")
                 log_progress("Writing partial summary...")
                 _write_summary(
                     out_path=out_path,
@@ -544,6 +575,7 @@ def main() -> int:
     )
 
     total_elapsed = time.perf_counter() - started_at
+    trial_progress.complete(message="candidate execution finished")
     log_progress(f"Summary saved: {out_path}")
     log_progress(f"Best candidate: {best_row['candidate']}")
     log_progress(f"Best score: {best_score:.6f}")

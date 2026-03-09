@@ -1,0 +1,53 @@
+features:
+  base: []
+  history: []
+
+selection:
+  mode: "all_safe"
+  exclude_columns:
+    - "date"
+    - "race_id"
+    - "rank"
+    - "is_win"
+    - "horse_id"
+    - "horse_history_key"
+    - "horse_history_key_source"
+    - "horse_name"
+    - "レース名"
+    - "馬主"
+    - "着順注記"
+  exclude_keywords:
+    - "タイム"
+    - "着差"
+    - "コーナー"
+    - "上り"
+    - "賞金"
+    - "払戻"
+    - "配当"
+    - "payout"
+    - "passing_order"
+  force_include_columns:
+    - "horse_last_3_avg_rank"
+    - "horse_last_5_win_rate"
+    - "jockey_last_30_win_rate"
+    - "trainer_last_30_win_rate"
+    - "race_year"
+    - "race_month"
+    - "race_dayofweek"
+  force_categorical_columns:
+    - "jockey_id"
+    - "trainer_id"
+    - "track"
+    - "競争条件"
+    - "リステッド・重賞競走"
+    - "障害区分"
+    - "芝・ダート区分"
+    - "芝・ダート区分2"
+    - "右左回り・直線区分"
+    - "内・外・襷区分"
+    - "weather"
+    - "ground_condition"
+    - "馬場状態2"
+    - "発走時刻"
+    - "sex"
+    - "東西・外国・地方区分"

@@ -25,6 +25,7 @@ def main() -> int:
             "source_dataset",
             dataset.get("source_repo", "takamotoki/jra-horse-racing-dataset"),
         )
+        external_raw_dirs = dataset.get("external_raw_dirs", [])
 
         try:
             path = download_dataset_if_needed(target, source_dataset)
@@ -33,6 +34,13 @@ def main() -> int:
             print(f"[ingest] warning: {error}")
             sample = create_sample_dataset(target)
             print(f"[ingest] fallback sample dataset created: {sample}")
+
+        for raw_dir in external_raw_dirs:
+            external_path = Path(raw_dir)
+            if not external_path.is_absolute():
+                external_path = ROOT / external_path
+            external_path.mkdir(parents=True, exist_ok=True)
+            print(f"[ingest] external raw dir ready: {external_path}")
         return 0
     except KeyboardInterrupt:
         print("[ingest] interrupted by user")

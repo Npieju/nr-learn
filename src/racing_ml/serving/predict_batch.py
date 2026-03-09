@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+import time
 from typing import Any
 
 import joblib
@@ -10,19 +11,24 @@ import pandas as pd
 
 from racing_ml.common.artifacts import resolve_output_artifacts
 from racing_ml.common.config import load_yaml
+from racing_ml.common.progress import Heartbeat, ProgressBar
 from racing_ml.data.dataset_loader import load_training_table
-from racing_ml.evaluation.scoring import generate_prediction_outputs
+from racing_ml.evaluation.scoring import generate_prediction_outputs, predict_target_values
 from racing_ml.features.builder import build_features
+from racing_ml.features.selection import prepare_model_input_frame, resolve_feature_selection, resolve_model_feature_selection
 
 
-def _predict_score(model: object, frame: pd.DataFrame) -> np.ndarray:
-    return generate_prediction_outputs(model, frame).score
+def log_progress(message: str) -> None:
+    now = time.strftime("%H:%M:%S")
+    print(f"[predict {now}] {message}", flush=True)
 
 
-def _predict_multi_position(model_bundle: dict[str, Any], frame: pd.DataFrame) -> dict[str, np.ndarray]:
-    race_ids = frame["race_id"] if "race_id" in frame.columns else None
-    feature_frame = frame.drop(columns=["race_id"], errors="ignore")
-    outputs = generate_prediction_outputs(model_bundle, feature_frame, race_ids=race_ids)
+def _predict_score(model: object, frame: pd.DataFrame, race_ids: pd.Series | None) -> np.ndarray:
+    return generate_prediction_outputs(model, frame, race_ids=race_ids).score
+
+
+def _predict_multi_position(model_bundle: dict[str, Any], frame: pd.DataFrame, race_ids: pd.Series | None) -> dict[str, np.ndarray]:
+    outputs = generate_prediction_outputs(model_bundle, frame, race_ids=race_ids)
     if outputs.top3_probs is None:
         raise RuntimeError("Invalid multi_position model bundle")
     return outputs.top3_probs
@@ -81,52 +87,74 @@ def run_predict(
     model_config = load_yaml(Path(model_config_path))
     data_config = load_yaml(Path(data_config_path))
     feature_config = load_yaml(Path(feature_config_path))
+    progress = ProgressBar(total=6, prefix="[predict]", logger=log_progress, min_interval_sec=0.0)
+    progress.start("configs loaded")
 
-    raw_dir = data_config.get("dataset", {}).get("raw_dir", "data/raw")
-    frame = load_training_table(raw_dir)
-    frame = build_features(frame)
+    dataset_cfg = data_config.get("dataset", {})
+    raw_dir = dataset_cfg.get("raw_dir", "data/raw")
+    with Heartbeat("[predict]", "loading training table", logger=log_progress):
+        frame = load_training_table(raw_dir, dataset_config=dataset_cfg, base_dir=Path.cwd())
+    progress.update(message=f"training table loaded rows={len(frame):,}")
+
+    with Heartbeat("[predict]", "building features", logger=log_progress):
+        frame = build_features(frame)
+    progress.update(message=f"features built columns={len(frame.columns):,}")
 
     target_date = _resolve_target_date(frame, race_date)
     pred_frame = frame[frame["date"] == target_date].copy()
     if pred_frame.empty:
         raise ValueError(f"No races found for target date: {target_date}")
+    progress.update(
+        message=f"target date resolved date={pd.Timestamp(target_date).date()} races={pred_frame['race_id'].nunique():,}"
+    )
 
-    features_cfg = feature_config.get("features", {})
-    feature_columns = features_cfg.get("base", []) + features_cfg.get("history", [])
-    available_features = [column for column in feature_columns if column in pred_frame.columns]
-    if not available_features:
-        raise ValueError("No feature columns available for prediction")
+    with Heartbeat("[predict]", "loading model and preparing inputs", logger=log_progress):
+        output_artifacts = resolve_output_artifacts(model_config.get("output", {}))
+        workspace_root = Path.cwd()
+        model_path = output_artifacts.model_path if output_artifacts.model_path.is_absolute() else (workspace_root / output_artifacts.model_path)
+        manifest_path = output_artifacts.manifest_path if output_artifacts.manifest_path.is_absolute() else (workspace_root / output_artifacts.manifest_path)
+        if not model_path.exists():
+            raise FileNotFoundError(f"Model file not found: {model_path}")
 
-    output_artifacts = resolve_output_artifacts(model_config.get("output", {}))
-    workspace_root = Path.cwd()
-    model_path = output_artifacts.model_path if output_artifacts.model_path.is_absolute() else (workspace_root / output_artifacts.model_path)
-    manifest_path = output_artifacts.manifest_path if output_artifacts.manifest_path.is_absolute() else (workspace_root / output_artifacts.manifest_path)
-    if not model_path.exists():
-        raise FileNotFoundError(f"Model file not found: {model_path}")
-
-    model = joblib.load(model_path)
-    if isinstance(model, dict) and model.get("kind") == "multi_position_top3":
-        scoring_frame = pred_frame[["race_id", *available_features]].copy() if "race_id" in pred_frame.columns else pred_frame[available_features].copy()
-        outputs = _predict_multi_position(model, scoring_frame)
-        pred_frame["p_rank1_raw"] = outputs["p_rank1"]
-        pred_frame["p_rank2_raw"] = outputs["p_rank2"]
-        pred_frame["p_rank3_raw"] = outputs["p_rank3"]
-        pred_frame = pred_frame.rename(
-            columns={
-                "p_rank1_raw": "p_rank1",
-                "p_rank2_raw": "p_rank2",
-                "p_rank3_raw": "p_rank3",
-            }
+        model = joblib.load(model_path)
+        fallback_selection = resolve_feature_selection(pred_frame, feature_config, label_column=model_config.get("label", "is_win"))
+        feature_selection = resolve_model_feature_selection(model, fallback_selection)
+        model_input = prepare_model_input_frame(pred_frame, feature_selection.feature_columns, feature_selection.categorical_columns)
+        model_task = str(model.get("task", "")) if isinstance(model, dict) else ""
+    progress.update(
+        message=(
+            f"model ready features={len(feature_selection.feature_columns):,} "
+            f"categorical={len(feature_selection.categorical_columns):,}"
         )
-        pred_frame["p_top3"] = (pred_frame["p_rank1"] + pred_frame["p_rank2"] + pred_frame["p_rank3"]).clip(0.0, 1.0)
-        pred_frame["score"] = pred_frame["p_rank1"]
-    else:
-        pred_frame["score"] = _predict_score(model, pred_frame[available_features])
+    )
+
+    with Heartbeat("[predict]", "running inference", logger=log_progress):
+        if isinstance(model, dict) and model.get("kind") == "multi_position_top3":
+            outputs = _predict_multi_position(model, model_input, pred_frame.get("race_id"))
+            pred_frame["p_rank1_raw"] = outputs["p_rank1"]
+            pred_frame["p_rank2_raw"] = outputs["p_rank2"]
+            pred_frame["p_rank3_raw"] = outputs["p_rank3"]
+            pred_frame = pred_frame.rename(
+                columns={
+                    "p_rank1_raw": "p_rank1",
+                    "p_rank2_raw": "p_rank2",
+                    "p_rank3_raw": "p_rank3",
+                }
+            )
+            pred_frame["p_top3"] = (pred_frame["p_rank1"] + pred_frame["p_rank2"] + pred_frame["p_rank3"]).clip(0.0, 1.0)
+            pred_frame["score"] = pred_frame["p_rank1"]
+        else:
+            pred_frame["score"] = _predict_score(model, model_input, pred_frame.get("race_id"))
+            if model_task == "time_regression":
+                pred_frame["pred_finish_time_sec"] = predict_target_values(model, model_input)
+            elif model_task == "time_deviation":
+                pred_frame["pred_time_deviation"] = predict_target_values(model, model_input)
     pred_frame["pred_rank"] = (
         pred_frame.groupby("race_id")["score"]
         .rank(method="first", ascending=False)
         .astype(int)
     )
+    progress.update(message=f"inference complete rows={len(pred_frame):,}")
 
     if "odds" in pred_frame.columns:
         pred_frame["odds"] = pd.to_numeric(pred_frame["odds"], errors="coerce")
@@ -145,6 +173,9 @@ def run_predict(
     for extra_col in ["p_rank1", "p_rank2", "p_rank3", "p_top3"]:
         if extra_col in pred_frame.columns:
             columns.append(extra_col)
+    for extra_col in ["pred_finish_time_sec", "pred_time_deviation"]:
+        if extra_col in pred_frame.columns:
+            columns.append(extra_col)
     if "expected_value" in pred_frame.columns:
         columns += ["expected_value", "ev_rank"]
 
@@ -155,9 +186,11 @@ def run_predict(
     csv_path = out_dir / f"predictions_{date_tag}.csv"
     png_path = out_dir / f"predictions_{date_tag}.png"
 
-    output = pred_frame[columns].sort_values(["race_id", "pred_rank"]).reset_index(drop=True)
-    output.to_csv(csv_path, index=False)
-    _plot_predictions(output, png_path)
+    with Heartbeat("[predict]", "writing prediction outputs", logger=log_progress):
+        output = pred_frame[columns].sort_values(["race_id", "pred_rank"]).reset_index(drop=True)
+        output.to_csv(csv_path, index=False)
+        _plot_predictions(output, png_path)
+    progress.complete(message="prediction outputs written")
 
     print(f"[predict] target date: {pd.Timestamp(target_date).date()}")
     print(f"[predict] predictions saved: {csv_path}")

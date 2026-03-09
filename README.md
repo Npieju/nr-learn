@@ -1,7 +1,7 @@
 # nr-learn
 
 JRA競馬予想の**学習用**プロジェクトです。  
-データソースは KaggleHub の `takamotoki/jra-horse-racing-dataset` を前提にしています。
+データソースは KaggleHub の `takamotoki/jra-horse-racing-dataset` を主表にしつつ、後から外部CSVを追加マージできる構成です。
 
 ## 目的
 - 競馬予想を「勘」ではなく、再現可能なMLパイプラインとして学ぶ
@@ -10,14 +10,15 @@ JRA競馬予想の**学習用**プロジェクトです。
 
 ## アーキテクチャ概要
 - **Data Layer**: 生データ取得・正規化・特徴量生成
-- **Model Layer**: classification / ranking / Top3 / ROI / alpha の学習
+- **Feature Selection Layer**: `explicit` / `all_safe` による共通特徴量解決とカテゴリ列判定
+- **Model Layer**: LightGBM比較系 + CatBoost本命系で classification / ranking / Top3 / ROI / alpha を学習
 - **Scoring Layer**: モデル出力と Top3 正規化を共通 API 化
 - **Policy Layer**: ROI評価、market signal、gating、Kelly / portfolio を統一
 - **Walk-Forward Layer**: calibration / blend / nested WF 最適化を統一
 - **Artifact Layer**: train manifest と stack bundle manifest を管理
 - **Serving Layer**: 次レース予測バッチ出力（CSV/PNG）
 
-詳細は [docs/architecture.md](docs/architecture.md)、[docs/architecture_long_term.md](docs/architecture_long_term.md)、[docs/model_artifacts.md](docs/model_artifacts.md) を参照。
+詳細は [docs/architecture.md](docs/architecture.md)、[docs/architecture_long_term.md](docs/architecture_long_term.md)、[docs/model_artifacts.md](docs/model_artifacts.md)、[docs/external_benchmark_targets.md](docs/external_benchmark_targets.md) を参照。
 
 ## ディレクトリ
 ```text
@@ -53,17 +54,27 @@ nr-learn/
 
 ## まずの進め方（推奨）
 1. `data/raw/` にデータを配置（または取得スクリプトで同期）
-2. Baseline分類モデルで `win/place` を予測
-3. 時系列CVで評価
-4. 回収率を含む指標で改善
-5. Rankモデルへ拡張
+2. 必要に応じて `data/external/...` に外部CSVを配置し、`configs/data.yaml` の `append_tables` / `supplemental_tables` で取り込む
+3. CatBoost分類モデルで広めの安全特徴量を使って `win` を予測
+4. 時系列スライスで評価し、AUCだけでなくROIも確認
+5. Top3 / ROI / alpha / ranking に横展開
+6. LightGBM baseline とA/B比較して改善幅を固定化
 
 ## 実行手順（MVP）
 1. データ取得
     - `python scripts/run_ingest.py --config configs/data.yaml`
     - Kaggle認証が未設定 / データ取得失敗時は、学習確認用の `data/raw/sample_races.csv` を自動生成
+    - `configs/data.yaml` の `dataset.external_raw_dirs` に定義した外部 raw dir も同時に作成されます
+    - 外部サイト由来CSVを後から足す場合は、`append_tables` で行追加、`supplemental_tables` で列追加を定義します
 2. 学習
     - `python scripts/run_train.py --config configs/model.yaml --data-config configs/data.yaml --feature-config configs/features.yaml`
+    - （推奨 / CatBoost win）`python scripts/run_train.py --config configs/model_catboost.yaml --data-config configs/data.yaml --feature-config configs/features_catboost_rich.yaml`
+    - （benchmark 用 / CatBoost fundamental win）`python scripts/run_train.py --config configs/model_catboost_fundamental.yaml --data-config configs/data.yaml --feature-config configs/features_catboost_fundamental.yaml`
+    - （推奨 / CatBoost Top3）`python scripts/run_train.py --config configs/model_catboost_top3.yaml --data-config configs/data.yaml --feature-config configs/features_catboost_rich.yaml`
+    - （推奨 / CatBoost Ranker）`python scripts/run_train.py --config configs/model_catboost_ranker.yaml --data-config configs/data.yaml --feature-config configs/features_catboost_rich.yaml`
+    - （推奨 / CatBoost ROI）`python scripts/run_train.py --config configs/model_catboost_roi.yaml --data-config configs/data.yaml --feature-config configs/features_catboost_rich.yaml`
+    - （推奨 / CatBoost alpha）`python scripts/run_train.py --config configs/model_catboost_alpha.yaml --data-config configs/data.yaml --feature-config configs/features_catboost_rich.yaml`
+    - （長期ROI向け stack build）`python scripts/run_build_value_stack.py --config configs/model_catboost_value_stack.yaml --data-config configs/data.yaml --feature-config configs/features_catboost_rich.yaml`
     - （Ranker）`python scripts/run_train.py --config configs/model_ranker.yaml --data-config configs/data.yaml --feature-config configs/features.yaml`
     - （Top3確率）`python scripts/run_train.py --config configs/model_top3.yaml --data-config configs/data.yaml --feature-config configs/features.yaml`
     - （ROI回帰）`python scripts/run_train.py --config configs/model_roi.yaml --data-config configs/data.yaml --feature-config configs/features.yaml`
@@ -92,13 +103,22 @@ nr-learn/
     - 可視化PNG: `artifacts/reports/backtest_YYYYMMDD.png`
 7. モデル評価（全体＋日別）
     - `python scripts/run_evaluate.py --config configs/model.yaml --data-config configs/data.yaml --feature-config configs/features.yaml --max-rows 80000`
+    - （CatBoost win）`python scripts/run_evaluate.py --config configs/model_catboost.yaml --data-config configs/data.yaml --feature-config configs/features_catboost_rich.yaml --max-rows 200000`
+    - （benchmark 用 / CatBoost fundamental win）`python scripts/run_evaluate.py --config configs/model_catboost_fundamental.yaml --data-config configs/data.yaml --feature-config configs/features_catboost_fundamental.yaml --max-rows 200000 --wf-mode off`
+    - （CatBoost Top3）`python scripts/run_evaluate.py --config configs/model_catboost_top3.yaml --data-config configs/data.yaml --feature-config configs/features_catboost_rich.yaml --max-rows 200000`
+    - （CatBoost ROI）`python scripts/run_evaluate.py --config configs/model_catboost_roi.yaml --data-config configs/data.yaml --feature-config configs/features_catboost_rich.yaml --max-rows 200000 --wf-mode off`
+    - （CatBoost alpha）`python scripts/run_evaluate.py --config configs/model_catboost_alpha.yaml --data-config configs/data.yaml --feature-config configs/features_catboost_rich.yaml --max-rows 150000 --wf-mode off`
+    - （長期ROI向け stack）`python scripts/run_evaluate.py --config configs/model_catboost_value_stack.yaml --data-config configs/data.yaml --feature-config configs/features_catboost_rich.yaml --max-rows 150000 --wf-mode fast`
     - （ROI回帰）`python scripts/run_evaluate.py --config configs/model_roi.yaml --data-config configs/data.yaml --feature-config configs/features.yaml --max-rows 80000`
     - （市場乖離/Layer2）`python scripts/run_evaluate.py --config configs/model_alpha.yaml --data-config configs/data.yaml --feature-config configs/features.yaml --max-rows 80000`
-    - 全体指標: `artifacts/reports/evaluation_summary.json`
+    - 全体指標: `artifacts/reports/evaluation_summary.json`（常に最新実行）
+    - モデル別保存: `artifacts/reports/evaluation_summary_<model>.json`
             - `run_context`: 実行条件（config, max_rows, wf設定 など）
             - `artifact_manifest`: 利用モデルの manifest パス
             - `leakage_audit`: 特徴量リーク疑義の自動点検結果
-    - 日別指標: `artifacts/reports/evaluation_by_date.csv`
+            - `public_pseudo_r2` / `model_pseudo_r2` / `benter_combined_pseudo_r2` / `benter_delta_pseudo_r2`: public を超える追加情報があるかを測る benchmark 指標
+    - 日別指標: `artifacts/reports/evaluation_by_date.csv`（常に最新実行）
+    - モデル別日別保存: `artifacts/reports/evaluation_by_date_<model>.csv`
         - 回収率指標（主目的）:
             - `top1_roi`: スコア1位を毎レース購入
             - `ev_top1_roi`: `score × odds` が最大の馬を毎レース購入
@@ -106,6 +126,7 @@ nr-learn/
             - `ev_threshold_1_2_roi`: 期待値1.2以上のみ購入
 8. ベースライン vs Ranker 比較（同一データでA/B）
     - `python scripts/run_ab_compare.py --base-config configs/model.yaml --challenger-config configs/model_ranker.yaml --max-rows 30000`
+    - （CatBoost win vs LightGBM baseline）`python scripts/run_ab_compare.py --base-config configs/model.yaml --challenger-config configs/model_catboost.yaml --feature-config configs/features_catboost_rich.yaml --max-rows 30000`
     - 比較サマリ: `artifacts/reports/ab_compare_summary.json`
     - Top3確率モデルを比較する場合は `--challenger-config configs/model_top3.yaml` を指定
     - Top3チューニング結果（`artifacts/reports/tune_top3_summary.json`）には `run_context` / `leakage_audit` / `policy_constraints` が保存されます
@@ -120,9 +141,18 @@ nr-learn/
 
 ## Artifact運用
 - 学習ごとに `model_file` / `report_file` / `manifest_file` の3点が揃います
-- manifest には task、config パス、used_features、metrics、policy_constraints、run_context が保存されます
+- manifest には task、config パス、used_features、categorical_columns、metrics、policy_constraints、run_context が保存されます
 - stack bundle は複数 manifest / model を運用単位として束ねるための JSON です
 - 推奨運用順: `run_train` 群 → `run_bundle_models.py` → `run_predict` / `run_evaluate` / `run_ab_compare`
+
+## CatBoost長期運用メモ
+- 現在の本命系は `configs/model_catboost*.yaml` と `configs/features_catboost_rich.yaml` の組み合わせです
+- `features_catboost_rich.yaml` は `selection.mode: all_safe` を使い、`horse_id`、`horse_name`、`レース名`、`馬主` のような超高カーディナリティ列や払戻系列を除外します
+- public benchmark を測るときは `configs/model_catboost_fundamental.yaml` と `configs/features_catboost_fundamental.yaml` を使い、`odds` / `popularity` を切った fundamental model を別管理します
+- 学習済みCatBoost bundle には `feature_columns` と `categorical_columns` が埋め込まれるため、推論・評価側は model metadata を優先して同じ入力列を再現します
+- データ拡張は `configs/data.yaml` の multi-source loader で扱います。外部CSVを足すときは、主表を壊さず `append_tables` と `supplemental_tables` に追加してください
+- CPUのCatBoost ranking は pairwise 制約のため `one_hot_max_size=1` に自動補正されます
+- 長期ROI改善用には `configs/model_catboost_value_stack.yaml` を使い、win確率を土台に alpha / ROI シグナルで logit を補正した `value_blend_model` を構築できます
 
 ## Notebookトラブルシュート
 - `dashboard.ipynb` が止まる場合は、まずカーネルを `.venv` に再選択して先頭セルから順に実行

@@ -2,6 +2,7 @@ import argparse
 import json
 from pathlib import Path
 import sys
+import time
 import traceback
 
 import joblib
@@ -16,13 +17,20 @@ if str(SRC) not in sys.path:
 
 from racing_ml.common.artifacts import resolve_output_artifacts
 from racing_ml.common.config import load_yaml
+from racing_ml.common.progress import Heartbeat, ProgressBar
 from racing_ml.data.dataset_loader import load_training_table
 from racing_ml.evaluation.policy import add_market_signals, evaluate_fixed_stake_summary
 from racing_ml.evaluation.scoring import generate_prediction_outputs, prepare_scored_frame, resolve_odds_column, topk_hit_rate
 from racing_ml.features.builder import build_features
+from racing_ml.features.selection import FeatureSelection, prepare_model_input_frame, resolve_feature_selection, resolve_model_feature_selection
 
 
-def evaluate_model(name: str, model_cfg: dict, frame: pd.DataFrame, feature_columns: list[str], label_col: str) -> dict:
+def log_progress(message: str) -> None:
+    now = time.strftime("%H:%M:%S")
+    print(f"[ab {now}] {message}", flush=True)
+
+
+def evaluate_model(name: str, model_cfg: dict, frame: pd.DataFrame, fallback_selection: FeatureSelection, label_col: str) -> dict:
     output_cfg = model_cfg.get("output", {})
     output_artifacts = resolve_output_artifacts(output_cfg)
     model_path = output_artifacts.model_path if output_artifacts.model_path.is_absolute() else (ROOT / output_artifacts.model_path)
@@ -30,8 +38,9 @@ def evaluate_model(name: str, model_cfg: dict, frame: pd.DataFrame, feature_colu
         raise FileNotFoundError(f"Model file not found: {model_path}")
 
     model = joblib.load(model_path)
+    feature_selection = resolve_model_feature_selection(model, fallback_selection)
     eval_frame = frame.copy()
-    x_eval = eval_frame[feature_columns]
+    x_eval = prepare_model_input_frame(eval_frame, feature_selection.feature_columns, feature_selection.categorical_columns)
     odds_col = resolve_odds_column(eval_frame)
     outputs = generate_prediction_outputs(model, x_eval, race_ids=eval_frame["race_id"])
     eval_frame = prepare_scored_frame(eval_frame, outputs.score, odds_col=odds_col, score_col="score")
@@ -43,6 +52,8 @@ def evaluate_model(name: str, model_cfg: dict, frame: pd.DataFrame, feature_colu
         "model": name,
         "model_file": str(model_path.relative_to(ROOT)),
         "manifest_file": output_artifacts.manifest_path.as_posix() if (ROOT / output_artifacts.manifest_path).exists() else None,
+        "feature_count": int(len(feature_selection.feature_columns)),
+        "categorical_feature_count": int(len(feature_selection.categorical_columns)),
         "n_rows": int(len(eval_frame)),
         "n_races": int(eval_frame["race_id"].nunique()),
         "top1_hit_rate": topk_hit_rate(eval_frame, 1),
@@ -74,22 +85,41 @@ def main() -> int:
         challenger_cfg = load_yaml(ROOT / args.challenger_config)
         data_cfg = load_yaml(ROOT / args.data_config)
         feature_cfg = load_yaml(ROOT / args.feature_config)
+        progress = ProgressBar(total=7, prefix="[ab]", logger=log_progress, min_interval_sec=0.0)
+        progress.start("configs loaded")
 
-        raw_dir = data_cfg.get("dataset", {}).get("raw_dir", "data/raw")
-        frame = load_training_table(str(ROOT / raw_dir))
-        frame = build_features(frame)
+        dataset_cfg = data_cfg.get("dataset", {})
+        raw_dir = dataset_cfg.get("raw_dir", "data/raw")
+        with Heartbeat("[ab]", "loading training table", logger=log_progress):
+            frame = load_training_table(raw_dir, dataset_config=dataset_cfg, base_dir=ROOT)
+        progress.update(message=f"training table loaded rows={len(frame):,}")
+
+        with Heartbeat("[ab]", "building features", logger=log_progress):
+            frame = build_features(frame)
+        progress.update(message=f"features built columns={len(frame.columns):,}")
+
         if args.max_rows and len(frame) > args.max_rows:
             frame = frame.tail(args.max_rows).copy()
-
-        features_cfg = feature_cfg.get("features", {})
-        feature_columns = features_cfg.get("base", []) + features_cfg.get("history", [])
-        available_features = [column for column in feature_columns if column in frame.columns]
-        if not available_features:
-            raise RuntimeError("No configured feature columns found for comparison")
+        progress.update(message=f"evaluation slice ready rows={len(frame):,}")
 
         label_col = str(base_cfg.get("label", "is_win"))
-        base_metrics = evaluate_model("baseline", base_cfg, frame, available_features, label_col)
-        challenger_metrics = evaluate_model("challenger", challenger_cfg, frame, available_features, label_col)
+        fallback_selection = resolve_feature_selection(frame, feature_cfg, label_column=label_col)
+        if not fallback_selection.feature_columns:
+            raise RuntimeError("No configured feature columns found for comparison")
+        progress.update(
+            message=(
+                f"feature selection ready features={len(fallback_selection.feature_columns):,} "
+                f"categorical={len(fallback_selection.categorical_columns):,}"
+            )
+        )
+
+        with Heartbeat("[ab]", "evaluating baseline model", logger=log_progress):
+            base_metrics = evaluate_model("baseline", base_cfg, frame, fallback_selection, label_col)
+        progress.update(message="baseline evaluated")
+
+        with Heartbeat("[ab]", "evaluating challenger model", logger=log_progress):
+            challenger_metrics = evaluate_model("challenger", challenger_cfg, frame, fallback_selection, label_col)
+        progress.update(message="challenger evaluated")
 
         summary = {
             "base_config": args.base_config,
@@ -118,8 +148,10 @@ def main() -> int:
 
         out_path = ROOT / "artifacts/reports/ab_compare_summary.json"
         out_path.parent.mkdir(parents=True, exist_ok=True)
-        with out_path.open("w", encoding="utf-8") as file:
-            json.dump(summary, file, ensure_ascii=False, indent=2)
+        with Heartbeat("[ab]", "writing comparison summary", logger=log_progress):
+            with out_path.open("w", encoding="utf-8") as file:
+                json.dump(summary, file, ensure_ascii=False, indent=2)
+        progress.complete(message="comparison summary written")
 
         print(f"[ab] summary saved: {out_path}")
         print(f"[ab] baseline: {base_metrics}")

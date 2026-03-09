@@ -50,11 +50,18 @@ flowchart LR
 - 集約特徴量（直近N走成績、騎手成績、コース適性など）
 - カテゴリ処理（競馬場・距離・馬場状態）
 - 過去時点で再現できる特徴量のみを採用
+- モデルごとに同じ特徴量集合を再現できるよう、選択結果を明示管理する
 
 **設計指針**
 - `features/base_features.py`
 - `features/history_features.py`
 - `features/encoding.py`
+- `features/selection.py`
+
+**現在の運用方針**
+- LightGBM向けの明示列指定は残すが、本命系は `selection.mode: all_safe` で広めの安全特徴量を採用する
+- `horse_id`、`horse_name`、`レース名`、`馬主` のような超高カーディナリティ列はメモリ保護のため除外する
+- `jockey_id`、`trainer_id`、馬場・天候・条件系はCatBoostのネイティブカテゴリ処理に渡す
 
 **リーク回避ルール**
 - 各サンプル時点 `t` で、`t` 以降の情報を参照しない
@@ -65,13 +72,19 @@ flowchart LR
 
 1) **Baseline分類**
 - 目的変数: `is_win`（1着）または `is_place`（3着以内）
-- モデル: LightGBM / XGBoost
-- メリット: 実装が簡単で改善サイクルを回しやすい
+- モデル: LightGBM / CatBoost
+- 現在の推奨: CatBoost + 広めの安全特徴量
+- メリット: カテゴリ列を大規模に活用しやすく、競馬データの構造と相性が良い
 
 2) **Rankモデル**
 - 1レース内での相対順位を学習
-- モデル: LightGBM LambdaRank
+- モデル: LightGBM LambdaRank / CatBoost YetiRankPairwise
 - メリット: 競馬の本質（同レース内比較）に自然
+
+3) **派生タスク**
+- Top3: 1着 / 2着 / 3着確率を独立学習して共通Scoring Layerで扱う
+- ROI回帰: 払戻を直接近似して高期待値候補を探索する
+- 市場乖離(alpha): 市場確率との差分を学習してオッズ由来の歪みを拾う
 
 ### 3.4 Evaluation Layer
 **最低限の指標**
@@ -96,22 +109,23 @@ flowchart LR
 - 設定ファイル: `configs/*.yaml`
 - 実験管理: まずはCSVログ/MLflowローカル（任意）
 - モデル保存: `artifacts/models/` に日付バージョンで保存
+- manifest には `used_features` に加えて `categorical_columns` も残し、推論時は model metadata を優先して入力列を再現する
 
 ---
 
 ## 4. 学習用におすすめの開発ステップ
-1. **P0**: Baseline分類を時系列CVで動かす
-2. **P1**: 主要特徴量を追加（近走・騎手・距離適性）
-3. **P2**: ROIベースの閾値戦略を検証
-4. **P3**: Rankモデルへ移行
-5. **P4**: 推論バッチを固定化（再現可能なCLI）
+1. **P0**: CatBoost分類を `all_safe` 特徴量で時系列評価まで動かす
+2. **P1**: 主要特徴量を追加（近走・騎手・距離適性・日付派生）
+3. **P2**: Top3 / ROI / alpha に同じ特徴量戦略を横展開する
+4. **P3**: Rankモデルを比較導入し、LightGBM baseline とA/Bで差分確認する
+5. **P4**: 推論バッチとartifact manifestを固定化する
 
 ---
 
 ## 5. 最小MVP仕様
 - 入力: 過去レーステーブル（特徴量生成済み）
 - 出力: 次レースの推奨順位CSV
-- 学習: LightGBM分類 + 時系列CV
+- 学習: CatBoost分類 + 時系列評価
 - 評価: AUC + 回収率
 - 保存: モデルと評価レポートを`artifacts/`へ
 

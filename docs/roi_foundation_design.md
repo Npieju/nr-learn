@@ -10,6 +10,7 @@
   3. 特徴量定義の整合
   4. ハイパーパラメータ最適化（最後）
 - 2026-03-07 以降の長期運用設計は [architecture_long_term.md](architecture_long_term.md) を正本とする。
+- 外部 benchmark と target 値は [external_benchmark_targets.md](external_benchmark_targets.md) を正本とする。
 
 ## 2. 設計原則（幹）
 1. 学習ターゲットと評価KPIは一致させる。
@@ -45,6 +46,8 @@
 - LogLoss
 - Brier
 - Calibration Error（ECE相当）
+- Benter pseudo-R²
+- `ΔR² = R²_combined - R²_public`
 
 ### 4.2 投資品質KPI
 - Out-of-Sample ROI

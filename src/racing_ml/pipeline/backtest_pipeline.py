@@ -2,9 +2,17 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+import time
 
 import matplotlib.pyplot as plt
 import pandas as pd
+
+from racing_ml.common.progress import Heartbeat, ProgressBar
+
+
+def log_progress(message: str) -> None:
+    now = time.strftime("%H:%M:%S")
+    print(f"[backtest {now}] {message}", flush=True)
 
 
 def _latest_prediction_file(predictions_dir: Path) -> Path:
@@ -110,31 +118,39 @@ def run_backtest(config_path: str, predictions_file: str | None = None) -> None:
     target_file = Path(predictions_file) if predictions_file else _latest_prediction_file(predictions_dir)
     if not target_file.exists():
         raise FileNotFoundError(f"Prediction file not found: {target_file}")
+    progress = ProgressBar(total=4, prefix="[backtest]", logger=log_progress, min_interval_sec=0.0)
+    progress.start("starting backtest")
+    progress.update(message=f"prediction target resolved file={target_file.name}")
 
-    frame = pd.read_csv(target_file)
+    with Heartbeat("[backtest]", "loading prediction frame", logger=log_progress):
+        frame = pd.read_csv(target_file)
+    progress.update(message=f"prediction frame loaded rows={len(frame):,}")
+
     required_cols = {"race_id", "score", "pred_rank"}
     missing = required_cols - set(frame.columns)
     if missing:
         raise ValueError(f"Missing columns in prediction file: {sorted(missing)}")
 
-    frame["pred_rank"] = pd.to_numeric(frame["pred_rank"], errors="coerce")
-    frame["score"] = pd.to_numeric(frame["score"], errors="coerce")
-    if "odds" in frame.columns:
-        frame["odds"] = pd.to_numeric(frame["odds"], errors="coerce")
-    if "expected_value" not in frame.columns and "odds" in frame.columns:
-        frame["expected_value"] = frame["score"] * frame["odds"]
-    frame = frame.dropna(subset=["pred_rank", "score"])
+    with Heartbeat("[backtest]", "computing backtest metrics", logger=log_progress):
+        frame["pred_rank"] = pd.to_numeric(frame["pred_rank"], errors="coerce")
+        frame["score"] = pd.to_numeric(frame["score"], errors="coerce")
+        if "odds" in frame.columns:
+            frame["odds"] = pd.to_numeric(frame["odds"], errors="coerce")
+        if "expected_value" not in frame.columns and "odds" in frame.columns:
+            frame["expected_value"] = frame["score"] * frame["odds"]
+        frame = frame.dropna(subset=["pred_rank", "score"])
 
-    metrics = {
-        "prediction_file": str(target_file),
-        "num_rows": int(len(frame)),
-        "num_races": int(frame["race_id"].nunique()),
-        "top1_hit_rate": _topk_hit_rate(frame, 1),
-        "top3_hit_rate": _topk_hit_rate(frame, 3),
-        "top5_hit_rate": _topk_hit_rate(frame, 5),
-        "simple_top1_win_roi": _simple_win_roi(frame),
-        "ev_top1_win_roi": _ev_top1_roi(frame),
-    }
+        metrics = {
+            "prediction_file": str(target_file),
+            "num_rows": int(len(frame)),
+            "num_races": int(frame["race_id"].nunique()),
+            "top1_hit_rate": _topk_hit_rate(frame, 1),
+            "top3_hit_rate": _topk_hit_rate(frame, 3),
+            "top5_hit_rate": _topk_hit_rate(frame, 5),
+            "simple_top1_win_roi": _simple_win_roi(frame),
+            "ev_top1_win_roi": _ev_top1_roi(frame),
+        }
+    progress.update(message=f"metrics computed races={metrics['num_races']:,}")
 
     report_dir = Path("artifacts/reports")
     report_dir.mkdir(parents=True, exist_ok=True)
@@ -142,10 +158,12 @@ def run_backtest(config_path: str, predictions_file: str | None = None) -> None:
     json_path = report_dir / f"backtest_{stem}.json"
     png_path = report_dir / f"backtest_{stem}.png"
 
-    with json_path.open("w", encoding="utf-8") as file:
-        json.dump(metrics, file, ensure_ascii=False, indent=2)
+    with Heartbeat("[backtest]", "writing backtest outputs", logger=log_progress):
+        with json_path.open("w", encoding="utf-8") as file:
+            json.dump(metrics, file, ensure_ascii=False, indent=2)
 
-    _plot_backtest(frame, png_path)
+        _plot_backtest(frame, png_path)
+    progress.complete(message="backtest outputs written")
 
     print(f"[backtest] target predictions: {target_file}")
     print(f"[backtest] report saved: {json_path}")
