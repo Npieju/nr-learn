@@ -68,9 +68,18 @@ column_aliases:
 
 ## 7. 運用チェック
 - validation CLI: [scripts/run_validate_data_sources.py](../scripts/run_validate_data_sources.py)
+- feature gap CLI: [scripts/run_feature_gap_report.py](../scripts/run_feature_gap_report.py)
 - 出力: `artifacts/reports/data_source_validation.json`
+- 出力: `artifacts/reports/feature_gap_summary_<feature_config>.json`
 - 確認内容:
   - primary dataset が存在するか
   - append / supplemental table が見つかるか
   - required columns / join keys が足りているか
   - dedupe key 上の重複がどの程度あるか
+  - netkeiba template 上の canonical raw columns が今の主表でどこまで埋まっているか
+  - benchmark feature profile の force include 特徴が missing / empty / low coverage になっていないか
+
+## 8. 直近の gap 結果
+- `features_catboost_fundamental_enriched` の gap report では、優先 missing raw columns は `breeder_name`, `sire_name`, `dam_name`, `damsire_name` だった。
+- つまり次に効果が見込める外部ソースは pedigree / breeder 系で、owner や gate/frame はすでに主表だけでも利用可能。
+- low coverage 側では `horse_last_3_avg_corner_2_position`, `horse_last_3_avg_corner_2_ratio`, `horse_last_3_avg_corner_gain_2_to_4` が残っており、corner 前半列の品質改善も有効候補。
