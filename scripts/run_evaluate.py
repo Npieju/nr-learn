@@ -56,7 +56,7 @@ from racing_ml.evaluation.walk_forward import (
     split_three_way_time,
 )
 from racing_ml.features.builder import build_features
-from racing_ml.features.selection import prepare_model_input_frame, resolve_feature_selection, resolve_model_feature_selection
+from racing_ml.features.selection import prepare_model_input_frame, resolve_feature_selection, resolve_model_feature_selection, summarize_feature_coverage
 
 
 def log_progress(message: str) -> None:
@@ -277,6 +277,7 @@ def main() -> int:
         model = joblib.load(model_path)
         fallback_selection = resolve_feature_selection(frame, feature_cfg, label_column=label_col)
         feature_selection = resolve_model_feature_selection(model, fallback_selection)
+        feature_coverage = summarize_feature_coverage(frame, feature_cfg, feature_selection)
         if not feature_selection.feature_columns:
             raise RuntimeError("No features available for evaluation")
         progress.update(
@@ -285,6 +286,10 @@ def main() -> int:
                 f"categorical={len(feature_selection.categorical_columns):,}"
             )
         )
+        if feature_coverage["missing_force_include_features"]:
+            print(f"[evaluate] missing force-include features: {feature_coverage['missing_force_include_features']}")
+        if feature_coverage["low_coverage_force_include_features"]:
+            print(f"[evaluate] low-coverage force-include features: {feature_coverage['low_coverage_force_include_features']}")
 
         x_eval = prepare_model_input_frame(frame, feature_selection.feature_columns, feature_selection.categorical_columns)
         y_eval = frame[label_col].astype(int).to_numpy()
@@ -341,6 +346,7 @@ def main() -> int:
             "categorical_feature_count": int(len(feature_selection.categorical_columns)),
             "artifact_manifest": output_artifacts.manifest_path.as_posix() if (ROOT / output_artifacts.manifest_path).exists() else None,
         }
+        summary["feature_coverage"] = feature_coverage
         summary["policy_constraints"] = policy_constraints.to_dict()
 
         if leakage_enabled:

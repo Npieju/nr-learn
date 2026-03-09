@@ -260,3 +260,49 @@ def resolve_model_feature_selection(
         excluded_columns=list(fallback_selection.excluded_columns),
         mode=fallback_selection.mode,
     )
+
+
+def summarize_feature_coverage(
+    frame: pd.DataFrame,
+    feature_config: dict[str, Any],
+    selection: FeatureSelection,
+    coverage_threshold: float = 0.5,
+) -> dict[str, Any]:
+    selection_cfg = feature_config.get("selection", {})
+    configured_threshold = selection_cfg.get("coverage_threshold")
+    threshold = float(configured_threshold) if configured_threshold is not None else float(coverage_threshold)
+    force_include_columns = _normalize_string_list(selection_cfg.get("force_include_columns"))
+
+    missing_force_include_features: list[str] = []
+    empty_force_include_features: list[str] = []
+    low_coverage_force_include_features: list[str] = []
+    selected_low_coverage_features: list[str] = []
+
+    for column in force_include_columns:
+        if column not in frame.columns:
+            missing_force_include_features.append(column)
+            continue
+
+        non_null_ratio = float(frame[column].notna().mean())
+        if non_null_ratio == 0.0:
+            empty_force_include_features.append(column)
+        elif non_null_ratio < threshold:
+            low_coverage_force_include_features.append(column)
+
+    for column in selection.feature_columns:
+        if column not in frame.columns:
+            continue
+        non_null_ratio = float(frame[column].notna().mean())
+        if 0.0 < non_null_ratio < threshold:
+            selected_low_coverage_features.append(column)
+
+    return {
+        "coverage_threshold": threshold,
+        "selected_feature_count": int(len(selection.feature_columns)),
+        "force_include_total": int(len(force_include_columns)),
+        "force_include_present": int(sum(1 for column in force_include_columns if column in frame.columns)),
+        "missing_force_include_features": missing_force_include_features,
+        "empty_force_include_features": empty_force_include_features,
+        "low_coverage_force_include_features": low_coverage_force_include_features,
+        "selected_low_coverage_features": selected_low_coverage_features[:20],
+    }

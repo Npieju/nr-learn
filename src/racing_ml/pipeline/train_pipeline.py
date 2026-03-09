@@ -13,7 +13,7 @@ from racing_ml.common.config import load_yaml
 from racing_ml.common.progress import Heartbeat, ProgressBar
 from racing_ml.data.dataset_loader import load_training_table
 from racing_ml.features.builder import build_features
-from racing_ml.features.selection import resolve_feature_selection
+from racing_ml.features.selection import resolve_feature_selection, summarize_feature_coverage
 from racing_ml.models.trainer import train_and_evaluate
 
 
@@ -42,6 +42,7 @@ def run_train(model_config_path: str, data_config_path: str, feature_config_path
 
     label_column = model_config.get("label", "is_win")
     feature_selection = resolve_feature_selection(frame, feature_config, label_column=label_column)
+    feature_coverage = summarize_feature_coverage(frame, feature_config, feature_selection)
     feature_columns = feature_selection.feature_columns
     progress.update(
         message=(
@@ -68,6 +69,10 @@ def run_train(model_config_path: str, data_config_path: str, feature_config_path
     print(f"[train] device_type: {device_type}")
     print(f"[train] allow_fallback_model: {allow_fallback}")
     print(f"[train] early_stopping_rounds: {early_stopping_rounds}")
+    if feature_coverage["missing_force_include_features"]:
+        print(f"[train] missing force-include features: {feature_coverage['missing_force_include_features']}")
+    if feature_coverage["low_coverage_force_include_features"]:
+        print(f"[train] low-coverage force-include features: {feature_coverage['low_coverage_force_include_features']}")
 
     if leakage_enabled:
         with Heartbeat("[train]", "running leakage audit"):
@@ -128,6 +133,7 @@ def run_train(model_config_path: str, data_config_path: str, feature_config_path
             run_context=run_context,
             leakage_audit=leakage_report,
             policy_constraints=policy_constraints,
+            extra_metadata={"feature_coverage": feature_coverage},
         )
         write_json(result.report_path, report_payload)
 
@@ -149,6 +155,7 @@ def run_train(model_config_path: str, data_config_path: str, feature_config_path
             run_context=run_context,
             leakage_audit=leakage_report,
             policy_constraints=policy_constraints,
+            extra_metadata={"feature_coverage": feature_coverage},
         )
         write_json(manifest_path, manifest_payload)
     progress.complete(message="artifacts written")

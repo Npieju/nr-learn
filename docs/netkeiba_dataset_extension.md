@@ -71,6 +71,7 @@ column_aliases:
 - feature gap CLI: [scripts/run_feature_gap_report.py](../scripts/run_feature_gap_report.py)
 - 出力: `artifacts/reports/data_source_validation.json`
 - 出力: `artifacts/reports/feature_gap_summary_<feature_config>.json`
+- train / evaluate artifact 内の `feature_coverage`
 - 確認内容:
   - primary dataset が存在するか
   - append / supplemental table が見つかるか
