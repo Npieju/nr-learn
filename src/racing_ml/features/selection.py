@@ -9,6 +9,7 @@ import pandas as pd
 DEFAULT_SAFE_EXCLUDE_COLUMNS = {
     "date",
     "race_id",
+    "horse_key",
     "rank",
     "is_win",
     "horse_history_key",
@@ -55,8 +56,11 @@ DEFAULT_SAFE_EXCLUDE_KEYWORDS = [
     "賞金",
 ]
 
+DEFAULT_SAFE_EXCLUDE_SUFFIXES = ("_key",)
+
 DEFAULT_FORCE_CATEGORICAL_COLUMNS = {
     "horse_id",
+    "horse_key",
     "jockey_id",
     "trainer_id",
     "track",
@@ -120,6 +124,9 @@ def _should_exclude_column(
 
     if _looks_like_history_feature(lower_name):
         return False
+
+    if lower_name.endswith(DEFAULT_SAFE_EXCLUDE_SUFFIXES):
+        return True
 
     return any(keyword in lower_name for keyword in excluded_keywords)
 

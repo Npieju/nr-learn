@@ -11,6 +11,7 @@ COLUMN_ALIASES = {
     "date": ["date", "race_date", "held_at", "レース日付"],
     "race_id": ["race_id", "racecode", "race_code", "レースid", "レースID"],
     "horse_id": ["horse_id", "horse_code", "horse_no", "レース馬番id", "レース馬番ID", "馬番"],
+    "horse_key": ["horse_key", "horse_uuid", "競走馬id", "競走馬ID", "競走馬コード"],
     "horse_name": ["horse_name", "name", "馬名"],
     "rank": ["rank", "result", "finish_position", "order", "着順"],
     "jockey_id": ["jockey_id", "jockey_code", "騎手id", "騎手ID", "騎手"],
@@ -333,7 +334,10 @@ def _select_table_columns(frame: pd.DataFrame, keep_columns: list[str], join_on:
 
 
 def _load_candidate_table(candidate: Path, table_cfg: dict[str, Any]) -> pd.DataFrame:
-    table = pd.read_csv(candidate, low_memory=False)
+    try:
+        table = pd.read_csv(candidate, low_memory=False)
+    except pd.errors.EmptyDataError:
+        return pd.DataFrame()
     table = _normalize_columns(table, extra_aliases=table_cfg.get("column_aliases"))
 
     table_loader = str(table_cfg.get("table_loader", "")).strip().lower()
@@ -391,9 +395,12 @@ def _inspect_table_sources(
         "matched_files": [_display_path(path, base_dir) for path in candidates[:10]],
         "join_on": join_on,
         "required_columns": required_columns,
+        "optional": bool(table_cfg.get("optional", False)),
         "status": "missing",
     }
     if not candidates:
+        if result["optional"]:
+            result["status"] = "optional_missing"
         return result
 
     for candidate in candidates:

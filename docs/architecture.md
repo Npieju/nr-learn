@@ -35,11 +35,13 @@ flowchart LR
 ### 3.1 主テーブルの読み込み
 - 実体は [src/racing_ml/data/dataset_loader.py](../src/racing_ml/data/dataset_loader.py) にあります。
 - 主表は `data/raw` 配下から自動選択し、列名は alias 正規化で canonical name に寄せます。
-- 現在の canonical 列には `race_id`, `horse_id`, `rank`, `odds`, `track`, `distance`, `jockey_id`, `trainer_id`, `owner_name` などが含まれます。
+- 現在の canonical 列には `race_id`, `horse_id`, `horse_key`, `rank`, `odds`, `track`, `distance`, `jockey_id`, `trainer_id`, `owner_name` などが含まれます。
 
 ### 3.2 外部データの統合
 - `configs/data.yaml` の `external_raw_dirs`, `append_tables`, `supplemental_tables` で追加ソースを差し込みます。
 - loader 側は config-driven で、将来の netkeiba CSV を loader 改修なしで試せる構成です。
+- stable な競走馬 ID が必要な外部ソースは `horse_key` を使います。既存主表にはまず `race_id + horse_id` で `horse_key` を戻し、その後 pedigree を `horse_key` で merge します。
+- netkeiba crawler の現行 target は `race_result`, `race_card`, `pedigree` です。`race_card` は `race.netkeiba.com` の shutuba page から `horse_key`, 枠番, 馬番, 性齢, 斤量, 騎手, 調教師などの pre-race 列を取ります。owner / breeder は現ページに直出しされないため、profile / pedigree 側で補います。
 - 既存の custom supplemental loader:
   - `laptime`
   - `corner_passing_order`
@@ -79,6 +81,7 @@ flowchart LR
   - `trainer_track_distance_last_50_*`
 
 ### 4.3 リーク防止ルール
+- horse 履歴 key は row-wise に解決します。`horse_key` がある行は常に `horse_key` を優先し、不足分だけ `horse_name` または `horse_id` へ fallback します。
 - rolling 系は基本的に `shift(1)` 相当の過去のみ集約です。
 - race 内に同一 entity が複数出るケースは row-level ではなく race-level rolling を使います。
 - `_entity_race_shifted_rolling_mean` は元 frame の index を保持します。これを外すと tail slice で owner / pedigree 履歴が壊れます。

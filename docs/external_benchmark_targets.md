@@ -164,7 +164,7 @@
 4. `ΔR² > 0.009` を超えるまで、market-blend の微調整より feature enrichment を優先する。
 
 ## 8. 次にやるべき改善
-1. 今回入れた pace / corner enriched profile を土台に、pedigree・racecard・owner/breeder の外部 pre-race 情報を足して、market を補完できる水準まで fundamental model を引き上げる。
+1. 今回入れた pace / corner enriched profile を土台に、pedigree / breeder と racecard の外部 pre-race 情報を足して、market を補完できる水準まで fundamental model を引き上げる。
 2. `odds` / `popularity` を含む model は「policy model」として扱い、fundamental benchmark とは分離する。
 3. `value_blend_model` を使う場合も、土台 win model は market-free fundamental 系に差し替えて再検証する。
 4. 外部CSVを `data/external/...` に受けられる multi-source loader を前提にし、netkeiba 等の将来ソース追加を loader 改修なしで試せる状態を維持する。

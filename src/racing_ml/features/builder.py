@@ -68,6 +68,18 @@ def _clean_group_series(frame: pd.DataFrame, column: str) -> pd.Series:
     return frame[column].astype("string").str.strip().replace({"": pd.NA, "nan": pd.NA, "None": pd.NA})
 
 
+def _build_horse_name_history_key(frame: pd.DataFrame) -> pd.Series | None:
+    if "horse_name" not in frame.columns:
+        return None
+
+    horse_name = _clean_group_series(frame, "horse_name")
+    if "sex" not in frame.columns:
+        return horse_name
+
+    sex = _clean_group_series(frame, "sex").fillna("unknown")
+    return (horse_name + "|sex=" + sex).where(horse_name.notna())
+
+
 def _entity_race_shifted_rolling_mean(
     frame: pd.DataFrame,
     group_col: str,
@@ -111,7 +123,7 @@ def _entity_race_shifted_rolling_mean(
     return joined["_feature_value"].astype(float)
 
 
-def _select_horse_key(frame: pd.DataFrame) -> str | None:
+def _select_horse_fallback_key(frame: pd.DataFrame) -> str | None:
     has_horse_id = "horse_id" in frame.columns
     has_horse_name = "horse_name" in frame.columns
     if not has_horse_id and not has_horse_name:
@@ -122,13 +134,13 @@ def _select_horse_key(frame: pd.DataFrame) -> str | None:
     if has_horse_name and not has_horse_id:
         return "horse_name"
 
-    horse_id = frame["horse_id"].astype(str).str.strip().replace({"": "unknown", "nan": "unknown", "None": "unknown"})
-    horse_name = frame["horse_name"].astype(str).str.strip().replace({"": "unknown", "nan": "unknown", "None": "unknown"})
+    horse_id = _clean_group_series(frame, "horse_id")
+    horse_name = _clean_group_series(frame, "horse_name")
 
-    valid_id = horse_id[horse_id != "unknown"]
+    valid_id = horse_id.dropna()
     id_repeat_ratio = (1.0 - (valid_id.nunique() / len(valid_id))) if len(valid_id) > 0 else 0.0
 
-    valid_name = horse_name[horse_name != "unknown"]
+    valid_name = horse_name.dropna()
     name_repeat_ratio = (1.0 - (valid_name.nunique() / len(valid_name))) if len(valid_name) > 0 else 0.0
 
     if id_repeat_ratio >= 0.05 and id_repeat_ratio >= name_repeat_ratio * 0.8:
@@ -136,18 +148,38 @@ def _select_horse_key(frame: pd.DataFrame) -> str | None:
     return "horse_name"
 
 
-def _build_horse_history_key(frame: pd.DataFrame) -> tuple[pd.Series | None, str | None]:
-    key_col = _select_horse_key(frame)
-    if key_col is None:
+def _build_horse_history_key(frame: pd.DataFrame) -> tuple[pd.Series | None, pd.Series | None]:
+    history_key = pd.Series(pd.NA, index=frame.index, dtype="string")
+    key_source = pd.Series(pd.NA, index=frame.index, dtype="string")
+
+    if "horse_key" in frame.columns:
+        horse_key = _clean_group_series(frame, "horse_key")
+        horse_key_mask = horse_key.notna()
+        if horse_key_mask.any():
+            history_key.loc[horse_key_mask] = "horse_key|" + horse_key.loc[horse_key_mask]
+            key_source.loc[horse_key_mask] = "horse_key"
+
+    fallback_col = _select_horse_fallback_key(frame)
+    if fallback_col is None and not history_key.notna().any():
         return None, None
 
-    key = frame[key_col].astype(str).str.strip().replace({"": "unknown", "nan": "unknown", "None": "unknown"})
+    if fallback_col == "horse_name":
+        fallback_key = _build_horse_name_history_key(frame)
+    elif fallback_col is not None:
+        fallback_key = _clean_group_series(frame, fallback_col)
+    else:
+        fallback_key = None
 
-    if key_col == "horse_name" and "sex" in frame.columns:
-        sex = frame["sex"].astype(str).str.strip().replace({"": "unknown", "nan": "unknown", "None": "unknown"})
-        key = key + "|sex=" + sex
+    if fallback_key is not None:
+        fallback_mask = history_key.isna() & fallback_key.notna()
+        if fallback_mask.any():
+            history_key.loc[fallback_mask] = f"{fallback_col}|" + fallback_key.loc[fallback_mask]
+            key_source.loc[fallback_mask] = fallback_col
 
-    return key, key_col
+    if not history_key.notna().any():
+        return None, None
+
+    return history_key, key_source
 
 
 def build_features(frame: pd.DataFrame) -> pd.DataFrame:

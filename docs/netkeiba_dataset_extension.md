@@ -17,22 +17,30 @@
 ## 3. 先に集めるべき表
 - race_result
   - 目的: Kaggle 主表にない履歴や欠損年を埋める。
-  - merge 方針: `append_tables`
+  - merge 方針: `append_tables` + `supplemental_tables`
   - 主キー: `race_id + horse_id`
 - race_card
-  - 目的: 出走時点で利用可能な owner / breeder / 枠番 / 馬番を足す。
+  - 目的: 出走時点で利用可能な `horse_key` / 枠番 / 馬番 / 性齢 / 斤量 / 騎手 / 調教師を足す。
   - merge 方針: `supplemental_tables`
   - 主キー: `race_id + horse_id`
+- 現行の shutuba page では owner / breeder は直接出ないため、これらは引き続き horse profile / pedigree 側から補う。
 - pedigree
   - 目的: 血統系特徴量の基礎を追加する。
   - merge 方針: `supplemental_tables`
-  - 主キー: `horse_id`
+  - 主キー: `horse_key`
+
+## 3.1 `horse_id` と `horse_key` の分離
+- 既存 Kaggle 主表の `horse_id` は row-level join key として扱う。
+- stable な競走馬 ID は `horse_key` として別列で保持する。
+- netkeiba crawler の `race_result` は `horse_id = race_id + 馬番(2桁)` を生成し、同時に馬リンクから `horse_key` を抽出する。
+- まず `race_id + horse_id` で主表へ `horse_key` を補完し、その後 `horse_key` で pedigree を merge する。
 
 ## 4. 実装済み受け皿
 - [src/racing_ml/data/dataset_loader.py](/workspaces/nr-learn/src/racing_ml/data/dataset_loader.py)
   - `append_tables`
   - `supplemental_tables`
   - table 単位の `column_aliases`
+  - `horse_key` canonical column
 - [src/racing_ml/features/builder.py](/workspaces/nr-learn/src/racing_ml/features/builder.py)
   - `gate_ratio`
   - `frame_ratio`
@@ -55,20 +63,53 @@ column_aliases:
     - "race_key"
     - "レースID"
   horse_id:
-    - "horse_key"
     - "出走馬ID"
+  horse_key:
+    - "horse_key"
+    - "競走馬ID"
   sire_name:
     - "父"
 ```
 
 ## 6. 次段階
-- crawler 実装前に、保存先 CSV の列名をこの template に合わせる。
+- crawler 出力を template に合わせる。
+- `race_result` は append 用だけでなく、`horse_key` 補完用の supplemental merge にも使う。
 - pedigree や owner のような高カーディナリティ列は、まず raw のまま保持し、採用は feature selection 側で制御する。
 - 追加データ導入後の採用判定は raw ROI ではなく `benter_delta_pseudo_r2` を優先する。
+
+## 6.1 crawler 初期実装
+- 設定テンプレート: [configs/crawl_netkeiba_template.yaml](/workspaces/nr-learn/configs/crawl_netkeiba_template.yaml)
+- ID 生成 CLI: [scripts/run_prepare_netkeiba_ids.py](/workspaces/nr-learn/scripts/run_prepare_netkeiba_ids.py)
+- 実行 CLI: [scripts/run_collect_netkeiba.py](/workspaces/nr-learn/scripts/run_collect_netkeiba.py)
+- 年単位 backfill CLI: [scripts/run_backfill_netkeiba.py](/workspaces/nr-learn/scripts/run_backfill_netkeiba.py)
+- 初期 target:
+  - `race_result`: race page を収集し、`horse_id`, `horse_key`, `owner_name` を含む canonical CSV を出す。
+  - `race_card`: shutuba page を収集し、`horse_id`, `horse_key`, `frame_no`, `gate_no`, `sex`, `age`, `weight`, `jockey_id`, `trainer_id` を含む canonical CSV を出す。
+  - `pedigree`: horse top page と AJAX pedigree endpoint を収集し、`horse_key`, `sire_name`, `dam_name`, `damsire_name`, `owner_name`, `breeder_name` を出す。
+- raw HTML は `data/external/netkeiba/raw_html/` に保存し、既存 cache があれば再 fetch せず再利用する。
+- canonical CSV は batch ごとに累積更新し、同一 dedupe key の重複行は最新 batch を優先する。
+- `run_prepare_netkeiba_ids.py` は主表から `race_ids.csv` を作り、主表と既存の `race_result` / `race_card` 出力から `horse_keys.csv` を作る。既に出力済みの ID はデフォルトでは除外する。
+- `run_prepare_netkeiba_ids.py` / `run_backfill_netkeiba.py` は `--date-order desc` で最新レース優先に切り替えられる。benchmark 改善の確認を急ぐときは descending を使う。
+- default の [configs/data.yaml](/workspaces/nr-learn/configs/data.yaml) では `netkeiba_race_card` を `optional: true` で組み込み済みとし、まだ CSV が無い段階では validation 上 `optional_missing` として扱う。
+- `run_backfill_netkeiba.py` は training table を 1 回だけ読み込み、指定期間で pending race IDs と horse_keys を batch 単位に自動生成しながら `race_result` / `race_card` / `pedigree` を繰り返し回す。cycle ごとの要約は `artifacts/reports/netkeiba_backfill_manifest.json` に保存する。
+- `run_backfill_netkeiba.py` は `--post-cycle-command` を受けられる。cycle 完了直後の安定タイミングで snapshot / benchmark を差し込む用途に使う。
+- すでに別の collect/backfill が lock を保持している場合は `scripts/run_netkeiba_wait_then_cycle.py` を使うと、lock 解放を監視したあとに `--max-cycles 1` backfill と benchmark gate を自動で接続できる。待機 manifest は `artifacts/reports/netkeiba_wait_then_cycle_manifest.json`、follow-up cycle の要約は `artifacts/reports/netkeiba_backfill_handoff_manifest.json` に保存する。
+- `run_collect_netkeiba.py` / `run_backfill_netkeiba.py` は共通 lock (`artifacts/reports/netkeiba_crawl_manifest.json.lock`) を使い、shared な ID CSV・output CSV・manifest の同時更新を防ぐ。
+- target manifest (`artifacts/reports/netkeiba_crawl_manifest_<target>.json`) は batch 完了待ちではなく実行途中にも更新され、`status=running` と `processed_ids` で進捗を確認できる。
+- `race_card` parser は `race_id + horse_id` で重複行を落とす。layout 差で同一馬が 2 回並ぶページがあるため、row count は canonical 側で正規化して扱う。
+- 推奨順序:
+  - `run_prepare_netkeiba_ids.py --target race_result`
+  - `run_collect_netkeiba.py --target race_result` または `race_card`
+  - `run_prepare_netkeiba_ids.py --target pedigree`
+  - `run_collect_netkeiba.py --target pedigree`
 
 ## 7. 運用チェック
 - validation CLI: [scripts/run_validate_data_sources.py](../scripts/run_validate_data_sources.py)
 - feature gap CLI: [scripts/run_feature_gap_report.py](../scripts/run_feature_gap_report.py)
+- snapshot CLI: [scripts/run_netkeiba_coverage_snapshot.py](../scripts/run_netkeiba_coverage_snapshot.py)
+- benchmark gate CLI: [scripts/run_netkeiba_benchmark_gate.py](../scripts/run_netkeiba_benchmark_gate.py)
+- snapshot JSON には target manifest 状態と readiness が含まれるため、cycle 途中の一時的不整合と benchmark rerun 可否を分離して確認できる
+- benchmark gate は snapshot を 1 回更新し、`benchmark_rerun_ready=true` のときだけ train/evaluate を実行する。結果 manifest は `artifacts/reports/netkeiba_benchmark_gate_manifest.json` に保存する
 - 出力: `artifacts/reports/data_source_validation.json`
 - 出力: `artifacts/reports/feature_gap_summary_<feature_config>.json`
 - train / evaluate artifact 内の `feature_coverage`

@@ -55,10 +55,11 @@ nr-learn/
 ## まずの進め方（推奨）
 1. `data/raw/` にデータを配置（または取得スクリプトで同期）
 2. 必要に応じて `data/external/...` に外部CSVを配置し、`configs/data.yaml` の `append_tables` / `supplemental_tables` で取り込む
-3. CatBoost分類モデルで広めの安全特徴量を使って `win` を予測
-4. 時系列スライスで評価し、AUCだけでなくROIも確認
-5. Top3 / ROI / alpha / ranking に横展開
-6. LightGBM baseline とA/B比較して改善幅を固定化
+3. 外部収集を自前で行う場合は `scripts/run_collect_netkeiba.py` で `race_result` / `race_card` / `pedigree` を canonical CSV 化する
+4. CatBoost分類モデルで広めの安全特徴量を使って `win` を予測
+5. 時系列スライスで評価し、AUCだけでなくROIも確認
+6. Top3 / ROI / alpha / ranking に横展開
+7. LightGBM baseline とA/B比較して改善幅を固定化
 
 ## 実行手順（MVP）
 1. データ取得
@@ -66,8 +67,33 @@ nr-learn/
     - Kaggle認証が未設定 / データ取得失敗時は、学習確認用の `data/raw/sample_races.csv` を自動生成
     - `configs/data.yaml` の `dataset.external_raw_dirs` に定義した外部 raw dir も同時に作成されます
     - 外部サイト由来CSVを後から足す場合は、`append_tables` で行追加、`supplemental_tables` で列追加を定義します
+    - stable な競走馬 ID は `horse_id` ではなく `horse_key` として別保持します。feature builder は `horse_key` がある行で常にこれを履歴 key に使い、不足分だけ `horse_name` / `horse_id` へ fallback します。netkeiba crawler はまず `race_result` または `race_card` で `horse_key` を補完し、その後 `pedigree` を `horse_key` で結合する前提です
+    - `race_card` は shutuba page から `horse_key`, 枠番, 馬番, 性齢, 斤量, 騎手, 調教師などの pre-race 列を収集します。owner / breeder は現レイアウトでは直接出ないため、`pedigree` 側で補います
     - 取り込み前の整合確認: `python scripts/run_validate_data_sources.py --config configs/data.yaml`
     - 外部 pre-race 情報の欠損確認: `python scripts/run_feature_gap_report.py --config configs/data.yaml --model-config configs/model_catboost_fundamental_enriched.yaml --feature-config configs/features_catboost_fundamental_enriched.yaml`
+    - netkeiba の tail coverage / race 整合確認: `python scripts/run_netkeiba_coverage_snapshot.py --config configs/data.yaml --tail-rows 5000`
+    - snapshot JSON には race_result / race_card / pedigree の manifest 状態と `readiness.benchmark_rerun_ready` も出るので、mid-cycle の一時的不整合と再学習可能状態を分けて判断できます
+    - `configs/data.yaml` の netkeiba table 群は default では optional 扱いです。CSV がまだ無い段階でも validation は `optional_missing` 扱いで通り、収集が始まると自動で merge 対象に入ります
+    - crawler 用 ID を自動生成する場合:
+        - `python scripts/run_prepare_netkeiba_ids.py --data-config configs/data.yaml --crawl-config configs/crawl_netkeiba_template.yaml --target race_result --start-date 2020-01-01`
+        - `python scripts/run_prepare_netkeiba_ids.py --data-config configs/data.yaml --crawl-config configs/crawl_netkeiba_template.yaml --target pedigree`
+        - benchmark を先に押し上げたいときは `--date-order desc` で最新日付を優先します
+        - 既存出力に含まれる ID を再投入したいときだけ `--include-completed` を付けます
+    - 年単位の backfill は `python scripts/run_backfill_netkeiba.py --data-config configs/data.yaml --crawl-config configs/crawl_netkeiba_template.yaml --start-date 2020-01-01 --end-date 2021-12-31 --date-order desc --race-batch-size 100 --pedigree-batch-size 500` のように回します
+    - backfill の cycle 要約は `artifacts/reports/netkeiba_backfill_manifest.json` に出ます
+        - cycle 完了直後の安定スナップショットで benchmark を回したいときは `--post-cycle-command` に gate script を渡せます。例: `python scripts/run_backfill_netkeiba.py --data-config configs/data.yaml --crawl-config configs/crawl_netkeiba_template.yaml --start-date 2021-01-01 --end-date 2021-07-31 --date-order desc --race-batch-size 100 --pedigree-batch-size 500 --max-cycles 1 --post-cycle-command "/workspaces/nr-learn/.venv/bin/python scripts/run_netkeiba_benchmark_gate.py --data-config configs/data.yaml --model-config configs/model_catboost_fundamental_enriched.yaml --feature-config configs/features_catboost_fundamental_enriched.yaml --max-rows 200000 --wf-mode off"`
+        - `scripts/run_netkeiba_benchmark_gate.py` は snapshot を 1 回更新し、`benchmark_rerun_ready=true` のときだけ train/evaluate を実行します。manifest は `artifacts/reports/netkeiba_benchmark_gate_manifest.json` に出ます
+        - すでに old-style backfill が lock を握っている最中に follow-up の 1 cycle を予約したいときは `python scripts/run_netkeiba_wait_then_cycle.py --data-config configs/data.yaml --crawl-config configs/crawl_netkeiba_template.yaml --model-config configs/model_catboost_fundamental_enriched.yaml --feature-config configs/features_catboost_fundamental_enriched.yaml --start-date 2021-01-01 --end-date 2021-07-31 --date-order desc --race-batch-size 100 --pedigree-batch-size 500 --max-rows 200000 --wf-mode off` を使うと、lock 解放待ちのあとに `--max-cycles 1` backfill と gate を自動でつなげられます。待機 manifest は `artifacts/reports/netkeiba_wait_then_cycle_manifest.json` に出ます
+    - `artifacts/reports/netkeiba_crawl_manifest.json.lock` に lock を置くので、netkeiba の collect/backfill は同時起動しないでください。同時実行はエラーで弾かれます
+    - 長い batch の途中経過は `artifacts/reports/netkeiba_crawl_manifest_<target>.json` の `status=running` と `processed_ids` で追えます
+    - `race_card` はレイアウト差で同一馬が二重に出るケースがあるため、crawler 側で `race_id + horse_id` 重複を除外します
+    - netkeiba crawler の初期実行例:
+        - `python scripts/run_collect_netkeiba.py --config configs/crawl_netkeiba_template.yaml --target race_result --limit 50`
+        - `python scripts/run_collect_netkeiba.py --config configs/crawl_netkeiba_template.yaml --target race_card --limit 50`
+        - `python scripts/run_collect_netkeiba.py --config configs/crawl_netkeiba_template.yaml --target pedigree --limit 50`
+        - `race_result` / `race_card` は `data/external/netkeiba/ids/race_ids.csv`、`pedigree` は `data/external/netkeiba/ids/horse_keys.csv` を読む想定です
+        - crawler の output CSV は batch ごとに累積更新され、重複キーは最新 batch 側で上書きされます
+        - 推奨フローは `run_prepare_netkeiba_ids.py --target race_result` → `run_collect_netkeiba.py --target race_result` or `race_card` → `run_prepare_netkeiba_ids.py --target pedigree` → `run_collect_netkeiba.py --target pedigree` です
 2. 学習
     - `python scripts/run_train.py --config configs/model.yaml --data-config configs/data.yaml --feature-config configs/features.yaml`
     - （推奨 / CatBoost win）`python scripts/run_train.py --config configs/model_catboost.yaml --data-config configs/data.yaml --feature-config configs/features_catboost_rich.yaml`

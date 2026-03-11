@@ -45,13 +45,16 @@ def main() -> int:
                 json.dump(report, file, ensure_ascii=False, indent=2)
         progress.complete(message="validation report written")
 
-        append_ok = sum(1 for row in report.get("append_tables", []) if row.get("status") == "ok")
+        healthy_statuses = {"ok", "optional_missing"}
+        append_ok = sum(1 for row in report.get("append_tables", []) if row.get("status") in healthy_statuses)
         append_total = len(report.get("append_tables", []))
-        supplemental_ok = sum(1 for row in report.get("supplemental_tables", []) if row.get("status") == "ok")
+        supplemental_ok = sum(1 for row in report.get("supplemental_tables", []) if row.get("status") in healthy_statuses)
         supplemental_total = len(report.get("supplemental_tables", []))
+        append_optional = sum(1 for row in report.get("append_tables", []) if row.get("status") == "optional_missing")
+        supplemental_optional = sum(1 for row in report.get("supplemental_tables", []) if row.get("status") == "optional_missing")
         print(f"[data-validate] primary={report.get('primary_dataset', {}).get('status')}")
-        print(f"[data-validate] append_tables_ok={append_ok}/{append_total}")
-        print(f"[data-validate] supplemental_tables_ok={supplemental_ok}/{supplemental_total}")
+        print(f"[data-validate] append_tables_ok={append_ok}/{append_total} optional_missing={append_optional}")
+        print(f"[data-validate] supplemental_tables_ok={supplemental_ok}/{supplemental_total} optional_missing={supplemental_optional}")
         print(f"[data-validate] report saved: {output_path}")
         return 0
     except KeyboardInterrupt:

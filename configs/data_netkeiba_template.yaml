@@ -27,9 +27,11 @@ dataset:
           - "race_key"
           - "レースID"
         horse_id:
+          - "出走馬ID"
+        horse_key:
           - "horse_key"
           - "horse_uuid"
-          - "出走馬ID"
+          - "競走馬ID"
         horse_name:
           - "馬名"
         jockey_id:
@@ -61,44 +63,26 @@ dataset:
         corner_4_position:
           - "4C"
           - "4コーナー"
-    - name: "netkeiba_race_card_history"
+    - name: "netkeiba_race_result_keys"
       search_dirs:
-        - "data/external/netkeiba/racecard"
-      pattern: "**/*history*.csv"
-      required_columns:
-        - "date"
+        - "data/external/netkeiba/results"
+      pattern: "**/*race_result*.csv"
+      join_on:
         - "race_id"
         - "horse_id"
+      required_columns:
+        - "race_id"
+        - "horse_id"
+        - "horse_key"
+      keep_columns:
+        - "race_id"
+        - "horse_id"
+        - "horse_key"
+        - "owner_name"
       dedupe_on:
         - "race_id"
         - "horse_id"
-      column_aliases:
-        date:
-          - "レース日"
-        race_id:
-          - "race_key"
-        horse_id:
-          - "horse_key"
-        horse_name:
-          - "馬名"
-        jockey_id:
-          - "騎手ID"
-        trainer_id:
-          - "調教師ID"
-        track:
-          - "競馬場"
-        distance:
-          - "距離"
-        weather:
-          - "天候"
-        ground_condition:
-          - "馬場"
-        age:
-          - "馬齢"
-        sex:
-          - "性別"
-        weight:
-          - "斤量"
+      merge_mode: "prefer_supplemental"
   supplemental_tables:
     - name: "laptime"
       pattern: "**/*laptime*.csv"
@@ -114,6 +98,7 @@ dataset:
         - "race_id"
       merge_mode: "fill_missing"
     - name: "netkeiba_race_card"
+      optional: true
       search_dirs:
         - "data/external/netkeiba/racecard"
       pattern: "**/*racecard*.csv"
@@ -126,51 +111,83 @@ dataset:
       keep_columns:
         - "race_id"
         - "horse_id"
+        - "date"
+        - "track"
+        - "distance"
+        - "weather"
+        - "ground_condition"
+        - "horse_key"
         - "frame_no"
         - "gate_no"
-        - "owner_name"
-        - "breeder_name"
+        - "horse_name"
+        - "sex"
+        - "age"
+        - "weight"
+        - "jockey_id"
+        - "trainer_id"
       dedupe_on:
         - "race_id"
         - "horse_id"
-      merge_mode: "prefer_supplemental"
+      merge_mode: "fill_missing"
       column_aliases:
+        date:
+          - "レース日"
         race_id:
           - "race_key"
           - "レースID"
+        track:
+          - "競馬場"
+        distance:
+          - "距離"
+        weather:
+          - "天候"
+        ground_condition:
+          - "馬場"
         horse_id:
-          - "horse_key"
           - "出走馬ID"
+        horse_key:
+          - "horse_key"
+          - "horse_uuid"
+          - "競走馬ID"
         frame_no:
           - "枠番"
         gate_no:
           - "馬番"
-        owner_name:
-          - "馬主"
-        breeder_name:
-          - "生産者"
+        horse_name:
+          - "馬名"
+        sex:
+          - "性別"
+        age:
+          - "馬齢"
+        weight:
+          - "斤量"
+        jockey_id:
+          - "騎手ID"
+        trainer_id:
+          - "調教師ID"
     - name: "netkeiba_pedigree"
       search_dirs:
         - "data/external/netkeiba/pedigree"
       pattern: "**/*pedigree*.csv"
       join_on:
-        - "horse_id"
+        - "horse_key"
       required_columns:
-        - "horse_id"
+        - "horse_key"
       keep_columns:
-        - "horse_id"
+        - "horse_key"
         - "sire_name"
         - "dam_name"
         - "damsire_name"
         - "owner_name"
         - "breeder_name"
       dedupe_on:
-        - "horse_id"
+        - "horse_key"
       merge_mode: "prefer_supplemental"
       column_aliases:
-        horse_id:
+        horse_key:
           - "horse_key"
           - "horse_uuid"
+          - "競走馬ID"
         sire_name:
           - "父"
         dam_name:
