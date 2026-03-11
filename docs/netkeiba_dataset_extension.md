@@ -95,7 +95,7 @@ column_aliases:
 - `run_backfill_netkeiba.py` は `--post-cycle-command` を受けられる。cycle 完了直後の安定タイミングで snapshot / benchmark を差し込む用途に使う。
 - すでに別の collect/backfill が lock を保持している場合は `scripts/run_netkeiba_wait_then_cycle.py` を使うと、lock 解放を監視したあとに `--max-cycles 1` backfill と benchmark gate を自動で接続できる。待機 manifest は `artifacts/reports/netkeiba_wait_then_cycle_manifest.json`、follow-up cycle の要約は `artifacts/reports/netkeiba_backfill_handoff_manifest.json` に保存する。
 - `run_collect_netkeiba.py` / `run_backfill_netkeiba.py` は共通 lock (`artifacts/reports/netkeiba_crawl_manifest.json.lock`) を使い、shared な ID CSV・output CSV・manifest の同時更新を防ぐ。
-- target manifest (`artifacts/reports/netkeiba_crawl_manifest_<target>.json`) は batch 完了待ちではなく実行途中にも更新され、`status=running` と `processed_ids` で進捗を確認できる。
+- target manifest (`artifacts/reports/netkeiba_crawl_manifest_<target>.json`) は batch 完了待ちではなく実行途中にも更新され、`status=running` と `processed_ids` で進捗を確認できる。manifest には `pid` / `lock_file` も保存されるので、snapshot 側で dead process の置き土産を `status=stale` として判定できる。
 - `race_card` parser は `race_id + horse_id` で重複行を落とす。layout 差で同一馬が 2 回並ぶページがあるため、row count は canonical 側で正規化して扱う。
 - 推奨順序:
   - `run_prepare_netkeiba_ids.py --target race_result`
@@ -108,7 +108,7 @@ column_aliases:
 - feature gap CLI: [scripts/run_feature_gap_report.py](../scripts/run_feature_gap_report.py)
 - snapshot CLI: [scripts/run_netkeiba_coverage_snapshot.py](../scripts/run_netkeiba_coverage_snapshot.py)
 - benchmark gate CLI: [scripts/run_netkeiba_benchmark_gate.py](../scripts/run_netkeiba_benchmark_gate.py)
-- snapshot JSON には target manifest 状態と readiness が含まれるため、cycle 途中の一時的不整合と benchmark rerun 可否を分離して確認できる
+- snapshot JSON には target manifest 状態と readiness が含まれるため、cycle 途中の一時的不整合と benchmark rerun 可否を分離して確認できる。`status=stale` は lock 消失や dead pid を検出した状態で、再学習前に crawl 状態の確認が必要。
 - benchmark gate は snapshot を 1 回更新し、`benchmark_rerun_ready=true` のときだけ train/evaluate を実行する。結果 manifest は `artifacts/reports/netkeiba_benchmark_gate_manifest.json` に保存する
 - 出力: `artifacts/reports/data_source_validation.json`
 - 出力: `artifacts/reports/feature_gap_summary_<feature_config>.json`

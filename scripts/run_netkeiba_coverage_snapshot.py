@@ -1,5 +1,6 @@
 import argparse
 import json
+import os
 from pathlib import Path
 import sys
 import traceback
@@ -30,6 +31,7 @@ TARGET_MANIFEST_PATHS = {
     "race_card": ROOT / "artifacts/reports/netkeiba_crawl_manifest_race_card.json",
     "pedigree": ROOT / "artifacts/reports/netkeiba_crawl_manifest_pedigree.json",
 }
+DEFAULT_CRAWL_LOCK_PATH = ROOT / "artifacts/reports/netkeiba_crawl_manifest.json.lock"
 
 
 def _safe_ratio(series: pd.Series | None) -> float | None:
@@ -86,6 +88,30 @@ def _optional_int(value: object) -> int | None:
         return None
 
 
+def _pid_is_running(pid: int) -> bool:
+    if pid <= 0:
+        return False
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        return True
+    return True
+
+
+def _build_crawl_lock_state(path: Path) -> dict[str, object]:
+    payload = _read_json(path)
+    pid = _optional_int(payload.get("pid")) if isinstance(payload, dict) else None
+    return {
+        "present": path.exists(),
+        "path": str(path),
+        "pid": pid,
+        "pid_running": _pid_is_running(pid) if pid is not None else None,
+        "started_at": payload.get("started_at") if isinstance(payload, dict) else None,
+    }
+
+
 def _build_target_state(path: Path) -> dict[str, object]:
     payload = _read_json(path)
     if not payload:
@@ -99,10 +125,25 @@ def _build_target_state(path: Path) -> dict[str, object]:
             "rows_written": None,
             "started_at": None,
             "finished_at": None,
+            "pid": None,
+            "lock_file": None,
+            "stale_reason": None,
         }
+    status = str(payload.get("status", "unknown"))
+    pid = _optional_int(payload.get("pid"))
+    lock_file_text = payload.get("lock_file") if isinstance(payload, dict) else None
+    lock_path = Path(str(lock_file_text)) if lock_file_text else DEFAULT_CRAWL_LOCK_PATH
+    stale_reason = None
+    if status == "running":
+        if pid is not None and not _pid_is_running(pid):
+            status = "stale"
+            stale_reason = f"pid_not_running:{pid}"
+        elif not lock_path.exists():
+            status = "stale"
+            stale_reason = "lock_missing"
     return {
         "present": True,
-        "status": payload.get("status", "unknown"),
+        "status": status,
         "requested_ids": _optional_int(payload.get("requested_ids")),
         "processed_ids": _optional_int(payload.get("processed_ids")),
         "parsed_ids": _optional_int(payload.get("parsed_ids")),
@@ -110,6 +151,9 @@ def _build_target_state(path: Path) -> dict[str, object]:
         "rows_written": _optional_int(payload.get("rows_written")),
         "started_at": payload.get("started_at"),
         "finished_at": payload.get("finished_at"),
+        "pid": pid,
+        "lock_file": str(lock_path),
+        "stale_reason": stale_reason,
     }
 
 
@@ -205,6 +249,11 @@ def _build_alignment_summary(race_result: pd.DataFrame, race_card: pd.DataFrame)
 
 
 def _build_readiness(target_states: dict[str, dict[str, object]], alignment: dict[str, object]) -> dict[str, object]:
+    stale_targets = [
+        target_name
+        for target_name, target_state in target_states.items()
+        if target_state.get("status") == "stale"
+    ]
     race_targets_complete = all(
         target_states.get(name, {}).get("status") == "completed"
         for name in ("race_result", "race_card")
@@ -214,12 +263,14 @@ def _build_readiness(target_states: dict[str, dict[str, object]], alignment: dic
         and int(alignment.get("race_card_only_races", 0)) == 0
     )
     paired_alignment_ok = int(alignment.get("paired_mismatch_races", 0)) == 0
-    pedigree_stable = target_states.get("pedigree", {}).get("status") != "running"
+    pedigree_stable = target_states.get("pedigree", {}).get("status") not in {"running", "stale"}
 
     snapshot_consistent = race_targets_complete and paired_alignment_ok and no_unpaired_races
     benchmark_rerun_ready = snapshot_consistent and pedigree_stable
 
     reasons: list[str] = []
+    if stale_targets:
+        reasons.append(f"stale crawl manifests detected: {', '.join(stale_targets)}")
     if not race_targets_complete:
         reasons.append("race_result and race_card must both be completed")
     if not no_unpaired_races:
@@ -227,10 +278,16 @@ def _build_readiness(target_states: dict[str, dict[str, object]], alignment: dic
     if not paired_alignment_ok:
         reasons.append("paired races still have row-count mismatches")
     if not pedigree_stable:
-        reasons.append("pedigree crawl is still running")
+        pedigree_status = target_states.get("pedigree", {}).get("status")
+        if pedigree_status == "stale":
+            reasons.append("pedigree manifest is stale; inspect crawl state")
+        elif pedigree_status == "running":
+            reasons.append("pedigree crawl is still running")
 
     if benchmark_rerun_ready:
         recommended_action = "rerun_enriched_benchmark"
+    elif stale_targets:
+        recommended_action = "inspect_manifests"
     elif not race_targets_complete:
         recommended_action = "wait_for_race_targets"
     elif not no_unpaired_races or not paired_alignment_ok:
@@ -299,6 +356,7 @@ def main() -> int:
                 "rows_total": int(len(frame)),
                 "rows_tail": int(len(tail_frame)),
             },
+            "crawl_lock": _build_crawl_lock_state(DEFAULT_CRAWL_LOCK_PATH),
             "external_outputs": {
                 "race_result": _summarize_external(race_result, "race_id"),
                 "race_card": _summarize_external(race_card, "race_id"),

@@ -72,7 +72,7 @@ nr-learn/
     - 取り込み前の整合確認: `python scripts/run_validate_data_sources.py --config configs/data.yaml`
     - 外部 pre-race 情報の欠損確認: `python scripts/run_feature_gap_report.py --config configs/data.yaml --model-config configs/model_catboost_fundamental_enriched.yaml --feature-config configs/features_catboost_fundamental_enriched.yaml`
     - netkeiba の tail coverage / race 整合確認: `python scripts/run_netkeiba_coverage_snapshot.py --config configs/data.yaml --tail-rows 5000`
-    - snapshot JSON には race_result / race_card / pedigree の manifest 状態と `readiness.benchmark_rerun_ready` も出るので、mid-cycle の一時的不整合と再学習可能状態を分けて判断できます
+    - snapshot JSON には race_result / race_card / pedigree の manifest 状態と `readiness.benchmark_rerun_ready` も出るので、mid-cycle の一時的不整合と再学習可能状態を分けて判断できます。pid が死んで lock も消えた古い manifest は `status=stale` として検出されます
     - `configs/data.yaml` の netkeiba table 群は default では optional 扱いです。CSV がまだ無い段階でも validation は `optional_missing` 扱いで通り、収集が始まると自動で merge 対象に入ります
     - crawler 用 ID を自動生成する場合:
         - `python scripts/run_prepare_netkeiba_ids.py --data-config configs/data.yaml --crawl-config configs/crawl_netkeiba_template.yaml --target race_result --start-date 2020-01-01`
@@ -85,7 +85,7 @@ nr-learn/
         - `scripts/run_netkeiba_benchmark_gate.py` は snapshot を 1 回更新し、`benchmark_rerun_ready=true` のときだけ train/evaluate を実行します。manifest は `artifacts/reports/netkeiba_benchmark_gate_manifest.json` に出ます
         - すでに old-style backfill が lock を握っている最中に follow-up の 1 cycle を予約したいときは `python scripts/run_netkeiba_wait_then_cycle.py --data-config configs/data.yaml --crawl-config configs/crawl_netkeiba_template.yaml --model-config configs/model_catboost_fundamental_enriched.yaml --feature-config configs/features_catboost_fundamental_enriched.yaml --start-date 2021-01-01 --end-date 2021-07-31 --date-order desc --race-batch-size 100 --pedigree-batch-size 500 --max-rows 200000 --wf-mode off` を使うと、lock 解放待ちのあとに `--max-cycles 1` backfill と gate を自動でつなげられます。待機 manifest は `artifacts/reports/netkeiba_wait_then_cycle_manifest.json` に出ます
     - `artifacts/reports/netkeiba_crawl_manifest.json.lock` に lock を置くので、netkeiba の collect/backfill は同時起動しないでください。同時実行はエラーで弾かれます
-    - 長い batch の途中経過は `artifacts/reports/netkeiba_crawl_manifest_<target>.json` の `status=running` と `processed_ids` で追えます
+    - 長い batch の途中経過は `artifacts/reports/netkeiba_crawl_manifest_<target>.json` の `status=running` と `processed_ids` で追えます。プロセスが落ちて lock も消えた場合は snapshot 側で `status=stale` として拾います
     - `race_card` はレイアウト差で同一馬が二重に出るケースがあるため、crawler 側で `race_id + horse_id` 重複を除外します
     - netkeiba crawler の初期実行例:
         - `python scripts/run_collect_netkeiba.py --config configs/crawl_netkeiba_template.yaml --target race_result --limit 50`

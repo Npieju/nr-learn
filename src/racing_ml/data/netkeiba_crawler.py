@@ -588,6 +588,8 @@ def _build_target_report(
     rows_written: int | None = None,
     existing_rows_merged: int | None = None,
     finished_at: str | None = None,
+    process_id: int | None = None,
+    lock_file: Path | None = None,
 ) -> dict[str, Any]:
     report: dict[str, Any] = {
         "started_at": started_at,
@@ -602,6 +604,10 @@ def _build_target_report(
         "output_file": str(output_file),
         "raw_html_dir": str(raw_html_path),
     }
+    if process_id is not None:
+        report["pid"] = int(process_id)
+    if lock_file is not None:
+        report["lock_file"] = str(lock_file)
     if batch_rows_written is not None:
         report["batch_rows_written"] = int(batch_rows_written)
     if rows_written is not None:
@@ -619,14 +625,21 @@ def _build_crawl_summary(
     target_reports: list[dict[str, Any]],
     finished_at: str | None = None,
     status: str,
+    process_id: int | None = None,
+    lock_file: Path | None = None,
 ) -> dict[str, Any]:
-    return {
+    summary = {
         "source": "netkeiba",
         "started_at": started_at,
         "finished_at": finished_at,
         "status": status,
         "targets": target_reports,
     }
+    if process_id is not None:
+        summary["pid"] = int(process_id)
+    if lock_file is not None:
+        summary["lock_file"] = str(lock_file)
+    return summary
 
 
 def _read_lock_payload(lock_path: Path) -> dict[str, Any]:
@@ -708,6 +721,7 @@ def _crawl_race_result_target(
     base_url: str,
     manifest_path: Path | None = None,
     checkpoint_interval: int = 0,
+    lock_path: Path | None = None,
 ) -> dict[str, Any]:
     progress = ProgressBar(total=max(len(ids), 1), prefix="[crawl:race_result]", min_interval_sec=0.0)
     progress.start("starting")
@@ -762,6 +776,8 @@ def _crawl_race_result_target(
                     batch_rows_written=current_batch_rows,
                     rows_written=current_rows_written,
                     existing_rows_merged=initial_existing_rows,
+                    process_id=os.getpid(),
+                    lock_file=lock_path,
                 ),
             )
 
@@ -783,6 +799,8 @@ def _crawl_race_result_target(
         rows_written=len(combined),
         existing_rows_merged=initial_existing_rows,
         finished_at=time.strftime("%Y-%m-%dT%H:%M:%S"),
+        process_id=os.getpid(),
+        lock_file=lock_path,
     )
     if manifest_path is not None:
         _write_json(manifest_path, report)
@@ -800,6 +818,7 @@ def _crawl_race_card_target(
     base_url: str,
     manifest_path: Path | None = None,
     checkpoint_interval: int = 0,
+    lock_path: Path | None = None,
 ) -> dict[str, Any]:
     progress = ProgressBar(total=max(len(ids), 1), prefix="[crawl:race_card]", min_interval_sec=0.0)
     progress.start("starting")
@@ -854,6 +873,8 @@ def _crawl_race_card_target(
                     batch_rows_written=current_batch_rows,
                     rows_written=current_rows_written,
                     existing_rows_merged=initial_existing_rows,
+                    process_id=os.getpid(),
+                    lock_file=lock_path,
                 ),
             )
 
@@ -875,6 +896,8 @@ def _crawl_race_card_target(
         rows_written=len(combined),
         existing_rows_merged=initial_existing_rows,
         finished_at=time.strftime("%Y-%m-%dT%H:%M:%S"),
+        process_id=os.getpid(),
+        lock_file=lock_path,
     )
     if manifest_path is not None:
         _write_json(manifest_path, report)
@@ -892,6 +915,7 @@ def _crawl_pedigree_target(
     base_url: str,
     manifest_path: Path | None = None,
     checkpoint_interval: int = 0,
+    lock_path: Path | None = None,
 ) -> dict[str, Any]:
     progress = ProgressBar(total=max(len(ids), 1), prefix="[crawl:pedigree]", min_interval_sec=0.0)
     progress.start("starting")
@@ -957,6 +981,8 @@ def _crawl_pedigree_target(
                     batch_rows_written=current_batch_rows,
                     rows_written=current_rows_written,
                     existing_rows_merged=initial_existing_rows,
+                    process_id=os.getpid(),
+                    lock_file=lock_path,
                 ),
             )
 
@@ -978,6 +1004,8 @@ def _crawl_pedigree_target(
         rows_written=len(combined),
         existing_rows_merged=initial_existing_rows,
         finished_at=time.strftime("%Y-%m-%dT%H:%M:%S"),
+        process_id=os.getpid(),
+        lock_file=lock_path,
     )
     if manifest_path is not None:
         _write_json(manifest_path, report)
@@ -1024,12 +1052,20 @@ def crawl_netkeiba_from_config(
 
     raw_html_dir = _resolve_path(crawl_cfg.get("raw_html_dir", "data/external/netkeiba/raw_html"), base_dir)
     manifest_base_path = _resolve_path(crawl_cfg.get("manifest_file", "artifacts/reports/netkeiba_crawl_manifest.json"), base_dir)
+    lock_path = _build_lock_path(manifest_base_path)
     started_at = time.strftime("%Y-%m-%dT%H:%M:%S")
 
     target_reports: list[dict[str, Any]] = []
     _write_json(
         manifest_base_path,
-        _build_crawl_summary(started_at=started_at, target_reports=target_reports, finished_at=None, status="running"),
+        _build_crawl_summary(
+            started_at=started_at,
+            target_reports=target_reports,
+            finished_at=None,
+            status="running",
+            process_id=os.getpid(),
+            lock_file=lock_path,
+        ),
     )
     session = _build_session(settings)
     try:
@@ -1064,6 +1100,7 @@ def crawl_netkeiba_from_config(
                     base_url=target_base_url,
                     manifest_path=manifest_path,
                     checkpoint_interval=checkpoint_interval,
+                    lock_path=lock_path,
                 )
             elif target_name == "race_card":
                 report = _crawl_race_card_target(
@@ -1076,6 +1113,7 @@ def crawl_netkeiba_from_config(
                     base_url=target_base_url,
                     manifest_path=manifest_path,
                     checkpoint_interval=checkpoint_interval,
+                    lock_path=lock_path,
                 )
             elif target_name == "pedigree":
                 report = _crawl_pedigree_target(
@@ -1088,6 +1126,7 @@ def crawl_netkeiba_from_config(
                     base_url=target_base_url,
                     manifest_path=manifest_path,
                     checkpoint_interval=checkpoint_interval,
+                    lock_path=lock_path,
                 )
             else:
                 raise ValueError(f"Unsupported crawl target: {target_name}")
@@ -1101,6 +1140,8 @@ def crawl_netkeiba_from_config(
                     target_reports=target_reports,
                     finished_at=None,
                     status="running",
+                    process_id=os.getpid(),
+                    lock_file=lock_path,
                 ),
             )
     finally:
@@ -1112,6 +1153,8 @@ def crawl_netkeiba_from_config(
         target_reports=target_reports,
         finished_at=finished_at,
         status="completed",
+        process_id=os.getpid(),
+        lock_file=lock_path,
     )
     _write_json(manifest_base_path, summary)
     return summary
