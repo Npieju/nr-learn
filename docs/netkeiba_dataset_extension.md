@@ -125,5 +125,5 @@ column_aliases:
 - `features_catboost_fundamental_enriched` の gap report では、優先 missing raw columns は `breeder_name`, `sire_name`, `dam_name`, `damsire_name` だった。
 - つまり次に効果が見込める外部ソースは pedigree / breeder 系で、owner や gate/frame はすでに主表だけでも利用可能。
 - `sire_track_distance_last_80_win_rate` も現在は force-include missing として出る。これは `sire_name` が無い状態で擬似的な `track+distance` 集計を作らないように補正したためで、pedigree raw が入るまでこの特徴は正しく立たない。
-- low coverage 側では `horse_last_3_avg_corner_2_position`, `horse_last_3_avg_corner_2_ratio`, `horse_last_3_avg_corner_gain_2_to_4` が残っており、corner 前半列の品質改善も有効候補。
+- `horse_last_3_avg_corner_2_position`, `horse_last_3_avg_corner_2_ratio`, `horse_last_3_avg_corner_gain_2_to_4` の低 coverage は、主に 2C 自体が無いレース構造に由来していた。builder 側では `corner_2_position` が無いとき earliest available pre-stretch corner (`corner_1_position` / `corner_3_position`) に fallback するよう補正済み。
 - 既存 JRA raw の `corner_passing_order.csv` を supplemental として有効化しても coverage 改善は小さく、benchmark 指標はほぼ不変だったため、次の投資先は pedigree 系が優先。

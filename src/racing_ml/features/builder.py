@@ -182,6 +182,17 @@ def _build_horse_history_key(frame: pd.DataFrame) -> tuple[pd.Series | None, pd.
     return history_key, key_source
 
 
+def _build_early_corner_position(frame: pd.DataFrame) -> pd.Series | None:
+    corner_columns = [
+        column
+        for column in ["corner_2_position", "corner_1_position", "corner_3_position"]
+        if column in frame.columns
+    ]
+    if not corner_columns:
+        return None
+    return frame[corner_columns].bfill(axis=1).iloc[:, 0].astype(float)
+
+
 def build_features(frame: pd.DataFrame) -> pd.DataFrame:
     data = frame.copy()
 
@@ -214,12 +225,6 @@ def build_features(frame: pd.DataFrame) -> pd.DataFrame:
         approx_frame_count = np.ceil(data["field_size"] / 2.0)
         data["frame_ratio"] = np.where(approx_frame_count > 0, data["frame_no"] / approx_frame_count, np.nan)
 
-    if {"corner_2_position", "field_size"}.issubset(data.columns):
-        data["corner_2_ratio"] = np.where(data["field_size"] > 0, data["corner_2_position"] / data["field_size"], np.nan)
-
-    if {"corner_4_position", "field_size"}.issubset(data.columns):
-        data["corner_4_ratio"] = np.where(data["field_size"] > 0, data["corner_4_position"] / data["field_size"], np.nan)
-
     if "finish_time_sec" in data.columns:
         data["finish_time_sec"] = pd.to_numeric(data["finish_time_sec"], errors="coerce")
 
@@ -229,6 +234,16 @@ def build_features(frame: pd.DataFrame) -> pd.DataFrame:
     for column in ["corner_1_position", "corner_2_position", "corner_3_position", "corner_4_position", "race_pace_front3f", "race_pace_back3f"]:
         if column in data.columns:
             data[column] = pd.to_numeric(data[column], errors="coerce")
+
+    early_corner_position = _build_early_corner_position(data)
+    if early_corner_position is not None:
+        data["corner_2_position"] = early_corner_position
+
+    if {"corner_2_position", "field_size"}.issubset(data.columns):
+        data["corner_2_ratio"] = np.where(data["field_size"] > 0, data["corner_2_position"] / data["field_size"], np.nan)
+
+    if {"corner_4_position", "field_size"}.issubset(data.columns):
+        data["corner_4_ratio"] = np.where(data["field_size"] > 0, data["corner_4_position"] / data["field_size"], np.nan)
 
     if {"corner_2_position", "corner_4_position"}.issubset(data.columns):
         data["corner_gain_2_to_4"] = data["corner_2_position"] - data["corner_4_position"]

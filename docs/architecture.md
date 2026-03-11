@@ -70,6 +70,7 @@ flowchart LR
 - 日付派生: `race_year`, `race_month`, `race_dayofweek`
 - 枠順・馬番: `gate_ratio`, `frame_ratio`
 - pace / corner: `corner_*_ratio`, `corner_gain_2_to_4`, `race_pace_balance_3f`
+- `corner_2_*` 系は raw に 2C が存在しないレースで完全欠損にしません。builder は `corner_2_position` を優先し、無い場合だけ earliest available pre-stretch corner (`corner_1_position` -> `corner_3_position`) に fallback します。
 - course baseline: `course_baseline_*`
 - horse 履歴: `horse_last_3_*`, `horse_last_5_*`
 - jockey / trainer 履歴: `jockey_last_30_*`, `trainer_last_30_*`
