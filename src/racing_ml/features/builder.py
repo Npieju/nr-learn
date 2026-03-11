@@ -53,7 +53,12 @@ def _race_level_shifted_rolling_mean(
     return frame["race_id"].map(mapping).astype(float)
 
 
-def _compose_key(frame: pd.DataFrame, columns: list[str], out_col: str) -> None:
+def _compose_key(
+    frame: pd.DataFrame,
+    columns: list[str],
+    out_col: str,
+    required_columns: list[str] | None = None,
+) -> None:
     available_columns = [column for column in columns if column in frame.columns]
     if not available_columns:
         return
@@ -61,11 +66,39 @@ def _compose_key(frame: pd.DataFrame, columns: list[str], out_col: str) -> None:
     key = frame[available_columns[0]].astype("string").fillna("unknown")
     for column in available_columns[1:]:
         key = key + "|" + frame[column].astype("string").fillna("unknown")
-    frame[out_col] = key.astype(str)
+
+    if required_columns:
+        required_mask = pd.Series(True, index=frame.index, dtype=bool)
+        for column in required_columns:
+            if column not in frame.columns:
+                required_mask &= False
+                continue
+            required_mask &= _clean_group_series(frame, column).notna()
+        key = key.where(required_mask)
+
+    frame[out_col] = key.astype("string")
 
 
 def _clean_group_series(frame: pd.DataFrame, column: str) -> pd.Series:
     return frame[column].astype("string").str.strip().replace({"": pd.NA, "nan": pd.NA, "None": pd.NA})
+
+
+def _fill_history_defaults(
+    frame: pd.DataFrame,
+    group_col: str,
+    values: pd.Series,
+    fill_value: float | int | None,
+) -> pd.Series:
+    if pd.isna(fill_value) or group_col not in frame.columns:
+        return values
+
+    valid_group_mask = _clean_group_series(frame, group_col).notna()
+    if not valid_group_mask.any():
+        return values
+
+    filled = values.copy()
+    filled.loc[valid_group_mask] = filled.loc[valid_group_mask].fillna(float(fill_value))
+    return filled
 
 
 def _build_horse_name_history_key(frame: pd.DataFrame) -> pd.Series | None:
@@ -296,7 +329,12 @@ def build_features(frame: pd.DataFrame) -> pd.DataFrame:
     if horse_history_key is not None and {"is_win"}.issubset(data.columns):
         data["horse_last_5_win_rate"] = _group_shifted_rolling_mean(data, "horse_history_key", "is_win", window=5).fillna(0.0)
     if horse_history_key is not None and {"track", "distance"}.issubset(data.columns):
-        _compose_key(data, ["horse_history_key", "track", "distance"], "horse_track_distance_key")
+        _compose_key(
+            data,
+            ["horse_history_key", "track", "distance"],
+            "horse_track_distance_key",
+            required_columns=["horse_history_key"],
+        )
 
     history_specs = [
         ("time_per_1000m", "horse_last_3_avg_time_per_1000m", 3),
@@ -366,9 +404,19 @@ def build_features(frame: pd.DataFrame) -> pd.DataFrame:
         ("trainer_track_distance_key", "rank", "trainer_track_distance_last_50_avg_rank", 50, 3, float(data["rank"].median()) if "rank" in data.columns and data["rank"].notna().any() else np.nan),
     ]
     if {"jockey_id", "track", "distance"}.issubset(data.columns):
-        _compose_key(data, ["jockey_id", "track", "distance"], "jockey_track_distance_key")
+        _compose_key(
+            data,
+            ["jockey_id", "track", "distance"],
+            "jockey_track_distance_key",
+            required_columns=["jockey_id"],
+        )
     if {"trainer_id", "track", "distance"}.issubset(data.columns):
-        _compose_key(data, ["trainer_id", "track", "distance"], "trainer_track_distance_key")
+        _compose_key(
+            data,
+            ["trainer_id", "track", "distance"],
+            "trainer_track_distance_key",
+            required_columns=["trainer_id"],
+        )
     for group_col, value_col, output_col, window, min_periods, fill_value in track_distance_history_specs:
         if {group_col, value_col}.issubset(data.columns):
             history_values = _entity_race_shifted_rolling_mean(
@@ -378,8 +426,7 @@ def build_features(frame: pd.DataFrame) -> pd.DataFrame:
                 window=window,
                 min_periods=min_periods,
             )
-            if pd.notna(fill_value):
-                history_values = history_values.fillna(float(fill_value))
+            history_values = _fill_history_defaults(data, group_col, history_values, fill_value)
             data[output_col] = history_values
 
     pedigree_history_specs = [
@@ -391,26 +438,37 @@ def build_features(frame: pd.DataFrame) -> pd.DataFrame:
     ]
     for group_col, value_col, output_col, window, min_periods, fill_value in pedigree_history_specs:
         if {group_col, value_col}.issubset(data.columns):
-            data[output_col] = _entity_race_shifted_rolling_mean(
+            history_values = _entity_race_shifted_rolling_mean(
                 data,
                 group_col,
                 value_col,
                 window=window,
                 min_periods=min_periods,
             )
-            if pd.notna(fill_value):
-                data[output_col] = data[output_col].fillna(float(fill_value))
+            history_values = _fill_history_defaults(data, group_col, history_values, fill_value)
+            data[output_col] = history_values
 
     if {"sire_name", "track", "distance"}.issubset(data.columns):
-        _compose_key(data, ["sire_name", "track", "distance"], "sire_track_distance_key")
+        _compose_key(
+            data,
+            ["sire_name", "track", "distance"],
+            "sire_track_distance_key",
+            required_columns=["sire_name"],
+        )
     if {"sire_track_distance_key", "is_win"}.issubset(data.columns):
-        data["sire_track_distance_last_80_win_rate"] = _entity_race_shifted_rolling_mean(
+        history_values = _entity_race_shifted_rolling_mean(
             data,
             "sire_track_distance_key",
             "is_win",
             window=80,
             min_periods=3,
-        ).fillna(0.0)
+        )
+        data["sire_track_distance_last_80_win_rate"] = _fill_history_defaults(
+            data,
+            "sire_track_distance_key",
+            history_values,
+            0.0,
+        )
 
     for column in data.columns:
         if data[column].dtype == "object":
