@@ -1,260 +1,437 @@
-# 現在の競馬予想MLアーキテクチャ
+# 現在のアーキテクチャ構成
 
-2026-03-09 時点の実装スナップショットです。現行コードに即して、どのデータがどこを通り、どのモデルが何を学習し、ROI 指標がどの買い方を意味するのかを整理します。
+2026-03-11 時点の実装スナップショットです。現行コードと最新 artifact に合わせて、データ取得から特徴量生成、学習、評価、外部データ拡張、運用上のボトルネックまでを整理します。
 
-## 1. 設計原則
-- 本命は LightGBM ではなく CatBoost-first 構成です。高カーディナリティカテゴリ、欠損、表形式の混在特徴を無理なく扱えるためです。
-- 「AUC を上げること」ではなく「長期 ROI を壊さず、public odds を補完する追加情報を出せること」を重視します。
-- ベンチマーク系と馬券ポリシー系を分離しています。
-  - benchmark 系: `odds` / `popularity` を抜いた fundamental model で、`benter_delta_pseudo_r2` を主指標にします。
-  - policy 系: `odds` / `popularity` を含めた CatBoost rich model と value stack で、固定額 ROI や Kelly 系を見ます。
-- パラメータ調整より、リーク防止・データ拡張・特徴量 contract の正確性を優先します。
+## 1. 現在の設計方針
+
+- 現在の本命は LightGBM ではなく CatBoost-first 構成です。
+  - LightGBM は baseline と比較対象として維持します。
+  - CatBoost は高カーディナリティカテゴリ、欠損、数値とカテゴリの混在、履歴特徴との相性を見込んだ主力です。
+- 評価は精度だけでなく ROI を主眼に置きます。
+  - AUC / logloss は見ますが、それだけで採用しません。
+  - fixed-stake ROI、EV ベース ROI、Benter 系 benchmark を並べて判定します。
+- データ拡張は主表破壊型ではなく multi-source merge で行います。
+  - Kaggle 主表を残しつつ、netkeiba 由来の race result / race card / pedigree を外部 CSV として追加します。
+- リーク防止を強く優先します。
+  - 時系列 split、shift 済み rolling、leakage audit、post-race 列の feature 選別を標準フローに入れています。
 
 ## 2. 全体フロー
 
 ```mermaid
 flowchart LR
-  A[Primary Raw CSV] --> B[dataset_loader]
-  A2[External Raw CSVs] --> B
-  B --> C[Feature Builder]
-  C --> D[Feature Selection]
-  D --> E1[Fundamental Benchmark Models]
-  D --> E2[Policy Models]
-  E2 --> F[Value Blend Stack]
-  E1 --> G[run_evaluate]
-  E2 --> G
-  F --> G
-  G --> H[ROI / EV / Kelly / Benter Reports]
-  E1 --> I[Model Manifest]
-  E2 --> I
-  F --> I
+  A[Kaggle Raw CSV] --> B[dataset_loader]
+  A2[External CSV: netkeiba / laptime / corner] --> B
+  B --> C[build_features]
+  C --> D[resolve_feature_selection]
+  D --> E[train_pipeline]
+  E --> F[trained model artifact]
+  F --> G[run_predict / run_evaluate / run_backtest]
+  H[netkeiba id prep / crawl / backfill] --> A2
+  G --> I[reports / manifests / predictions]
 ```
 
-## 3. Data Layer
+## 3. レイヤ別の実装
 
-### 3.1 主テーブルの読み込み
-- 実体は [src/racing_ml/data/dataset_loader.py](../src/racing_ml/data/dataset_loader.py) にあります。
-- 主表は `data/raw` 配下から自動選択し、列名は alias 正規化で canonical name に寄せます。
-- 現在の canonical 列には `race_id`, `horse_id`, `horse_key`, `rank`, `odds`, `track`, `distance`, `jockey_id`, `trainer_id`, `owner_name` などが含まれます。
+### 3.1 Data Layer
 
-### 3.2 外部データの統合
-- `configs/data.yaml` の `external_raw_dirs`, `append_tables`, `supplemental_tables` で追加ソースを差し込みます。
-- loader 側は config-driven で、将来の netkeiba CSV を loader 改修なしで試せる構成です。
-- stable な競走馬 ID が必要な外部ソースは `horse_key` を使います。既存主表にはまず `race_id + horse_id` で `horse_key` を戻し、その後 pedigree を `horse_key` で merge します。
-- netkeiba crawler の現行 target は `race_result`, `race_card`, `pedigree` です。`race_card` は `race.netkeiba.com` の shutuba page から `horse_key`, 枠番, 馬番, 性齢, 斤量, 騎手, 調教師などの pre-race 列を取ります。owner / breeder は現ページに直出しされないため、profile / pedigree 側で補います。
-- 既存の custom supplemental loader:
+主な実装:
+
+- `scripts/run_ingest.py`
+- `src/racing_ml/data/ingest.py`
+- `src/racing_ml/data/dataset_loader.py`
+- `configs/data.yaml`
+
+責務:
+
+- KaggleHub の `takamotoki/jra-horse-racing-dataset` を主表として用意します。
+- `configs/data.yaml` の `supplemental_tables` / `append_tables` に従い、追加 CSV を merge します。
+- 列名は alias 正規化で canonical 列へ寄せます。
+- 現在の canonical 列には以下が含まれます。
+  - `date`, `race_id`, `horse_id`, `horse_key`, `horse_name`
+  - `rank`, `odds`, `popularity`
+  - `track`, `distance`, `weather`, `ground_condition`
+  - `jockey_id`, `trainer_id`, `owner_name`, `breeder_name`
+  - `sire_name`, `dam_name`, `damsire_name`
+  - `finish_time`, `closing_time_3f`, `corner_*_position`
+
+現行の `configs/data.yaml` では次を取り込み対象にしています。
+
+- append:
+  - `netkeiba_race_result`
+- supplemental:
   - `laptime`
   - `corner_passing_order`
+  - `netkeiba_race_result_keys`
+  - `netkeiba_race_card`
+  - `netkeiba_pedigree`
 
-### 3.3 運用上のチェック
-- source validation: `scripts/run_validate_data_sources.py`
-  - join key 欠損、required columns 欠損、dedupe key 重複をチェックします。
-- feature gap: `scripts/run_feature_gap_report.py`
-  - raw column の不足と force-include feature の missing / low coverage をチェックします。
+マージ方針:
 
-### 3.4 現在の外部データ不足
-- 現時点で重要なのは以下の pedigree / breeder 系 raw columns です。
-  - `breeder_name`
-  - `sire_name`
-  - `dam_name`
-  - `damsire_name`
-- ここが埋まらない限り、pedigree 系の条件付き特徴は正しく立ちません。
+- row append は `append_tables`
+- 列補完は `supplemental_tables`
+- `merge_mode` により `fill_missing` / `prefer_supplemental` を選びます
 
-## 4. Feature Layer
+ID の扱い:
 
-### 4.1 実装位置
-- 特徴量生成の本体は [src/racing_ml/features/builder.py](../src/racing_ml/features/builder.py) です。
-- 特徴量選択と model input 再現は [src/racing_ml/features/selection.py](../src/racing_ml/features/selection.py) が担当します。
+- 外部 pedigree 系は `horse_id` ではなく `horse_key` を基準にします。
+- `race_result` / `race_card` で `horse_key` を補完してから `pedigree` を結合する設計です。
 
-### 4.2 現在の主要特徴群
-- 日付派生: `race_year`, `race_month`, `race_dayofweek`
-- 枠順・馬番: `gate_ratio`, `frame_ratio`
-- pace / corner: `corner_*_ratio`, `corner_gain_2_to_4`, `race_pace_balance_3f`
-- `corner_2_*` 系は raw に 2C が存在しないレースで完全欠損にしません。builder は `corner_2_position` を優先し、無い場合だけ earliest available pre-stretch corner (`corner_1_position` -> `corner_3_position`) に fallback します。
-- course baseline: `course_baseline_*`
-- horse 履歴: `horse_last_3_*`, `horse_last_5_*`
-- jockey / trainer 履歴: `jockey_last_30_*`, `trainer_last_30_*`
-- owner / pedigree 履歴: `owner_last_50_win_rate`, `sire_last_100_*`, `damsire_last_100_*`
-- entity-conditioned track-distance 履歴:
-  - `horse_track_distance_last_3_avg_rank`
-  - `horse_track_distance_last_5_win_rate`
-  - `jockey_track_distance_last_50_*`
-  - `trainer_track_distance_last_50_*`
+### 3.2 Feature Layer
 
-### 4.3 リーク防止ルール
-- horse 履歴 key は row-wise に解決します。`horse_key` がある行は常に `horse_key` を優先し、不足分だけ `horse_name` または `horse_id` へ fallback します。
-- rolling 系は基本的に `shift(1)` 相当の過去のみ集約です。
-- race 内に同一 entity が複数出るケースは row-level ではなく race-level rolling を使います。
-- `_entity_race_shifted_rolling_mean` は元 frame の index を保持します。これを外すと tail slice で owner / pedigree 履歴が壊れます。
-- entity-conditioned key は entity 列が存在するときだけ作ります。
-  - 例: `sire_name` が無いのに `sire_track_distance_*` を作ることはしません。
+主な実装:
 
-### 4.4 Feature Selection
-- 本命系は `selection.mode: all_safe` です。
-- 除外対象:
-  - ゴール後情報
-  - 超高カーディナリティ生文字列
-  - 払戻系列
-- categorical 列は CatBoost にそのまま渡します。
-- train/evaluate artifact には `feature_coverage` を保存し、missing force-include feature を後から追えるようにしています。
+- `src/racing_ml/features/builder.py`
+- `src/racing_ml/features/selection.py`
+- `configs/features.yaml`
+- `configs/features_catboost_rich.yaml`
+- `configs/features_catboost_fundamental.yaml`
+- `configs/features_catboost_fundamental_enriched.yaml`
 
-## 5. Model Layer
+`builder.py` の責務:
 
-### 5.1 Fundamental Benchmark Plane
-用途: public odds を抜いた状態で「市場を補完できるか」を測る面です。
+- 基本派生:
+  - `race_year`, `race_month`, `race_dayofweek`
+  - `field_size`, `gate_ratio`, `frame_ratio`
+- pace / corner 派生:
+  - `corner_2_ratio`, `corner_4_ratio`, `corner_gain_2_to_4`
+  - `race_pace_balance_3f`
+- time 系派生:
+  - `time_per_1000m`, `time_margin_sec`, `time_deviation`
+- 履歴特徴:
+  - horse: `horse_last_3_*`, `horse_last_5_*`
+  - jockey / trainer: `*_last_30_*`
+  - owner / breeder / sire / damsire: `*_last_50_*`, `*_last_100_*`
+  - track-distance 条件付き履歴: `horse_track_distance_*`, `jockey_track_distance_*`, `trainer_track_distance_*`, `sire_track_distance_*`
 
-- 主な config:
+現在の重要な仕様:
+
+- horse 履歴 key は `horse_key` を最優先し、不足時のみ `horse_name` / `horse_id` に fallback します。
+- rolling は `shift(1)` 済みの過去だけを使います。
+- `corner_2_position` が欠けるレースでは earliest available pre-stretch corner に fallback します。
+- lineage 系や entity-conditioned key は、必要な entity 列が存在する場合だけ作ります。
+
+`selection.py` の責務:
+
+- `explicit` と `all_safe` の 2 モードで model input を解決します。
+- post-race 列、払戻列、結果そのもの、内部 key を feature から除外します。
+- CatBoost 向けに categorical columns を自動判定します。
+- `summarize_feature_coverage(...)` で force-include 特徴の missing / low coverage を記録します。
+
+### 3.3 Model Layer
+
+主な実装:
+
+- `src/racing_ml/models/trainer.py`
+- `src/racing_ml/models/value_blend.py`
+- `configs/model*.yaml`
+
+`trainer.py` の責務:
+
+- LightGBM / CatBoost の初期化
+- GPU runtime validation
+- time split
+- fit / valid 評価
+- joblib artifact 出力
+
+サポートしている主な task:
+
+- `classification`
+- `ranking`
+- `roi_regression`
+- `market_deviation`
+- `time_regression`
+- `time_deviation`
+
+現在のモデル面の整理:
+
+- baseline:
+  - `configs/model.yaml`
+  - LightGBM classification
+- CatBoost win:
+  - `configs/model_catboost.yaml`
+- CatBoost fundamental benchmark:
   - `configs/model_catboost_fundamental.yaml`
   - `configs/model_catboost_fundamental_enriched.yaml`
-  - `configs/features_catboost_fundamental.yaml`
-  - `configs/features_catboost_fundamental_enriched.yaml`
-- 特徴:
-  - `odds` / `popularity` を使わない
-  - 主指標は `benter_delta_pseudo_r2`
-  - raw ROI が一時的に良くても `ΔR² <= 0` なら採用しません
+- CatBoost Top3 / ranking / ROI / alpha:
+  - `configs/model_catboost_top3.yaml`
+  - `configs/model_catboost_ranker.yaml`
+  - `configs/model_catboost_roi.yaml`
+  - `configs/model_catboost_alpha.yaml`
+- time 系:
+  - `configs/model_catboost_time.yaml`
+  - `configs/model_catboost_time_deviation.yaml`
+- stack:
+  - `configs/model_catboost_value_stack.yaml`
+  - `configs/model_catboost_value_stack_time.yaml`
+  - GPU 用 `*_gpu.yaml`
 
-### 5.2 Policy / ROI Plane
-用途: 実際の買い目候補を出す面です。
+value blend:
 
-- rich win model
-  - config: `configs/model_catboost.yaml`
-  - `odds` / `popularity` を含む CatBoost win probability model
-- time / time deviation model
-  - config: `configs/model_catboost_time.yaml`
-  - config: `configs/model_catboost_time_deviation.yaml`
-  - 予測タイムやコース基準からの偏差を学習し、順位付けに使います
-- alpha / ROI model
-  - config: `configs/model_catboost_alpha.yaml`
-  - config: `configs/model_catboost_roi.yaml`
-  - 現在の mainline では二次的です
+- `value_blend_model` は meta learner ではなく component bundle です。
+- `win` を土台に、必要に応じて `alpha` / `roi` / `time` を logit 上で加算します。
+- `market_blend_weight` で市場確率へ寄せる設定を持ちます。
 
-### 5.3 現在の本命 ROI stack
-- 主 stack は `win + time_deviation` の 2 コンポーネントです。
-- value blend bundle は [src/racing_ml/models/value_blend.py](../src/racing_ml/models/value_blend.py) で構築します。
-- 現在の主 config:
-  - CPU: `configs/model_catboost_value_stack_time.yaml`
-  - GPU: `configs/model_catboost_value_stack_time_gpu.yaml`
-- 合成ロジック:
-  - base は win probability の logit
-  - time_deviation の低い値を `tanh` で signal 化して加算
-  - `market_blend_weight` で odds 由来の market probability に寄せる
+### 3.4 Training Layer
 
-### 5.4 GPU Path
-- CatBoost GPU は利用可能です。今回 RTX 4060 上で full retrain を実施済みです。
-- GPU 用 config:
-  - [configs/model_catboost_gpu.yaml](../configs/model_catboost_gpu.yaml)
-  - [configs/model_catboost_time_deviation_gpu.yaml](../configs/model_catboost_time_deviation_gpu.yaml)
-  - [configs/model_catboost_value_stack_time_gpu.yaml](../configs/model_catboost_value_stack_time_gpu.yaml)
-- 注意:
-  - CatBoost GPU は classification / regression で `rsm` 非対応です。
-  - CPU config をそのまま GPU に流すと validation で落ちます。
+主な実装:
 
-## 6. Training Layer
+- `scripts/run_train.py`
+- `src/racing_ml/pipeline/train_pipeline.py`
 
-### 6.1 train orchestration
-- 実体は [src/racing_ml/pipeline/train_pipeline.py](../src/racing_ml/pipeline/train_pipeline.py) です。
-- 処理順:
-  1. config load
-  2. training table load
-  3. feature build
-  4. feature selection / feature coverage summary
-  5. leakage audit
-  6. train / valid split
-  7. task ごとの fit
-  8. report / manifest 書き出し
+実行順:
 
-### 6.2 progress visibility
-- 重い区間には `ProgressBar` と `Heartbeat` を入れています。
-- データロード、feature build、fit、walk-forward は long-running でも停止に見えないようになっています。
+1. config load
+2. training table load
+3. feature build
+4. feature selection / coverage summary
+5. leakage audit
+6. train / valid split
+7. model fit
+8. report / manifest 書き出し
 
-## 7. Evaluation Layer
+時系列 split は現在 `configs/data.yaml` で以下です。
 
-### 7.1 実装位置
-- 評価本体は [scripts/run_evaluate.py](../scripts/run_evaluate.py) です。
-- score の共通生成は [src/racing_ml/evaluation/scoring.py](../src/racing_ml/evaluation/scoring.py) が担当します。
-- ROI policy simulation は [src/racing_ml/evaluation/policy.py](../src/racing_ml/evaluation/policy.py) が担当します。
+- train end: `2019-12-31`
+- valid start: `2020-01-01`
+- valid end: `2021-07-31`
 
-### 7.2 指標の意味
-このプロジェクトの ROI 指標は、すべて「単勝の固定額シミュレーション」か「Kelly シミュレーション」です。
+長時間処理では `ProgressBar` と `Heartbeat` を使い、停止に見えないようにしています。
+
+### 3.5 Evaluation Layer
+
+主な実装:
+
+- `scripts/run_evaluate.py`
+- `src/racing_ml/evaluation/scoring.py`
+- `src/racing_ml/evaluation/policy.py`
+- `src/racing_ml/evaluation/benchmark.py`
+- `src/racing_ml/evaluation/walk_forward.py`
+- `src/racing_ml/evaluation/leakage.py`
+
+評価の 2 面:
+
+- ROI / 実運用 proxy
+  - `top1_roi`
+  - `ev_top1_roi`
+  - `ev_threshold_1_0_roi`
+  - `ev_threshold_1_2_roi`
+  - Kelly / portfolio / walk-forward 指標
+- benchmark / 市場補完力
+  - `public_pseudo_r2`
+  - `model_pseudo_r2`
+  - `benter_combined_pseudo_r2`
+  - `benter_delta_pseudo_r2`
+
+現在の ROI 指標の意味:
 
 - `top1_roi`
-  - 各レースで model score が最大の 1 頭だけを買う
-  - 1 ベット 100 円固定
+  - 各レースで score 最大の 1 頭を単勝固定額で買う
 - `ev_top1_roi`
-  - 各レースで `expected_value = score × odds` が最大の 1 頭だけを買う
-  - 1 ベット 100 円固定
-- `ev_threshold_1_0_roi`
-  - `score × odds >= 1.0` の馬だけ買う
-  - 1 ベット 100 円固定
-- `ev_threshold_1_2_roi`
-  - `score × odds >= 1.2` の馬だけ買う
-  - 1 ベット 100 円固定
-- `linear_blend_kelly_*`
-  - isotonic calibration 後の model probability を market probability と線形 blend した確率で、fractional Kelly を回す
-- `benter_ev_top1_roi`
-  - Benter の second-stage で `model_prob` と `market_prob` を再合成した確率を使い、`expected_value` 最大の 1 頭を買う
-- `benter_kelly_*`
-  - Benter 再合成確率を使った fractional Kelly
+  - 各レースで `score × odds` 最大の 1 頭を単勝固定額で買う
+- `ev_threshold_*`
+  - EV 閾値を超えるときだけ買う
 
-### 7.3 benchmark と policy の違い
-- `top1_roi` や `ev_top1_roi` は「実際にどう買うか」の proxy です。
-- `public_pseudo_r2`, `model_pseudo_r2`, `benter_delta_pseudo_r2` は「市場をどれだけ補完したか」の benchmark です。
-- policy 指標が良くても benchmark が悪い場合、単なる market 追随や過学習の可能性があります。
+採用方針:
 
-## 8. Artifacts
-- train artifact
-  - model: `artifacts/models/*.joblib`
-  - report: `artifacts/reports/train_metrics*.json`
-  - manifest: `artifacts/models/*.manifest.json`
-- evaluation artifact
-  - summary: `artifacts/reports/evaluation_summary*.json`
-  - by-date: `artifacts/reports/evaluation_by_date*.csv`
-- stack artifact
-  - `kind: value_blend_model`
-  - component metadata と blend params を同梱します
+- AUC が少し高いだけでは採用しません。
+- ROI と benchmark の両面で悪化していないことを見ます。
 
-## 9. 現在の主結果
+### 3.6 Serving / Backtest / Dashboard Layer
 
-### 9.1 GPU で学習した ROI mainline
-- config: `configs/model_catboost_value_stack_time_gpu.yaml`
-- components:
-  - `configs/model_catboost_gpu.yaml`
-  - `configs/model_catboost_time_deviation_gpu.yaml`
-- 100k rows 評価:
-  - `top1_roi = 0.802865`
-  - `ev_top1_roi = 0.860271`
-  - `ev_threshold_1_0_roi = 0.839528`
-  - `ev_threshold_1_2_roi = 0.701514`
-  - `auc = 0.832061`
-  - `logloss = 0.207528`
-  - `model_pseudo_r2 = 0.237940`
-  - `benter_delta_pseudo_r2 = -0.009343`
+主な実装:
 
-### 9.2 この結果が意味する買い方
-- `top1_roi = 0.802865`
-  - 毎レース、stack score が最上位の 1 頭を単勝で 100 円買った結果です。
-- `ev_top1_roi = 0.860271`
-  - 毎レース、`score × odds` が最大の 1 頭を単勝 100 円で買った結果です。
-- `ev_threshold_1_0_roi = 0.839528`
-  - `score × odds >= 1.0` を満たす馬だけ単勝 100 円で買った結果です。
-- `benter_ev_top1_roi = 1.002293`
-  - calibration split 上で Benter 再合成した確率を使い、`expected_value` 最大の 1 頭を買った結果です。
-  - ただし同じ run で `benter_delta_pseudo_r2 = -0.009343` なので、benchmark 観点では改善扱いにしません。
+- `scripts/run_predict.py`
+- `src/racing_ml/serving/predict_batch.py`
+- `scripts/run_backtest.py`
+- `src/racing_ml/pipeline/backtest_pipeline.py`
+- `scripts/run_dashboard.py`
 
-## 10. 現在のボトルネック
-- tuning ではなく raw signal が不足しています。
-- 特に pedigree / breeder raw が欠けているため、fundamental benchmark が public を補完しきれていません。
-- current-data-only の pace / corner / track-distance 追加は、独立 signal を多少増やしても決定打にはなっていません。
+役割:
 
-## 11. 次の優先課題
-1. pedigree / breeder 外部 CSV を onboarding する
-2. validation と feature gap を再実行する
-3. fundamental benchmark を再学習し `benter_delta_pseudo_r2` を再確認する
-4. benchmark が改善したら、その component を policy stack に戻して ROI を再検証する
+- `run_predict.py`
+  - 指定日または最新日について予測 CSV / PNG を出力
+- `run_backtest.py`
+  - prediction CSV をもとに hit rate / simple ROI / EV ROI を算出
+- `run_dashboard.py`
+  - ダッシュボード用 JSON / CSV / PNG を生成
 
-## 12. 関連ドキュメント
-- ROI 基礎設計: [roi_foundation_design.md](roi_foundation_design.md)
-- 長期運用設計: [architecture_long_term.md](architecture_long_term.md)
-- artifact 運用: [model_artifacts.md](model_artifacts.md)
-- benchmark 解釈: [external_benchmark_targets.md](external_benchmark_targets.md)
-- 外部データ拡張: [netkeiba_dataset_extension.md](netkeiba_dataset_extension.md)
+### 3.7 Artifact Layer
+
+主な実装:
+
+- `src/racing_ml/common/artifacts.py`
+- `scripts/run_bundle_models.py`
+- `scripts/run_build_value_stack.py`
+- `src/racing_ml/pipeline/bundle_pipeline.py`
+
+標準 artifact:
+
+- model: `artifacts/models/*.joblib`
+- report: `artifacts/reports/*.json`
+- manifest: `artifacts/models/*.manifest.json`
+- evaluation latest:
+  - `artifacts/reports/evaluation_summary.json`
+  - `artifacts/reports/evaluation_by_date.csv`
+- evaluation versioned:
+  - `artifacts/reports/evaluation_summary_<model>.json`
+  - `artifacts/reports/evaluation_by_date_<model>.csv`
+
+現在の model artifact は bare estimator ではなく dict bundle の場合があります。典型的には以下を持ちます。
+
+- `kind`
+- `task`
+- `feature_columns`
+- `categorical_columns`
+- `model`
+- `prep`
+
+## 4. netkeiba 拡張ライン
+
+主な実装:
+
+- `scripts/run_prepare_netkeiba_ids.py`
+- `src/racing_ml/data/netkeiba_id_prep.py`
+- `scripts/run_collect_netkeiba.py`
+- `src/racing_ml/data/netkeiba_crawler.py`
+- `scripts/run_backfill_netkeiba.py`
+- `src/racing_ml/data/netkeiba_backfill.py`
+- `scripts/run_netkeiba_benchmark_gate.py`
+- `scripts/run_netkeiba_wait_then_cycle.py`
+
+流れ:
+
+1. training table から race_id / horse_key 候補を抽出
+2. `race_result` / `race_card` / `pedigree` を crawl
+3. canonical CSV と raw HTML を保存
+4. coverage snapshot を生成
+5. readiness が満たされると train/evaluate を自動実行
+
+運用上の特徴:
+
+- lock file で同時 crawl を防止します
+- manifest で途中状態と stale 状態を追跡します
+- `wait_then_cycle` で既存バッチ完了待ち後に 1 cycle + benchmark gate を自動接続できます
+
+現在の target:
+
+- `race_result`
+- `race_card`
+- `pedigree`
+
+## 5. 現在の主力構成
+
+2026-03-11 時点で最新の mainline benchmark は次です。
+
+- model config:
+  - `configs/model_catboost_fundamental_enriched.yaml`
+- feature config:
+  - `configs/features_catboost_fundamental_enriched.yaml`
+- artifact manifest:
+  - `artifacts/models/catboost_fundamental_enriched_win_model.manifest.json`
+- latest summary:
+  - `artifacts/reports/evaluation_summary.json`
+
+この構成の特徴:
+
+- CatBoost classification
+- `all_safe` feature selection
+- 91 features
+- categorical 36 列
+- lineage 系を force-include している
+
+最新 summary の主要値:
+
+- `top1_roi = 0.77148`
+- `ev_top1_roi = 0.42636`
+- `auc = 0.75738`
+- `logloss = 0.22860`
+- `model_pseudo_r2 = 0.11228`
+- `benter_delta_pseudo_r2 = -0.001019`
+
+## 6. 直近の外部データ拡張結果
+
+2017 年ウィンドウの safe wait-then-cycle 後の主要状態:
+
+- handoff manifest:
+  - `artifacts/reports/netkeiba_backfill_handoff_manifest.json`
+- coverage snapshot:
+  - `artifacts/reports/netkeiba_coverage_snapshot.json`
+
+反映内容:
+
+- `race_result`: 100/100, rows 23512
+- `race_card`: 100/100, rows 23512
+- `pedigree`: 500/500, rows 6855, unique horse_key 6355
+
+coverage snapshot:
+
+- latest tail の `breeder_name` / `sire_name` / `dam_name` / `damsire_name` non-null ratio = `0.902`
+- paired race subset では同 ratio = `0.736047`
+
+## 7. 現在のボトルネック
+
+直近の検証で重要だった点は、coverage 改善と ROI 改善が一致していないことです。
+
+### 7.1 いま起きていること
+
+- 2017 まで遡る backfill で lineage raw coverage は大きく改善しました。
+- しかし mainline enriched benchmark の ROI は悪化しました。
+- mainline artifact では以下が low-coverage force-include として残っています。
+  - `breeder_last_50_win_rate`
+  - `sire_last_100_win_rate`
+  - `sire_last_100_avg_rank`
+  - `damsire_last_100_win_rate`
+  - `sire_track_distance_last_80_win_rate`
+
+### 7.2 診断結果
+
+診断用 no-lineage ablation では以下を除外しました。
+
+- `breeder_last_50_win_rate`
+- `sire_last_100_win_rate`
+- `sire_last_100_avg_rank`
+- `damsire_last_100_win_rate`
+- `sire_track_distance_last_80_win_rate`
+
+結果:
+
+- no-lineage summary:
+  - `artifacts/reports/evaluation_summary_catboost_fundamental_enriched_no_lineage_win.json`
+- 改善した値:
+  - `top1_roi = 0.78123`
+  - `ev_top1_roi = 0.45969`
+  - `benter_delta_pseudo_r2 = -0.000326`
+- 悪化した値:
+  - `auc = 0.75708`
+  - `logloss = 0.22864`
+  - `model_pseudo_r2 = 0.10016`
+
+解釈:
+
+- 現在の lineage 特徴は ranking / calibration には少し寄与しても、単勝 ROI には逆風になっている可能性が高いです。
+- したがって次の打ち手は「さらに古い年を盲目的に backfill」ではなく、lineage の利用条件見直しです。
+
+## 8. 現在の優先課題
+
+1. lineage 特徴の coverage-based gating か一時除外を repo 側の設定として固定化する
+2. 古い年より先に、新しい年の欠損や最新側の不足を優先して埋める
+3. benchmark と policy の両面で再評価し、ROI>1 に近づく構成を選別する
+4. no-lineage が再現良好なら mainline config を置き換える、または派生 config を正式化する
+
+## 9. よく使う実行入口
+
+```bash
+python scripts/run_ingest.py --config configs/data.yaml
+python scripts/run_train.py --config configs/model_catboost_fundamental_enriched.yaml --data-config configs/data.yaml --feature-config configs/features_catboost_fundamental_enriched.yaml
+python scripts/run_evaluate.py --config configs/model_catboost_fundamental_enriched.yaml --data-config configs/data.yaml --feature-config configs/features_catboost_fundamental_enriched.yaml --max-rows 200000 --wf-mode off
+python scripts/run_predict.py --config configs/model_catboost.yaml --data-config configs/data.yaml --feature-config configs/features_catboost_rich.yaml --race-date 2021-07-31
+python scripts/run_backfill_netkeiba.py --data-config configs/data.yaml --crawl-config configs/crawl_netkeiba_template.yaml --date-order desc --race-batch-size 100 --pedigree-batch-size 500
+```
+
+## 10. 要点まとめ
+
+- repo は現在、multi-source tabular ML pipeline として成立しています。
+- baseline は LightGBM ですが、本命運用面は CatBoost-first です。
+- ROI は単なる精度の副産物ではなく、評価フローに明示的に組み込まれています。
+- 最大の技術課題は「lineage coverage を増やすこと」そのものではなく、「lineage を ROI に効く形で使えるか」です。
+- 次の改善余地は blind backfill より、特徴量利用条件と最新側データ補完の最適化にあります。
