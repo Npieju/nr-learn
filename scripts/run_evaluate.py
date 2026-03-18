@@ -191,6 +191,44 @@ def _safe_regression_corr(y_true: np.ndarray, y_pred: np.ndarray) -> float | Non
     return float(np.corrcoef(y_true[finite_mask], y_pred[finite_mask])[0, 1])
 
 
+def _date_window_payload(frame: pd.DataFrame) -> dict[str, str | int | None]:
+    if "date" not in frame.columns:
+        return {
+            "start_date": None,
+            "end_date": None,
+            "start_month": None,
+            "end_month": None,
+        }
+
+    date_series = pd.to_datetime(frame["date"], errors="coerce").dropna().sort_values().reset_index(drop=True)
+    if date_series.empty:
+        return {
+            "start_date": None,
+            "end_date": None,
+            "start_month": None,
+            "end_month": None,
+        }
+
+    start_ts = pd.Timestamp(date_series.iloc[0])
+    end_ts = pd.Timestamp(date_series.iloc[-1])
+    return {
+        "start_date": str(start_ts.date()),
+        "end_date": str(end_ts.date()),
+        "start_month": int(start_ts.month),
+        "end_month": int(end_ts.month),
+    }
+
+
+def _prefix_window_payload(
+    prefix: str,
+    window_payload: dict[str, str | int | None] | None,
+) -> dict[str, str | int | None]:
+    keys = ("start_date", "end_date", "start_month", "end_month")
+    if not isinstance(window_payload, dict):
+        return {f"{prefix}_{key}": None for key in keys}
+    return {f"{prefix}_{key}": window_payload.get(key) for key in keys}
+
+
 def _record_single_wf_summary(
     summary: dict[str, object],
     best_params: dict[str, float | str],
@@ -279,7 +317,15 @@ def _fold_row(
     fold_test_metrics: dict[str, float | int | None],
     fold_index: int,
     score_source: str = "default",
+    train_window: dict[str, str | int | None] | None = None,
+    valid_window: dict[str, str | int | None] | None = None,
+    test_window: dict[str, str | int | None] | None = None,
 ) -> dict[str, float | int | str | None]:
+    window_fields = {
+        **_prefix_window_payload("train", train_window),
+        **_prefix_window_payload("valid", valid_window),
+        **_prefix_window_payload("test", test_window),
+    }
     if strategy_kind == "kelly":
         return {
             "fold": int(fold_index),
@@ -303,6 +349,7 @@ def _fold_row(
             "min_edge": float(best_params.get("min_edge", 0.03)),
             "fractional_kelly": float(best_params.get("fractional_kelly", 0.5)),
             "max_fraction": float(best_params.get("max_fraction", 0.05)),
+            **window_fields,
         }
     if strategy_kind == "portfolio":
         return {
@@ -326,6 +373,7 @@ def _fold_row(
             "odds_max": float(best_params.get("odds_max", 999.0)),
             "top_k": int(best_params.get("top_k", 2)),
             "min_expected_value": float(best_params.get("min_expected_value", 1.0)),
+            **window_fields,
         }
     return {
         "fold": int(fold_index),
@@ -346,6 +394,7 @@ def _fold_row(
         "min_prob": None,
         "odds_min": None,
         "odds_max": None,
+        **window_fields,
     }
 
 
@@ -772,6 +821,9 @@ def main() -> int:
                     summary["wf_train_rows"] = int(len(wf_train))
                     summary["wf_valid_rows"] = int(len(wf_valid))
                     summary["wf_test_rows"] = int(len(wf_test))
+                    summary["wf_train_window"] = _date_window_payload(wf_train)
+                    summary["wf_valid_window"] = _date_window_payload(wf_valid)
+                    summary["wf_test_window"] = _date_window_payload(wf_test)
                     summary["wf_mode"] = args.wf_mode
                     summary["wf_scheme"] = args.wf_scheme
                     summary["wf_constraints_min_bet_ratio"] = float(policy_constraints.min_bet_ratio)
@@ -843,6 +895,9 @@ def main() -> int:
                                 fold_progress.start(message="nested folds started")
                                 log_progress(f"Nested WF started: folds={len(nested_slices)}")
                                 for fold_index, (fold_train, fold_valid, fold_test) in enumerate(nested_slices, start=1):
+                                    fold_train_window = _date_window_payload(fold_train)
+                                    fold_valid_window = _date_window_payload(fold_valid)
+                                    fold_test_window = _date_window_payload(fold_test)
                                     fold_score_source = _resolve_score_source_name(
                                         score_regime_overrides_cfg,
                                         frame=fold_valid,
@@ -886,6 +941,9 @@ def main() -> int:
                                             fold_test_metrics,
                                             fold_index,
                                             score_source=fold_score_source,
+                                            train_window=fold_train_window,
+                                            valid_window=fold_valid_window,
+                                            test_window=fold_test_window,
                                         )
                                     )
                                     fold_progress.update(message=f"fold {fold_index} complete")
