@@ -6,6 +6,7 @@ from typing import Any
 import pandas as pd
 
 from racing_ml.data.dataset_loader import load_training_table
+from racing_ml.data.netkeiba_race_list import discover_netkeiba_race_ids_from_race_list
 
 
 RACE_TARGET_NAMES = ("race_result", "race_card")
@@ -71,6 +72,27 @@ def _collect_existing_values(path: Path, column_name: str) -> set[str]:
     }
 
 
+def _collect_completed_values_for_targets(
+    *,
+    selected_targets: list[str],
+    targets: dict[str, Any],
+    base_dir: Path,
+    column_name: str,
+) -> set[str]:
+    completed_sets: list[set[str]] = []
+    for target_name in selected_targets:
+        target_cfg = targets.get(target_name, {})
+        output_file = target_cfg.get("output_file")
+        if not output_file:
+            completed_sets.append(set())
+            continue
+        completed_sets.append(_collect_existing_values(_resolve_path(output_file, base_dir), column_name))
+
+    if not completed_sets or not all(completed_sets):
+        return set()
+    return set.intersection(*completed_sets)
+
+
 def _select_target_names(target_filter: str | None, targets: dict[str, Any], allowed: tuple[str, ...]) -> list[str]:
     if target_filter in {None, "all"}:
         return [name for name in allowed if name in targets]
@@ -125,18 +147,12 @@ def _build_race_id_frame(
 
     completed_ids: set[str] = set()
     if pending_only and selected_targets:
-        completed_sets: list[set[str]] = []
-        for target_name in selected_targets:
-            target_cfg = targets.get(target_name, {})
-            output_file = target_cfg.get("output_file")
-            if not output_file:
-                completed_sets.append(set())
-                continue
-            completed_sets.append(
-                _collect_existing_values(_resolve_path(output_file, base_dir), "race_id")
-            )
-        if completed_sets:
-            completed_ids = set.intersection(*completed_sets) if all(completed_sets) else set()
+        completed_ids = _collect_completed_values_for_targets(
+            selected_targets=selected_targets,
+            targets=targets,
+            base_dir=base_dir,
+            column_name="race_id",
+        )
 
     if completed_ids:
         work = work[~work["race_id"].isin(completed_ids)]
@@ -234,42 +250,85 @@ def prepare_netkeiba_ids_from_config(
     include_completed: bool = False,
     training_frame: pd.DataFrame | None = None,
     date_order: str = "asc",
+    race_id_source: str = "training_table",
+    refresh: bool = False,
+    parse_only: bool = False,
 ) -> dict[str, Any]:
     crawl_cfg = _resolve_crawl_config(crawl_config)
     targets = crawl_cfg.get("targets")
     if not isinstance(targets, dict) or not targets:
         raise ValueError("crawl.targets must contain at least one target")
 
-    if training_frame is None:
-        dataset_cfg = data_config.get("dataset", data_config)
-        raw_dir = dataset_cfg.get("raw_dir", "data/raw")
-        working_frame = load_training_table(raw_dir, dataset_config=data_config, base_dir=base_dir)
-    else:
-        working_frame = training_frame.copy()
-    working_frame = _filter_by_date(working_frame, start_date, end_date)
+    normalized_race_id_source = str(race_id_source).strip().lower() or "training_table"
+    if normalized_race_id_source not in {"training_table", "race_list"}:
+        raise ValueError(f"Unsupported race_id_source: {race_id_source}")
 
     explicit_targets = _normalize_target_names(target_names, targets)
+    selected_race_targets = explicit_targets or _select_target_names(target_filter, targets, RACE_TARGET_NAMES)
+    selected_race_targets = [target_name for target_name in selected_race_targets if target_name in RACE_TARGET_NAMES]
+    if explicit_targets:
+        selected_pedigree_targets = [target_name for target_name in explicit_targets if target_name == "pedigree"]
+    else:
+        selected_pedigree_targets = _select_target_names(target_filter, targets, ("pedigree",))
+
+    needs_training_frame = bool(selected_pedigree_targets) or (
+        bool(selected_race_targets) and normalized_race_id_source == "training_table"
+    )
+    if needs_training_frame:
+        if training_frame is None:
+            dataset_cfg = data_config.get("dataset", data_config)
+            raw_dir = dataset_cfg.get("raw_dir", "data/raw")
+            working_frame = load_training_table(raw_dir, dataset_config=data_config, base_dir=base_dir)
+        else:
+            working_frame = training_frame.copy()
+        working_frame = _filter_by_date(working_frame, start_date, end_date)
+    else:
+        working_frame = pd.DataFrame()
 
     summary: dict[str, Any] = {
         "target_filter": target_filter or "all",
         "target_names": explicit_targets,
         "date_window": {"start": start_date, "end": end_date},
         "date_order": str(date_order),
+        "race_id_source": normalized_race_id_source,
         "reports": [],
     }
 
-    selected_race_targets = explicit_targets or _select_target_names(target_filter, targets, RACE_TARGET_NAMES)
-    selected_race_targets = [target_name for target_name in selected_race_targets if target_name in RACE_TARGET_NAMES]
     if selected_race_targets:
-        race_frame = _build_race_id_frame(
-            working_frame,
-            selected_targets=selected_race_targets,
-            targets=targets,
-            base_dir=base_dir,
-            pending_only=not include_completed,
-            limit=limit,
-            date_order=date_order,
-        )
+        race_source_report: dict[str, Any] | None = None
+        if normalized_race_id_source == "race_list":
+            if not start_date:
+                raise ValueError("race_id_source='race_list' requires start_date")
+            completed_ids = set()
+            if not include_completed:
+                completed_ids = _collect_completed_values_for_targets(
+                    selected_targets=selected_race_targets,
+                    targets=targets,
+                    base_dir=base_dir,
+                    column_name="race_id",
+                )
+            race_frame, race_source_report = discover_netkeiba_race_ids_from_race_list(
+                crawl_config,
+                base_dir=base_dir,
+                start_date=start_date,
+                end_date=end_date or start_date,
+                limit=limit,
+                date_order=date_order,
+                exclude_race_ids=completed_ids,
+                refresh=refresh,
+                parse_only=parse_only,
+            )
+        else:
+            race_frame = _build_race_id_frame(
+                working_frame,
+                selected_targets=selected_race_targets,
+                targets=targets,
+                base_dir=base_dir,
+                pending_only=not include_completed,
+                limit=limit,
+                date_order=date_order,
+            )
+
         id_paths = {
             _resolve_path(str(targets[target_name].get("id_file")), base_dir)
             for target_name in selected_race_targets
@@ -277,19 +336,17 @@ def prepare_netkeiba_ids_from_config(
         }
         for path in id_paths:
             _write_id_frame(race_frame, path)
-        summary["reports"].append(
-            {
-                "kind": "race_ids",
-                "targets": selected_race_targets,
-                "row_count": int(len(race_frame)),
-                "output_files": [str(path) for path in sorted(id_paths)],
-            }
-        )
+        report = {
+            "kind": "race_ids",
+            "targets": selected_race_targets,
+            "row_count": int(len(race_frame)),
+            "output_files": [str(path) for path in sorted(id_paths)],
+            "source": normalized_race_id_source,
+        }
+        if race_source_report is not None:
+            report["source_report"] = race_source_report
+        summary["reports"].append(report)
 
-    if explicit_targets:
-        selected_pedigree_targets = [target_name for target_name in explicit_targets if target_name == "pedigree"]
-    else:
-        selected_pedigree_targets = _select_target_names(target_filter, targets, ("pedigree",))
     if selected_pedigree_targets:
         horse_key_frame = _build_horse_key_frame(
             working_frame,

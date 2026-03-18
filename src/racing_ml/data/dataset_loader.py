@@ -22,7 +22,7 @@ COLUMN_ALIASES = {
     "ground_condition": ["ground_condition", "condition", "track_condition", "馬場状態1", "馬場状態2"],
     "age": ["age", "馬齢"],
     "sex": ["sex", "gender", "性別"],
-    "weight": ["weight", "horse_weight", "body_weight", "馬体重", "斤量"],
+    "weight": ["weight", "horse_weight", "body_weight", "馬体重"],
     "odds": ["odds", "単勝", "単勝オッズ"],
     "popularity": ["popularity", "人気", "人気順"],
     "finish_time": ["finish_time", "タイム"],

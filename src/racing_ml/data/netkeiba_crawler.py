@@ -29,7 +29,20 @@ WEATHER_PATTERN = re.compile(r"天候\s*:\s*(?P<weather>[^\s/]+)")
 GROUND_PATTERN = re.compile(r"(?:芝|ダート|障害)\s*:\s*(?P<ground>[^\s/]+)")
 RACECARD_GROUND_PATTERN = re.compile(r"馬場\s*:\s*(?P<ground>[^\s/|]+)")
 BRACKET_PREFIX_PATTERN = re.compile(r"^\[[^\]]+\]\s*")
+BRACKET_PREFIX_CAPTURE_PATTERN = re.compile(r"^\[(?P<prefix>[^\]]+)\]\s*")
 SAFE_FILENAME_PATTERN = re.compile(r"[^0-9A-Za-z._-]+")
+FULLWIDTH_DIGIT_TRANSLATION = str.maketrans("０１２３４５６７８９", "0123456789")
+CLASS_TOKEN_REGEX = (
+    r"未出走|新馬|未勝利|300万下|400万下|500万下|600万下|700万下|"
+    r"800万下|900万下|1000万下|1400万下|1500万下|1600万下|"
+    r"1勝クラス|2勝クラス|3勝クラス|オープン|OPEN|OP"
+)
+CONDITION_WITH_AGE_PATTERN = re.compile(
+    fr"(?P<age_group>(?:障害)?\d歳(?:以上|上)?)\s*(?P<class_token>{CLASS_TOKEN_REGEX})"
+)
+CLASS_TOKEN_PATTERN = re.compile(fr"(?P<class_token>{CLASS_TOKEN_REGEX})")
+RACE_GRADE_PATTERN = re.compile(r"\((?P<grade>(?:J\.?)?G(?:III|II|I|3|2|1)|L)\)")
+SURFACE_PATTERN = re.compile(r"(?P<surface>芝|ダート|ダ|障害)(?:\s*(?:右|左|直線|\d))")
 JRA_VENUES = (
     "札幌",
     "函館",
@@ -58,6 +71,7 @@ class RequestSettings:
 
 def _normalize_text(value: object) -> str:
     text = str(value or "")
+    text = text.translate(FULLWIDTH_DIGIT_TRANSLATION)
     text = text.replace("\xa0", " ").replace("\u3000", " ").replace("\r", " ").replace("\n", " ")
     text = re.sub(r"\s+", " ", text)
     return text.strip()
@@ -118,6 +132,15 @@ def _strip_bracket_prefix(text: str | None) -> str | None:
     return stripped or None
 
 
+def _extract_bracket_prefix(text: str | None) -> str | None:
+    if text is None:
+        return None
+    match = BRACKET_PREFIX_CAPTURE_PATTERN.match(_normalize_text(text))
+    if match is None:
+        return None
+    return match.group("prefix") or None
+
+
 def _extract_racecard_date(soup: BeautifulSoup) -> str | None:
     date_container = soup.find("div", class_="RaceList_Date")
     if date_container is None:
@@ -139,6 +162,104 @@ def _extract_racecard_date(soup: BeautifulSoup) -> str | None:
     return f"{value[0:4]}-{value[4:6]}-{value[6:8]}"
 
 
+def _extract_race_title(soup: BeautifulSoup) -> str | None:
+    title_tag = soup.find("title")
+    title_text = _normalize_text(title_tag.get_text(" ", strip=True) if title_tag is not None else "")
+    if not title_text:
+        return None
+
+    title_text = re.split(r"\s*[｜|]\s*", title_text, maxsplit=1)[0]
+
+    title_text = re.sub(r"\s*出馬表\s*$", "", title_text)
+    title_text = re.sub(r"\s*-\s*netkeiba\s*$", "", title_text)
+    return title_text or None
+
+
+def _extract_class_condition(*texts: str | None) -> str | None:
+    for raw_text in texts:
+        text = _normalize_text(raw_text).replace("サラ系", "")
+        if not text:
+            continue
+        match = CONDITION_WITH_AGE_PATTERN.search(text)
+        if match is not None:
+            return f"{match.group('age_group')}{match.group('class_token')}"
+
+    for raw_text in texts:
+        text = _normalize_text(raw_text)
+        if not text:
+            continue
+        match = CLASS_TOKEN_PATTERN.search(text)
+        if match is not None:
+            return match.group("class_token")
+
+    return None
+
+
+def _normalize_stakes_grade(value: str | None) -> str | None:
+    if value is None:
+        return None
+    text = _normalize_text(value).upper()
+    if not text:
+        return None
+
+    if text.startswith("JG"):
+        text = text.replace("JG", "J.G", 1)
+
+    replacements = {
+        "J.GIII": "J.G3",
+        "J.GII": "J.G2",
+        "J.GI": "J.G1",
+        "GIII": "G3",
+        "GII": "G2",
+        "GI": "G1",
+    }
+    return replacements.get(text, text)
+
+
+def _extract_stakes_grade(*texts: str | None) -> str | None:
+    for raw_text in texts:
+        text = _normalize_text(raw_text)
+        if not text:
+            continue
+        match = RACE_GRADE_PATTERN.search(text)
+        if match is not None:
+            return _normalize_stakes_grade(match.group("grade"))
+    return None
+
+
+def _extract_surface(text: str | None) -> str | None:
+    normalized = _normalize_text(text)
+    if not normalized:
+        return None
+    match = SURFACE_PATTERN.search(normalized)
+    if match is None:
+        return None
+    surface = match.group("surface")
+    if surface == "ダ":
+        return "ダート"
+    return surface
+
+
+def _extract_course_direction(text: str | None) -> str | None:
+    normalized = _normalize_text(text)
+    if not normalized:
+        return None
+    for token in ("直線", "右", "左"):
+        if token in normalized:
+            return token
+    return None
+
+
+def _extract_course_side(text: str | None) -> str | None:
+    normalized = _normalize_text(text)
+    if not normalized:
+        return None
+    for token in ("外内", "内外", "外", "内", "襷"):
+        if re.search(fr"(?:^|[\s(/]){token}(?:$|[\s)A-D])", normalized):
+            return token
+    return None
+
+
 def _extract_race_metadata(soup: BeautifulSoup) -> dict[str, Any]:
     intro = soup.find("div", class_="data_intro")
     intro_text = _normalize_text(intro.get_text(" ", strip=True) if intro is not None else "")
@@ -148,8 +269,15 @@ def _extract_race_metadata(soup: BeautifulSoup) -> dict[str, Any]:
     race_data_01_text = _normalize_text(race_data_01.get_text(" ", strip=True) if race_data_01 is not None else "")
     race_data_02 = soup.find("div", class_="RaceData02")
     race_data_02_text = _normalize_text(race_data_02.get_text(" ", strip=True) if race_data_02 is not None else "")
+    race_name_node = soup.find("h1", class_="RaceName")
+    if race_name_node is None and intro is not None:
+        race_name_node = intro.find("h1")
+    race_name_text = _normalize_text(race_name_node.get_text(" ", strip=True) if race_name_node is not None else "")
+    race_title = _extract_race_title(soup)
     page_text = " ".join(
-        text for text in [intro_text, smalltxt_text, race_data_01_text, race_data_02_text] if text
+        text
+        for text in [intro_text, smalltxt_text, race_data_01_text, race_data_02_text, race_name_text, race_title]
+        if text
     ).strip()
 
     date_match = DATE_PATTERN.search(page_text)
@@ -172,6 +300,8 @@ def _extract_race_metadata(soup: BeautifulSoup) -> dict[str, Any]:
     )
     venue_text = smalltxt_text or race_data_02_text or page_text
     venue = next((venue_name for venue_name in JRA_VENUES if venue_name in venue_text), None)
+    course_text = intro_text or race_data_01_text
+    surface = _extract_surface(course_text)
 
     return {
         "date": date_value,
@@ -179,6 +309,12 @@ def _extract_race_metadata(soup: BeautifulSoup) -> dict[str, Any]:
         "distance": distance_match.group("distance") if distance_match is not None else None,
         "weather": weather_match.group("weather") if weather_match is not None else None,
         "ground_condition": ground_match.group("ground") if ground_match is not None else None,
+        "競争条件": _extract_class_condition(smalltxt_text, race_data_02_text, race_title),
+        "リステッド・重賞競走": _extract_stakes_grade(race_name_text, race_title),
+        "芝・ダート区分": surface,
+        "芝・ダート区分2": None,
+        "右左回り・直線区分": _extract_course_direction(course_text),
+        "内・外・襷区分": _extract_course_side(course_text),
     }
 
 
@@ -236,13 +372,14 @@ def parse_netkeiba_race_result_html(html: str, race_id: str) -> pd.DataFrame:
         "馬番": "gate_no",
         "馬名": "horse_name",
         "性齢": "sex_age",
-        "斤量": "weight",
+        "斤量": "斤量",
         "騎手": "jockey_id",
         "タイム": "finish_time",
         "通過": "passing_order",
         "上り": "closing_time_3f",
         "単勝": "odds",
         "人気": "popularity",
+        "馬体重": "weight",
         "調教師": "trainer_id",
         "馬主": "owner_name",
     }
@@ -267,8 +404,10 @@ def parse_netkeiba_race_result_html(html: str, race_id: str) -> pd.DataFrame:
         horse_key = _extract_anchor_id(row_tag, HORSE_LINK_PATTERN)
         horse_name = _extract_anchor_text(row_tag, HORSE_LINK_PATTERN) or raw_row.get("horse_name")
         jockey_name = _extract_anchor_text(row_tag, JOCKEY_LINK_PATTERN) or raw_row.get("jockey_id")
-        trainer_name = _extract_anchor_text(row_tag, TRAINER_LINK_PATTERN) or raw_row.get("trainer_id")
+        trainer_raw_text = raw_row.get("trainer_id")
+        trainer_name = _extract_anchor_text(row_tag, TRAINER_LINK_PATTERN) or trainer_raw_text
         owner_name = _extract_anchor_text(row_tag, OWNER_LINK_PATTERN) or raw_row.get("owner_name")
+        trainer_region = _extract_bracket_prefix(trainer_raw_text or trainer_name)
 
         row: dict[str, Any] = {
             **metadata,
@@ -281,10 +420,12 @@ def parse_netkeiba_race_result_html(html: str, race_id: str) -> pd.DataFrame:
             "gate_no": raw_row.get("gate_no"),
             "sex": sex,
             "age": age,
+            "斤量": raw_row.get("斤量"),
             "weight": raw_row.get("weight"),
             "jockey_id": jockey_name,
             "jockey_key": _extract_anchor_id(row_tag, JOCKEY_LINK_PATTERN),
-            "trainer_id": _strip_bracket_prefix(trainer_name),
+            "東西・外国・地方区分": trainer_region,
+            "trainer_id": _strip_bracket_prefix(trainer_raw_text or trainer_name),
             "trainer_key": _extract_anchor_id(row_tag, TRAINER_LINK_PATTERN),
             "owner_name": owner_name,
             "owner_key": _extract_anchor_id(row_tag, OWNER_LINK_PATTERN),
@@ -316,9 +457,11 @@ def parse_netkeiba_race_card_html(html: str, race_id: str) -> pd.DataFrame:
         "馬番": "gate_no",
         "馬名": "horse_name",
         "性齢": "sex_age",
-        "斤量": "weight",
+        "斤量": "斤量",
         "騎手": "jockey_id",
         "厩舎": "trainer_id",
+        "馬体重(増減)": "weight",
+        "馬体重": "weight",
     }
 
     rows: list[dict[str, Any]] = []
@@ -345,7 +488,9 @@ def parse_netkeiba_race_card_html(html: str, race_id: str) -> pd.DataFrame:
         horse_key = _extract_anchor_id(row_tag, HORSE_LINK_PATTERN)
         horse_name = _extract_anchor_text(row_tag, HORSE_LINK_PATTERN) or raw_row.get("horse_name")
         jockey_name = _extract_anchor_text(row_tag, JOCKEY_LINK_PATTERN) or raw_row.get("jockey_id")
-        trainer_name = _extract_anchor_text(row_tag, TRAINER_LINK_PATTERN) or raw_row.get("trainer_id")
+        trainer_raw_text = raw_row.get("trainer_id")
+        trainer_name = _extract_anchor_text(row_tag, TRAINER_LINK_PATTERN) or trainer_raw_text
+        trainer_region = _extract_bracket_prefix(trainer_raw_text or trainer_name)
 
         rows.append(
             {
@@ -358,10 +503,12 @@ def parse_netkeiba_race_card_html(html: str, race_id: str) -> pd.DataFrame:
                 "gate_no": raw_row.get("gate_no"),
                 "sex": sex,
                 "age": age,
+                "斤量": raw_row.get("斤量"),
                 "weight": raw_row.get("weight"),
                 "jockey_id": jockey_name,
                 "jockey_key": _extract_anchor_id(row_tag, JOCKEY_LINK_PATTERN),
-                "trainer_id": _strip_bracket_prefix(trainer_name),
+                "東西・外国・地方区分": trainer_region,
+                "trainer_id": _strip_bracket_prefix(trainer_raw_text or trainer_name),
                 "trainer_key": _extract_anchor_id(row_tag, TRAINER_LINK_PATTERN),
             }
         )

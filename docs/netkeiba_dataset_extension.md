@@ -128,3 +128,15 @@ column_aliases:
 - `horse_last_3_avg_corner_2_position`, `horse_last_3_avg_corner_2_ratio`, `horse_last_3_avg_corner_gain_2_to_4` の低 coverage は、主に 2C 自体が無いレース構造に由来していた。builder 側では `corner_2_position` が無いとき earliest available pre-stretch corner (`corner_1_position` / `corner_3_position`) に fallback するよう補正済み。
 - 既存 JRA raw の `corner_passing_order.csv` を supplemental として有効化しても coverage 改善は小さく、benchmark 指標はほぼ不変だったため、次の投資先は pedigree 系が優先。
 - ただし pedigree を 2021 帯だけ backfill しても、現行 split (`train_end=2019-12-31`) の train 側には lineage raw が入らない。したがって `breeder_last_50_*`, `sire_last_100_*`, `damsire_last_100_*`, `sire_track_distance_last_80_win_rate` は train では学習できず、valid 側だけで見えても importance は伸びにくい。次の本命は pre-2020 側への pedigree backfill 拡張。
+
+## 9. 2026-03-12 時点の最新年側ボトルネック
+- loader 自体は `append_tables` で外部 row append を受けられるため、2022 以降のレースを取り込む受け皿はすでにある。
+- 2026-03-12 時点で [scripts/run_prepare_netkeiba_ids.py](/workspaces/nr-learn/scripts/run_prepare_netkeiba_ids.py) と [scripts/run_backfill_netkeiba.py](/workspaces/nr-learn/scripts/run_backfill_netkeiba.py) に `--race-id-source race_list` を追加した。
+- race list source は [src/racing_ml/data/netkeiba_race_list.py](/workspaces/nr-learn/src/racing_ml/data/netkeiba_race_list.py) で netkeiba mobile の `race_list` ページを日付単位に取得し、headline の race links から `race_id` を抽出する。
+- mobile の `race_list` HTML は 1 ページ内に複数開催日の `RaceListDayWrap` を持つため、parser 側では `data-kaisaidate` が要求日付と一致する scope だけを読む。単純にページ全体の anchor を舐めると、別開催日の `race_id` を同じ `kaisai_date` に誤帰属させる。
+- これにより、主表が `2021-07-31` で止まっていても、2022-2026 の race IDs を外生的に起こして既存の `race_result` / `race_card` / `pedigree` backfill へ接続できる。
+- 既存の training table source はそのまま残してあり、`--race-id-source training_table` が従来挙動である。
+- 2026-03-12 の実地検証では `2024-01-08` の 1 day / 1 cycle backfill を完走し、`race_result` / `race_card` に 24 レース 363 行ずつ追加、loader 全体の `date_max` は `2024-01-08` まで伸びた。
+- その後 `2024-01-01..2024-03-31` を `--race-id-source race_list --skip-pedigree --max-cycles 3` で拡張し、外部出力は `race_result` / `race_card` ともに 2,146 races / 32,571 rows で整合した。coverage snapshot も `benchmark_rerun_ready=true` まで回復し、recent benchmark を実運用できる状態になった。
+- loader 上でも recent Q1 slice は 588 races / 8,147 rows まで増えたが、latest tail の lineage raw coverage (`breeder_name` / `sire_name` / `dam_name` / `damsire_name`) は依然 `0.1202` しかない。つまり race_result / race_card の recent 拡張だけでは pedigree 系 bottleneck は解消しない。
+- したがって最新年側の主ボトルネックは race ID 発見ではなく、どの年・期間を優先して crawl し benchmark rerun するかの運用判断へ移った。

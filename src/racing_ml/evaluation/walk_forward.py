@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import time
-from typing import Callable
+from typing import Any, Callable
 
 import numpy as np
 import pandas as pd
@@ -9,6 +9,7 @@ from sklearn.isotonic import IsotonicRegression
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import log_loss
 
+from racing_ml.common.regime import resolve_regime_override
 from racing_ml.evaluation.policy import (
     PolicyConstraints,
     apply_selection_mode,
@@ -20,6 +21,70 @@ from racing_ml.evaluation.policy import (
 
 
 Logger = Callable[[str], None] | None
+
+
+def _resolve_search_candidate_values(
+    search_config: dict[str, Any] | None,
+    *,
+    mode: str,
+    key: str,
+    default: list[float | int],
+    cast: Callable[[Any], float | int],
+) -> list[float | int]:
+    if not isinstance(search_config, dict):
+        return list(default)
+
+    merged: dict[str, Any] = {}
+    for config_key, config_value in search_config.items():
+        if isinstance(config_value, dict):
+            continue
+        merged[config_key] = config_value
+
+    mode_value = search_config.get(str(mode).strip().lower())
+    if isinstance(mode_value, dict):
+        merged.update(mode_value)
+
+    raw_values = merged.get(key)
+    if not isinstance(raw_values, (list, tuple)):
+        return list(default)
+
+    resolved: list[float | int] = []
+    for raw_value in raw_values:
+        try:
+            resolved_value = cast(raw_value)
+        except Exception:
+            continue
+        if resolved_value in resolved:
+            continue
+        resolved.append(resolved_value)
+
+    return resolved or list(default)
+
+
+def _resolve_regime_search_config(
+    search_config: dict[str, Any] | None,
+    *,
+    frame: pd.DataFrame,
+    date_col: str = "date",
+) -> dict[str, Any] | None:
+    if not isinstance(search_config, dict):
+        return search_config
+
+    overrides = search_config.get("regime_overrides")
+    if not isinstance(overrides, list) or not overrides:
+        return search_config
+
+    resolved = {key: value for key, value in search_config.items() if key != "regime_overrides"}
+    override = resolve_regime_override(overrides, frame=frame, date_col=date_col)
+    if not isinstance(override, dict):
+        return resolved
+
+    for key, value in override.items():
+        if key in {"when", "name"}:
+            continue
+        resolved[key] = value
+
+    return resolved
 
 
 def split_for_calibration(frame: pd.DataFrame, date_col: str = "date", train_ratio: float = 0.7) -> tuple[pd.DataFrame, pd.DataFrame]:
@@ -183,9 +248,11 @@ def optimize_roi_strategy(
     odds_col: str,
     constraints: PolicyConstraints,
     mode: str = "fast",
+    search_config: dict[str, Any] | None = None,
     progress_interval_sec: float = 5.0,
     logger: Logger = None,
-) -> tuple[dict[str, float], dict[str, float | int | None]]:
+) -> tuple[dict[str, float | str], dict[str, float | int | None]]:
+    search_config = _resolve_regime_search_config(search_config, frame=valid_df)
     train_scores = train_df["score"].to_numpy()
     train_labels = train_df[label_col].astype(int).to_numpy()
 
@@ -197,27 +264,135 @@ def optimize_roi_strategy(
     valid_df["market_prob"] = compute_market_prob(valid_df, odds_col=odds_col)
 
     if mode == "full":
-        blend_candidates = [0.2, 0.4, 0.6, 0.8]
-        edge_candidates = [0.01, 0.03, 0.05]
-        min_prob_candidates = [0.03, 0.05]
-        kelly_frac_candidates = [0.25, 0.5]
-        max_frac_candidates = [0.02, 0.05]
-        odds_min_candidates = [1.0]
-        odds_max_candidates = [25.0, 40.0, 80.0]
-        top_k_candidates = [1, 2]
-        min_ev_candidates = [1.0, 1.05, 1.10]
+        blend_candidates = _resolve_search_candidate_values(
+            search_config,
+            mode=mode,
+            key="blend_weights",
+            default=[0.2, 0.4, 0.6, 0.8],
+            cast=float,
+        )
+        edge_candidates = _resolve_search_candidate_values(
+            search_config,
+            mode=mode,
+            key="min_edges",
+            default=[0.01, 0.03, 0.05],
+            cast=float,
+        )
+        min_prob_candidates = _resolve_search_candidate_values(
+            search_config,
+            mode=mode,
+            key="min_probabilities",
+            default=[0.03, 0.05],
+            cast=float,
+        )
+        kelly_frac_candidates = _resolve_search_candidate_values(
+            search_config,
+            mode=mode,
+            key="fractional_kelly_values",
+            default=[0.25, 0.5],
+            cast=float,
+        )
+        max_frac_candidates = _resolve_search_candidate_values(
+            search_config,
+            mode=mode,
+            key="max_fraction_values",
+            default=[0.02, 0.05],
+            cast=float,
+        )
+        odds_min_candidates = _resolve_search_candidate_values(
+            search_config,
+            mode=mode,
+            key="odds_mins",
+            default=[1.0],
+            cast=float,
+        )
+        odds_max_candidates = _resolve_search_candidate_values(
+            search_config,
+            mode=mode,
+            key="odds_maxs",
+            default=[25.0, 40.0, 80.0],
+            cast=float,
+        )
+        top_k_candidates = _resolve_search_candidate_values(
+            search_config,
+            mode=mode,
+            key="top_ks",
+            default=[1, 2],
+            cast=int,
+        )
+        min_ev_candidates = _resolve_search_candidate_values(
+            search_config,
+            mode=mode,
+            key="min_expected_values",
+            default=[1.0, 1.05, 1.10],
+            cast=float,
+        )
     else:
-        blend_candidates = [0.2, 0.4, 0.6]
-        edge_candidates = [0.01, 0.03]
-        min_prob_candidates = [0.05]
-        kelly_frac_candidates = [0.25, 0.5]
-        max_frac_candidates = [0.02]
-        odds_min_candidates = [1.0]
-        odds_max_candidates = [25.0, 40.0]
-        top_k_candidates = [1, 2]
-        min_ev_candidates = [1.0, 1.05]
+        blend_candidates = _resolve_search_candidate_values(
+            search_config,
+            mode=mode,
+            key="blend_weights",
+            default=[0.2, 0.4, 0.6],
+            cast=float,
+        )
+        edge_candidates = _resolve_search_candidate_values(
+            search_config,
+            mode=mode,
+            key="min_edges",
+            default=[0.01, 0.03],
+            cast=float,
+        )
+        min_prob_candidates = _resolve_search_candidate_values(
+            search_config,
+            mode=mode,
+            key="min_probabilities",
+            default=[0.05],
+            cast=float,
+        )
+        kelly_frac_candidates = _resolve_search_candidate_values(
+            search_config,
+            mode=mode,
+            key="fractional_kelly_values",
+            default=[0.25, 0.5],
+            cast=float,
+        )
+        max_frac_candidates = _resolve_search_candidate_values(
+            search_config,
+            mode=mode,
+            key="max_fraction_values",
+            default=[0.02],
+            cast=float,
+        )
+        odds_min_candidates = _resolve_search_candidate_values(
+            search_config,
+            mode=mode,
+            key="odds_mins",
+            default=[1.0],
+            cast=float,
+        )
+        odds_max_candidates = _resolve_search_candidate_values(
+            search_config,
+            mode=mode,
+            key="odds_maxs",
+            default=[25.0, 40.0],
+            cast=float,
+        )
+        top_k_candidates = _resolve_search_candidate_values(
+            search_config,
+            mode=mode,
+            key="top_ks",
+            default=[1, 2],
+            cast=int,
+        )
+        min_ev_candidates = _resolve_search_candidate_values(
+            search_config,
+            mode=mode,
+            key="min_expected_values",
+            default=[1.0, 1.05],
+            cast=float,
+        )
 
-    best_params: dict[str, float] = {
+    best_params: dict[str, float | str] = {
         "strategy_kind": "kelly",
         "blend_weight": 0.7,
         "min_edge": 0.03,
@@ -231,7 +406,7 @@ def optimize_roi_strategy(
     }
     best_score = float("-inf")
     best_metrics: dict[str, float | int | None] = {}
-    fallback_params = dict(best_params)
+    fallback_params: dict[str, float | str] = dict(best_params)
     fallback_score = float("-inf")
     fallback_metrics: dict[str, float | int | None] = {}
 
@@ -375,9 +550,21 @@ def optimize_roi_strategy(
                                 maybe_log_progress()
 
     if best_score == float("-inf"):
-        best_params = dict(fallback_params)
-        best_metrics = dict(fallback_metrics)
-        best_score = float(fallback_score)
+        selection_mode = constraints.selection_mode.strip().lower()
+        if selection_mode in {"gate_then_roi", "risk_first"}:
+            best_params = {
+                "strategy_kind": "no_bet",
+                "blend_weight": 0.0,
+                "initial_bankroll": 1.0,
+                "selection_reason": "no_feasible_candidate",
+            }
+            best_metrics = run_policy_strategy(valid_df, prob_col="blend_prob", odds_col=odds_col, params=best_params)
+            best_score = 0.0
+            _emit(logger, "WF strategy search found no feasible candidate; selecting no_bet.")
+        else:
+            best_params = dict(fallback_params)
+            best_metrics = dict(fallback_metrics)
+            best_score = float(fallback_score)
 
     maybe_log_progress(force=True)
     _emit(

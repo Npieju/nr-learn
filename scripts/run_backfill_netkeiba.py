@@ -19,6 +19,7 @@ def main() -> int:
     parser.add_argument("--start-date", default=None)
     parser.add_argument("--end-date", default=None)
     parser.add_argument("--date-order", choices=["asc", "desc"], default="desc")
+    parser.add_argument("--race-id-source", choices=["training_table", "race_list"], default="training_table")
     parser.add_argument("--race-batch-size", type=int, default=100)
     parser.add_argument("--pedigree-batch-size", type=int, default=500)
     parser.add_argument("--max-cycles", type=int, default=0)
@@ -41,6 +42,7 @@ def main() -> int:
             start_date=args.start_date,
             end_date=args.end_date,
             date_order=args.date_order,
+            race_id_source=args.race_id_source,
             race_batch_size=args.race_batch_size,
             pedigree_batch_size=args.pedigree_batch_size,
             include_race_card=not args.skip_race_card,
@@ -54,7 +56,7 @@ def main() -> int:
         )
         print(
             "[backfill-netkeiba] "
-            f"cycles={summary.get('completed_cycles')} stopped_reason={summary.get('stopped_reason')} date_order={summary.get('date_order')}"
+            f"cycles={summary.get('completed_cycles')} stopped_reason={summary.get('stopped_reason')} date_order={summary.get('date_order')} race_id_source={summary.get('race_id_source')}"
         )
         print(f"[backfill-netkeiba] manifest: {ROOT / args.manifest_file}")
         return 0

@@ -226,14 +226,89 @@ def _build_early_corner_position(frame: pd.DataFrame) -> pd.Series | None:
     return frame[corner_columns].bfill(axis=1).iloc[:, 0].astype(float)
 
 
+def _group_shift(frame: pd.DataFrame, group_col: str, value_col: str) -> pd.Series:
+    required = {group_col, value_col}
+    if not required.issubset(frame.columns):
+        return pd.Series(pd.NA, index=frame.index, dtype="object")
+    return frame.groupby(group_col, sort=False)[value_col].shift(1)
+
+
+def _build_surface_series(frame: pd.DataFrame) -> pd.Series | None:
+    surface_columns = [column for column in ["芝・ダート区分", "芝・ダート区分2"] if column in frame.columns]
+    if not surface_columns:
+        return None
+
+    surface_frame = pd.DataFrame(
+        {column: _clean_group_series(frame, column) for column in surface_columns},
+        index=frame.index,
+    )
+    return surface_frame.bfill(axis=1).iloc[:, 0].astype("string")
+
+
+def _build_race_class_score(frame: pd.DataFrame) -> pd.Series | None:
+    if "競争条件" not in frame.columns and "リステッド・重賞競走" not in frame.columns:
+        return None
+
+    score = pd.Series(np.nan, index=frame.index, dtype=float)
+
+    if "リステッド・重賞競走" in frame.columns:
+        stakes = _clean_group_series(frame, "リステッド・重賞競走").str.upper()
+        stakes_specs = [
+            (r"J\.G1|G1", 10.0),
+            (r"J\.G2|G2", 9.0),
+            (r"J\.G3|G3", 8.0),
+            (r"^L$", 7.5),
+            (r"^G$", 8.5),
+        ]
+        for pattern, value in stakes_specs:
+            mask = stakes.str.contains(pattern, regex=True, na=False)
+            score = score.mask(mask, value)
+
+    if "競争条件" in frame.columns:
+        condition = _clean_group_series(frame, "競争条件")
+        condition_specs = [
+            (r"未出走|新馬", 0.5),
+            (r"未勝利", 1.0),
+            (r"300万下", 2.0),
+            (r"400万下|500万下|1勝", 3.0),
+            (r"600万下|700万下", 4.0),
+            (r"800万下|900万下|1000万下|2勝", 5.0),
+            (r"1400万下|1500万下|1600万下|3勝", 6.0),
+            (r"オープン|OPEN|OP", 7.0),
+        ]
+        for pattern, value in condition_specs:
+            mask = score.isna() & condition.str.contains(pattern, regex=True, na=False)
+            score = score.mask(mask, value)
+
+    return score
+
+
+def _bucketize_gate_ratio(gate_ratio: pd.Series) -> pd.Series:
+    numeric_ratio = pd.to_numeric(gate_ratio, errors="coerce")
+    bucket = pd.Series(pd.NA, index=gate_ratio.index, dtype="string")
+    bucket.loc[numeric_ratio.notna() & (numeric_ratio <= 0.34)] = "inner"
+    bucket.loc[numeric_ratio.notna() & (numeric_ratio > 0.34) & (numeric_ratio <= 0.67)] = "middle"
+    bucket.loc[numeric_ratio.notna() & (numeric_ratio > 0.67)] = "outer"
+    return bucket
+
+
 def build_features(frame: pd.DataFrame) -> pd.DataFrame:
     data = frame.copy()
 
+    date_series = None
     if "date" in data.columns:
         date_series = pd.to_datetime(data["date"], errors="coerce")
         data["race_year"] = date_series.dt.year.astype("Int64")
         data["race_month"] = date_series.dt.month.astype("Int64")
         data["race_dayofweek"] = date_series.dt.dayofweek.astype("Int64")
+
+    race_surface = _build_surface_series(data)
+    if race_surface is not None:
+        data["_race_surface_tmp"] = race_surface
+
+    race_class_score = _build_race_class_score(data)
+    if race_class_score is not None:
+        data["race_class_score"] = race_class_score
 
     if "rank" in data.columns:
         data["rank"] = pd.to_numeric(data["rank"], errors="coerce")
@@ -293,6 +368,24 @@ def build_features(frame: pd.DataFrame) -> pd.DataFrame:
         data["time_margin_sec"] = data["finish_time_sec"] - race_best_time
 
     _compose_key(data, ["track", "distance", "ground_condition"], "course_history_key")
+    if {"track", "distance", "_race_surface_tmp"}.issubset(data.columns):
+        course_surface_columns = ["track", "distance"]
+        if "ground_condition" in data.columns:
+            course_surface_columns.append("ground_condition")
+        course_surface_columns.append("_race_surface_tmp")
+        _compose_key(data, course_surface_columns, "course_surface_history_key")
+
+    if "gate_ratio" in data.columns:
+        data["gate_bucket"] = _bucketize_gate_ratio(data["gate_ratio"])
+
+    if {"course_surface_history_key", "gate_bucket"}.issubset(data.columns):
+        _compose_key(
+            data,
+            ["course_surface_history_key", "gate_bucket"],
+            "course_gate_bucket_key",
+            required_columns=["course_surface_history_key", "gate_bucket"],
+        )
+
     if {"course_history_key", "time_per_1000m"}.issubset(data.columns):
         data["course_baseline_time_per_1000m"] = _race_level_shifted_rolling_mean(
             data,
@@ -322,6 +415,51 @@ def build_features(frame: pd.DataFrame) -> pd.DataFrame:
     horse_history_key, horse_key_source = _build_horse_history_key(data)
     if horse_history_key is not None:
         data["horse_history_key"] = horse_history_key
+
+    if horse_history_key is not None and date_series is not None:
+        previous_race_date = pd.to_datetime(_group_shift(data, "horse_history_key", "date"), errors="coerce")
+        days_since_last_race = (date_series - previous_race_date).dt.days.astype(float)
+        data["horse_days_since_last_race"] = days_since_last_race
+        data["horse_days_since_last_race_log1p"] = np.log1p(days_since_last_race.clip(lower=0))
+
+        short_turnaround = (days_since_last_race <= 14).astype(float)
+        data["horse_is_short_turnaround"] = short_turnaround.where(days_since_last_race.notna(), np.nan)
+
+        long_layoff = (days_since_last_race >= 90).astype(float)
+        data["horse_is_long_layoff"] = long_layoff.where(days_since_last_race.notna(), np.nan)
+
+    if horse_history_key is not None and "weight" in data.columns:
+        current_weight = pd.to_numeric(data["weight"], errors="coerce")
+        previous_weight = pd.to_numeric(_group_shift(data, "horse_history_key", "weight"), errors="coerce")
+        data["horse_weight_change"] = current_weight - previous_weight
+        data["horse_weight_change_abs"] = data["horse_weight_change"].abs()
+
+    if horse_history_key is not None and "斤量" in data.columns:
+        current_carried_weight = pd.to_numeric(data["斤量"], errors="coerce")
+        previous_carried_weight = pd.to_numeric(_group_shift(data, "horse_history_key", "斤量"), errors="coerce")
+        data["horse_carried_weight_change"] = current_carried_weight - previous_carried_weight
+        data["horse_carried_weight_change_abs"] = data["horse_carried_weight_change"].abs()
+
+    if horse_history_key is not None and "distance" in data.columns:
+        previous_distance = pd.to_numeric(_group_shift(data, "horse_history_key", "distance"), errors="coerce")
+        data["horse_distance_change"] = data["distance"] - previous_distance
+        data["horse_distance_change_abs"] = data["horse_distance_change"].abs()
+
+    if horse_history_key is not None and "_race_surface_tmp" in data.columns:
+        previous_surface = _group_shift(data, "horse_history_key", "_race_surface_tmp").astype("string")
+        surface_switch = (data["_race_surface_tmp"] != previous_surface).astype(float)
+        data["horse_surface_switch"] = surface_switch.where(previous_surface.notna(), np.nan)
+
+    if horse_history_key is not None and "race_class_score" in data.columns:
+        data["horse_last_class_score"] = pd.to_numeric(
+            _group_shift(data, "horse_history_key", "race_class_score"),
+            errors="coerce",
+        )
+        data["horse_class_change"] = data["race_class_score"] - data["horse_last_class_score"]
+        class_up = (data["horse_class_change"] > 0).astype(float)
+        data["horse_is_class_up"] = class_up.where(data["horse_class_change"].notna(), np.nan)
+        class_down = (data["horse_class_change"] < 0).astype(float)
+        data["horse_is_class_down"] = class_down.where(data["horse_class_change"].notna(), np.nan)
 
     if horse_history_key is not None and {"rank"}.issubset(data.columns):
         data["horse_last_3_avg_rank"] = _group_shifted_rolling_mean(data, "horse_history_key", "rank", window=3).fillna(data["rank"].median())
@@ -380,6 +518,44 @@ def build_features(frame: pd.DataFrame) -> pd.DataFrame:
             window=30,
         ).fillna(0.0)
 
+    if {"jockey_id", "trainer_id"}.issubset(data.columns):
+        _compose_key(
+            data,
+            ["jockey_id", "trainer_id"],
+            "jockey_trainer_combo_key",
+            required_columns=["jockey_id", "trainer_id"],
+        )
+
+    combo_history_specs = [
+        (
+            "jockey_trainer_combo_key",
+            "is_win",
+            "jockey_trainer_combo_last_50_win_rate",
+            50,
+            3,
+            0.0,
+        ),
+        (
+            "jockey_trainer_combo_key",
+            "rank",
+            "jockey_trainer_combo_last_50_avg_rank",
+            50,
+            3,
+            float(data["rank"].median()) if "rank" in data.columns and data["rank"].notna().any() else np.nan,
+        ),
+    ]
+    for group_col, value_col, output_col, window, min_periods, fill_value in combo_history_specs:
+        if {group_col, value_col}.issubset(data.columns):
+            history_values = _entity_race_shifted_rolling_mean(
+                data,
+                group_col,
+                value_col,
+                window=window,
+                min_periods=min_periods,
+            )
+            history_values = _fill_history_defaults(data, group_col, history_values, fill_value)
+            data[output_col] = history_values
+
     jockey_trainer_style_specs = [
         ("jockey_id", "corner_gain_2_to_4", "jockey_last_30_avg_corner_gain_2_to_4", 30),
         ("trainer_id", "corner_gain_2_to_4", "trainer_last_30_avg_corner_gain_2_to_4", 30),
@@ -418,6 +594,29 @@ def build_features(frame: pd.DataFrame) -> pd.DataFrame:
             required_columns=["trainer_id"],
         )
     for group_col, value_col, output_col, window, min_periods, fill_value in track_distance_history_specs:
+        if {group_col, value_col}.issubset(data.columns):
+            history_values = _entity_race_shifted_rolling_mean(
+                data,
+                group_col,
+                value_col,
+                window=window,
+                min_periods=min_periods,
+            )
+            history_values = _fill_history_defaults(data, group_col, history_values, fill_value)
+            data[output_col] = history_values
+
+    gate_bias_history_specs = [
+        ("course_gate_bucket_key", "is_win", "course_gate_bucket_last_100_win_rate", 100, 5, 0.0),
+        (
+            "course_gate_bucket_key",
+            "rank",
+            "course_gate_bucket_last_100_avg_rank",
+            100,
+            5,
+            float(data["rank"].median()) if "rank" in data.columns and data["rank"].notna().any() else np.nan,
+        ),
+    ]
+    for group_col, value_col, output_col, window, min_periods, fill_value in gate_bias_history_specs:
         if {group_col, value_col}.issubset(data.columns):
             history_values = _entity_race_shifted_rolling_mean(
                 data,
@@ -469,6 +668,18 @@ def build_features(frame: pd.DataFrame) -> pd.DataFrame:
             history_values,
             0.0,
         )
+
+    if {"horse_last_3_avg_corner_gain_2_to_4", "course_baseline_race_pace_balance_3f"}.issubset(data.columns):
+        data["horse_closing_pace_fit"] = data["horse_last_3_avg_corner_gain_2_to_4"] * data["course_baseline_race_pace_balance_3f"]
+
+    if {"horse_last_3_avg_corner_2_ratio", "course_baseline_race_pace_balance_3f"}.issubset(data.columns):
+        data["horse_front_pace_fit"] = (1.0 - data["horse_last_3_avg_corner_2_ratio"]) * (-data["course_baseline_race_pace_balance_3f"])
+
+    if {"horse_last_3_avg_closing_time_3f", "course_baseline_race_pace_back3f"}.issubset(data.columns):
+        data["horse_closing_vs_course"] = data["course_baseline_race_pace_back3f"] - data["horse_last_3_avg_closing_time_3f"]
+
+    if "_race_surface_tmp" in data.columns:
+        data = data.drop(columns=["_race_surface_tmp"])
 
     for column in data.columns:
         if data[column].dtype == "object":

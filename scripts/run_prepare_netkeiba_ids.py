@@ -9,6 +9,7 @@ if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
 from racing_ml.common.config import load_yaml
+from racing_ml.data.netkeiba_crawler import netkeiba_crawl_lock
 from racing_ml.data.netkeiba_id_prep import prepare_netkeiba_ids_from_config
 
 
@@ -20,30 +21,44 @@ def main() -> int:
     parser.add_argument("--start-date", default=None)
     parser.add_argument("--end-date", default=None)
     parser.add_argument("--date-order", choices=["asc", "desc"], default="asc")
+    parser.add_argument("--race-id-source", choices=["training_table", "race_list"], default="training_table")
     parser.add_argument("--limit", type=int, default=None)
     parser.add_argument("--include-completed", action="store_true")
+    parser.add_argument("--refresh", action="store_true")
+    parser.add_argument("--parse-only", action="store_true")
     args = parser.parse_args()
 
     try:
         data_config = load_yaml(ROOT / args.data_config)
         crawl_config = load_yaml(ROOT / args.crawl_config)
-        summary = prepare_netkeiba_ids_from_config(
-            data_config,
-            crawl_config,
-            base_dir=ROOT,
-            target_filter=args.target,
-            start_date=args.start_date,
-            end_date=args.end_date,
-            date_order=args.date_order,
-            limit=args.limit,
-            include_completed=args.include_completed,
-        )
+        def _run_prepare() -> dict[str, object]:
+            return prepare_netkeiba_ids_from_config(
+                data_config,
+                crawl_config,
+                base_dir=ROOT,
+                target_filter=args.target,
+                start_date=args.start_date,
+                end_date=args.end_date,
+                date_order=args.date_order,
+                limit=args.limit,
+                include_completed=args.include_completed,
+                race_id_source=args.race_id_source,
+                refresh=args.refresh,
+                parse_only=args.parse_only,
+            )
+
+        if args.race_id_source == "race_list":
+            with netkeiba_crawl_lock(crawl_config, base_dir=ROOT):
+                summary = _run_prepare()
+        else:
+            summary = _run_prepare()
+
         for report in summary.get("reports", []):
             output_files = ", ".join(report.get("output_files", []))
             targets = ",".join(report.get("targets", []))
             print(
                 "[prepare-netkeiba-ids] "
-                f"kind={report.get('kind')} targets={targets} rows={report.get('row_count')}"
+                f"kind={report.get('kind')} targets={targets} rows={report.get('row_count')} source={report.get('source', summary.get('race_id_source'))}"
             )
             print(f"[prepare-netkeiba-ids] outputs: {output_files}")
         return 0

@@ -78,8 +78,10 @@ nr-learn/
         - `python scripts/run_prepare_netkeiba_ids.py --data-config configs/data.yaml --crawl-config configs/crawl_netkeiba_template.yaml --target race_result --start-date 2020-01-01`
         - `python scripts/run_prepare_netkeiba_ids.py --data-config configs/data.yaml --crawl-config configs/crawl_netkeiba_template.yaml --target pedigree`
         - benchmark を先に押し上げたいときは `--date-order desc` で最新日付を優先します
+        - base dataset より新しい年の race ID を取りたいときは mobile race list を source にします。例: `python scripts/run_prepare_netkeiba_ids.py --data-config configs/data.yaml --crawl-config configs/crawl_netkeiba_template.yaml --target race_result --race-id-source race_list --start-date 2024-01-01 --end-date 2024-12-31 --date-order desc`
         - 既存出力に含まれる ID を再投入したいときだけ `--include-completed` を付けます
     - 年単位の backfill は `python scripts/run_backfill_netkeiba.py --data-config configs/data.yaml --crawl-config configs/crawl_netkeiba_template.yaml --start-date 2020-01-01 --end-date 2021-12-31 --date-order desc --race-batch-size 100 --pedigree-batch-size 500` のように回します
+    - base dataset 以後の年を掘るときは `--race-id-source race_list` を付けると、training table ではなく netkeiba mobile race list から race IDs を起こしてそのまま backfill できます
     - backfill の cycle 要約は `artifacts/reports/netkeiba_backfill_manifest.json` に出ます
         - cycle 完了直後の安定スナップショットで benchmark を回したいときは `--post-cycle-command` に gate script を渡せます。例: `python scripts/run_backfill_netkeiba.py --data-config configs/data.yaml --crawl-config configs/crawl_netkeiba_template.yaml --start-date 2021-01-01 --end-date 2021-07-31 --date-order desc --race-batch-size 100 --pedigree-batch-size 500 --max-cycles 1 --post-cycle-command "/workspaces/nr-learn/.venv/bin/python scripts/run_netkeiba_benchmark_gate.py --data-config configs/data.yaml --model-config configs/model_catboost_fundamental_enriched.yaml --feature-config configs/features_catboost_fundamental_enriched.yaml --max-rows 200000 --wf-mode off"`
         - `scripts/run_netkeiba_benchmark_gate.py` は snapshot を 1 回更新し、`benchmark_rerun_ready=true` のときだけ train/evaluate を実行します。manifest は `artifacts/reports/netkeiba_benchmark_gate_manifest.json` に出ます
@@ -99,6 +101,7 @@ nr-learn/
     - （推奨 / CatBoost win）`python scripts/run_train.py --config configs/model_catboost.yaml --data-config configs/data.yaml --feature-config configs/features_catboost_rich.yaml`
     - （benchmark 用 / CatBoost fundamental win）`python scripts/run_train.py --config configs/model_catboost_fundamental.yaml --data-config configs/data.yaml --feature-config configs/features_catboost_fundamental.yaml`
     - （benchmark 拡張 / pace-corner enriched）`python scripts/run_train.py --config configs/model_catboost_fundamental_enriched.yaml --data-config configs/data.yaml --feature-config configs/features_catboost_fundamental_enriched.yaml`
+    - （benchmark 診断 / no-lineage）`python scripts/run_train.py --config configs/model_catboost_fundamental_enriched_no_lineage.yaml --data-config configs/data.yaml --feature-config configs/features_catboost_fundamental_enriched_no_lineage.yaml`
     - enriched benchmark の train / evaluate artifact には `feature_coverage` が入り、missing force-include 特徴が自動記録されます
     - （推奨 / CatBoost Top3）`python scripts/run_train.py --config configs/model_catboost_top3.yaml --data-config configs/data.yaml --feature-config configs/features_catboost_rich.yaml`
     - （推奨 / CatBoost Ranker）`python scripts/run_train.py --config configs/model_catboost_ranker.yaml --data-config configs/data.yaml --feature-config configs/features_catboost_rich.yaml`
@@ -138,6 +141,7 @@ nr-learn/
     - `python scripts/run_evaluate.py --config configs/model.yaml --data-config configs/data.yaml --feature-config configs/features.yaml --max-rows 80000`
     - （CatBoost win）`python scripts/run_evaluate.py --config configs/model_catboost.yaml --data-config configs/data.yaml --feature-config configs/features_catboost_rich.yaml --max-rows 200000`
     - （benchmark 用 / CatBoost fundamental win）`python scripts/run_evaluate.py --config configs/model_catboost_fundamental.yaml --data-config configs/data.yaml --feature-config configs/features_catboost_fundamental.yaml --max-rows 200000 --wf-mode off`
+    - （benchmark 診断 / no-lineage）`python scripts/run_evaluate.py --config configs/model_catboost_fundamental_enriched_no_lineage.yaml --data-config configs/data.yaml --feature-config configs/features_catboost_fundamental_enriched_no_lineage.yaml --max-rows 200000 --wf-mode off`
     - （CatBoost Top3）`python scripts/run_evaluate.py --config configs/model_catboost_top3.yaml --data-config configs/data.yaml --feature-config configs/features_catboost_rich.yaml --max-rows 200000`
     - （CatBoost ROI）`python scripts/run_evaluate.py --config configs/model_catboost_roi.yaml --data-config configs/data.yaml --feature-config configs/features_catboost_rich.yaml --max-rows 200000 --wf-mode off`
     - （CatBoost alpha）`python scripts/run_evaluate.py --config configs/model_catboost_alpha.yaml --data-config configs/data.yaml --feature-config configs/features_catboost_rich.yaml --max-rows 150000 --wf-mode off`
@@ -145,8 +149,11 @@ nr-learn/
     - （GPU / ROI mainline stack）`python scripts/run_evaluate.py --config configs/model_catboost_value_stack_time_gpu.yaml --data-config configs/data.yaml --feature-config configs/features_catboost_rich.yaml --max-rows 100000 --wf-mode off`
     - （ROI回帰）`python scripts/run_evaluate.py --config configs/model_roi.yaml --data-config configs/data.yaml --feature-config configs/features.yaml --max-rows 80000`
     - （市場乖離/Layer2）`python scripts/run_evaluate.py --config configs/model_alpha.yaml --data-config configs/data.yaml --feature-config configs/features.yaml --max-rows 80000`
+    - 最新年だけを切って見たいときは `--start-date` / `--end-date` を併用できます。例: `python scripts/run_evaluate.py --config configs/model_catboost_fundamental_enriched_no_lineage.yaml --data-config configs/data.yaml --feature-config configs/features_catboost_fundamental_enriched_no_lineage.yaml --start-date 2024-01-01 --end-date 2024-01-08 --wf-mode off`
     - 全体指標: `artifacts/reports/evaluation_summary.json`（常に最新実行）
     - モデル別保存: `artifacts/reports/evaluation_summary_<model>.json`
+            - `wf_mode` / `wf_scheme` がデフォルト (`fast` / `nested`) 以外のときは versioned artifact に `_wf_<mode>_<scheme>` suffix が付き、raw / walk-forward 実験が同じ date window でも上書きされません
+            - `selection_mode=gate_then_roi` で feasible 候補が 1 つも無い walk-forward fold は `strategy_kind=no_bet` / `selection_reason=no_feasible_candidate` として保存され、infeasible な fallback policy は採用されません
             - `run_context`: 実行条件（config, max_rows, wf設定 など）
             - `artifact_manifest`: 利用モデルの manifest パス
             - `leakage_audit`: 特徴量リーク疑義の自動点検結果

@@ -1,0 +1,46 @@
+task: "classification"
+label: "is_win"
+
+model:
+  name: "value_blend"
+  params:
+    alpha_weight: 0.0
+    alpha_scale: 1.5
+    roi_weight: 0.1
+    roi_scale: 3.0
+    market_blend_weight: 0.97
+    odds_column: "odds"
+    alpha_positive_only: false
+    roi_positive_only: false
+
+components:
+  win: "configs/model_catboost.yaml"
+  roi: "configs/model_lightgbm_roi_cpu_diag.yaml"
+
+evaluation:
+  leakage_audit:
+    enabled: true
+  policy:
+    selection_mode: "gate_then_roi"
+    min_bet_ratio: 0.05
+    min_bets_abs: 100
+    max_drawdown: 0.40
+    min_final_bankroll: 0.90
+  policy_search:
+    full:
+      blend_weights: [0.6, 0.8]
+      min_edges: [0.01, 0.03]
+      min_probabilities: [0.05]
+      fractional_kelly_values: [0.25, 0.5]
+      max_fraction_values: [0.02]
+      odds_mins: [1.0]
+      odds_maxs: [25.0, 40.0]
+      top_ks: [1]
+      min_expected_values: [1.0, 1.05]
+
+output:
+  model_dir: "artifacts/models"
+  report_dir: "artifacts/reports"
+  model_file: "catboost_value_stack_lgbm_roi_tuned_top1_model.joblib"
+  report_file: "train_metrics_catboost_value_stack_lgbm_roi_tuned_top1.json"
+  manifest_file: "catboost_value_stack_lgbm_roi_tuned_top1_model.manifest.json"

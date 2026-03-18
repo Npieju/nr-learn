@@ -5,17 +5,22 @@ import time
 from typing import Any
 
 import joblib
-import matplotlib.pyplot as plt
+import matplotlib
 import numpy as np
 import pandas as pd
+
+matplotlib.use("Agg")
+import matplotlib.pyplot as plt
 
 from racing_ml.common.artifacts import resolve_output_artifacts
 from racing_ml.common.config import load_yaml
 from racing_ml.common.progress import Heartbeat, ProgressBar
+from racing_ml.common.regime import resolve_regime_override
 from racing_ml.data.dataset_loader import load_training_table
-from racing_ml.evaluation.scoring import generate_prediction_outputs, predict_target_values
+from racing_ml.evaluation.scoring import generate_prediction_outputs, predict_target_values, prepare_scored_frame, resolve_odds_column
 from racing_ml.features.builder import build_features
 from racing_ml.features.selection import prepare_model_input_frame, resolve_feature_selection, resolve_model_feature_selection
+from racing_ml.serving.runtime_policy import annotate_runtime_policy, resolve_runtime_policy
 
 
 def log_progress(message: str) -> None:
@@ -47,6 +52,48 @@ def _resolve_target_date(frame: pd.DataFrame, race_date: str | None) -> pd.Times
     if candidates:
         return pd.to_datetime(candidates[-1])
     return pd.to_datetime(available_dates[0])
+
+
+def _resolve_workspace_path(path_value: str | Path, workspace_root: Path) -> Path:
+    path = Path(path_value)
+    if path.is_absolute():
+        return path
+    return workspace_root / path
+
+
+def _display_path(path: Path, workspace_root: Path) -> str:
+    try:
+        return path.relative_to(workspace_root).as_posix()
+    except ValueError:
+        return path.as_posix()
+
+
+def _resolve_prediction_source(
+    model_config: dict[str, Any],
+    *,
+    model_config_path: Path,
+    pred_frame: pd.DataFrame,
+    workspace_root: Path,
+) -> tuple[str, Path, dict[str, Any]]:
+    serving_cfg = model_config.get("serving", {})
+    evaluation_cfg = model_config.get("evaluation", {})
+    score_regime_overrides = []
+    if isinstance(serving_cfg, dict):
+        score_regime_overrides = serving_cfg.get("score_regime_overrides", [])
+    if not isinstance(score_regime_overrides, list) or not score_regime_overrides:
+        score_regime_overrides = evaluation_cfg.get("score_regime_overrides", [])
+    override = resolve_regime_override(score_regime_overrides, frame=pred_frame)
+    if not isinstance(override, dict):
+        return "default", model_config_path, model_config
+
+    override_model_config = str(override.get("model_config", "")).strip()
+    if not override_model_config:
+        return "default", model_config_path, model_config
+
+    override_name = str(override.get("name", "")).strip() or "default"
+    override_config_path = _resolve_workspace_path(override_model_config, workspace_root)
+    override_model_config_data = load_yaml(override_config_path)
+    return override_name, override_config_path, override_model_config_data
 
 
 def _plot_predictions(predictions: pd.DataFrame, out_path: Path) -> None:
@@ -84,7 +131,9 @@ def run_predict(
     feature_config_path: str,
     race_date: str | None = None,
 ) -> None:
-    model_config = load_yaml(Path(model_config_path))
+    workspace_root = Path.cwd()
+    resolved_model_config_path = _resolve_workspace_path(model_config_path, workspace_root)
+    model_config = load_yaml(resolved_model_config_path)
     data_config = load_yaml(Path(data_config_path))
     feature_config = load_yaml(Path(feature_config_path))
     progress = ProgressBar(total=6, prefix="[predict]", logger=log_progress, min_interval_sec=0.0)
@@ -109,21 +158,30 @@ def run_predict(
     )
 
     with Heartbeat("[predict]", "loading model and preparing inputs", logger=log_progress):
-        output_artifacts = resolve_output_artifacts(model_config.get("output", {}))
-        workspace_root = Path.cwd()
+        score_source_name, active_model_config_path, active_model_config = _resolve_prediction_source(
+            model_config,
+            model_config_path=resolved_model_config_path,
+            pred_frame=pred_frame,
+            workspace_root=workspace_root,
+        )
+        output_artifacts = resolve_output_artifacts(active_model_config.get("output", {}))
         model_path = output_artifacts.model_path if output_artifacts.model_path.is_absolute() else (workspace_root / output_artifacts.model_path)
         manifest_path = output_artifacts.manifest_path if output_artifacts.manifest_path.is_absolute() else (workspace_root / output_artifacts.manifest_path)
         if not model_path.exists():
             raise FileNotFoundError(f"Model file not found: {model_path}")
 
         model = joblib.load(model_path)
-        fallback_selection = resolve_feature_selection(pred_frame, feature_config, label_column=model_config.get("label", "is_win"))
+        fallback_selection = resolve_feature_selection(
+            pred_frame,
+            feature_config,
+            label_column=active_model_config.get("label", model_config.get("label", "is_win")),
+        )
         feature_selection = resolve_model_feature_selection(model, fallback_selection)
         model_input = prepare_model_input_frame(pred_frame, feature_selection.feature_columns, feature_selection.categorical_columns)
         model_task = str(model.get("task", "")) if isinstance(model, dict) else ""
     progress.update(
         message=(
-            f"model ready features={len(feature_selection.feature_columns):,} "
+            f"model ready score_source={score_source_name} features={len(feature_selection.feature_columns):,} "
             f"categorical={len(feature_selection.categorical_columns):,}"
         )
     )
@@ -149,27 +207,55 @@ def run_predict(
                 pred_frame["pred_finish_time_sec"] = predict_target_values(model, model_input)
             elif model_task == "time_deviation":
                 pred_frame["pred_time_deviation"] = predict_target_values(model, model_input)
-    pred_frame["pred_rank"] = (
-        pred_frame.groupby("race_id")["score"]
-        .rank(method="first", ascending=False)
-        .astype(int)
-    )
+    odds_col = resolve_odds_column(pred_frame)
+    pred_frame = prepare_scored_frame(pred_frame, pred_frame["score"].to_numpy(), odds_col=odds_col, score_col="score")
+    pred_frame["score_source"] = score_source_name
+    pred_frame["score_source_model_config"] = _display_path(active_model_config_path, workspace_root)
+    policy_name: str | None = None
+    policy_strategy_kind: str | None = None
+    policy_resolution = resolve_runtime_policy(model_config, frame=pred_frame)
+    if policy_resolution is not None:
+        policy_name, policy_config = policy_resolution
+        policy_strategy_kind = str(policy_config.get("strategy_kind", "")).strip().lower() or None
+        pred_frame = annotate_runtime_policy(
+            pred_frame,
+            odds_col=odds_col,
+            policy_name=policy_name,
+            policy_config=policy_config,
+            score_col="score",
+        )
     progress.update(message=f"inference complete rows={len(pred_frame):,}")
-
-    if "odds" in pred_frame.columns:
-        pred_frame["odds"] = pd.to_numeric(pred_frame["odds"], errors="coerce")
-        pred_frame["expected_value"] = pred_frame["score"] * pred_frame["odds"]
-        ev_rank = pred_frame.groupby("race_id")["expected_value"].rank(method="first", ascending=False)
-        pred_frame["ev_rank"] = ev_rank.astype("Int64")
 
     columns = ["date", "race_id", "horse_id"]
     if "horse_name" in pred_frame.columns:
         columns.append("horse_name")
     if "rank" in pred_frame.columns:
         columns.append("rank")
-    if "odds" in pred_frame.columns:
-        columns.append("odds")
-    columns += ["score", "pred_rank"]
+    if odds_col is not None and odds_col in pred_frame.columns:
+        columns.append(odds_col)
+    columns += ["score_source", "score_source_model_config", "score", "pred_rank"]
+    for extra_col in [
+        "policy_name",
+        "policy_strategy_kind",
+        "policy_selected",
+        "policy_selection_rank",
+        "policy_weight",
+        "policy_prob",
+        "policy_market_prob",
+        "policy_expected_value",
+        "policy_edge",
+        "policy_blend_weight",
+        "policy_min_prob",
+        "policy_odds_min",
+        "policy_odds_max",
+        "policy_min_edge",
+        "policy_fractional_kelly",
+        "policy_max_fraction",
+        "policy_top_k",
+        "policy_min_expected_value",
+    ]:
+        if extra_col in pred_frame.columns:
+            columns.append(extra_col)
     for extra_col in ["p_rank1", "p_rank2", "p_rank3", "p_top3"]:
         if extra_col in pred_frame.columns:
             columns.append(extra_col)
@@ -193,6 +279,13 @@ def run_predict(
     progress.complete(message="prediction outputs written")
 
     print(f"[predict] target date: {pd.Timestamp(target_date).date()}")
+    print(f"[predict] score source: {score_source_name}")
+    print(f"[predict] score config: {_display_path(active_model_config_path, workspace_root)}")
+    if policy_name is not None:
+        selected_rows = int(output["policy_selected"].fillna(False).sum()) if "policy_selected" in output.columns else 0
+        print(f"[predict] policy: {policy_name}")
+        print(f"[predict] policy strategy: {policy_strategy_kind}")
+        print(f"[predict] policy selected rows: {selected_rows}")
     print(f"[predict] predictions saved: {csv_path}")
     print(f"[predict] chart saved: {png_path}")
     if manifest_path.exists():

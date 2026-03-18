@@ -577,7 +577,7 @@ def simulate_ev_portfolio(
     odds_min: float = 1.0,
     odds_max: float = 50.0,
     stake_per_race: float = 1.0,
-    initial_bankroll: float = 1.0,
+    initial_bankroll: float | None = None,
 ) -> dict[str, float | int | None]:
     if odds_col is None or "rank" not in frame.columns:
         return {
@@ -585,12 +585,14 @@ def simulate_ev_portfolio(
             "portfolio_bets": 0,
             "portfolio_hit_rate": None,
             "portfolio_avg_synthetic_odds": None,
-            "portfolio_final_bankroll": initial_bankroll,
+            "portfolio_final_bankroll": 1.0,
             "portfolio_max_drawdown": None,
         }
 
-    bankroll = float(initial_bankroll)
-    peak_bankroll = float(initial_bankroll)
+    n_races = int(frame["race_id"].nunique()) if "race_id" in frame.columns else 0
+    starting_bankroll = float(initial_bankroll) if initial_bankroll is not None else float(max(n_races, 1) * stake_per_race)
+    bankroll = float(starting_bankroll)
+    peak_bankroll = float(starting_bankroll)
     max_drawdown = 0.0
     total_bet = 0.0
     total_return = 0.0
@@ -644,13 +646,33 @@ def simulate_ev_portfolio(
         "portfolio_bets": int(race_bets),
         "portfolio_hit_rate": float(hit_rate) if hit_rate is not None else None,
         "portfolio_avg_synthetic_odds": avg_synth_odds,
-        "portfolio_final_bankroll": float(bankroll),
+        "portfolio_final_bankroll": float(bankroll / starting_bankroll) if starting_bankroll > 0 else None,
         "portfolio_max_drawdown": float(max_drawdown),
     }
 
 
-def run_policy_strategy(frame: pd.DataFrame, prob_col: str, odds_col: str, params: dict[str, float]) -> dict[str, float | int | None]:
+def _no_bet_policy_metrics(initial_bankroll: float = 1.0) -> dict[str, float | int | None]:
+    bankroll = float(initial_bankroll)
+    return {
+        "kelly_roi": None,
+        "kelly_bets": 0,
+        "kelly_hit_rate": None,
+        "kelly_final_bankroll": bankroll,
+        "kelly_max_drawdown": 0.0,
+        "portfolio_roi": None,
+        "portfolio_bets": 0,
+        "portfolio_hit_rate": None,
+        "portfolio_avg_synthetic_odds": None,
+        "portfolio_final_bankroll": bankroll,
+        "portfolio_max_drawdown": 0.0,
+    }
+
+
+def run_policy_strategy(frame: pd.DataFrame, prob_col: str, odds_col: str, params: dict[str, float | str]) -> dict[str, float | int | None]:
     strategy_kind = str(params.get("strategy_kind", "kelly"))
+    if strategy_kind == "no_bet":
+        return _no_bet_policy_metrics(initial_bankroll=float(params.get("initial_bankroll", 1.0)))
+
     if strategy_kind == "portfolio":
         return simulate_ev_portfolio(
             frame=frame,
@@ -662,7 +684,7 @@ def run_policy_strategy(frame: pd.DataFrame, prob_col: str, odds_col: str, param
             odds_min=float(params.get("odds_min", 1.0)),
             odds_max=float(params.get("odds_max", 50.0)),
             stake_per_race=1.0,
-            initial_bankroll=float(params.get("initial_bankroll", 1.0)),
+            initial_bankroll=(float(params["initial_bankroll"]) if "initial_bankroll" in params else None),
         )
 
     return simulate_fractional_kelly(

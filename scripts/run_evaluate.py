@@ -4,6 +4,7 @@ from pathlib import Path
 import sys
 import time
 import traceback
+from typing import Any
 import warnings
 
 import joblib
@@ -19,6 +20,7 @@ if str(SRC) not in sys.path:
 from racing_ml.common.config import load_yaml
 from racing_ml.common.artifacts import resolve_output_artifacts
 from racing_ml.common.progress import Heartbeat, ProgressBar
+from racing_ml.common.regime import resolve_regime_name
 from racing_ml.data.dataset_loader import load_training_table
 from racing_ml.evaluation.benchmark import (
     count_winner_only_races,
@@ -62,6 +64,69 @@ from racing_ml.features.selection import prepare_model_input_frame, resolve_feat
 def log_progress(message: str) -> None:
     now = time.strftime("%H:%M:%S")
     print(f"[evaluate {now}] {message}", flush=True)
+
+
+def _filter_frame_by_date_window(
+    frame: pd.DataFrame,
+    *,
+    start_date: str | None,
+    end_date: str | None,
+) -> pd.DataFrame:
+    if not start_date and not end_date:
+        return frame
+
+    if "date" not in frame.columns:
+        raise RuntimeError("Date filtering requires a 'date' column")
+
+    date_series = pd.to_datetime(frame["date"], errors="coerce")
+    mask = date_series.notna()
+    start_ts = pd.Timestamp(start_date) if start_date else None
+    end_ts = pd.Timestamp(end_date) if end_date else None
+    if start_ts is not None and end_ts is not None and end_ts < start_ts:
+        raise ValueError(f"end_date must be >= start_date: {start_date} .. {end_date}")
+    if start_ts is not None:
+        mask &= date_series >= start_ts
+    if end_ts is not None:
+        mask &= date_series <= end_ts
+
+    filtered = frame.loc[mask].copy()
+    if filtered.empty:
+        raise RuntimeError(
+            f"No rows found in date window: {start_date or '-inf'} .. {end_date or '+inf'}"
+        )
+    return filtered
+
+
+def _resolve_score_source_name(
+    overrides: list[dict[str, Any]] | None,
+    *,
+    frame: pd.DataFrame,
+    default_name: str = "default",
+) -> str:
+    return resolve_regime_name(overrides, frame=frame, default_name=default_name)
+
+
+def _build_scored_prediction_frame(
+    *,
+    model: object,
+    frame: pd.DataFrame,
+    fallback_selection: Any,
+    odds_col: str | None,
+) -> tuple[pd.DataFrame, Any, Any]:
+    feature_selection = resolve_model_feature_selection(model, fallback_selection)
+    if not feature_selection.feature_columns:
+        raise RuntimeError("No features available for evaluation")
+
+    x_eval = prepare_model_input_frame(
+        frame,
+        feature_selection.feature_columns,
+        feature_selection.categorical_columns,
+    )
+    outputs = generate_prediction_outputs(model, x_eval, race_ids=frame["race_id"])
+    pred = prepare_scored_frame(frame, outputs.score, odds_col=odds_col, score_col="score")
+    if odds_col is not None:
+        pred = add_market_signals(pred, score_col="score", odds_col=odds_col)
+    return pred, feature_selection, outputs
 
 
 def _safe_auc(y_true: np.ndarray, y_score: np.ndarray) -> float | None:
@@ -128,15 +193,44 @@ def _safe_regression_corr(y_true: np.ndarray, y_pred: np.ndarray) -> float | Non
 
 def _record_single_wf_summary(
     summary: dict[str, object],
-    best_params: dict[str, float],
+    best_params: dict[str, float | str],
     best_valid_metrics: dict[str, float | int | None],
     wf_test_metrics: dict[str, float | int | None],
+    score_source: str = "default",
 ) -> None:
+    strategy_kind = str(best_params.get("strategy_kind", "kelly"))
+    policy_params: dict[str, float | int | str] = {
+        "strategy_kind": strategy_kind,
+        "blend_weight": float(best_params.get("blend_weight", 0.0)),
+        "min_prob": float(best_params.get("min_prob", 0.05)),
+        "odds_min": float(best_params.get("odds_min", 1.0)),
+        "odds_max": float(best_params.get("odds_max", 999.0)),
+    }
+    if strategy_kind == "kelly":
+        policy_params.update(
+            {
+                "min_edge": float(best_params.get("min_edge", 0.03)),
+                "fractional_kelly": float(best_params.get("fractional_kelly", 0.5)),
+                "max_fraction": float(best_params.get("max_fraction", 0.05)),
+            }
+        )
+    elif strategy_kind == "portfolio":
+        policy_params.update(
+            {
+                "top_k": int(best_params.get("top_k", 2)),
+                "min_expected_value": float(best_params.get("min_expected_value", 1.0)),
+            }
+        )
+
     summary["wf_strategy_kind"] = str(best_params.get("strategy_kind", "kelly"))
+    summary["wf_score_source"] = str(score_source)
     summary["wf_best_blend_weight"] = float(best_params.get("blend_weight", 0.0))
     summary["wf_best_min_prob"] = float(best_params.get("min_prob", 0.05))
     summary["wf_best_odds_min"] = float(best_params.get("odds_min", 1.0))
     summary["wf_best_odds_max"] = float(best_params.get("odds_max", 999.0))
+    summary["wf_policy_params"] = policy_params
+    selection_reason = best_params.get("selection_reason")
+    summary["wf_selection_reason"] = str(selection_reason) if selection_reason is not None else None
 
     if summary["wf_strategy_kind"] == "kelly":
         summary["wf_best_min_edge"] = float(best_params.get("min_edge", 0.03))
@@ -151,7 +245,7 @@ def _record_single_wf_summary(
         summary["wf_test_final_bankroll"] = wf_test_metrics.get("kelly_final_bankroll")
         summary["wf_valid_max_drawdown"] = best_valid_metrics.get("kelly_max_drawdown")
         summary["wf_test_max_drawdown"] = wf_test_metrics.get("kelly_max_drawdown")
-    else:
+    elif summary["wf_strategy_kind"] == "portfolio":
         summary["wf_best_top_k"] = int(best_params.get("top_k", 2))
         summary["wf_best_min_expected_value"] = float(best_params.get("min_expected_value", 1.0))
         summary["wf_valid_roi"] = best_valid_metrics.get("portfolio_roi")
@@ -165,19 +259,33 @@ def _record_single_wf_summary(
         summary["wf_test_final_bankroll"] = wf_test_metrics.get("portfolio_final_bankroll")
         summary["wf_valid_max_drawdown"] = best_valid_metrics.get("portfolio_max_drawdown")
         summary["wf_test_max_drawdown"] = wf_test_metrics.get("portfolio_max_drawdown")
+    else:
+        summary["wf_valid_roi"] = None
+        summary["wf_valid_bets"] = 0
+        summary["wf_valid_hit_rate"] = None
+        summary["wf_test_roi"] = None
+        summary["wf_test_bets"] = 0
+        summary["wf_test_hit_rate"] = None
+        summary["wf_valid_final_bankroll"] = 1.0
+        summary["wf_test_final_bankroll"] = 1.0
+        summary["wf_valid_max_drawdown"] = 0.0
+        summary["wf_test_max_drawdown"] = 0.0
 
 
 def _fold_row(
     strategy_kind: str,
-    best_params: dict[str, float],
+    best_params: dict[str, float | str],
     best_valid_metrics: dict[str, float | int | None],
     fold_test_metrics: dict[str, float | int | None],
     fold_index: int,
+    score_source: str = "default",
 ) -> dict[str, float | int | str | None]:
     if strategy_kind == "kelly":
         return {
             "fold": int(fold_index),
             "strategy_kind": strategy_kind,
+            "score_source": str(score_source),
+            "selection_reason": str(best_params.get("selection_reason")) if best_params.get("selection_reason") is not None else None,
             "valid_roi": best_valid_metrics.get("kelly_roi"),
             "valid_bets": best_valid_metrics.get("kelly_bets"),
             "valid_hit_rate": best_valid_metrics.get("kelly_hit_rate"),
@@ -189,21 +297,55 @@ def _fold_row(
             "test_final_bankroll": fold_test_metrics.get("kelly_final_bankroll"),
             "test_max_drawdown": fold_test_metrics.get("kelly_max_drawdown"),
             "blend_weight": float(best_params.get("blend_weight", 0.0)),
+            "min_prob": float(best_params.get("min_prob", 0.05)),
+            "odds_min": float(best_params.get("odds_min", 1.0)),
+            "odds_max": float(best_params.get("odds_max", 999.0)),
+            "min_edge": float(best_params.get("min_edge", 0.03)),
+            "fractional_kelly": float(best_params.get("fractional_kelly", 0.5)),
+            "max_fraction": float(best_params.get("max_fraction", 0.05)),
+        }
+    if strategy_kind == "portfolio":
+        return {
+            "fold": int(fold_index),
+            "strategy_kind": strategy_kind,
+            "score_source": str(score_source),
+            "selection_reason": str(best_params.get("selection_reason")) if best_params.get("selection_reason") is not None else None,
+            "valid_roi": best_valid_metrics.get("portfolio_roi"),
+            "valid_bets": best_valid_metrics.get("portfolio_bets"),
+            "valid_hit_rate": best_valid_metrics.get("portfolio_hit_rate"),
+            "valid_final_bankroll": best_valid_metrics.get("portfolio_final_bankroll"),
+            "valid_max_drawdown": best_valid_metrics.get("portfolio_max_drawdown"),
+            "test_roi": fold_test_metrics.get("portfolio_roi"),
+            "test_bets": fold_test_metrics.get("portfolio_bets"),
+            "test_hit_rate": fold_test_metrics.get("portfolio_hit_rate"),
+            "test_final_bankroll": fold_test_metrics.get("portfolio_final_bankroll"),
+            "test_max_drawdown": fold_test_metrics.get("portfolio_max_drawdown"),
+            "blend_weight": float(best_params.get("blend_weight", 0.0)),
+            "min_prob": float(best_params.get("min_prob", 0.05)),
+            "odds_min": float(best_params.get("odds_min", 1.0)),
+            "odds_max": float(best_params.get("odds_max", 999.0)),
+            "top_k": int(best_params.get("top_k", 2)),
+            "min_expected_value": float(best_params.get("min_expected_value", 1.0)),
         }
     return {
         "fold": int(fold_index),
         "strategy_kind": strategy_kind,
-        "valid_roi": best_valid_metrics.get("portfolio_roi"),
-        "valid_bets": best_valid_metrics.get("portfolio_bets"),
-        "valid_hit_rate": best_valid_metrics.get("portfolio_hit_rate"),
-        "valid_final_bankroll": best_valid_metrics.get("portfolio_final_bankroll"),
-        "valid_max_drawdown": best_valid_metrics.get("portfolio_max_drawdown"),
-        "test_roi": fold_test_metrics.get("portfolio_roi"),
-        "test_bets": fold_test_metrics.get("portfolio_bets"),
-        "test_hit_rate": fold_test_metrics.get("portfolio_hit_rate"),
-        "test_final_bankroll": fold_test_metrics.get("portfolio_final_bankroll"),
-        "test_max_drawdown": fold_test_metrics.get("portfolio_max_drawdown"),
+        "score_source": str(score_source),
+        "selection_reason": str(best_params.get("selection_reason")) if best_params.get("selection_reason") is not None else None,
+        "valid_roi": None,
+        "valid_bets": 0,
+        "valid_hit_rate": None,
+        "valid_final_bankroll": 1.0,
+        "valid_max_drawdown": 0.0,
+        "test_roi": None,
+        "test_bets": 0,
+        "test_hit_rate": None,
+        "test_final_bankroll": 1.0,
+        "test_max_drawdown": 0.0,
         "blend_weight": float(best_params.get("blend_weight", 0.0)),
+        "min_prob": None,
+        "odds_min": None,
+        "odds_max": None,
     }
 
 
@@ -214,8 +356,25 @@ def _sanitize_output_slug(value: str) -> str:
     return slug.strip("_") or "model"
 
 
-def _derive_evaluation_output_slug(config_path: str, model_path: Path) -> str:
-    candidates = [model_path.stem, Path(config_path).stem]
+def _derive_date_window_slug(start_date: str | None, end_date: str | None) -> str:
+    if not start_date and not end_date:
+        return ""
+
+    start_token = _sanitize_output_slug((start_date or "start_auto").replace("-", ""))
+    end_token = _sanitize_output_slug((end_date or "end_auto").replace("-", ""))
+    return f"_{start_token}_{end_token}"
+
+
+def _derive_wf_slug(wf_mode: str, wf_scheme: str) -> str:
+    normalized_mode = _sanitize_output_slug(wf_mode)
+    normalized_scheme = _sanitize_output_slug(wf_scheme)
+    if normalized_mode == "fast" and normalized_scheme == "nested":
+        return ""
+    return f"_wf_{normalized_mode}_{normalized_scheme}"
+
+
+def _derive_evaluation_output_slug(config_path: str, model_path: Path, *, prefer_config: bool = False) -> str:
+    candidates = [Path(config_path).stem, model_path.stem] if prefer_config else [model_path.stem, Path(config_path).stem]
     for candidate in candidates:
         text = str(candidate).strip()
         if not text:
@@ -238,6 +397,8 @@ def main() -> int:
     parser.add_argument("--data-config", default="configs/data.yaml")
     parser.add_argument("--feature-config", default="configs/features.yaml")
     parser.add_argument("--max-rows", type=int, default=120000)
+    parser.add_argument("--start-date", default=None)
+    parser.add_argument("--end-date", default=None)
     parser.add_argument("--wf-mode", choices=["off", "fast", "full"], default="fast")
     parser.add_argument("--wf-scheme", choices=["single", "nested"], default="nested")
     parser.add_argument("--progress-interval-sec", type=float, default=5.0)
@@ -252,6 +413,8 @@ def main() -> int:
 
         task = str(model_cfg.get("task", "classification")).strip().lower()
         evaluation_cfg = model_cfg.get("evaluation", {})
+        policy_search_cfg = evaluation_cfg.get("policy_search", {})
+        score_regime_overrides_cfg = evaluation_cfg.get("score_regime_overrides", [])
         output_cfg = model_cfg.get("output", {})
         output_artifacts = resolve_output_artifacts(output_cfg)
         policy_constraints = PolicyConstraints.from_config(evaluation_cfg)
@@ -267,6 +430,18 @@ def main() -> int:
         with Heartbeat("[evaluate]", "building features", logger=log_progress):
             frame = build_features(frame)
         progress.update(message=f"features built columns={len(frame.columns):,}")
+        if args.start_date or args.end_date:
+            frame = _filter_frame_by_date_window(
+                frame,
+                start_date=args.start_date,
+                end_date=args.end_date,
+            )
+            progress.update(
+                message=(
+                    f"date filter applied rows={len(frame):,} "
+                    f"start={args.start_date or '-inf'} end={args.end_date or '+inf'}"
+                )
+            )
         if args.max_rows and len(frame) > args.max_rows:
             frame = frame.tail(args.max_rows).copy()
             print(f"[evaluate] using tail rows: {len(frame)}")
@@ -303,6 +478,58 @@ def main() -> int:
             pred = add_market_signals(pred, score_col="score", odds_col=odds_col)
         progress.update(message=f"inference complete rows={len(pred):,} races={pred['race_id'].nunique():,}")
 
+        prediction_sources: dict[str, dict[str, Any]] = {
+            "default": {
+                "pred": pred,
+                "model_config": str(args.config),
+                "model_path": output_artifacts.model_path.as_posix(),
+                "feature_count": int(len(feature_selection.feature_columns)),
+                "categorical_feature_count": int(len(feature_selection.categorical_columns)),
+            }
+        }
+        if isinstance(score_regime_overrides_cfg, list) and score_regime_overrides_cfg:
+            for override_index, override_cfg in enumerate(score_regime_overrides_cfg, start=1):
+                if not isinstance(override_cfg, dict):
+                    continue
+                override_name = str(override_cfg.get("name") or f"override_{override_index}").strip()
+                override_model_config = str(override_cfg.get("model_config", "")).strip()
+                if not override_name or not override_model_config:
+                    continue
+
+                override_config_path = Path(override_model_config)
+                if not override_config_path.is_absolute():
+                    override_config_path = ROOT / override_config_path
+                override_model_cfg = load_yaml(override_config_path)
+                override_output_artifacts = resolve_output_artifacts(override_model_cfg.get("output", {}))
+                override_model_path = (
+                    override_output_artifacts.model_path
+                    if override_output_artifacts.model_path.is_absolute()
+                    else ROOT / override_output_artifacts.model_path
+                )
+                override_model = joblib.load(override_model_path)
+                with Heartbeat(
+                    "[evaluate]",
+                    f"running override inference {override_name}",
+                    logger=log_progress,
+                ):
+                    override_pred, override_feature_selection, _ = _build_scored_prediction_frame(
+                        model=override_model,
+                        frame=frame,
+                        fallback_selection=fallback_selection,
+                        odds_col=odds_col,
+                    )
+                prediction_sources[override_name] = {
+                    "pred": override_pred,
+                    "model_config": str(override_config_path.relative_to(ROOT)),
+                    "model_path": override_output_artifacts.model_path.as_posix(),
+                    "feature_count": int(len(override_feature_selection.feature_columns)),
+                    "categorical_feature_count": int(len(override_feature_selection.categorical_columns)),
+                }
+                log_progress(
+                    f"Loaded override source '{override_name}' from {override_config_path.relative_to(ROOT)} "
+                    f"features={len(override_feature_selection.feature_columns):,}"
+                )
+
         score_is_prob = bool(np.nanmin(outputs.score) >= 0.0 and np.nanmax(outputs.score) <= 1.0)
         compute_prob_metrics = task in {"classification", "ranking", "multi_position"}
         probabilistic_flow = bool(compute_prob_metrics and score_is_prob)
@@ -337,6 +564,8 @@ def main() -> int:
             "task": task,
             "label_column": label_col,
             "max_rows": int(args.max_rows),
+            "start_date": args.start_date,
+            "end_date": args.end_date,
             "wf_mode": args.wf_mode,
             "wf_scheme": args.wf_scheme,
             "progress_interval_sec": float(args.progress_interval_sec),
@@ -344,10 +573,27 @@ def main() -> int:
             "feature_selection_mode": feature_selection.mode,
             "feature_count": int(len(feature_selection.feature_columns)),
             "categorical_feature_count": int(len(feature_selection.categorical_columns)),
+            "score_source_count": int(len(prediction_sources)),
             "artifact_manifest": output_artifacts.manifest_path.as_posix() if (ROOT / output_artifacts.manifest_path).exists() else None,
         }
         summary["feature_coverage"] = feature_coverage
         summary["policy_constraints"] = policy_constraints.to_dict()
+        if isinstance(policy_search_cfg, dict) and policy_search_cfg:
+            summary["policy_search"] = policy_search_cfg
+        if len(prediction_sources) > 1:
+            summary["score_regime_overrides"] = score_regime_overrides_cfg
+            summary["score_sources"] = {
+                name: {
+                    key: value
+                    for key, value in source.items()
+                    if key != "pred"
+                }
+                for name, source in prediction_sources.items()
+            }
+        summary["date_window"] = {
+            "start": args.start_date,
+            "end": args.end_date,
+        }
 
         if leakage_enabled:
             with Heartbeat("[evaluate]", "running leakage audit", logger=log_progress):
@@ -537,30 +783,45 @@ def main() -> int:
                     if args.wf_mode != "off" and len(wf_train) >= 1000 and len(wf_valid) >= 500 and len(wf_test) >= 500:
                         if args.wf_scheme == "single":
                             log_progress("Walk-forward optimization started (single split)...")
+                            wf_score_source = _resolve_score_source_name(
+                                score_regime_overrides_cfg,
+                                frame=wf_valid,
+                            )
+                            wf_pred_source = prediction_sources.get(wf_score_source, prediction_sources["default"])
+                            wf_train_source = wf_pred_source["pred"].loc[wf_train.index].copy()
+                            wf_valid_source = wf_pred_source["pred"].loc[wf_valid.index].copy()
+                            wf_test_source = wf_pred_source["pred"].loc[wf_test.index].copy()
+                            log_progress(f"Walk-forward single split using score_source={wf_score_source}")
                             best_params, best_valid_metrics = optimize_roi_strategy(
-                                train_df=wf_train,
-                                valid_df=wf_valid,
+                                train_df=wf_train_source,
+                                valid_df=wf_valid_source,
                                 label_col=label_col,
                                 odds_col=odds_col,
                                 constraints=policy_constraints,
                                 mode=args.wf_mode,
+                                search_config=policy_search_cfg,
                                 progress_interval_sec=float(args.progress_interval_sec),
                                 logger=log_progress,
                             )
 
-                            wf_train_scores = wf_train["score"].to_numpy()
-                            wf_train_labels = wf_train[label_col].astype(int).to_numpy()
-                            wf_test = wf_test.copy()
-                            wf_test["iso_prob"] = fit_isotonic(wf_train_scores, wf_train_labels, wf_test["score"].to_numpy())
-                            wf_test["market_prob"] = compute_market_prob(wf_test, odds_col=odds_col)
-                            wf_test["blend_prob"] = blend_prob(
-                                wf_test["iso_prob"],
-                                wf_test["market_prob"],
+                            wf_train_scores = wf_train_source["score"].to_numpy()
+                            wf_train_labels = wf_train_source[label_col].astype(int).to_numpy()
+                            wf_test_source["iso_prob"] = fit_isotonic(wf_train_scores, wf_train_labels, wf_test_source["score"].to_numpy())
+                            wf_test_source["market_prob"] = compute_market_prob(wf_test_source, odds_col=odds_col)
+                            wf_test_source["blend_prob"] = blend_prob(
+                                wf_test_source["iso_prob"],
+                                wf_test_source["market_prob"],
                                 weight=float(best_params.get("blend_weight", 0.0)),
                             )
-                            wf_test_metrics = run_policy_strategy(wf_test, prob_col="blend_prob", odds_col=odds_col, params=best_params)
+                            wf_test_metrics = run_policy_strategy(wf_test_source, prob_col="blend_prob", odds_col=odds_col, params=best_params)
                             log_progress("Walk-forward optimization finished (single split).")
-                            _record_single_wf_summary(summary, best_params, best_valid_metrics, wf_test_metrics)
+                            _record_single_wf_summary(
+                                summary,
+                                best_params,
+                                best_valid_metrics,
+                                wf_test_metrics,
+                                score_source=wf_score_source,
+                            )
                         else:
                             n_folds = 5 if args.wf_mode == "full" else 3
                             nested_slices = build_nested_wf_slices(
@@ -582,31 +843,51 @@ def main() -> int:
                                 fold_progress.start(message="nested folds started")
                                 log_progress(f"Nested WF started: folds={len(nested_slices)}")
                                 for fold_index, (fold_train, fold_valid, fold_test) in enumerate(nested_slices, start=1):
-                                    log_progress(f"Nested WF fold {fold_index}/{len(nested_slices)}: optimizing on inner valid...")
+                                    fold_score_source = _resolve_score_source_name(
+                                        score_regime_overrides_cfg,
+                                        frame=fold_valid,
+                                    )
+                                    fold_pred_source = prediction_sources.get(fold_score_source, prediction_sources["default"])
+                                    fold_train_source = fold_pred_source["pred"].loc[fold_train.index].copy()
+                                    fold_valid_source = fold_pred_source["pred"].loc[fold_valid.index].copy()
+                                    fold_test_source = fold_pred_source["pred"].loc[fold_test.index].copy()
+                                    log_progress(
+                                        f"Nested WF fold {fold_index}/{len(nested_slices)}: optimizing on inner valid "
+                                        f"with score_source={fold_score_source}..."
+                                    )
                                     best_params, best_valid_metrics = optimize_roi_strategy(
-                                        train_df=fold_train,
-                                        valid_df=fold_valid,
+                                        train_df=fold_train_source,
+                                        valid_df=fold_valid_source,
                                         label_col=label_col,
                                         odds_col=odds_col,
                                         constraints=policy_constraints,
                                         mode=args.wf_mode,
+                                        search_config=policy_search_cfg,
                                         progress_interval_sec=float(args.progress_interval_sec),
                                         logger=log_progress,
                                     )
 
-                                    fold_train_scores = fold_train["score"].to_numpy()
-                                    fold_train_labels = fold_train[label_col].astype(int).to_numpy()
-                                    fold_test = fold_test.copy()
-                                    fold_test["iso_prob"] = fit_isotonic(fold_train_scores, fold_train_labels, fold_test["score"].to_numpy())
-                                    fold_test["market_prob"] = compute_market_prob(fold_test, odds_col=odds_col)
-                                    fold_test["blend_prob"] = blend_prob(
-                                        fold_test["iso_prob"],
-                                        fold_test["market_prob"],
+                                    fold_train_scores = fold_train_source["score"].to_numpy()
+                                    fold_train_labels = fold_train_source[label_col].astype(int).to_numpy()
+                                    fold_test_source["iso_prob"] = fit_isotonic(fold_train_scores, fold_train_labels, fold_test_source["score"].to_numpy())
+                                    fold_test_source["market_prob"] = compute_market_prob(fold_test_source, odds_col=odds_col)
+                                    fold_test_source["blend_prob"] = blend_prob(
+                                        fold_test_source["iso_prob"],
+                                        fold_test_source["market_prob"],
                                         weight=float(best_params.get("blend_weight", 0.0)),
                                     )
-                                    fold_test_metrics = run_policy_strategy(fold_test, prob_col="blend_prob", odds_col=odds_col, params=best_params)
+                                    fold_test_metrics = run_policy_strategy(fold_test_source, prob_col="blend_prob", odds_col=odds_col, params=best_params)
                                     strategy_kind = str(best_params.get("strategy_kind", "kelly"))
-                                    fold_rows.append(_fold_row(strategy_kind, best_params, best_valid_metrics, fold_test_metrics, fold_index))
+                                    fold_rows.append(
+                                        _fold_row(
+                                            strategy_kind,
+                                            best_params,
+                                            best_valid_metrics,
+                                            fold_test_metrics,
+                                            fold_index,
+                                            score_source=fold_score_source,
+                                        )
+                                    )
                                     fold_progress.update(message=f"fold {fold_index} complete")
 
                                 fold_progress.complete(message="nested folds finished")
@@ -674,11 +955,17 @@ def main() -> int:
 
         report_dir = ROOT / "artifacts/reports"
         report_dir.mkdir(parents=True, exist_ok=True)
-        output_slug = _derive_evaluation_output_slug(args.config, model_path)
+        output_slug = _derive_evaluation_output_slug(
+            args.config,
+            model_path,
+            prefer_config=bool(isinstance(score_regime_overrides_cfg, list) and score_regime_overrides_cfg),
+        )
+        date_window_slug = _derive_date_window_slug(args.start_date, args.end_date)
+        wf_slug = _derive_wf_slug(args.wf_mode, args.wf_scheme)
         summary_path = report_dir / "evaluation_summary.json"
         by_date_path = report_dir / "evaluation_by_date.csv"
-        versioned_summary_path = report_dir / f"evaluation_summary_{output_slug}.json"
-        versioned_by_date_path = report_dir / f"evaluation_by_date_{output_slug}.csv"
+        versioned_summary_path = report_dir / f"evaluation_summary_{output_slug}{date_window_slug}{wf_slug}.json"
+        versioned_by_date_path = report_dir / f"evaluation_by_date_{output_slug}{date_window_slug}{wf_slug}.csv"
 
         summary["output_files"] = {
             "latest_summary": str(summary_path.relative_to(ROOT)),

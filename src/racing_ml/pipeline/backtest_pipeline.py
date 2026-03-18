@@ -4,10 +4,17 @@ import json
 from pathlib import Path
 import time
 
-import matplotlib.pyplot as plt
+import matplotlib
 import pandas as pd
 
+matplotlib.use("Agg")
+import matplotlib.pyplot as plt
+
+from racing_ml.common.config import load_yaml
 from racing_ml.common.progress import Heartbeat, ProgressBar
+from racing_ml.evaluation.policy import run_policy_strategy
+from racing_ml.evaluation.scoring import resolve_odds_column
+from racing_ml.serving.runtime_policy import annotate_runtime_policy, resolve_runtime_policy
 
 
 def log_progress(message: str) -> None:
@@ -43,7 +50,8 @@ def _simple_win_roi(frame: pd.DataFrame, stake_per_race: float = 100.0) -> float
     for _, group in frame.groupby("race_id"):
         pick = group.sort_values("pred_rank").iloc[0]
         total_bet += stake_per_race
-        if int(pick.get("rank", 0)) == 1:
+        rank = pd.to_numeric(pick.get("rank"), errors="coerce")
+        if pd.notna(rank) and int(rank) == 1:
             odds = pd.to_numeric(pick.get("odds", 0), errors="coerce")
             if pd.isna(odds) or odds <= 0:
                 odds = 1.0
@@ -113,7 +121,10 @@ def _plot_backtest(frame: pd.DataFrame, out_path: Path) -> None:
 
 
 def run_backtest(config_path: str, predictions_file: str | None = None) -> None:
-    _ = Path(config_path)
+    resolved_config_path = Path(config_path)
+    if not resolved_config_path.is_absolute():
+        resolved_config_path = Path.cwd() / resolved_config_path
+    model_config = load_yaml(resolved_config_path)
     predictions_dir = Path("artifacts/predictions")
     target_file = Path(predictions_file) if predictions_file else _latest_prediction_file(predictions_dir)
     if not target_file.exists():
@@ -142,6 +153,7 @@ def run_backtest(config_path: str, predictions_file: str | None = None) -> None:
 
         metrics = {
             "prediction_file": str(target_file),
+            "config_file": str(resolved_config_path),
             "num_rows": int(len(frame)),
             "num_races": int(frame["race_id"].nunique()),
             "top1_hit_rate": _topk_hit_rate(frame, 1),
@@ -150,6 +162,48 @@ def run_backtest(config_path: str, predictions_file: str | None = None) -> None:
             "simple_top1_win_roi": _simple_win_roi(frame),
             "ev_top1_win_roi": _ev_top1_roi(frame),
         }
+        if "score_source" in frame.columns:
+            score_source_counts = frame["score_source"].fillna("default").astype(str).value_counts().to_dict()
+            metrics["score_source_count"] = int(len(score_source_counts))
+            metrics["score_sources"] = {str(key): int(value) for key, value in score_source_counts.items()}
+
+        odds_col = resolve_odds_column(frame)
+        policy_resolution = resolve_runtime_policy(model_config, frame=frame)
+        if odds_col is not None and policy_resolution is not None:
+            policy_name, policy_config = policy_resolution
+            policy_frame = annotate_runtime_policy(
+                frame,
+                odds_col=odds_col,
+                policy_name=policy_name,
+                policy_config=policy_config,
+                score_col="score",
+            )
+            policy_metrics = run_policy_strategy(
+                policy_frame,
+                prob_col="policy_prob",
+                odds_col=odds_col,
+                params=policy_config,
+            )
+            policy_strategy_kind = str(policy_config.get("strategy_kind", "")).strip().lower()
+            selected_mask = policy_frame["policy_selected"].fillna(False).astype(bool)
+            metrics["policy_name"] = policy_name
+            metrics["policy_strategy_kind"] = policy_strategy_kind
+            metrics["policy_blend_weight"] = float(policy_config.get("blend_weight", 1.0))
+            metrics["policy_selected_rows"] = int(selected_mask.sum())
+            metrics["policy_selected_races"] = int(policy_frame.loc[selected_mask, "race_id"].nunique()) if selected_mask.any() else 0
+            if policy_strategy_kind == "portfolio":
+                metrics["policy_roi"] = policy_metrics.get("portfolio_roi")
+                metrics["policy_bets"] = int(policy_metrics.get("portfolio_bets") or 0)
+                metrics["policy_hit_rate"] = policy_metrics.get("portfolio_hit_rate")
+                metrics["policy_final_bankroll"] = policy_metrics.get("portfolio_final_bankroll")
+                metrics["policy_max_drawdown"] = policy_metrics.get("portfolio_max_drawdown")
+                metrics["policy_avg_synthetic_odds"] = policy_metrics.get("portfolio_avg_synthetic_odds")
+            else:
+                metrics["policy_roi"] = policy_metrics.get("kelly_roi")
+                metrics["policy_bets"] = int(policy_metrics.get("kelly_bets") or 0)
+                metrics["policy_hit_rate"] = policy_metrics.get("kelly_hit_rate")
+                metrics["policy_final_bankroll"] = policy_metrics.get("kelly_final_bankroll")
+                metrics["policy_max_drawdown"] = policy_metrics.get("kelly_max_drawdown")
     progress.update(message=f"metrics computed races={metrics['num_races']:,}")
 
     report_dir = Path("artifacts/reports")
