@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 from collections import defaultdict
+import difflib
 import json
 from pathlib import Path
 import traceback
@@ -36,6 +37,41 @@ def _load_summary(summary_file: str) -> dict[str, Any]:
         summary_path = ROOT / summary_path
     with summary_path.open("r", encoding="utf-8") as file:
         return json.load(file)
+
+
+def _load_yaml_file(path_value: str) -> tuple[Path, dict[str, Any]]:
+    file_path = Path(path_value)
+    if not file_path.is_absolute():
+        file_path = ROOT / file_path
+    with file_path.open("r", encoding="utf-8") as file:
+        data = yaml.safe_load(file)
+    return file_path, data or {}
+
+
+def _serving_yaml_text(serving: dict[str, Any]) -> str:
+    return yaml.safe_dump({"serving": serving}, allow_unicode=True, sort_keys=False).strip()
+
+
+def _compare_serving_blocks(
+    generated_serving: dict[str, Any],
+    config_serving: dict[str, Any] | None,
+) -> tuple[bool, str]:
+    config_serving = config_serving if isinstance(config_serving, dict) else {}
+    if generated_serving == config_serving:
+        return True, ""
+
+    generated_text = _serving_yaml_text(generated_serving).splitlines()
+    config_text = _serving_yaml_text(config_serving).splitlines()
+    diff = "\n".join(
+        difflib.unified_diff(
+            config_text,
+            generated_text,
+            fromfile="config:serving",
+            tofile="generated:serving",
+            lineterm="",
+        )
+    )
+    return False, diff
 
 
 def _require_fold_field(row: dict[str, Any], key: str, mode: str) -> Any:
@@ -318,6 +354,9 @@ def main() -> int:
         choices=["last_fold", "last_non_no_bet"],
         default="last_non_no_bet",
     )
+    parser.add_argument("--config-file", default=None)
+    parser.add_argument("--check-config-serving", action="store_true")
+    parser.add_argument("--sync-config-serving", action="store_true")
     parser.add_argument("--output-file", default=None)
     parser.add_argument("--format", choices=["yaml", "json"], default="yaml")
     args = parser.parse_args()
@@ -331,6 +370,35 @@ def main() -> int:
             score_when_source=score_when_source,
             default_policy_source=args.default_policy_source,
         )
+        generated_serving = payload["serving"]
+
+        config_path: Path | None = None
+        config_data: dict[str, Any] | None = None
+        if args.config_file:
+            config_path, config_data = _load_yaml_file(args.config_file)
+
+        if args.check_config_serving:
+            if config_data is None:
+                raise ValueError("--check-config-serving requires --config-file")
+            is_match, diff_text = _compare_serving_blocks(generated_serving, config_data.get("serving"))
+            if is_match:
+                print(f"[export-serving] config serving matches generated block: {config_path}")
+            else:
+                print(f"[export-serving] config serving differs from generated block: {config_path}")
+                if diff_text:
+                    print(diff_text)
+                return 1
+
+        if args.sync_config_serving:
+            if config_data is None or config_path is None:
+                raise ValueError("--sync-config-serving requires --config-file")
+            config_data["serving"] = generated_serving
+            config_path.write_text(
+                yaml.safe_dump(config_data, allow_unicode=True, sort_keys=False),
+                encoding="utf-8",
+            )
+            print(f"[export-serving] config serving synced: {config_path}")
+
         if args.format == "json":
             output_text = json.dumps(payload, ensure_ascii=False, indent=2)
         else:
