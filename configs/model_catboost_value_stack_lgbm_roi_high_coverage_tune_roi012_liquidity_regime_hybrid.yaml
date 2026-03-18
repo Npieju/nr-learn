@@ -52,6 +52,53 @@ evaluation:
           top_ks: [1]
           min_expected_values: [999.0]
 
+serving:
+  policy:
+    name: "sep_runtime_portfolio"
+    strategy_kind: "portfolio"
+    blend_weight: 0.8
+    min_prob: 0.05
+    odds_min: 1.0
+    odds_max: 25.0
+    top_k: 1
+    min_expected_value: 0.95
+  policy_regime_overrides:
+    - name: "may_june_runtime_kelly"
+      when:
+        end_month_in: [5, 6]
+      policy:
+        strategy_kind: "kelly"
+        blend_weight: 0.8
+        min_prob: 0.03
+        odds_min: 1.0
+        odds_max: 25.0
+        min_edge: 0.0
+        fractional_kelly: 0.25
+        max_fraction: 0.02
+    - name: "july_runtime_kelly"
+      when:
+        end_month_in: [7]
+      policy:
+        strategy_kind: "kelly"
+        blend_weight: 0.8
+        min_prob: 0.03
+        odds_min: 1.0
+        odds_max: 25.0
+        min_edge: 0.005
+        fractional_kelly: 0.25
+        max_fraction: 0.02
+    - name: "aug_runtime_portfolio"
+      when:
+        end_month_in: [8]
+      policy:
+        strategy_kind: "portfolio"
+        blend_weight: 0.8
+        min_prob: 0.03
+        odds_min: 1.0
+        odds_max: 25.0
+        top_k: 1
+        min_expected_value: 0.95
+
 output:
   model_dir: "artifacts/models"
   report_dir: "artifacts/reports"
