@@ -137,7 +137,11 @@ nr-learn/
     - （任意）`python scripts/run_backtest.py --config configs/model.yaml --predictions-file artifacts/predictions/predictions_20210731.csv`
     - レポートJSON: `artifacts/reports/backtest_YYYYMMDD.json`
     - 可視化PNG: `artifacts/reports/backtest_YYYYMMDD.png`
-7. モデル評価（全体＋日別）
+7. Serving smoke validation
+    - representative date の score source / fixed policy routing を一括確認するときは `python scripts/run_serving_smoke.py --profile best_policy_may` または `python scripts/run_serving_smoke.py --profile fallback_hybrid`
+    - 特定日だけ確認したいときは `--date 2024-09-14` のように絞れます
+    - summary は `artifacts/reports/serving_smoke_<profile>.json` に保存され、prediction/backtest artifact は `_policy_may` や `_fallback_hybrid` suffix 付きでも退避されます
+8. モデル評価（全体＋日別）
     - `python scripts/run_evaluate.py --config configs/model.yaml --data-config configs/data.yaml --feature-config configs/features.yaml --max-rows 80000`
     - （CatBoost win）`python scripts/run_evaluate.py --config configs/model_catboost.yaml --data-config configs/data.yaml --feature-config configs/features_catboost_rich.yaml --max-rows 200000`
     - （benchmark 用 / CatBoost fundamental win）`python scripts/run_evaluate.py --config configs/model_catboost_fundamental.yaml --data-config configs/data.yaml --feature-config configs/features_catboost_fundamental.yaml --max-rows 200000 --wf-mode off`
@@ -165,19 +169,19 @@ nr-learn/
             - `ev_top1_roi`: `score × odds` が最大の馬を毎レース購入
             - `ev_threshold_1_0_roi`: 期待値1.0以上のみ購入
             - `ev_threshold_1_2_roi`: 期待値1.2以上のみ購入
-8. ベースライン vs Ranker 比較（同一データでA/B）
+9. ベースライン vs Ranker 比較（同一データでA/B）
     - `python scripts/run_ab_compare.py --base-config configs/model.yaml --challenger-config configs/model_ranker.yaml --max-rows 30000`
     - （CatBoost win vs LightGBM baseline）`python scripts/run_ab_compare.py --base-config configs/model.yaml --challenger-config configs/model_catboost.yaml --feature-config configs/features_catboost_rich.yaml --max-rows 30000`
     - 比較サマリ: `artifacts/reports/ab_compare_summary.json`
     - Top3確率モデルを比較する場合は `--challenger-config configs/model_top3.yaml` を指定
     - Top3チューニング結果（`artifacts/reports/tune_top3_summary.json`）には `run_context` / `leakage_audit` / `policy_constraints` が保存されます
     - 互換のため `strategy_constraints` も同時に残します
-9. ダッシュボード（Notebookが止まるときのCLI代替）
+10. ダッシュボード（Notebookが止まるときのCLI代替）
     - `python scripts/run_dashboard.py`
     - 概要JSON: `artifacts/reports/dashboard/dashboard_summary_YYYYMMDD.json`
     - 可視化PNG: `artifacts/reports/dashboard/dashboard_YYYYMMDD.png`
     - Top20 CSV: `artifacts/reports/dashboard/dashboard_top20_YYYYMMDD.csv`
-10. 実データで重い場合
+11. 実データで重い場合
     - `configs/model.yaml` の `training.max_train_rows` / `training.max_valid_rows` で学習件数を調整
 
 ## Artifact運用

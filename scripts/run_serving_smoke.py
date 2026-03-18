@@ -1,0 +1,365 @@
+from __future__ import annotations
+
+import argparse
+import json
+import os
+from pathlib import Path
+import shutil
+import sys
+import traceback
+from typing import Any
+
+ROOT = Path(__file__).resolve().parents[1]
+SRC = ROOT / "src"
+if str(SRC) not in sys.path:
+    sys.path.append(str(SRC))
+
+import pandas as pd
+
+from racing_ml.pipeline.backtest_pipeline import run_backtest
+from racing_ml.serving.predict_batch import run_predict
+
+
+PROFILE_PRESETS: dict[str, dict[str, Any]] = {
+    "best_policy_may": {
+        "config": "configs/model_catboost_value_stack_lgbm_roi_high_coverage_tune_roi012_liquidity_regime_modelswitch_f1_policy_may.yaml",
+        "data_config": "configs/data.yaml",
+        "feature_config": "configs/features_catboost_rich_high_coverage_diag.yaml",
+        "artifact_suffix": "policy_may",
+        "cases": [
+            {
+                "date": "2024-05-25",
+                "score_source": "may_runtime_liquidity",
+                "policy_name": "may_runtime_kelly",
+            },
+            {
+                "date": "2024-06-15",
+                "score_source": "default",
+                "policy_name": "june_runtime_kelly",
+            },
+            {
+                "date": "2024-07-20",
+                "score_source": "default",
+                "policy_name": "july_runtime_kelly",
+            },
+            {
+                "date": "2024-08-10",
+                "score_source": "default",
+                "policy_name": "aug_runtime_portfolio",
+            },
+            {
+                "date": "2024-09-14",
+                "score_source": "default",
+                "policy_name": "sep_runtime_portfolio",
+            },
+        ],
+    },
+    "fallback_hybrid": {
+        "config": "configs/model_catboost_value_stack_lgbm_roi_high_coverage_tune_roi012_liquidity_regime_hybrid.yaml",
+        "data_config": "configs/data.yaml",
+        "feature_config": "configs/features_catboost_rich_high_coverage_diag.yaml",
+        "artifact_suffix": "fallback_hybrid",
+        "cases": [
+            {
+                "date": "2024-05-25",
+                "score_source": "default",
+                "policy_name": "may_june_runtime_kelly",
+            },
+            {
+                "date": "2024-06-15",
+                "score_source": "default",
+                "policy_name": "may_june_runtime_kelly",
+            },
+            {
+                "date": "2024-07-20",
+                "score_source": "default",
+                "policy_name": "july_runtime_kelly",
+            },
+            {
+                "date": "2024-08-10",
+                "score_source": "default",
+                "policy_name": "aug_runtime_portfolio",
+            },
+            {
+                "date": "2024-09-14",
+                "score_source": "default",
+                "policy_name": "sep_runtime_portfolio",
+            },
+        ],
+    },
+}
+
+
+def _resolve_path(path_value: str | Path) -> Path:
+    path = Path(path_value)
+    if path.is_absolute():
+        return path
+    return ROOT / path
+
+
+def _display_path(path: Path) -> str:
+    try:
+        return path.relative_to(ROOT).as_posix()
+    except ValueError:
+        return path.as_posix()
+
+
+def _date_tag(date_value: str) -> str:
+    return pd.Timestamp(date_value).strftime("%Y%m%d")
+
+
+def _prediction_paths(date_value: str) -> tuple[Path, Path]:
+    date_tag = _date_tag(date_value)
+    base_dir = ROOT / "artifacts" / "predictions"
+    return base_dir / f"predictions_{date_tag}.csv", base_dir / f"predictions_{date_tag}.png"
+
+
+def _backtest_paths(date_value: str) -> tuple[Path, Path]:
+    date_tag = _date_tag(date_value)
+    base_dir = ROOT / "artifacts" / "reports"
+    return base_dir / f"backtest_{date_tag}.json", base_dir / f"backtest_{date_tag}.png"
+
+
+def _copy_with_suffix(path: Path, suffix: str) -> str | None:
+    if not path.exists():
+        return None
+    destination = path.with_name(f"{path.stem}_{suffix}{path.suffix}")
+    shutil.copy2(path, destination)
+    return _display_path(destination)
+
+
+def _single_value(values: list[str], label: str) -> str:
+    unique_values = sorted({value for value in values if value})
+    if not unique_values:
+        raise ValueError(f"Missing {label} in artifact")
+    if len(unique_values) != 1:
+        raise ValueError(f"Expected a single {label}, got {unique_values}")
+    return unique_values[0]
+
+
+def _prediction_summary(prediction_file: Path) -> dict[str, Any]:
+    frame = pd.read_csv(prediction_file)
+    if frame.empty:
+        raise ValueError(f"Prediction output is empty: {prediction_file}")
+
+    resolved_date = _single_value(frame["date"].astype(str).str[:10].tolist(), "prediction date")
+    score_source = "default"
+    if "score_source" in frame.columns:
+        score_source = _single_value(frame["score_source"].fillna("default").astype(str).tolist(), "score_source")
+
+    policy_name = ""
+    if "policy_name" in frame.columns:
+        policy_values = frame["policy_name"].dropna().astype(str).tolist()
+        if policy_values:
+            policy_name = _single_value(policy_values, "policy_name")
+
+    score_source_model_config = ""
+    if "score_source_model_config" in frame.columns:
+        model_config_values = frame["score_source_model_config"].dropna().astype(str).tolist()
+        if model_config_values:
+            score_source_model_config = _single_value(model_config_values, "score_source_model_config")
+
+    selected_rows = 0
+    if "policy_selected" in frame.columns:
+        selected_rows = int(frame["policy_selected"].fillna(False).astype(bool).sum())
+
+    return {
+        "resolved_date": resolved_date,
+        "score_source": score_source,
+        "score_source_model_config": score_source_model_config,
+        "policy_name": policy_name,
+        "policy_selected_rows": selected_rows,
+        "num_rows": int(len(frame)),
+    }
+
+
+def _backtest_summary(report_file: Path) -> dict[str, Any]:
+    with report_file.open("r", encoding="utf-8") as file:
+        return json.load(file)
+
+
+def _validate_case(
+    case: dict[str, Any],
+    *,
+    prediction_summary: dict[str, Any],
+    backtest_summary: dict[str, Any],
+    expected_config_path: Path,
+) -> None:
+    if prediction_summary["resolved_date"] != case["date"]:
+        raise ValueError(
+            f"Resolved date mismatch for {case['date']}: got {prediction_summary['resolved_date']}"
+        )
+
+    if prediction_summary["score_source"] != case["score_source"]:
+        raise ValueError(
+            f"Score source mismatch for {case['date']}: expected {case['score_source']} got {prediction_summary['score_source']}"
+        )
+
+    if prediction_summary["policy_name"] != case["policy_name"]:
+        raise ValueError(
+            f"Policy mismatch in predictions for {case['date']}: expected {case['policy_name']} got {prediction_summary['policy_name']}"
+        )
+
+    if str(backtest_summary.get("policy_name", "")) != case["policy_name"]:
+        raise ValueError(
+            f"Policy mismatch in backtest for {case['date']}: expected {case['policy_name']} got {backtest_summary.get('policy_name')}"
+        )
+
+    score_sources = backtest_summary.get("score_sources") if isinstance(backtest_summary.get("score_sources"), dict) else {}
+    if sorted(str(key) for key in score_sources.keys()) != [case["score_source"]]:
+        raise ValueError(
+            f"Backtest score sources mismatch for {case['date']}: expected {[case['score_source']]} got {sorted(score_sources.keys())}"
+        )
+
+    if int(backtest_summary.get("policy_selected_rows", 0) or 0) != int(prediction_summary["policy_selected_rows"]):
+        raise ValueError(
+            f"Selected-row mismatch for {case['date']}: predictions={prediction_summary['policy_selected_rows']} backtest={backtest_summary.get('policy_selected_rows')}"
+        )
+
+    actual_config_path = Path(str(backtest_summary.get("config_file", ""))).resolve()
+    if actual_config_path != expected_config_path.resolve():
+        raise ValueError(
+            f"Backtest config mismatch for {case['date']}: expected {expected_config_path} got {actual_config_path}"
+        )
+
+
+def _select_cases(profile_name: str, requested_dates: list[str] | None) -> list[dict[str, Any]]:
+    preset = PROFILE_PRESETS[profile_name]
+    cases = list(preset["cases"])
+    if not requested_dates:
+        return cases
+
+    requested = {str(pd.Timestamp(date_value).date()) for date_value in requested_dates}
+    selected = [case for case in cases if case["date"] in requested]
+    found = {case["date"] for case in selected}
+    missing = sorted(requested - found)
+    if missing:
+        raise ValueError(f"Requested dates are not defined in profile '{profile_name}': {missing}")
+    return selected
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--profile", choices=sorted(PROFILE_PRESETS.keys()), required=True)
+    parser.add_argument("--date", action="append", default=None)
+    parser.add_argument("--config", default=None)
+    parser.add_argument("--data-config", default=None)
+    parser.add_argument("--feature-config", default=None)
+    parser.add_argument("--artifact-suffix", default=None)
+    parser.add_argument("--output-file", default=None)
+    parser.add_argument("--no-archive-artifacts", action="store_true")
+    parser.add_argument("--print-traceback", action="store_true")
+    args = parser.parse_args()
+
+    preset = PROFILE_PRESETS[args.profile]
+    config_path = _resolve_path(args.config or preset["config"])
+    data_config_path = _resolve_path(args.data_config or preset["data_config"])
+    feature_config_path = _resolve_path(args.feature_config or preset["feature_config"])
+    artifact_suffix = str(args.artifact_suffix or preset["artifact_suffix"]).strip() or args.profile
+    output_file = _resolve_path(args.output_file) if args.output_file else ROOT / "artifacts" / "reports" / f"serving_smoke_{args.profile}.json"
+
+    try:
+        cases = _select_cases(args.profile, args.date)
+        output_file.parent.mkdir(parents=True, exist_ok=True)
+        os.chdir(ROOT)
+
+        results: list[dict[str, Any]] = []
+        overall_success = True
+
+        for case in cases:
+            case_result: dict[str, Any] = {
+                "date": case["date"],
+                "expected_score_source": case["score_source"],
+                "expected_policy_name": case["policy_name"],
+            }
+            prediction_csv, prediction_png = _prediction_paths(case["date"])
+            backtest_json, backtest_png = _backtest_paths(case["date"])
+
+            print(
+                f"[serving-smoke] running date={case['date']} expected_score_source={case['score_source']} "
+                f"expected_policy={case['policy_name']}",
+                flush=True,
+            )
+
+            try:
+                run_predict(
+                    model_config_path=_display_path(config_path),
+                    data_config_path=_display_path(data_config_path),
+                    feature_config_path=_display_path(feature_config_path),
+                    race_date=case["date"],
+                )
+                if not prediction_csv.exists():
+                    raise FileNotFoundError(f"Prediction artifact not found: {prediction_csv}")
+
+                run_backtest(_display_path(config_path), _display_path(prediction_csv))
+                if not backtest_json.exists():
+                    raise FileNotFoundError(f"Backtest artifact not found: {backtest_json}")
+
+                prediction_summary = _prediction_summary(prediction_csv)
+                backtest_summary = _backtest_summary(backtest_json)
+                _validate_case(
+                    case,
+                    prediction_summary=prediction_summary,
+                    backtest_summary=backtest_summary,
+                    expected_config_path=config_path,
+                )
+
+                archived_artifacts = {}
+                if not args.no_archive_artifacts:
+                    archived_artifacts = {
+                        "prediction_csv": _copy_with_suffix(prediction_csv, artifact_suffix),
+                        "prediction_png": _copy_with_suffix(prediction_png, artifact_suffix),
+                        "backtest_json": _copy_with_suffix(backtest_json, artifact_suffix),
+                        "backtest_png": _copy_with_suffix(backtest_png, artifact_suffix),
+                    }
+
+                case_result.update(
+                    {
+                        "status": "ok",
+                        "prediction_file": _display_path(prediction_csv),
+                        "backtest_file": _display_path(backtest_json),
+                        "score_source": prediction_summary["score_source"],
+                        "policy_name": prediction_summary["policy_name"],
+                        "policy_selected_rows": prediction_summary["policy_selected_rows"],
+                        "policy_bets": int(backtest_summary.get("policy_bets", 0) or 0),
+                        "policy_roi": backtest_summary.get("policy_roi"),
+                        "archived_artifacts": archived_artifacts,
+                    }
+                )
+                print(
+                    f"[serving-smoke] ok date={case['date']} score_source={prediction_summary['score_source']} "
+                    f"policy={prediction_summary['policy_name']} bets={int(backtest_summary.get('policy_bets', 0) or 0)}",
+                    flush=True,
+                )
+            except Exception as error:
+                overall_success = False
+                case_result.update({"status": "failed", "error": str(error)})
+                print(f"[serving-smoke] failed date={case['date']} error={error}", flush=True)
+                if args.print_traceback:
+                    traceback.print_exc()
+
+            results.append(case_result)
+
+        summary = {
+            "profile": args.profile,
+            "config_file": _display_path(config_path),
+            "data_config_file": _display_path(data_config_path),
+            "feature_config_file": _display_path(feature_config_path),
+            "artifact_suffix": artifact_suffix,
+            "cases": results,
+        }
+        output_file.write_text(json.dumps(summary, ensure_ascii=False, indent=2), encoding="utf-8")
+        print(f"[serving-smoke] summary saved: {_display_path(output_file)}", flush=True)
+        return 0 if overall_success else 1
+    except KeyboardInterrupt:
+        print("[serving-smoke] interrupted by user")
+        return 130
+    except Exception as error:
+        print(f"[serving-smoke] failed: {error}")
+        if args.print_traceback:
+            traceback.print_exc()
+        return 1
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
