@@ -112,6 +112,64 @@ PROFILE_PRESETS: dict[str, dict[str, Any]] = {
             },
         ],
     },
+    "best_policy_may_test_partition_window": {
+        "config": "configs/model_catboost_value_stack_lgbm_roi_high_coverage_tune_roi012_liquidity_regime_modelswitch_f1_policy_may_test_partition.yaml",
+        "data_config": "configs/data.yaml",
+        "feature_config": "configs/features_catboost_rich_high_coverage_diag.yaml",
+        "artifact_suffix": "policy_may_test_partition_window",
+        "cases": [
+            {
+                "date": "2024-05-25",
+                "score_source": "may_runtime_liquidity",
+                "policy_name": "may_runtime_kelly",
+            },
+            {
+                "date": "2024-05-26",
+                "score_source": "may_runtime_liquidity",
+                "policy_name": "may_runtime_kelly",
+            },
+            {
+                "date": "2024-06-01",
+                "score_source": "may_runtime_liquidity",
+                "policy_name": "may_runtime_kelly",
+            },
+            {
+                "date": "2024-06-02",
+                "score_source": "may_runtime_liquidity",
+                "policy_name": "may_runtime_kelly",
+            },
+            {
+                "date": "2024-06-08",
+                "score_source": "may_runtime_liquidity",
+                "policy_name": "may_runtime_kelly",
+            },
+            {
+                "date": "2024-06-09",
+                "score_source": "may_runtime_liquidity",
+                "policy_name": "may_runtime_kelly",
+            },
+            {
+                "date": "2024-06-15",
+                "score_source": "may_runtime_liquidity",
+                "policy_name": "may_runtime_kelly",
+            },
+            {
+                "date": "2024-06-16",
+                "score_source": "default",
+                "policy_name": "june_runtime_kelly",
+            },
+            {
+                "date": "2024-06-22",
+                "score_source": "default",
+                "policy_name": "june_runtime_kelly",
+            },
+            {
+                "date": "2024-06-23",
+                "score_source": "default",
+                "policy_name": "june_runtime_kelly",
+            },
+        ],
+    },
     "fallback_hybrid": {
         "config": "configs/model_catboost_value_stack_lgbm_roi_high_coverage_tune_roi012_liquidity_regime_hybrid.yaml",
         "data_config": "configs/data.yaml",

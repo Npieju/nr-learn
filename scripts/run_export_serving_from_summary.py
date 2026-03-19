@@ -98,7 +98,40 @@ def _months_from_range(start_date: str, end_date: str) -> list[int]:
     return months
 
 
-def _when_payload(row: dict[str, Any], mode: str) -> dict[str, Any]:
+def _build_test_partition_windows(folds: list[dict[str, Any]]) -> dict[int, dict[str, Any]]:
+    ordered_rows = sorted(
+        folds,
+        key=lambda row: (
+            str(_require_fold_field(row, "test_start_date", "test_partition_window")),
+            int(row.get("fold", 0) or 0),
+        ),
+    )
+    partition_windows: dict[int, dict[str, Any]] = {}
+    for index, row in enumerate(ordered_rows):
+        fold = int(row.get("fold", 0) or 0)
+        start = pd.Timestamp(_require_fold_field(row, "test_start_date", "test_partition_window"))
+        raw_end = pd.Timestamp(_require_fold_field(row, "test_end_date", "test_partition_window"))
+        clipped_end = raw_end
+        if index + 1 < len(ordered_rows):
+            next_start = pd.Timestamp(_require_fold_field(ordered_rows[index + 1], "test_start_date", "test_partition_window"))
+            clipped_end = min(raw_end, next_start - pd.Timedelta(days=1))
+        if clipped_end < start:
+            raise ValueError(
+                f"Invalid partition window for fold {fold}: start={start.date()} clipped_end={clipped_end.date()}"
+            )
+        partition_windows[fold] = {
+            "start_on_or_after": str(start.date()),
+            "end_on_or_before": str(clipped_end.date()),
+        }
+    return partition_windows
+
+
+def _when_payload(
+    row: dict[str, Any],
+    mode: str,
+    *,
+    partition_windows: dict[int, dict[str, Any]] | None = None,
+) -> dict[str, Any]:
     if mode == "valid_end_month":
         return {"end_month_in": [int(_require_fold_field(row, "valid_end_month", mode))]}
     if mode == "test_start_month":
@@ -117,6 +150,11 @@ def _when_payload(row: dict[str, Any], mode: str) -> dict[str, Any]:
             "start_on_or_after": str(_require_fold_field(row, "test_start_date", mode)),
             "end_on_or_before": str(_require_fold_field(row, "test_end_date", mode)),
         }
+    if mode == "test_partition_window":
+        fold = int(_require_fold_field(row, "fold", mode))
+        if not isinstance(partition_windows, dict) or fold not in partition_windows:
+            raise ValueError(f"Partition window is missing for fold {fold}")
+        return dict(partition_windows[fold])
     raise ValueError(f"Unsupported mapping mode: {mode}")
 
 
@@ -223,12 +261,16 @@ def export_serving_from_summary(
     if not isinstance(folds, list) or not folds:
         raise ValueError("Summary does not contain wf_nested_folds")
 
+    partition_windows = None
+    if policy_when_source == "test_partition_window" or score_when_source == "test_partition_window":
+        partition_windows = _build_test_partition_windows(folds)
+
     score_sources = summary.get("score_sources") if isinstance(summary.get("score_sources"), dict) else {}
     default_policy_row = _select_default_policy_row(folds, default_policy_source)
     default_policy = _policy_from_fold_row(default_policy_row)
     default_months = None
     if policy_when_source in {"valid_end_month", "test_start_month", "test_end_month", "test_months"}:
-        default_months = _when_payload(default_policy_row, policy_when_source).get("end_month_in", [])
+        default_months = _when_payload(default_policy_row, policy_when_source, partition_windows=partition_windows).get("end_month_in", [])
 
     serving: dict[str, Any] = {
         "policy": {
@@ -279,7 +321,7 @@ def export_serving_from_summary(
                     {
                         "name": f"{row['score_source']}_fold{int(row['fold'])}",
                         "model_config": str(row["model_config"]),
-                        "when": _when_payload(row, score_when_source),
+                        "when": _when_payload(row, score_when_source, partition_windows=partition_windows),
                     }
                 )
         serving["score_regime_overrides"] = score_regime_overrides
@@ -327,7 +369,7 @@ def export_serving_from_summary(
                 policy_regime_overrides.append(
                     {
                         "name": _policy_name(policy, fold=int(row["fold"])),
-                        "when": _when_payload(row, policy_when_source),
+                        "when": _when_payload(row, policy_when_source, partition_windows=partition_windows),
                         "policy": policy,
                     }
                 )
@@ -341,12 +383,12 @@ def main() -> int:
     parser.add_argument("--summary-file", required=True)
     parser.add_argument(
         "--policy-when-source",
-        choices=["valid_end_month", "test_start_month", "test_end_month", "test_months", "test_date_window"],
+        choices=["valid_end_month", "test_start_month", "test_end_month", "test_months", "test_date_window", "test_partition_window"],
         default="valid_end_month",
     )
     parser.add_argument(
         "--score-when-source",
-        choices=["valid_end_month", "test_start_month", "test_end_month", "test_months", "test_date_window"],
+        choices=["valid_end_month", "test_start_month", "test_end_month", "test_months", "test_date_window", "test_partition_window"],
         default=None,
     )
     parser.add_argument(
