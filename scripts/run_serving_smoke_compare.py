@@ -91,6 +91,15 @@ def _sum_int_field(rows: list[dict[str, Any]], key: str) -> int:
     return total
 
 
+def _sum_float_field(rows: list[dict[str, Any]], key: str) -> float:
+    total = 0.0
+    for row in rows:
+        value = _float_or_none(row.get(key))
+        if value is not None:
+            total += value
+    return float(total)
+
+
 def _mean_float_field(rows: list[dict[str, Any]], key: str) -> float | None:
     values = []
     for row in rows:
@@ -102,6 +111,23 @@ def _mean_float_field(rows: list[dict[str, Any]], key: str) -> float | None:
     return float(sum(values) / len(values))
 
 
+def _policy_return_or_none(bets: int | None, roi: float | None) -> float | None:
+    if bets is None:
+        return None
+    if bets == 0:
+        return 0.0
+    if roi is None:
+        return None
+    return float(bets) * float(roi)
+
+
+def _policy_net_or_none(bets: int | None, roi: float | None) -> float | None:
+    policy_return = _policy_return_or_none(bets, roi)
+    if policy_return is None or bets is None:
+        return None
+    return float(policy_return - bets)
+
+
 def _shared_row(date_value: str, left_case: dict[str, Any] | None, right_case: dict[str, Any] | None, *, left_label: str, right_label: str) -> dict[str, Any]:
     left_bets = _int_or_none(left_case.get("policy_bets")) if left_case else None
     right_bets = _int_or_none(right_case.get("policy_bets")) if right_case else None
@@ -109,6 +135,10 @@ def _shared_row(date_value: str, left_case: dict[str, Any] | None, right_case: d
     right_roi = _float_or_none(right_case.get("policy_roi")) if right_case else None
     left_selected = _int_or_none(left_case.get("policy_selected_rows")) if left_case else None
     right_selected = _int_or_none(right_case.get("policy_selected_rows")) if right_case else None
+    left_return = _policy_return_or_none(left_bets, left_roi)
+    right_return = _policy_return_or_none(right_bets, right_roi)
+    left_net = _policy_net_or_none(left_bets, left_roi)
+    right_net = _policy_net_or_none(right_bets, right_roi)
 
     row = {
         "date": date_value,
@@ -126,6 +156,10 @@ def _shared_row(date_value: str, left_case: dict[str, Any] | None, right_case: d
         f"{right_label}_policy_bets": right_bets,
         f"{left_label}_policy_roi": left_roi,
         f"{right_label}_policy_roi": right_roi,
+        f"{left_label}_policy_return": left_return,
+        f"{right_label}_policy_return": right_return,
+        f"{left_label}_policy_net": left_net,
+        f"{right_label}_policy_net": right_net,
         "shared_date": left_case is not None and right_case is not None,
         "both_ok": (left_case is not None and right_case is not None and left_case.get("status") == "ok" and right_case.get("status") == "ok"),
         "score_source_same": (
@@ -137,6 +171,8 @@ def _shared_row(date_value: str, left_case: dict[str, Any] | None, right_case: d
         "policy_bets_delta": (left_bets - right_bets) if left_bets is not None and right_bets is not None else None,
         "policy_selected_rows_delta": (left_selected - right_selected) if left_selected is not None and right_selected is not None else None,
         "policy_roi_delta": (left_roi - right_roi) if left_roi is not None and right_roi is not None else None,
+        "policy_return_delta": (left_return - right_return) if left_return is not None and right_return is not None else None,
+        "policy_net_delta": (left_net - right_net) if left_net is not None and right_net is not None else None,
     }
     return row
 
@@ -187,6 +223,8 @@ def main() -> int:
             row["date"] for row in shared_ok_rows if _int_or_none(row.get("policy_selected_rows_delta")) not in {None, 0}
         ]
         nonzero_policy_roi_delta_dates = [row["date"] for row in shared_ok_rows if _float_or_none(row.get("policy_roi_delta")) not in {None, 0.0}]
+        nonzero_policy_return_delta_dates = [row["date"] for row in shared_ok_rows if _float_or_none(row.get("policy_return_delta")) not in {None, 0.0}]
+        nonzero_policy_net_delta_dates = [row["date"] for row in shared_ok_rows if _float_or_none(row.get("policy_net_delta")) not in {None, 0.0}]
         comparable_policy_roi_dates = [
             row["date"]
             for row in shared_ok_rows
@@ -197,6 +235,10 @@ def main() -> int:
         right_total_policy_bets = _sum_int_field(shared_ok_rows, f"{right_slug}_policy_bets")
         left_total_policy_selected_rows = _sum_int_field(shared_ok_rows, f"{left_slug}_policy_selected_rows")
         right_total_policy_selected_rows = _sum_int_field(shared_ok_rows, f"{right_slug}_policy_selected_rows")
+        left_total_policy_return = _sum_float_field(shared_ok_rows, f"{left_slug}_policy_return")
+        right_total_policy_return = _sum_float_field(shared_ok_rows, f"{right_slug}_policy_return")
+        left_total_policy_net = _sum_float_field(shared_ok_rows, f"{left_slug}_policy_net")
+        right_total_policy_net = _sum_float_field(shared_ok_rows, f"{right_slug}_policy_net")
         left_mean_policy_roi = _mean_float_field(shared_ok_rows, f"{left_slug}_policy_roi")
         right_mean_policy_roi = _mean_float_field(shared_ok_rows, f"{right_slug}_policy_roi")
 
@@ -234,6 +276,12 @@ def main() -> int:
                     "left_total_policy_selected_rows": left_total_policy_selected_rows,
                     "right_total_policy_selected_rows": right_total_policy_selected_rows,
                     "total_policy_selected_rows_delta": left_total_policy_selected_rows - right_total_policy_selected_rows,
+                    "left_total_policy_return": left_total_policy_return,
+                    "right_total_policy_return": right_total_policy_return,
+                    "total_policy_return_delta": left_total_policy_return - right_total_policy_return,
+                    "left_total_policy_net": left_total_policy_net,
+                    "right_total_policy_net": right_total_policy_net,
+                    "total_policy_net_delta": left_total_policy_net - right_total_policy_net,
                     "comparable_policy_roi_dates": comparable_policy_roi_dates,
                     "left_mean_policy_roi": left_mean_policy_roi,
                     "right_mean_policy_roi": right_mean_policy_roi,
@@ -245,6 +293,8 @@ def main() -> int:
                     "nonzero_policy_bets_delta_dates": nonzero_policy_bets_delta_dates,
                     "nonzero_policy_selected_rows_delta_dates": nonzero_policy_selected_rows_delta_dates,
                     "nonzero_policy_roi_delta_dates": nonzero_policy_roi_delta_dates,
+                    "nonzero_policy_return_delta_dates": nonzero_policy_return_delta_dates,
+                    "nonzero_policy_net_delta_dates": nonzero_policy_net_delta_dates,
                 },
             },
             "cases": rows,
@@ -267,6 +317,11 @@ def main() -> int:
             "[serving-smoke-compare] shared_ok_mean_policy_roi="
             f"{left_label}:{left_mean_policy_roi} {right_label}:{right_mean_policy_roi} "
             f"delta={summary['comparison']['shared_ok_aggregates']['mean_policy_roi_delta']}"
+        )
+        print(
+            "[serving-smoke-compare] shared_ok_policy_net="
+            f"{left_label}:{left_total_policy_net} {right_label}:{right_total_policy_net} "
+            f"delta={summary['comparison']['shared_ok_aggregates']['total_policy_net_delta']}"
         )
         return 0
     except KeyboardInterrupt:
