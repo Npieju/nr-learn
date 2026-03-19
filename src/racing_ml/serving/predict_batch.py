@@ -125,29 +125,34 @@ def _plot_predictions(predictions: pd.DataFrame, out_path: Path) -> None:
     plt.close(fig)
 
 
-def run_predict(
-    model_config_path: str,
-    data_config_path: str,
-    feature_config_path: str,
-    race_date: str | None = None,
-) -> None:
+def prepare_prediction_frame(data_config_path: str | Path) -> pd.DataFrame:
     workspace_root = Path.cwd()
-    resolved_model_config_path = _resolve_workspace_path(model_config_path, workspace_root)
-    model_config = load_yaml(resolved_model_config_path)
-    data_config = load_yaml(Path(data_config_path))
-    feature_config = load_yaml(Path(feature_config_path))
-    progress = ProgressBar(total=6, prefix="[predict]", logger=log_progress, min_interval_sec=0.0)
-    progress.start("configs loaded")
+    resolved_data_config_path = _resolve_workspace_path(data_config_path, workspace_root)
+    data_config = load_yaml(resolved_data_config_path)
 
     dataset_cfg = data_config.get("dataset", {})
     raw_dir = dataset_cfg.get("raw_dir", "data/raw")
     with Heartbeat("[predict]", "loading training table", logger=log_progress):
         frame = load_training_table(raw_dir, dataset_config=dataset_cfg, base_dir=Path.cwd())
-    progress.update(message=f"training table loaded rows={len(frame):,}")
 
     with Heartbeat("[predict]", "building features", logger=log_progress):
         frame = build_features(frame)
-    progress.update(message=f"features built columns={len(frame.columns):,}")
+    return frame
+
+
+def run_predict_from_frame(
+    model_config_path: str | Path,
+    feature_config_path: str | Path,
+    frame: pd.DataFrame,
+    race_date: str | None = None,
+) -> None:
+    workspace_root = Path.cwd()
+    resolved_model_config_path = _resolve_workspace_path(model_config_path, workspace_root)
+    resolved_feature_config_path = _resolve_workspace_path(feature_config_path, workspace_root)
+    model_config = load_yaml(resolved_model_config_path)
+    feature_config = load_yaml(resolved_feature_config_path)
+    progress = ProgressBar(total=5, prefix="[predict]", logger=log_progress, min_interval_sec=0.0)
+    progress.start(f"configs loaded frame_rows={len(frame):,} frame_columns={len(frame.columns):,}")
 
     target_date = _resolve_target_date(frame, race_date)
     pred_frame = frame[frame["date"] == target_date].copy()
@@ -291,3 +296,18 @@ def run_predict(
     if manifest_path.exists():
         print(f"[predict] manifest: {manifest_path}")
     print(f"[predict] records: {len(output)}")
+
+
+def run_predict(
+    model_config_path: str,
+    data_config_path: str,
+    feature_config_path: str,
+    race_date: str | None = None,
+) -> None:
+    frame = prepare_prediction_frame(data_config_path)
+    run_predict_from_frame(
+        model_config_path=model_config_path,
+        feature_config_path=feature_config_path,
+        frame=frame,
+        race_date=race_date,
+    )

@@ -17,7 +17,7 @@ if str(SRC) not in sys.path:
 import pandas as pd
 
 from racing_ml.pipeline.backtest_pipeline import run_backtest
-from racing_ml.serving.predict_batch import run_predict
+from racing_ml.serving.predict_batch import prepare_prediction_frame, run_predict_from_frame
 
 
 PROFILE_PRESETS: dict[str, dict[str, Any]] = {
@@ -54,6 +54,64 @@ PROFILE_PRESETS: dict[str, dict[str, Any]] = {
             },
         ],
     },
+    "best_policy_may_window": {
+        "config": "configs/model_catboost_value_stack_lgbm_roi_high_coverage_tune_roi012_liquidity_regime_modelswitch_f1_policy_may.yaml",
+        "data_config": "configs/data.yaml",
+        "feature_config": "configs/features_catboost_rich_high_coverage_diag.yaml",
+        "artifact_suffix": "policy_may_window",
+        "cases": [
+            {
+                "date": "2024-05-25",
+                "score_source": "may_runtime_liquidity",
+                "policy_name": "may_runtime_kelly",
+            },
+            {
+                "date": "2024-05-26",
+                "score_source": "may_runtime_liquidity",
+                "policy_name": "may_runtime_kelly",
+            },
+            {
+                "date": "2024-06-01",
+                "score_source": "default",
+                "policy_name": "june_runtime_kelly",
+            },
+            {
+                "date": "2024-06-02",
+                "score_source": "default",
+                "policy_name": "june_runtime_kelly",
+            },
+            {
+                "date": "2024-06-08",
+                "score_source": "default",
+                "policy_name": "june_runtime_kelly",
+            },
+            {
+                "date": "2024-06-09",
+                "score_source": "default",
+                "policy_name": "june_runtime_kelly",
+            },
+            {
+                "date": "2024-06-15",
+                "score_source": "default",
+                "policy_name": "june_runtime_kelly",
+            },
+            {
+                "date": "2024-06-16",
+                "score_source": "default",
+                "policy_name": "june_runtime_kelly",
+            },
+            {
+                "date": "2024-06-22",
+                "score_source": "default",
+                "policy_name": "june_runtime_kelly",
+            },
+            {
+                "date": "2024-06-23",
+                "score_source": "default",
+                "policy_name": "june_runtime_kelly",
+            },
+        ],
+    },
     "fallback_hybrid": {
         "config": "configs/model_catboost_value_stack_lgbm_roi_high_coverage_tune_roi012_liquidity_regime_hybrid.yaml",
         "data_config": "configs/data.yaml",
@@ -84,6 +142,64 @@ PROFILE_PRESETS: dict[str, dict[str, Any]] = {
                 "date": "2024-09-14",
                 "score_source": "default",
                 "policy_name": "sep_runtime_portfolio",
+            },
+        ],
+    },
+    "fallback_hybrid_window": {
+        "config": "configs/model_catboost_value_stack_lgbm_roi_high_coverage_tune_roi012_liquidity_regime_hybrid.yaml",
+        "data_config": "configs/data.yaml",
+        "feature_config": "configs/features_catboost_rich_high_coverage_diag.yaml",
+        "artifact_suffix": "fallback_hybrid_window",
+        "cases": [
+            {
+                "date": "2024-05-25",
+                "score_source": "default",
+                "policy_name": "may_june_runtime_kelly",
+            },
+            {
+                "date": "2024-05-26",
+                "score_source": "default",
+                "policy_name": "may_june_runtime_kelly",
+            },
+            {
+                "date": "2024-06-01",
+                "score_source": "default",
+                "policy_name": "may_june_runtime_kelly",
+            },
+            {
+                "date": "2024-06-02",
+                "score_source": "default",
+                "policy_name": "may_june_runtime_kelly",
+            },
+            {
+                "date": "2024-06-08",
+                "score_source": "default",
+                "policy_name": "may_june_runtime_kelly",
+            },
+            {
+                "date": "2024-06-09",
+                "score_source": "default",
+                "policy_name": "may_june_runtime_kelly",
+            },
+            {
+                "date": "2024-06-15",
+                "score_source": "default",
+                "policy_name": "may_june_runtime_kelly",
+            },
+            {
+                "date": "2024-06-16",
+                "score_source": "default",
+                "policy_name": "may_june_runtime_kelly",
+            },
+            {
+                "date": "2024-06-22",
+                "score_source": "default",
+                "policy_name": "may_june_runtime_kelly",
+            },
+            {
+                "date": "2024-06-23",
+                "score_source": "default",
+                "policy_name": "may_june_runtime_kelly",
             },
         ],
     },
@@ -263,6 +379,13 @@ def main() -> int:
         output_file.parent.mkdir(parents=True, exist_ok=True)
         os.chdir(ROOT)
 
+        print("[serving-smoke] preparing shared prediction frame", flush=True)
+        shared_frame = prepare_prediction_frame(_display_path(data_config_path))
+        print(
+            f"[serving-smoke] shared frame ready rows={len(shared_frame):,} columns={len(shared_frame.columns):,}",
+            flush=True,
+        )
+
         results: list[dict[str, Any]] = []
         overall_success = True
 
@@ -282,10 +405,10 @@ def main() -> int:
             )
 
             try:
-                run_predict(
+                run_predict_from_frame(
                     model_config_path=_display_path(config_path),
-                    data_config_path=_display_path(data_config_path),
                     feature_config_path=_display_path(feature_config_path),
+                    frame=shared_frame,
                     race_date=case["date"],
                 )
                 if not prediction_csv.exists():
