@@ -203,6 +203,39 @@ PROFILE_PRESETS: dict[str, dict[str, Any]] = {
             },
         ],
     },
+    "fallback_hybrid_june_strict": {
+        "config": "configs/model_catboost_value_stack_lgbm_roi_high_coverage_tune_roi012_liquidity_regime_hybrid_june_strict_serving.yaml",
+        "data_config": "configs/data.yaml",
+        "feature_config": "configs/features_catboost_rich_high_coverage_diag.yaml",
+        "artifact_suffix": "fallback_hybrid_june_strict",
+        "cases": [
+            {
+                "date": "2024-05-25",
+                "score_source": "default",
+                "policy_name": "may_runtime_kelly",
+            },
+            {
+                "date": "2024-06-15",
+                "score_source": "default",
+                "policy_name": "june_runtime_kelly",
+            },
+            {
+                "date": "2024-07-20",
+                "score_source": "default",
+                "policy_name": "july_runtime_kelly",
+            },
+            {
+                "date": "2024-08-10",
+                "score_source": "default",
+                "policy_name": "aug_runtime_portfolio",
+            },
+            {
+                "date": "2024-09-14",
+                "score_source": "default",
+                "policy_name": "sep_runtime_portfolio",
+            },
+        ],
+    },
     "fallback_hybrid_window": {
         "config": "configs/model_catboost_value_stack_lgbm_roi_high_coverage_tune_roi012_liquidity_regime_hybrid.yaml",
         "data_config": "configs/data.yaml",
