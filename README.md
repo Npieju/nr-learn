@@ -141,6 +141,8 @@ nr-learn/
     - representative date の score source / fixed policy routing を一括確認するときは `python scripts/run_serving_smoke.py --profile best_policy_may` または `python scripts/run_serving_smoke.py --profile fallback_hybrid`
     - 特定日だけ確認したいときは `--date 2024-09-14` のように絞れます
     - summary は `artifacts/reports/serving_smoke_<profile>.json` に保存され、prediction/backtest artifact は `_policy_may` や `_fallback_hybrid` suffix 付きでも退避されます
+    - 2 つの smoke summary を横比較するときは `python scripts/run_serving_smoke_compare.py --left-summary artifacts/reports/serving_smoke_best_policy_may.json --right-summary artifacts/reports/serving_smoke_fallback_hybrid.json`
+    - compare 結果は `artifacts/reports/serving_smoke_compare_<left>_vs_<right>.json` と `.csv` に保存されます
 8. モデル評価（全体＋日別）
     - `python scripts/run_evaluate.py --config configs/model.yaml --data-config configs/data.yaml --feature-config configs/features.yaml --max-rows 80000`
     - （CatBoost win）`python scripts/run_evaluate.py --config configs/model_catboost.yaml --data-config configs/data.yaml --feature-config configs/features_catboost_rich.yaml --max-rows 200000`
