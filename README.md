@@ -18,7 +18,7 @@ JRA競馬予想の**学習用**プロジェクトです。
 - **Artifact Layer**: train manifest と stack bundle manifest を管理
 - **Serving Layer**: 次レース予測バッチ出力（CSV/PNG）
 
-詳細は [docs/architecture.md](docs/architecture.md)、[docs/architecture_long_term.md](docs/architecture_long_term.md)、[docs/model_artifacts.md](docs/model_artifacts.md)、[docs/external_benchmark_targets.md](docs/external_benchmark_targets.md) を参照。
+詳細は [docs/architecture.md](docs/architecture.md)、[docs/architecture_long_term.md](docs/architecture_long_term.md)、[docs/model_artifacts.md](docs/model_artifacts.md)、[docs/external_benchmark_targets.md](docs/external_benchmark_targets.md)、[docs/current_model_architecture_2026-03-14.md](docs/current_model_architecture_2026-03-14.md)、[docs/milestones/2026-03-19_mid_project_review.md](docs/milestones/2026-03-19_mid_project_review.md)、[docs/milestones/2026-03-19_external_briefing.md](docs/milestones/2026-03-19_external_briefing.md) を参照。
 
 ## ディレクトリ
 ```text
@@ -34,7 +34,12 @@ nr-learn/
 ├── docs/
 │   ├── architecture.md
 │   ├── architecture_long_term.md
-│   └── model_artifacts.md
+│   ├── current_model_architecture_2026-03-14.md
+│   ├── external_benchmark_targets.md
+│   ├── model_artifacts.md
+│   └── milestones/
+│       ├── 2026-03-19_mid_project_review.md
+│       └── 2026-03-19_external_briefing.md
 ├── notebooks/
 ├── src/
 │   └── racing_ml/
