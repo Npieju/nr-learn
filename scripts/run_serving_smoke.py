@@ -16,8 +16,11 @@ if str(SRC) not in sys.path:
 
 import pandas as pd
 
+from racing_ml.common.config import load_yaml
+from racing_ml.common.regime import resolve_regime_name
 from racing_ml.pipeline.backtest_pipeline import run_backtest
 from racing_ml.serving.predict_batch import prepare_prediction_frame, run_predict_from_frame
+from racing_ml.serving.runtime_policy import resolve_runtime_policy
 
 
 PROFILE_PRESETS: dict[str, dict[str, Any]] = {
@@ -443,6 +446,42 @@ def _backtest_summary(report_file: Path) -> dict[str, Any]:
         return json.load(file)
 
 
+def _single_date_frame(date_value: str) -> pd.DataFrame:
+    return pd.DataFrame({"date": [pd.Timestamp(date_value)]})
+
+
+def _resolve_expected_score_source(model_config: dict[str, Any], date_value: str) -> str:
+    serving_cfg = model_config.get("serving", {}) if isinstance(model_config.get("serving", {}), dict) else {}
+    evaluation_cfg = model_config.get("evaluation", {}) if isinstance(model_config.get("evaluation", {}), dict) else {}
+
+    score_regime_overrides = serving_cfg.get("score_regime_overrides", [])
+    if not isinstance(score_regime_overrides, list) or not score_regime_overrides:
+        score_regime_overrides = evaluation_cfg.get("score_regime_overrides", [])
+
+    return resolve_regime_name(
+        score_regime_overrides,
+        frame=_single_date_frame(date_value),
+        default_name="default",
+    )
+
+
+def _resolve_expected_policy_name(model_config: dict[str, Any], date_value: str) -> str:
+    policy_resolution = resolve_runtime_policy(model_config, frame=_single_date_frame(date_value))
+    if policy_resolution is None:
+        raise ValueError(f"Runtime policy could not be resolved for date: {date_value}")
+    policy_name, _ = policy_resolution
+    return str(policy_name)
+
+
+def _auto_case_for_date(model_config: dict[str, Any], date_value: str) -> dict[str, str]:
+    normalized_date = str(pd.Timestamp(date_value).date())
+    return {
+        "date": normalized_date,
+        "score_source": _resolve_expected_score_source(model_config, normalized_date),
+        "policy_name": _resolve_expected_policy_name(model_config, normalized_date),
+    }
+
+
 def _validate_case(
     case: dict[str, Any],
     *,
@@ -488,18 +527,28 @@ def _validate_case(
         )
 
 
-def _select_cases(profile_name: str, requested_dates: list[str] | None) -> list[dict[str, Any]]:
+def _select_cases(profile_name: str, requested_dates: list[str] | None, model_config: dict[str, Any]) -> list[dict[str, Any]]:
     preset = PROFILE_PRESETS[profile_name]
     cases = list(preset["cases"])
     if not requested_dates:
         return cases
 
-    requested = {str(pd.Timestamp(date_value).date()) for date_value in requested_dates}
-    selected = [case for case in cases if case["date"] in requested]
-    found = {case["date"] for case in selected}
-    missing = sorted(requested - found)
-    if missing:
-        raise ValueError(f"Requested dates are not defined in profile '{profile_name}': {missing}")
+    normalized_dates: list[str] = []
+    seen_dates: set[str] = set()
+    for date_value in requested_dates:
+        normalized_date = str(pd.Timestamp(date_value).date())
+        if normalized_date in seen_dates:
+            continue
+        seen_dates.add(normalized_date)
+        normalized_dates.append(normalized_date)
+
+    case_map = {str(case["date"]): case for case in cases}
+    selected: list[dict[str, Any]] = []
+    for normalized_date in normalized_dates:
+        if normalized_date in case_map:
+            selected.append(case_map[normalized_date])
+            continue
+        selected.append(_auto_case_for_date(model_config, normalized_date))
     return selected
 
 
@@ -524,7 +573,8 @@ def main() -> int:
     output_file = _resolve_path(args.output_file) if args.output_file else ROOT / "artifacts" / "reports" / f"serving_smoke_{args.profile}.json"
 
     try:
-        cases = _select_cases(args.profile, args.date)
+        model_config = load_yaml(config_path)
+        cases = _select_cases(args.profile, args.date, model_config)
         output_file.parent.mkdir(parents=True, exist_ok=True)
         os.chdir(ROOT)
 
