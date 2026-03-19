@@ -1,0 +1,138 @@
+# 外部データ拡張
+
+## 1. 目的
+
+このプロジェクトでは、JRA 主表だけに依存せず、netkeiba などの外部データを後から安全に追加できる構成を取っている。
+
+目的は次の 3 点である。
+
+1. 主表を壊さずに履歴や補助列を追加する。
+2. crawler と学習系を疎結合に保つ。
+3. 外部データの品質を benchmark 再実行前に点検できるようにする。
+
+## 2. 基本方針
+
+外部データの追加は、2 種類に分けて扱う。
+
+### 2.1 append_tables
+
+- 履歴行を追加するための経路。
+- 主に race result の増補に使う。
+
+### 2.2 supplemental_tables
+
+- 既存行に列を補完するための経路。
+- 主に race card、pedigree、owner / breeder などの補助情報に使う。
+
+この 2 つを `configs/data.yaml` で分けて管理することで、行追加と列補完を混同しないようにしている。
+
+## 3. 主な外部ソース
+
+### 3.1 race_result
+
+- 役割:
+  - 主表にないレース履歴や補助情報の追加
+- 主キー:
+  - `race_id + horse_id`
+
+### 3.2 race_card
+
+- 役割:
+  - 出走時点で使える枠番、馬番、性齢、斤量、騎手、調教師などの補完
+- 主キー:
+  - `race_id + horse_id`
+
+### 3.3 pedigree
+
+- 役割:
+  - 血統系特徴量の基礎情報の追加
+- 主キー:
+  - `horse_key`
+
+## 4. `horse_id` と `horse_key`
+
+このプロジェクトでは、`horse_id` と `horse_key` を分けて扱う。
+
+- `horse_id`
+  - 行結合のためのキー
+- `horse_key`
+  - 競走馬を継続追跡するための安定キー
+
+実務上の流れは次のとおりである。
+
+1. `race_result` や `race_card` から `horse_key` を補完する。
+2. その後に `horse_key` を使って pedigree を結合する。
+3. 履歴特徴は `horse_key` を最優先に使う。
+
+この設計により、最近年帯でも同一馬の履歴接続を比較的安定させやすい。
+
+## 5. 実装の入口
+
+主なコードとスクリプトは次のとおりである。
+
+- loader:
+  - [src/racing_ml/data/dataset_loader.py](../src/racing_ml/data/dataset_loader.py)
+- crawler:
+  - [src/racing_ml/data/netkeiba_crawler.py](../src/racing_ml/data/netkeiba_crawler.py)
+- race list:
+  - [src/racing_ml/data/netkeiba_race_list.py](../src/racing_ml/data/netkeiba_race_list.py)
+- ID 準備:
+  - [scripts/run_prepare_netkeiba_ids.py](../scripts/run_prepare_netkeiba_ids.py)
+- 収集:
+  - [scripts/run_collect_netkeiba.py](../scripts/run_collect_netkeiba.py)
+- backfill:
+  - [scripts/run_backfill_netkeiba.py](../scripts/run_backfill_netkeiba.py)
+
+## 6. 品質確認
+
+外部データは、入れた後にそのまま学習へ進めない。最低限、次の確認を通す。
+
+### 6.1 データソース整合
+
+- [scripts/run_validate_data_sources.py](../scripts/run_validate_data_sources.py)
+
+確認するもの:
+
+- 必須テーブルの存在
+- join key の欠落
+- 重複行
+- canonical 列への正規化状態
+
+### 6.2 feature gap
+
+- [scripts/run_feature_gap_report.py](../scripts/run_feature_gap_report.py)
+
+確認するもの:
+
+- force-include 特徴の low coverage
+- raw 列不足による特徴未生成
+
+### 6.3 coverage snapshot
+
+- [scripts/run_netkeiba_coverage_snapshot.py](../scripts/run_netkeiba_coverage_snapshot.py)
+- [scripts/run_netkeiba_benchmark_gate.py](../scripts/run_netkeiba_benchmark_gate.py)
+
+確認するもの:
+
+- crawl 状態
+- readiness
+- benchmark rerun の可否
+
+## 7. 現在の注意点
+
+### 7.1 pedigree 系はまだ疎い
+
+recent 帯では pedigree / lineage 系の coverage がまだ薄い。列が存在していても、有効サンプルが十分とは限らない。
+
+### 7.2 race ID 発見より quality control が主課題
+
+最新年の race ID を起こす仕組み自体は整っているため、現在の主課題は「どの期間を優先して backfill し、どの時点で benchmark を回すか」の運用判断に移っている。
+
+### 7.3 外部データは benchmark で判断する
+
+新しい外部データを入れても、raw ROI の見かけだけで採用しない。採用判断は [benchmarks.md](benchmarks.md) に沿って行う。
+
+## 8. この文書の読み方
+
+- プロジェクト全体像は [project_overview.md](project_overview.md) を参照する。
+- システム構造は [system_architecture.md](system_architecture.md) を参照する。
