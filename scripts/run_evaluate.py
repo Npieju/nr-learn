@@ -1,4 +1,5 @@
 import argparse
+import hashlib
 import json
 from pathlib import Path
 import sys
@@ -18,7 +19,7 @@ if str(SRC) not in sys.path:
     sys.path.append(str(SRC))
 
 from racing_ml.common.config import load_yaml
-from racing_ml.common.artifacts import resolve_output_artifacts
+from racing_ml.common.artifacts import resolve_output_artifacts, utc_now_iso, write_json
 from racing_ml.common.model_profiles import MODEL_RUN_PROFILES, format_model_run_profiles, resolve_model_run_profile
 from racing_ml.common.progress import Heartbeat, ProgressBar
 from racing_ml.common.regime import resolve_regime_name
@@ -437,6 +438,77 @@ def _derive_evaluation_output_slug(config_path: str, model_path: Path, *, prefer
         if slug:
             return slug
     return "model"
+
+
+def _display_path(path: Path) -> str:
+    try:
+        return str(path.relative_to(ROOT))
+    except ValueError:
+        return str(path)
+
+
+def _sha256_text(text: str) -> str:
+    return hashlib.sha256(text.encode("utf-8")).hexdigest()
+
+
+def _build_evaluation_output_manifest(
+    *,
+    summary: dict[str, Any],
+    by_date: pd.DataFrame,
+    latest_summary_path: Path,
+    latest_by_date_path: Path | None,
+    latest_manifest_path: Path,
+    versioned_summary_path: Path,
+    versioned_by_date_path: Path | None,
+    versioned_manifest_path: Path,
+    summary_sha256: str,
+    by_date_sha256: str | None,
+) -> dict[str, Any]:
+    run_context = summary.get("run_context") if isinstance(summary.get("run_context"), dict) else {}
+    by_date_present = latest_by_date_path is not None and not by_date.empty
+    by_date_start = str(by_date["date"].iloc[0]) if by_date_present and "date" in by_date.columns else None
+    by_date_end = str(by_date["date"].iloc[-1]) if by_date_present and "date" in by_date.columns else None
+    n_dates_value = summary.get("n_dates")
+    expected_n_dates = int(n_dates_value) if isinstance(n_dates_value, int) else None
+    actual_by_date_rows = int(len(by_date)) if by_date_present else 0
+
+    return {
+        "created_at": utc_now_iso(),
+        "profile": run_context.get("profile"),
+        "config": run_context.get("config"),
+        "data_config": run_context.get("data_config"),
+        "feature_config": run_context.get("feature_config"),
+        "task": run_context.get("task"),
+        "date_window": summary.get("date_window"),
+        "wf_mode": run_context.get("wf_mode"),
+        "wf_scheme": run_context.get("wf_scheme"),
+        "n_rows": summary.get("n_rows"),
+        "n_dates": n_dates_value,
+        "by_date_rows": actual_by_date_rows,
+        "by_date_present": by_date_present,
+        "consistency": {
+            "n_dates_matches_by_date_rows": (
+                expected_n_dates == actual_by_date_rows
+                if expected_n_dates is not None and by_date_present
+                else None
+            ),
+            "by_date_start": by_date_start,
+            "by_date_end": by_date_end,
+        },
+        "source_model_manifest": run_context.get("artifact_manifest"),
+        "files": {
+            "latest_summary": _display_path(latest_summary_path),
+            "latest_by_date": _display_path(latest_by_date_path) if latest_by_date_path is not None else None,
+            "latest_manifest": _display_path(latest_manifest_path),
+            "versioned_summary": _display_path(versioned_summary_path),
+            "versioned_by_date": _display_path(versioned_by_date_path) if versioned_by_date_path is not None else None,
+            "versioned_manifest": _display_path(versioned_manifest_path),
+        },
+        "checksums": {
+            "summary_sha256": summary_sha256,
+            "by_date_sha256": by_date_sha256,
+        },
+    }
 
 
 def main() -> int:
@@ -1044,29 +1116,55 @@ def main() -> int:
         wf_slug = _derive_wf_slug(args.wf_mode, args.wf_scheme)
         summary_path = report_dir / "evaluation_summary.json"
         by_date_path = report_dir / "evaluation_by_date.csv"
+        manifest_path = report_dir / "evaluation_manifest.json"
         versioned_summary_path = report_dir / f"evaluation_summary_{output_slug}{date_window_slug}{wf_slug}.json"
         versioned_by_date_path = report_dir / f"evaluation_by_date_{output_slug}{date_window_slug}{wf_slug}.csv"
+        versioned_manifest_path = report_dir / f"evaluation_manifest_{output_slug}{date_window_slug}{wf_slug}.json"
+
+        latest_by_date_output_path = by_date_path if not by_date.empty else None
+        versioned_by_date_output_path = versioned_by_date_path if not by_date.empty else None
 
         summary["output_files"] = {
-            "latest_summary": str(summary_path.relative_to(ROOT)),
-            "latest_by_date": str(by_date_path.relative_to(ROOT)),
-            "versioned_summary": str(versioned_summary_path.relative_to(ROOT)),
-            "versioned_by_date": str(versioned_by_date_path.relative_to(ROOT)),
+            "latest_summary": _display_path(summary_path),
+            "latest_by_date": _display_path(latest_by_date_output_path) if latest_by_date_output_path is not None else None,
+            "latest_manifest": _display_path(manifest_path),
+            "versioned_summary": _display_path(versioned_summary_path),
+            "versioned_by_date": _display_path(versioned_by_date_output_path) if versioned_by_date_output_path is not None else None,
+            "versioned_manifest": _display_path(versioned_manifest_path),
         }
 
+        summary_text = json.dumps(summary, ensure_ascii=False, indent=2)
+        summary_sha256 = _sha256_text(summary_text)
+        by_date_text = by_date.to_csv(index=False) if not by_date.empty else None
+        by_date_sha256 = _sha256_text(by_date_text) if by_date_text is not None else None
+        evaluation_manifest = _build_evaluation_output_manifest(
+            summary=summary,
+            by_date=by_date,
+            latest_summary_path=summary_path,
+            latest_by_date_path=latest_by_date_output_path,
+            latest_manifest_path=manifest_path,
+            versioned_summary_path=versioned_summary_path,
+            versioned_by_date_path=versioned_by_date_output_path,
+            versioned_manifest_path=versioned_manifest_path,
+            summary_sha256=summary_sha256,
+            by_date_sha256=by_date_sha256,
+        )
+
         with Heartbeat("[evaluate]", "writing evaluation outputs", logger=log_progress):
-            with summary_path.open("w", encoding="utf-8") as file:
-                json.dump(summary, file, ensure_ascii=False, indent=2)
-            with versioned_summary_path.open("w", encoding="utf-8") as file:
-                json.dump(summary, file, ensure_ascii=False, indent=2)
-            if not by_date.empty:
-                by_date.to_csv(by_date_path, index=False)
-                by_date.to_csv(versioned_by_date_path, index=False)
+            summary_path.write_text(summary_text, encoding="utf-8")
+            versioned_summary_path.write_text(summary_text, encoding="utf-8")
+            write_json(manifest_path, evaluation_manifest)
+            write_json(versioned_manifest_path, evaluation_manifest)
+            if by_date_text is not None:
+                by_date_path.write_text(by_date_text, encoding="utf-8")
+                versioned_by_date_path.write_text(by_date_text, encoding="utf-8")
         progress.complete(message="evaluation outputs written")
 
         print(f"[evaluate] summary saved: {summary_path}")
         print(f"[evaluate] versioned summary saved: {versioned_summary_path}")
-        if not by_date.empty:
+        print(f"[evaluate] manifest saved: {manifest_path}")
+        print(f"[evaluate] versioned manifest saved: {versioned_manifest_path}")
+        if by_date_text is not None:
             print(f"[evaluate] by-date saved: {by_date_path}")
             print(f"[evaluate] versioned by-date saved: {versioned_by_date_path}")
             print(by_date.tail(5).to_string(index=False))

@@ -177,8 +177,10 @@ nr-learn/
     - （市場乖離/Layer2）`python scripts/run_evaluate.py --config configs/model_alpha.yaml --data-config configs/data.yaml --feature-config configs/features.yaml --max-rows 80000`
     - 最新年だけを切って見たいときは `--start-date` / `--end-date` を併用できます。例: `python scripts/run_evaluate.py --config configs/model_catboost_fundamental_enriched_no_lineage.yaml --data-config configs/data.yaml --feature-config configs/features_catboost_fundamental_enriched_no_lineage.yaml --start-date 2024-01-01 --end-date 2024-01-08 --wf-mode off`
     - 全体指標: `artifacts/reports/evaluation_summary.json`（常に最新実行）
+    - 最新 evaluation manifest: `artifacts/reports/evaluation_manifest.json`
     - モデル別保存: `artifacts/reports/evaluation_summary_<model>.json`
             - `wf_mode` / `wf_scheme` がデフォルト (`fast` / `nested`) 以外のときは versioned artifact に `_wf_<mode>_<scheme>` suffix が付き、raw / walk-forward 実験が同じ date window でも上書きされません
+            - 対応する `evaluation_manifest_<model>.json` も保存され、summary / by-date の path、checksum、row-count 整合性を確認できます
             - `selection_mode=gate_then_roi` で feasible 候補が 1 つも無い walk-forward fold は `strategy_kind=no_bet` / `selection_reason=no_feasible_candidate` として保存され、infeasible な fallback policy は採用されません
             - `run_context`: 実行条件（config, max_rows, wf設定 など）
             - `artifact_manifest`: 利用モデルの manifest パス
@@ -186,6 +188,7 @@ nr-learn/
             - `public_pseudo_r2` / `model_pseudo_r2` / `benter_combined_pseudo_r2` / `benter_delta_pseudo_r2`: public を超える追加情報があるかを測る benchmark 指標
     - 日別指標: `artifacts/reports/evaluation_by_date.csv`（常に最新実行）
     - モデル別日別保存: `artifacts/reports/evaluation_by_date_<model>.csv`
+        - by-date が空の run では summary / manifest には `latest_by_date` / `versioned_by_date = null` が入り、存在しない CSV path を指さないようにします
         - 回収率指標（主目的）:
             - `top1_roi`: スコア1位を毎レース購入
             - `ev_top1_roi`: `score × odds` が最大の馬を毎レース購入
