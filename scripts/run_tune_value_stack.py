@@ -1,10 +1,12 @@
 import argparse
+import hashlib
 import itertools
 import json
 from pathlib import Path
 import sys
 import time
 import traceback
+from typing import Any
 
 import numpy as np
 import pandas as pd
@@ -15,6 +17,7 @@ if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
 from racing_ml.common.config import load_yaml
+from racing_ml.common.artifacts import utc_now_iso, write_json
 from racing_ml.common.progress import Heartbeat, ProgressBar
 from racing_ml.data.dataset_loader import load_training_table
 from racing_ml.evaluation.policy import compute_market_prob, evaluate_fixed_stake_summary
@@ -27,6 +30,45 @@ from racing_ml.models.value_blend import load_component_from_config
 def log_progress(message: str) -> None:
     now = time.strftime("%H:%M:%S")
     print(f"[stack-tune {now}] {message}", flush=True)
+
+
+def _display_path(path: Path) -> str:
+    try:
+        return str(path.relative_to(ROOT))
+    except ValueError:
+        return str(path)
+
+
+def _date_window_payload(frame: pd.DataFrame) -> dict[str, str | int | None]:
+    if "date" not in frame.columns:
+        return {
+            "start_date": None,
+            "end_date": None,
+            "start_month": None,
+            "end_month": None,
+        }
+
+    date_series = pd.to_datetime(frame["date"], errors="coerce").dropna().sort_values().reset_index(drop=True)
+    if date_series.empty:
+        return {
+            "start_date": None,
+            "end_date": None,
+            "start_month": None,
+            "end_month": None,
+        }
+
+    start_ts = pd.Timestamp(date_series.iloc[0])
+    end_ts = pd.Timestamp(date_series.iloc[-1])
+    return {
+        "start_date": str(start_ts.date()),
+        "end_date": str(end_ts.date()),
+        "start_month": int(start_ts.month),
+        "end_month": int(end_ts.month),
+    }
+
+
+def _sha256_text(text: str) -> str:
+    return hashlib.sha256(text.encode("utf-8")).hexdigest()
 
 
 def _parse_grid(raw: str | None, default_values: list[float]) -> list[float]:
@@ -87,7 +129,7 @@ def _resolve_component_predictions(
     return np.asarray(predict_score(model, x_eval, race_ids=frame["race_id"]), dtype=float).reshape(-1)
 
 
-def _candidate_grid(component_names: set[str], params: dict, args: argparse.Namespace) -> list[dict[str, float]]:
+def _candidate_grid(component_names: set[str], params: dict, args: argparse.Namespace) -> tuple[list[dict[str, float]], dict[str, list[float]]]:
     alpha_weight_grid = [0.0]
     alpha_scale_grid = [float(params.get("alpha_scale", 2.0))]
     if "alpha" in component_names:
@@ -150,7 +192,16 @@ def _candidate_grid(component_names: set[str], params: dict, args: argparse.Name
                 "market_blend_weight": float(market_weight),
             }
         )
-    return grid
+    grid_spec = {
+        "alpha_weight_grid": [float(value) for value in alpha_weight_grid],
+        "alpha_scale_grid": [float(value) for value in alpha_scale_grid],
+        "roi_weight_grid": [float(value) for value in roi_weight_grid],
+        "roi_scale_grid": [float(value) for value in roi_scale_grid],
+        "time_weight_grid": [float(value) for value in time_weight_grid],
+        "time_scale_grid": [float(value) for value in time_scale_grid],
+        "market_blend_weight_grid": [float(value) for value in market_grid],
+    }
+    return grid, grid_spec
 
 
 def _merge_candidate_params(base_params: dict, candidate: dict[str, float]) -> dict:
@@ -159,12 +210,103 @@ def _merge_candidate_params(base_params: dict, candidate: dict[str, float]) -> d
     return merged
 
 
+def _component_artifacts_payload(component_bundles: dict[str, dict[str, Any]]) -> dict[str, dict[str, Any]]:
+    payload: dict[str, dict[str, Any]] = {}
+    for name, bundle in component_bundles.items():
+        payload[name] = {
+            "config_path": bundle.get("config_path"),
+            "model_path": bundle.get("model_path"),
+            "report_path": bundle.get("report_path"),
+            "manifest_path": bundle.get("manifest_path"),
+            "task": bundle.get("task"),
+            "model_name": bundle.get("model_name"),
+        }
+    return payload
+
+
+def _build_tuning_manifest(
+    *,
+    config_path: str,
+    data_config_path: str,
+    feature_config_path: str,
+    task: str,
+    label_column: str,
+    loaded_rows: int,
+    pre_feature_max_rows: int | None,
+    pre_feature_rows: int,
+    requested_max_rows: int,
+    actual_rows: int,
+    n_races: int,
+    sort_by: str,
+    top_n: int,
+    date_window: dict[str, str | int | None],
+    feature_selection_mode: str,
+    feature_count: int,
+    categorical_feature_count: int,
+    candidate_count: int,
+    csv_row_count: int,
+    grid_spec: dict[str, list[float]],
+    best_params: dict[str, Any],
+    component_artifacts: dict[str, dict[str, Any]],
+    summary_path: Path,
+    csv_path: Path,
+    manifest_path: Path,
+    summary_sha256: str,
+    csv_sha256: str,
+    top_results_count: int,
+) -> dict[str, Any]:
+    expected_top_results = min(top_n, candidate_count)
+    return {
+        "created_at": utc_now_iso(),
+        "config": config_path,
+        "data_config": data_config_path,
+        "feature_config": feature_config_path,
+        "task": task,
+        "label_column": label_column,
+        "loaded_rows": loaded_rows,
+        "pre_feature_max_rows": pre_feature_max_rows,
+        "pre_feature_rows": pre_feature_rows,
+        "requested_max_rows": requested_max_rows,
+        "n_rows": actual_rows,
+        "n_races": n_races,
+        "sort_by": sort_by,
+        "top_n": top_n,
+        "date_window": date_window,
+        "feature_selection": {
+            "mode": feature_selection_mode,
+            "feature_count": feature_count,
+            "categorical_feature_count": categorical_feature_count,
+        },
+        "search_space": grid_spec,
+        "candidate_count": candidate_count,
+        "best_params": best_params,
+        "component_artifacts": component_artifacts,
+        "files": {
+            "summary": _display_path(summary_path),
+            "csv": _display_path(csv_path),
+            "manifest": _display_path(manifest_path),
+        },
+        "checksums": {
+            "summary_sha256": summary_sha256,
+            "csv_sha256": csv_sha256,
+        },
+        "consistency": {
+            "candidate_count_matches_csv_rows": candidate_count == csv_row_count,
+            "csv_row_count": csv_row_count,
+            "top_results_count": top_results_count,
+            "expected_top_results_count": expected_top_results,
+            "top_results_count_matches_expected": top_results_count == expected_top_results,
+        },
+    }
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--config", default="configs/model_catboost_value_stack_time.yaml")
     parser.add_argument("--data-config", default="configs/data.yaml")
     parser.add_argument("--feature-config", default="configs/features_catboost_rich.yaml")
     parser.add_argument("--max-rows", type=int, default=100000)
+    parser.add_argument("--pre-feature-max-rows", type=int, default=None)
     parser.add_argument("--summary-path", default="artifacts/reports/tune_value_stack_summary.json")
     parser.add_argument("--top-n", type=int, default=15)
     parser.add_argument("--sort-by", default="top1_roi")
@@ -189,7 +331,20 @@ def main() -> int:
         raw_dir = dataset_cfg.get("raw_dir", "data/raw")
         with Heartbeat("[stack-tune]", "loading training table", logger=log_progress):
             frame = load_training_table(raw_dir, dataset_config=dataset_cfg, base_dir=ROOT)
-        progress.update(message=f"training table loaded rows={len(frame):,}")
+        loaded_rows = int(len(frame))
+        progress.update(message=f"training table loaded rows={loaded_rows:,}")
+
+        if args.pre_feature_max_rows is not None:
+            if args.pre_feature_max_rows <= 0:
+                raise ValueError("--pre-feature-max-rows must be greater than 0")
+            if len(frame) > args.pre_feature_max_rows:
+                frame = frame.tail(args.pre_feature_max_rows).copy()
+            else:
+                frame = frame.copy()
+        else:
+            frame = frame.copy()
+        pre_feature_rows = int(len(frame))
+        progress.update(message=f"pre-feature slice ready rows={pre_feature_rows:,}")
 
         with Heartbeat("[stack-tune]", "building features", logger=log_progress):
             frame = build_features(frame)
@@ -226,7 +381,7 @@ def main() -> int:
         progress.update(message=f"component predictions ready components={','.join(component_bundles.keys())}")
 
         params = dict(config.get("model", {}).get("params", {}))
-        candidate_grid = _candidate_grid(set(component_bundles.keys()), params, args)
+        candidate_grid, grid_spec = _candidate_grid(set(component_bundles.keys()), params, args)
         market_prob = None
         odds_column = str(params.get("odds_column", "odds"))
         if odds_column in frame.columns:
@@ -285,6 +440,7 @@ def main() -> int:
         summary_path = ROOT / args.summary_path
         summary_path.parent.mkdir(parents=True, exist_ok=True)
         csv_path = summary_path.with_suffix(".csv")
+        manifest_path = summary_path.with_suffix(".manifest.json")
         best_params = _merge_candidate_params(params, result_df.iloc[0][[
             "alpha_weight",
             "alpha_scale",
@@ -294,24 +450,95 @@ def main() -> int:
             "time_scale",
             "market_blend_weight",
         ]].to_dict())
+        component_artifacts = _component_artifacts_payload(component_bundles)
+        date_window = _date_window_payload(frame)
         payload = {
             "config": args.config,
             "data_config": args.data_config,
             "feature_config": args.feature_config,
             "max_rows": int(len(frame)),
+            "loaded_rows": loaded_rows,
+            "pre_feature_max_rows": int(args.pre_feature_max_rows) if args.pre_feature_max_rows is not None else None,
+            "pre_feature_rows": pre_feature_rows,
+            "requested_max_rows": int(args.max_rows),
+            "n_rows": int(len(frame)),
+            "n_races": int(frame["race_id"].nunique()),
             "sort_by": args.sort_by,
+            "top_n": int(args.top_n),
             "candidate_count": int(len(result_df)),
+            "date_window": date_window,
+            "search_space": grid_spec,
+            "component_artifacts": component_artifacts,
+            "run_context": {
+                "config": args.config,
+                "data_config": args.data_config,
+                "feature_config": args.feature_config,
+                "task": str(config.get("task", "classification")),
+                "label_column": label_col,
+                "loaded_rows": loaded_rows,
+                "pre_feature_max_rows": int(args.pre_feature_max_rows) if args.pre_feature_max_rows is not None else None,
+                "pre_feature_rows": pre_feature_rows,
+                "requested_max_rows": int(args.max_rows),
+                "actual_rows": int(len(frame)),
+                "n_races": int(frame["race_id"].nunique()),
+                "sort_by": args.sort_by,
+                "top_n": int(args.top_n),
+                "feature_selection_mode": fallback_selection.mode,
+                "feature_count": int(len(fallback_selection.feature_columns)),
+                "categorical_feature_count": int(len(fallback_selection.categorical_columns)),
+                "candidate_count": int(len(result_df)),
+                "odds_column": odds_column if odds_column in frame.columns else None,
+                "component_names": sorted(component_bundles.keys()),
+            },
+            "output_files": {
+                "summary": _display_path(summary_path),
+                "csv": _display_path(csv_path),
+                "manifest": _display_path(manifest_path),
+            },
             "best_params": best_params,
             "top_results": result_df.head(args.top_n).to_dict(orient="records"),
         }
+        summary_text = json.dumps(payload, ensure_ascii=False, indent=2)
+        csv_text = result_df.to_csv(index=False)
+        manifest_payload = _build_tuning_manifest(
+            config_path=args.config,
+            data_config_path=args.data_config,
+            feature_config_path=args.feature_config,
+            task=str(config.get("task", "classification")),
+            label_column=label_col,
+            loaded_rows=loaded_rows,
+            pre_feature_max_rows=int(args.pre_feature_max_rows) if args.pre_feature_max_rows is not None else None,
+            pre_feature_rows=pre_feature_rows,
+            requested_max_rows=int(args.max_rows),
+            actual_rows=int(len(frame)),
+            n_races=int(frame["race_id"].nunique()),
+            sort_by=args.sort_by,
+            top_n=int(args.top_n),
+            date_window=date_window,
+            feature_selection_mode=fallback_selection.mode,
+            feature_count=int(len(fallback_selection.feature_columns)),
+            categorical_feature_count=int(len(fallback_selection.categorical_columns)),
+            candidate_count=int(len(result_df)),
+            csv_row_count=int(len(result_df)),
+            grid_spec=grid_spec,
+            best_params=best_params,
+            component_artifacts=component_artifacts,
+            summary_path=summary_path,
+            csv_path=csv_path,
+            manifest_path=manifest_path,
+            summary_sha256=_sha256_text(summary_text),
+            csv_sha256=_sha256_text(csv_text),
+            top_results_count=int(min(args.top_n, len(result_df.head(args.top_n)))),
+        )
         with Heartbeat("[stack-tune]", "writing tuning outputs", logger=log_progress):
-            result_df.to_csv(csv_path, index=False)
-            with summary_path.open("w", encoding="utf-8") as file:
-                json.dump(payload, file, ensure_ascii=False, indent=2)
+            csv_path.write_text(csv_text, encoding="utf-8")
+            summary_path.write_text(summary_text, encoding="utf-8")
+            write_json(manifest_path, manifest_payload)
         progress.complete(message=f"tuning outputs written candidates={len(result_df):,}")
 
         print(f"[stack-tune] summary saved: {summary_path}")
         print(f"[stack-tune] csv saved: {csv_path}")
+        print(f"[stack-tune] manifest saved: {manifest_path}")
         print(result_df.head(args.top_n).to_string(index=False))
         print(f"[stack-tune] best_params={best_params}")
         return 0

@@ -209,6 +209,9 @@ nr-learn/
     - Top3確率モデルを比較する場合は `--challenger-config configs/model_top3.yaml` を指定
     - Top3チューニング結果（`artifacts/reports/tune_top3_summary.json`）には `run_context` / `leakage_audit` / `policy_constraints` が保存されます
     - 互換のため `strategy_constraints` も同時に残します
+    - value stack tuning は `python scripts/run_tune_value_stack.py --summary-path artifacts/reports/tune_value_stack_summary.json` で実行でき、summary / csv に加えて `tune_value_stack_summary.manifest.json` も出力します
+    - 低メモリ環境で feature build 前に入力を絞りたいときは `--pre-feature-max-rows 5000` を使えます。既存の `--max-rows` は feature build 後の evaluation slice のままです
+    - value stack tuning summary には `run_context` / `search_space` / `component_artifacts` / `output_files` / `loaded_rows` / `pre_feature_max_rows` が、manifest には summary/csv の checksum と row-count 整合性が保存されます
 10. ダッシュボード（Notebookが止まるときのCLI代替）
     - `python scripts/run_dashboard.py`
     - 必要に応じて `--predictions-file` / `--backtest-file` / `--train-metrics-file` で参照する artifact を固定できます
