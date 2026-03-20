@@ -195,6 +195,7 @@ nr-learn/
             - `ev_threshold_1_0_roi`: 期待値1.0以上のみ購入
             - `ev_threshold_1_2_roi`: 期待値1.2以上のみ購入
     - manifest の整合性を点検するときは `python scripts/run_validate_evaluation_manifest.py --manifest artifacts/reports/evaluation_manifest.json` を使えます
+    - latest + versioned manifest をまとめて点検するときは `python scripts/run_validate_evaluation_manifest.py --all-manifests` を使えます
     - 必要に応じて `--output artifacts/reports/evaluation_manifest_validation.json` で validation report を保存できます
 9. ベースライン vs Ranker 比較（同一データでA/B）
     - stable alias で比較する場合は `python scripts/run_ab_compare.py --base-profile current_best_eval --challenger-profile current_recommended_serving --max-rows 30000` を使えます
