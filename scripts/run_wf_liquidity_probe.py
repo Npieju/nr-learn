@@ -28,6 +28,7 @@ from racing_ml.evaluation.scoring import (
     prepare_scored_frame,
     resolve_odds_column,
 )
+from racing_ml.evaluation.stability import build_stability_guardrail
 from racing_ml.evaluation.walk_forward import build_nested_wf_slices, fit_isotonic
 from racing_ml.features.builder import build_features
 from racing_ml.features.selection import (
@@ -474,11 +475,15 @@ def main() -> int:
                     str(pd.to_datetime(test_df["date"], errors="coerce").max().date()),
                 ],
                 "valid_races": int(valid_df["race_id"].nunique()),
+                "valid_stability_guardrail": build_stability_guardrail(frame=valid_df),
+                "test_stability_guardrail": build_stability_guardrail(frame=test_df),
                 "top_candidates": ranked.head(10)
                 .assign(gate_failures=lambda df: df["gate_failures"].apply(list))
                 .to_dict("records"),
             }
         )
+        fold_summaries[-1]["valid_stability_assessment"] = fold_summaries[-1]["valid_stability_guardrail"]["assessment"]
+        fold_summaries[-1]["test_stability_assessment"] = fold_summaries[-1]["test_stability_guardrail"]["assessment"]
         _log(f"fold={fold_index} complete candidates={len(fold_rows)}")
 
     report_dir = ROOT / "artifacts" / "reports"
@@ -488,6 +493,13 @@ def main() -> int:
     fold_slug = _derive_fold_slug(selected_folds)
     summary_path = report_dir / f"wf_liquidity_probe_{output_slug}{date_slug}{fold_slug}.json"
     detail_path = report_dir / f"wf_liquidity_probe_{output_slug}{date_slug}{fold_slug}.csv"
+    stability_guardrail = build_stability_guardrail(frame=pred)
+    if stability_guardrail["assessment"] != "representative":
+        _log(
+            "stability guardrail="
+            f"{stability_guardrail['assessment']}: "
+            f"{'; '.join(stability_guardrail.get('warnings', [])[:2])}"
+        )
 
     payload = {
         "run_context": {
@@ -514,6 +526,8 @@ def main() -> int:
             "max_fraction": float(args.max_fraction),
         },
         "policy_constraints": constraints.to_dict(),
+        "stability_assessment": stability_guardrail["assessment"],
+        "stability_guardrail": stability_guardrail,
         "folds": fold_summaries,
     }
     summary_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")

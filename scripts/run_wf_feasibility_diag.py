@@ -28,6 +28,7 @@ from racing_ml.evaluation.policy import (
     run_policy_strategy,
 )
 from racing_ml.evaluation.scoring import generate_prediction_outputs, prepare_scored_frame, resolve_odds_column
+from racing_ml.evaluation.stability import build_stability_guardrail
 from racing_ml.evaluation.walk_forward import build_nested_wf_slices, fit_isotonic, _resolve_search_candidate_values
 from racing_ml.features.builder import build_features
 from racing_ml.features.selection import prepare_model_input_frame, resolve_feature_selection, resolve_model_feature_selection
@@ -403,10 +404,14 @@ def _summarize_fold_candidates(
         "feasible_by_strategy": dict(feasible_by_strategy),
         "failure_reason_counts": dict(failure_reason_counts),
         "failure_combo_counts": dict(failure_combo_counts),
+        "valid_stability_guardrail": build_stability_guardrail(frame=valid_df),
+        "test_stability_guardrail": build_stability_guardrail(frame=test_df),
         "best_feasible": _serialize_candidate(best_feasible),
         "best_fallback": _serialize_candidate(best_fallback),
         "closest_infeasible": closest_infeasible,
     }
+    summary["valid_stability_assessment"] = summary["valid_stability_guardrail"]["assessment"]
+    summary["test_stability_assessment"] = summary["test_stability_guardrail"]["assessment"]
     return summary, candidate_rows
 
 
@@ -467,6 +472,13 @@ def main() -> int:
         outputs = generate_prediction_outputs(model, x_eval, race_ids=frame["race_id"])
         pred = prepare_scored_frame(frame, outputs.score, odds_col=odds_col, score_col="score")
         pred = add_market_signals(pred, score_col="score", odds_col=odds_col)
+        stability_guardrail = build_stability_guardrail(frame=pred)
+        if stability_guardrail["assessment"] != "representative":
+            print(
+                "[wf-feasibility] stability guardrail="
+                f"{stability_guardrail['assessment']}: "
+                f"{'; '.join(stability_guardrail.get('warnings', [])[:2])}"
+            )
 
         n_folds = 5 if args.wf_mode == "full" else 3
         nested_slices = build_nested_wf_slices(
@@ -529,6 +541,8 @@ def main() -> int:
             },
             "policy_constraints": constraints.to_dict(),
             "policy_search": search_config,
+            "stability_assessment": stability_guardrail["assessment"],
+            "stability_guardrail": stability_guardrail,
             "folds": fold_summaries,
         }
         summary_path.write_text(json.dumps(summary_payload, ensure_ascii=False, indent=2), encoding="utf-8")

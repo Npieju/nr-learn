@@ -179,6 +179,7 @@ nr-learn/
     - 低メモリ環境で feature build 前に入力を絞りたいときは `--pre-feature-max-rows 5000` を使えます。`run_evaluate.py` はこの指定時に recent tail loader を使い、artifact には `data_load_strategy=tail_training_table` と `primary_source_rows_total` も残します。既存の `--max-rows` は feature build 後の evaluation slice のままです
     - 全体指標: `artifacts/reports/evaluation_summary.json`（常に最新実行）
     - 最新 evaluation manifest: `artifacts/reports/evaluation_manifest.json`
+    - summary / manifest には `stability_assessment` と `stability_guardrail` も入り、レース数・日数・calendar span・EV>=1.0 bet 数が小さい run は `probe_only` / `caution` として明示的に警告されます。短い smoke / probe の ROI を昇格判断に使わないための guardrail です
     - モデル別保存: `artifacts/reports/evaluation_summary_<model>.json`
             - `wf_mode` / `wf_scheme` がデフォルト (`fast` / `nested`) 以外のときは versioned artifact に `_wf_<mode>_<scheme>` suffix が付き、raw / walk-forward 実験が同じ date window でも上書きされません
             - 対応する `evaluation_manifest_<model>.json` も保存され、summary / by-date の path、checksum、row-count 整合性を確認できます
@@ -206,6 +207,7 @@ nr-learn/
     - （CatBoost win vs LightGBM baseline）`python scripts/run_ab_compare.py --base-config configs/model.yaml --challenger-config configs/model_catboost.yaml --feature-config configs/features_catboost_rich.yaml --max-rows 30000`
     - 比較サマリ: `artifacts/reports/ab_compare_summary.json`
     - versioned 保存: `artifacts/reports/ab_compare_summary_<base>_vs_<challenger>_*.json`
+    - compare summary にも `stability_assessment` / `stability_guardrail` が入り、小標本 compare を `probe_only` / `caution` として区別できます
     - summary には `run_context` / `artifact_manifest` / `date_window` / `comparison_warnings` / `expected_artifacts` も保存されます
     - 両 side が同じ `model_file` / `manifest_file` に解決された場合は warning が残ります。serving policy だけが違う profile 同士では、このケースが起こりえます
     - Top3確率モデルを比較する場合は `--challenger-config configs/model_top3.yaml` を指定
@@ -215,6 +217,7 @@ nr-learn/
     - value stack tuning は `python scripts/run_tune_value_stack.py --summary-path artifacts/reports/tune_value_stack_summary.json` で実行でき、summary / csv に加えて `tune_value_stack_summary.manifest.json` も出力します
     - 低メモリ環境で feature build 前に入力を絞りたいときは `--pre-feature-max-rows 5000` を使えます。`run_tune_value_stack.py` はこの指定時に recent tail loader を使い、summary / manifest / `run_context` に `data_load_strategy` と `primary_source_rows_total` も残します。既存の `--max-rows` は feature build 後の evaluation slice のままです
     - value stack tuning summary には `run_context` / `search_space` / `component_artifacts` / `output_files` / `loaded_rows` / `data_load_strategy` / `primary_source_rows_total` / `pre_feature_max_rows` が、manifest には summary/csv の checksum と row-count 整合性が保存されます
+    - value stack tuning summary / manifest、Top3 tuning summary、walk-forward 診断系 (`run_wf_feasibility_diag.py` / `run_wf_liquidity_probe.py`) にも `stability_assessment` / `stability_guardrail` が入り、短い tuning/probe window を昇格判断に使わないための support 情報を残します。Top3 tuning は candidate ごとの `roi_detail.stability_guardrail` も保存します
     - walk-forward の診断系 (`run_wf_feasibility_diag.py` / `run_wf_liquidity_probe.py`) も `--pre-feature-max-rows` 指定時は recent tail loader を使い、summary `run_context` に `data_load_strategy` と `primary_source_rows_total` を残します
 10. ダッシュボード（Notebookが止まるときのCLI代替）
     - `python scripts/run_dashboard.py`

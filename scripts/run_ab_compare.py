@@ -22,6 +22,7 @@ from racing_ml.common.progress import Heartbeat, ProgressBar
 from racing_ml.data.dataset_loader import load_training_table_for_feature_build
 from racing_ml.evaluation.policy import add_market_signals, evaluate_fixed_stake_summary
 from racing_ml.evaluation.scoring import generate_prediction_outputs, prepare_scored_frame, resolve_odds_column, topk_hit_rate
+from racing_ml.evaluation.stability import build_stability_guardrail
 from racing_ml.features.builder import build_features
 from racing_ml.features.selection import FeatureSelection, prepare_model_input_frame, resolve_feature_selection, resolve_model_feature_selection
 
@@ -362,6 +363,7 @@ def main() -> int:
             "distinct_manifest_artifacts": (not same_manifest_artifact) if same_manifest_artifact is not None else None,
             "comparison_warnings": warnings,
             "date_window": date_window,
+            "stability_guardrail": build_stability_guardrail(frame=frame, summary={"date_window": date_window}),
             "expected_artifacts": {
                 "baseline": base_expected_artifacts,
                 "challenger": challenger_expected_artifacts,
@@ -403,6 +405,13 @@ def main() -> int:
                 ),
             },
         }
+        summary["stability_assessment"] = summary["stability_guardrail"]["assessment"]
+        if summary["stability_assessment"] != "representative":
+            log_progress(
+                "[ab] stability guardrail="
+                f"{summary['stability_assessment']}: "
+                f"{'; '.join(summary['stability_guardrail'].get('warnings', [])[:2])}"
+            )
 
         out_path = ROOT / "artifacts/reports/ab_compare_summary.json"
         out_path.parent.mkdir(parents=True, exist_ok=True)

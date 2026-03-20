@@ -27,6 +27,7 @@ from racing_ml.data.dataset_loader import load_training_table_for_feature_build
 from racing_ml.evaluation.leakage import run_leakage_audit
 from racing_ml.evaluation.policy import PolicyConstraints, add_market_signals, evaluate_flat_strategy_catalog
 from racing_ml.evaluation.scoring import generate_prediction_outputs, prepare_scored_frame, resolve_odds_column
+from racing_ml.evaluation.stability import build_stability_guardrail
 from racing_ml.features.builder import build_features
 from racing_ml.features.selection import FeatureSelection, prepare_model_input_frame, resolve_feature_selection, resolve_model_feature_selection
 from racing_ml.models.trainer import train_and_evaluate
@@ -76,6 +77,7 @@ def objective_score(
     fallback_selection: FeatureSelection,
     constraints: PolicyConstraints,
 ) -> tuple[float, dict[str, float | int | str | None]]:
+    stability_guardrail = build_stability_guardrail(frame=valid_frame)
     if valid_frame.empty:
         return float("-inf"), {
             "strategy": "top1",
@@ -88,6 +90,8 @@ def objective_score(
             "selection_score": None,
             "is_feasible": False,
             "gate_failures": ["empty_validation_slice"],
+            "stability_assessment": stability_guardrail["assessment"],
+            "stability_guardrail": stability_guardrail,
         }
 
     odds_col = resolve_odds_column(valid_frame)
@@ -103,6 +107,8 @@ def objective_score(
             "selection_score": None,
             "is_feasible": False,
             "gate_failures": ["missing_odds_column"],
+            "stability_assessment": stability_guardrail["assessment"],
+            "stability_guardrail": stability_guardrail,
         }
 
     model = joblib.load(model_path)
@@ -121,6 +127,8 @@ def objective_score(
     )
     best_detail = dict(best_detail)
     best_detail["candidate_count"] = int(len(candidate_rows))
+    best_detail["stability_assessment"] = stability_guardrail["assessment"]
+    best_detail["stability_guardrail"] = stability_guardrail
 
     selection_score = best_detail.get("selection_score")
     if selection_score is None:
@@ -217,6 +225,7 @@ def _write_summary(
     run_context: dict,
     leakage_audit: dict,
     policy_constraints: dict,
+    data_stability_guardrail: dict,
 ) -> None:
     summary = {
         "base_config": args.config,
@@ -232,6 +241,10 @@ def _write_summary(
         "leakage_audit": leakage_audit,
         "policy_constraints": policy_constraints,
         "strategy_constraints": policy_constraints,
+        "stability_assessment": data_stability_guardrail["assessment"],
+        "stability_guardrail": data_stability_guardrail,
+        "best_validation_stability_assessment": ((best_row or {}).get("roi_detail") or {}).get("stability_assessment") if isinstance(best_row, dict) else None,
+        "best_validation_stability_guardrail": ((best_row or {}).get("roi_detail") or {}).get("stability_guardrail") if isinstance(best_row, dict) else None,
     }
     out_path.parent.mkdir(parents=True, exist_ok=True)
     with out_path.open("w", encoding="utf-8") as file:
@@ -282,6 +295,7 @@ def main() -> int:
     log_progress(f"Pre-feature slice ready: loaded_rows={loaded_rows:,}, rows={pre_feature_rows:,}")
     with Heartbeat("[tune]", "building features", logger=log_progress):
         frame = build_features(frame)
+    data_stability_guardrail = build_stability_guardrail(frame=frame)
 
     label_column = model_cfg.get("label", "is_win")
     feature_selection = resolve_feature_selection(frame, feature_cfg, label_column=label_column)
@@ -328,8 +342,15 @@ def main() -> int:
         "categorical_feature_count": int(len(feature_selection.categorical_columns)),
         "artifact_model_dir": output_artifacts.model_dir.as_posix(),
         "artifact_report_dir": output_artifacts.report_dir.as_posix(),
+        "stability_assessment": data_stability_guardrail["assessment"],
         **constraints.to_dict(),
     }
+    if data_stability_guardrail["assessment"] != "representative":
+        log_progress(
+            "Data stability guardrail="
+            f"{data_stability_guardrail['assessment']}: "
+            f"{'; '.join(data_stability_guardrail.get('warnings', [])[:2])}"
+        )
 
     log_progress(f"Runtime device_type from config: {device_type}")
 
@@ -573,6 +594,7 @@ def main() -> int:
                     run_context=run_context,
                     leakage_audit=leakage_audit,
                     policy_constraints=constraints.to_dict(),
+                    data_stability_guardrail=data_stability_guardrail,
                 )
     except KeyboardInterrupt:
         log_progress("Interrupted by user; partial summary saved")
@@ -593,6 +615,7 @@ def main() -> int:
         run_context=run_context,
         leakage_audit=leakage_audit,
         policy_constraints=constraints.to_dict(),
+        data_stability_guardrail=data_stability_guardrail,
     )
 
     total_elapsed = time.perf_counter() - started_at

@@ -59,6 +59,7 @@ from racing_ml.evaluation.walk_forward import (
     split_for_calibration,
     split_three_way_time,
 )
+from racing_ml.evaluation.stability import build_stability_guardrail
 from racing_ml.features.builder import build_features
 from racing_ml.features.selection import prepare_model_input_frame, resolve_feature_selection, resolve_model_feature_selection, summarize_feature_coverage
 
@@ -490,6 +491,8 @@ def _build_evaluation_output_manifest(
         "wf_scheme": run_context.get("wf_scheme"),
         "n_rows": summary.get("n_rows"),
         "n_dates": n_dates_value,
+        "stability_assessment": summary.get("stability_assessment"),
+        "stability_guardrail": summary.get("stability_guardrail"),
         "by_date_rows": actual_by_date_rows,
         "by_date_present": by_date_present,
         "consistency": {
@@ -1137,6 +1140,13 @@ def main() -> int:
         progress.update(message=f"by-date aggregation complete rows={len(by_date_rows):,}")
 
         by_date = pd.DataFrame(by_date_rows).sort_values("date") if by_date_rows else pd.DataFrame()
+        summary["stability_guardrail"] = build_stability_guardrail(frame=pred, by_date=by_date, summary=summary)
+        summary["stability_assessment"] = summary["stability_guardrail"]["assessment"]
+        if summary["stability_assessment"] != "representative":
+            warning_preview = "; ".join(summary["stability_guardrail"].get("warnings", [])[:2])
+            log_progress(
+                f"Stability guardrail={summary['stability_assessment']}: {warning_preview}"
+            )
 
         report_dir = ROOT / "artifacts/reports"
         report_dir.mkdir(parents=True, exist_ok=True)

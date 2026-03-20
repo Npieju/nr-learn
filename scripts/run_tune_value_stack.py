@@ -22,6 +22,7 @@ from racing_ml.common.progress import Heartbeat, ProgressBar
 from racing_ml.data.dataset_loader import load_training_table_for_feature_build
 from racing_ml.evaluation.policy import compute_market_prob, evaluate_fixed_stake_summary
 from racing_ml.evaluation.scoring import compose_value_blend_probabilities, predict_score, predict_target_values, prepare_scored_frame, topk_hit_rate
+from racing_ml.evaluation.stability import build_stability_guardrail
 from racing_ml.features.builder import build_features
 from racing_ml.features.selection import prepare_model_input_frame, resolve_feature_selection, resolve_model_feature_selection
 from racing_ml.models.value_blend import load_component_from_config
@@ -256,6 +257,8 @@ def _build_tuning_manifest(
     summary_sha256: str,
     csv_sha256: str,
     top_results_count: int,
+    stability_assessment: str,
+    stability_guardrail: dict[str, Any],
 ) -> dict[str, Any]:
     expected_top_results = min(top_n, candidate_count)
     return {
@@ -276,6 +279,8 @@ def _build_tuning_manifest(
         "sort_by": sort_by,
         "top_n": top_n,
         "date_window": date_window,
+        "stability_assessment": stability_assessment,
+        "stability_guardrail": stability_guardrail,
         "feature_selection": {
             "mode": feature_selection_mode,
             "feature_count": feature_count,
@@ -458,6 +463,7 @@ def main() -> int:
         ]].to_dict())
         component_artifacts = _component_artifacts_payload(component_bundles)
         date_window = _date_window_payload(frame)
+        stability_guardrail = build_stability_guardrail(frame=frame, summary={"date_window": date_window})
         payload = {
             "config": args.config,
             "data_config": args.data_config,
@@ -475,6 +481,8 @@ def main() -> int:
             "top_n": int(args.top_n),
             "candidate_count": int(len(result_df)),
             "date_window": date_window,
+            "stability_assessment": stability_guardrail["assessment"],
+            "stability_guardrail": stability_guardrail,
             "search_space": grid_spec,
             "component_artifacts": component_artifacts,
             "run_context": {
@@ -508,6 +516,12 @@ def main() -> int:
             "best_params": best_params,
             "top_results": result_df.head(args.top_n).to_dict(orient="records"),
         }
+        if payload["stability_assessment"] != "representative":
+            log_progress(
+                "Stability guardrail="
+                f"{payload['stability_assessment']}: "
+                f"{'; '.join(stability_guardrail.get('warnings', [])[:2])}"
+            )
         summary_text = json.dumps(payload, ensure_ascii=False, indent=2)
         csv_text = result_df.to_csv(index=False)
         manifest_payload = _build_tuning_manifest(
@@ -541,6 +555,8 @@ def main() -> int:
             summary_sha256=_sha256_text(summary_text),
             csv_sha256=_sha256_text(csv_text),
             top_results_count=int(min(args.top_n, len(result_df.head(args.top_n)))),
+            stability_assessment=payload["stability_assessment"],
+            stability_guardrail=stability_guardrail,
         )
         with Heartbeat("[stack-tune]", "writing tuning outputs", logger=log_progress):
             csv_path.write_text(csv_text, encoding="utf-8")
