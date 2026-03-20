@@ -19,7 +19,7 @@ if str(SRC) not in sys.path:
 from racing_ml.common.config import load_yaml
 from racing_ml.common.artifacts import utc_now_iso, write_json
 from racing_ml.common.progress import Heartbeat, ProgressBar
-from racing_ml.data.dataset_loader import load_training_table
+from racing_ml.data.dataset_loader import load_training_table, load_training_table_tail
 from racing_ml.evaluation.policy import compute_market_prob, evaluate_fixed_stake_summary
 from racing_ml.evaluation.scoring import compose_value_blend_probabilities, predict_score, predict_target_values, prepare_scored_frame, topk_hit_rate
 from racing_ml.features.builder import build_features
@@ -232,6 +232,8 @@ def _build_tuning_manifest(
     task: str,
     label_column: str,
     loaded_rows: int,
+    data_load_strategy: str,
+    primary_source_rows_total: int | None,
     pre_feature_max_rows: int | None,
     pre_feature_rows: int,
     requested_max_rows: int,
@@ -264,6 +266,8 @@ def _build_tuning_manifest(
         "task": task,
         "label_column": label_column,
         "loaded_rows": loaded_rows,
+        "data_load_strategy": data_load_strategy,
+        "primary_source_rows_total": primary_source_rows_total,
         "pre_feature_max_rows": pre_feature_max_rows,
         "pre_feature_rows": pre_feature_rows,
         "requested_max_rows": requested_max_rows,
@@ -330,19 +334,27 @@ def main() -> int:
         dataset_cfg = data_cfg.get("dataset", {})
         raw_dir = dataset_cfg.get("raw_dir", "data/raw")
         with Heartbeat("[stack-tune]", "loading training table", logger=log_progress):
-            frame = load_training_table(raw_dir, dataset_config=dataset_cfg, base_dir=ROOT)
-        loaded_rows = int(len(frame))
-        progress.update(message=f"training table loaded rows={loaded_rows:,}")
-
-        if args.pre_feature_max_rows is not None:
-            if args.pre_feature_max_rows <= 0:
-                raise ValueError("--pre-feature-max-rows must be greater than 0")
-            if len(frame) > args.pre_feature_max_rows:
-                frame = frame.tail(args.pre_feature_max_rows).copy()
+            if args.pre_feature_max_rows is not None:
+                if args.pre_feature_max_rows <= 0:
+                    raise ValueError("--pre-feature-max-rows must be greater than 0")
+                frame, primary_source_rows_total = load_training_table_tail(
+                    raw_dir,
+                    tail_rows=int(args.pre_feature_max_rows),
+                    dataset_config=dataset_cfg,
+                    base_dir=ROOT,
+                )
+                data_load_strategy = "tail_training_table"
             else:
-                frame = frame.copy()
-        else:
-            frame = frame.copy()
+                frame = load_training_table(raw_dir, dataset_config=dataset_cfg, base_dir=ROOT)
+                primary_source_rows_total = None
+                data_load_strategy = "full_training_table"
+        loaded_rows = int(len(frame))
+        load_message = f"training table loaded rows={loaded_rows:,} strategy={data_load_strategy}"
+        if primary_source_rows_total is not None:
+            load_message += f" primary_source_rows_total={primary_source_rows_total:,}"
+        progress.update(message=load_message)
+
+        frame = frame.copy()
         pre_feature_rows = int(len(frame))
         progress.update(message=f"pre-feature slice ready rows={pre_feature_rows:,}")
 
@@ -458,6 +470,8 @@ def main() -> int:
             "feature_config": args.feature_config,
             "max_rows": int(len(frame)),
             "loaded_rows": loaded_rows,
+            "data_load_strategy": data_load_strategy,
+            "primary_source_rows_total": int(primary_source_rows_total) if primary_source_rows_total is not None else None,
             "pre_feature_max_rows": int(args.pre_feature_max_rows) if args.pre_feature_max_rows is not None else None,
             "pre_feature_rows": pre_feature_rows,
             "requested_max_rows": int(args.max_rows),
@@ -476,6 +490,8 @@ def main() -> int:
                 "task": str(config.get("task", "classification")),
                 "label_column": label_col,
                 "loaded_rows": loaded_rows,
+                "data_load_strategy": data_load_strategy,
+                "primary_source_rows_total": int(primary_source_rows_total) if primary_source_rows_total is not None else None,
                 "pre_feature_max_rows": int(args.pre_feature_max_rows) if args.pre_feature_max_rows is not None else None,
                 "pre_feature_rows": pre_feature_rows,
                 "requested_max_rows": int(args.max_rows),
@@ -507,6 +523,8 @@ def main() -> int:
             task=str(config.get("task", "classification")),
             label_column=label_col,
             loaded_rows=loaded_rows,
+            data_load_strategy=data_load_strategy,
+            primary_source_rows_total=int(primary_source_rows_total) if primary_source_rows_total is not None else None,
             pre_feature_max_rows=int(args.pre_feature_max_rows) if args.pre_feature_max_rows is not None else None,
             pre_feature_rows=pre_feature_rows,
             requested_max_rows=int(args.max_rows),

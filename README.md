@@ -176,7 +176,7 @@ nr-learn/
     - （ROI回帰）`python scripts/run_evaluate.py --config configs/model_roi.yaml --data-config configs/data.yaml --feature-config configs/features.yaml --max-rows 80000`
     - （市場乖離/Layer2）`python scripts/run_evaluate.py --config configs/model_alpha.yaml --data-config configs/data.yaml --feature-config configs/features.yaml --max-rows 80000`
     - 最新年だけを切って見たいときは `--start-date` / `--end-date` を併用できます。例: `python scripts/run_evaluate.py --config configs/model_catboost_fundamental_enriched_no_lineage.yaml --data-config configs/data.yaml --feature-config configs/features_catboost_fundamental_enriched_no_lineage.yaml --start-date 2024-01-01 --end-date 2024-01-08 --wf-mode off`
-    - 低メモリ環境で feature build 前に入力を絞りたいときは `--pre-feature-max-rows 5000` を使えます。既存の `--max-rows` は feature build 後の evaluation slice のままです
+    - 低メモリ環境で feature build 前に入力を絞りたいときは `--pre-feature-max-rows 5000` を使えます。`run_evaluate.py` はこの指定時に recent tail loader を使い、artifact には `data_load_strategy=tail_training_table` と `primary_source_rows_total` も残します。既存の `--max-rows` は feature build 後の evaluation slice のままです
     - 全体指標: `artifacts/reports/evaluation_summary.json`（常に最新実行）
     - 最新 evaluation manifest: `artifacts/reports/evaluation_manifest.json`
     - モデル別保存: `artifacts/reports/evaluation_summary_<model>.json`
@@ -201,7 +201,7 @@ nr-learn/
 9. ベースライン vs Ranker 比較（同一データでA/B）
     - stable alias で比較する場合は `python scripts/run_ab_compare.py --base-profile current_best_eval --challenger-profile current_recommended_serving --max-rows 30000` を使えます
     - 同一 artifact 比較を禁止したいときは `--require-distinct-artifacts` を付けると、重い feature build 前に fail-fast します
-    - 低メモリ環境で feature build 前に入力を絞りたいときは `--pre-feature-max-rows 5000` を使えます。既存の `--max-rows` は feature build 後の evaluation slice のままです
+    - 低メモリ環境で feature build 前に入力を絞りたいときは `--pre-feature-max-rows 5000` を使えます。`run_ab_compare.py` はこの指定時に recent tail loader を使い、summary / `run_context` に `data_load_strategy` と `primary_source_rows_total` も残します。既存の `--max-rows` は feature build 後の evaluation slice のままです
     - `python scripts/run_ab_compare.py --base-config configs/model.yaml --challenger-config configs/model_ranker.yaml --max-rows 30000`
     - （CatBoost win vs LightGBM baseline）`python scripts/run_ab_compare.py --base-config configs/model.yaml --challenger-config configs/model_catboost.yaml --feature-config configs/features_catboost_rich.yaml --max-rows 30000`
     - 比較サマリ: `artifacts/reports/ab_compare_summary.json`
@@ -213,8 +213,8 @@ nr-learn/
     - Top3 tuning でも 低メモリ環境で feature build 前に入力を絞りたいときは `--pre-feature-max-rows 5000` を使えます
     - 互換のため `strategy_constraints` も同時に残します
     - value stack tuning は `python scripts/run_tune_value_stack.py --summary-path artifacts/reports/tune_value_stack_summary.json` で実行でき、summary / csv に加えて `tune_value_stack_summary.manifest.json` も出力します
-    - 低メモリ環境で feature build 前に入力を絞りたいときは `--pre-feature-max-rows 5000` を使えます。既存の `--max-rows` は feature build 後の evaluation slice のままです
-    - value stack tuning summary には `run_context` / `search_space` / `component_artifacts` / `output_files` / `loaded_rows` / `pre_feature_max_rows` が、manifest には summary/csv の checksum と row-count 整合性が保存されます
+    - 低メモリ環境で feature build 前に入力を絞りたいときは `--pre-feature-max-rows 5000` を使えます。`run_tune_value_stack.py` はこの指定時に recent tail loader を使い、summary / manifest / `run_context` に `data_load_strategy` と `primary_source_rows_total` も残します。既存の `--max-rows` は feature build 後の evaluation slice のままです
+    - value stack tuning summary には `run_context` / `search_space` / `component_artifacts` / `output_files` / `loaded_rows` / `data_load_strategy` / `primary_source_rows_total` / `pre_feature_max_rows` が、manifest には summary/csv の checksum と row-count 整合性が保存されます
 10. ダッシュボード（Notebookが止まるときのCLI代替）
     - `python scripts/run_dashboard.py`
     - 必要に応じて `--predictions-file` / `--backtest-file` / `--train-metrics-file` で参照する artifact を固定できます
