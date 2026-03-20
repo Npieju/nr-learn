@@ -23,6 +23,15 @@ def derive_manifest_file_name(model_file_name: str) -> str:
     return f"{model_path.stem}.manifest.json"
 
 
+def append_suffix_to_file_name(file_name: str, suffix: str | None) -> str:
+    normalized_suffix = str(suffix or "").strip()
+    if not normalized_suffix:
+        return file_name
+
+    file_path = Path(file_name)
+    return file_path.with_name(f"{file_path.stem}_{normalized_suffix}{file_path.suffix}").as_posix()
+
+
 def resolve_output_artifacts(output_cfg: dict[str, Any] | None = None) -> OutputArtifacts:
     output_cfg = output_cfg or {}
     model_dir = Path(output_cfg.get("model_dir", "artifacts/models"))

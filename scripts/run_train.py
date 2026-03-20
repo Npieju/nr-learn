@@ -25,6 +25,9 @@ def main() -> int:
     parser.add_argument("--config", default=None)
     parser.add_argument("--data-config", default=None)
     parser.add_argument("--feature-config", default=None)
+    parser.add_argument("--artifact-suffix", default=None)
+    parser.add_argument("--max-train-rows", type=int, default=None)
+    parser.add_argument("--max-valid-rows", type=int, default=None)
     args = parser.parse_args()
     progress = ProgressBar(total=2, prefix="[train cli]", logger=log_progress, min_interval_sec=0.0)
 
@@ -41,13 +44,18 @@ def main() -> int:
         progress.start(
             message=(
                 f"starting profile={resolved_profile or 'custom'} config={config_path} "
-                f"data_config={data_config_path} feature_config={feature_config_path}"
+                f"data_config={data_config_path} feature_config={feature_config_path} "
+                f"artifact_suffix={args.artifact_suffix or 'none'} "
+                f"max_train_rows={args.max_train_rows or 'config'} max_valid_rows={args.max_valid_rows or 'config'}"
             )
         )
         run_train(
             model_config_path=config_path,
             data_config_path=data_config_path,
             feature_config_path=feature_config_path,
+            artifact_suffix=args.artifact_suffix,
+            max_train_rows_override=args.max_train_rows,
+            max_valid_rows_override=args.max_valid_rows,
         )
         progress.complete(message="training flow finished")
         return 0
