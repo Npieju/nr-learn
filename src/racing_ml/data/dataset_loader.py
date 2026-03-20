@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import dataclass
 from pathlib import Path
 import re
 from typing import Any
@@ -73,6 +74,15 @@ DEFAULT_SUPPLEMENTAL_TABLES: list[dict[str, Any]] = [
         "table_loader": "corner_passing_order",
     }
 ]
+
+
+@dataclass(frozen=True)
+class TrainingTableLoadResult:
+    frame: pd.DataFrame
+    loaded_rows: int
+    pre_feature_rows: int
+    data_load_strategy: str
+    primary_source_rows_total: int | None
 
 
 def _pick_dataset(raw_dir: Path) -> Path:
@@ -770,6 +780,43 @@ def load_training_table_tail(
     frame = _ensure_minimum_columns(frame)
     frame = frame.sort_values(["date", "race_id"]).tail(int(tail_rows)).reset_index(drop=True)
     return frame, int(primary_source_rows_total)
+
+
+def load_training_table_for_feature_build(
+    raw_dir: str | Path,
+    *,
+    pre_feature_max_rows: int | None = None,
+    dataset_config: dict[str, Any] | None = None,
+    base_dir: str | Path | None = None,
+) -> TrainingTableLoadResult:
+    if pre_feature_max_rows is not None:
+        if int(pre_feature_max_rows) <= 0:
+            raise ValueError("pre_feature_max_rows must be greater than 0")
+        frame, primary_source_rows_total = load_training_table_tail(
+            raw_dir,
+            tail_rows=int(pre_feature_max_rows),
+            dataset_config=dataset_config,
+            base_dir=base_dir,
+        )
+        data_load_strategy = "tail_training_table"
+    else:
+        frame = load_training_table(
+            raw_dir,
+            dataset_config=dataset_config,
+            base_dir=base_dir,
+        )
+        primary_source_rows_total = None
+        data_load_strategy = "full_training_table"
+
+    frame = frame.copy()
+    loaded_rows = int(len(frame))
+    return TrainingTableLoadResult(
+        frame=frame,
+        loaded_rows=loaded_rows,
+        pre_feature_rows=loaded_rows,
+        data_load_strategy=data_load_strategy,
+        primary_source_rows_total=int(primary_source_rows_total) if primary_source_rows_total is not None else None,
+    )
 
 
 def inspect_dataset_sources(

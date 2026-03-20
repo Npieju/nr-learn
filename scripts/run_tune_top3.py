@@ -23,7 +23,7 @@ from racing_ml.common.artifacts import (
     write_json,
 )
 from racing_ml.common.progress import Heartbeat, ProgressBar
-from racing_ml.data.dataset_loader import load_training_table, load_training_table_tail
+from racing_ml.data.dataset_loader import load_training_table_for_feature_build
 from racing_ml.evaluation.leakage import run_leakage_audit
 from racing_ml.evaluation.policy import PolicyConstraints, add_market_signals, evaluate_flat_strategy_catalog
 from racing_ml.evaluation.scoring import generate_prediction_outputs, prepare_scored_frame, resolve_odds_column
@@ -264,23 +264,17 @@ def main() -> int:
     raw_dir = dataset_cfg.get("raw_dir", "data/raw")
     split_cfg = data_cfg.get("split", {})
     with Heartbeat("[tune]", "loading training table", logger=log_progress):
-        if args.pre_feature_max_rows is not None:
-            if args.pre_feature_max_rows <= 0:
-                raise ValueError("--pre-feature-max-rows must be greater than 0")
-            frame, primary_source_rows_total = load_training_table_tail(
-                raw_dir,
-                tail_rows=int(args.pre_feature_max_rows),
-                dataset_config=dataset_cfg,
-                base_dir=ROOT,
-            )
-            data_load_strategy = "tail_training_table"
-        else:
-            frame = load_training_table(raw_dir, dataset_config=dataset_cfg, base_dir=ROOT)
-            primary_source_rows_total = None
-            data_load_strategy = "full_training_table"
-    loaded_rows = int(len(frame))
-    frame = frame.copy()
-    pre_feature_rows = int(len(frame))
+        load_result = load_training_table_for_feature_build(
+            raw_dir,
+            pre_feature_max_rows=int(args.pre_feature_max_rows) if args.pre_feature_max_rows is not None else None,
+            dataset_config=dataset_cfg,
+            base_dir=ROOT,
+        )
+    frame = load_result.frame
+    loaded_rows = load_result.loaded_rows
+    pre_feature_rows = load_result.pre_feature_rows
+    data_load_strategy = load_result.data_load_strategy
+    primary_source_rows_total = load_result.primary_source_rows_total
     load_message = f"Training table loaded: rows={loaded_rows:,}, strategy={data_load_strategy}"
     if primary_source_rows_total is not None:
         load_message += f", primary_source_rows_total={primary_source_rows_total:,}"

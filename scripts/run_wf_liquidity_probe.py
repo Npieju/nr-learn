@@ -15,7 +15,7 @@ if str(SRC) not in sys.path:
 
 from racing_ml.common.artifacts import resolve_output_artifacts
 from racing_ml.common.config import load_yaml
-from racing_ml.data.dataset_loader import load_training_table, load_training_table_tail
+from racing_ml.data.dataset_loader import load_training_table_for_feature_build
 from racing_ml.evaluation.policy import (
     PolicyConstraints,
     blend_prob,
@@ -314,32 +314,22 @@ def main() -> int:
     constraints = PolicyConstraints.from_config(model_cfg.get("evaluation", {}))
 
     _log("loading training table")
-    if args.pre_feature_max_rows is not None:
-        if args.pre_feature_max_rows <= 0:
-            raise ValueError("--pre-feature-max-rows must be greater than 0")
-        frame, primary_source_rows_total = load_training_table_tail(
-            data_cfg.get("dataset", {}).get("raw_dir", "data/raw"),
-            tail_rows=int(args.pre_feature_max_rows),
-            dataset_config=data_cfg,
-            base_dir=ROOT,
-        )
-        data_load_strategy = "tail_training_table"
-    else:
-        frame = load_training_table(
-            data_cfg.get("dataset", {}).get("raw_dir", "data/raw"),
-            dataset_config=data_cfg,
-            base_dir=ROOT,
-        )
-        primary_source_rows_total = None
-        data_load_strategy = "full_training_table"
-    loaded_rows = int(len(frame))
+    load_result = load_training_table_for_feature_build(
+        data_cfg.get("dataset", {}).get("raw_dir", "data/raw"),
+        pre_feature_max_rows=int(args.pre_feature_max_rows) if args.pre_feature_max_rows is not None else None,
+        dataset_config=data_cfg,
+        base_dir=ROOT,
+    )
+    frame = load_result.frame
+    loaded_rows = load_result.loaded_rows
+    pre_feature_rows = load_result.pre_feature_rows
+    data_load_strategy = load_result.data_load_strategy
+    primary_source_rows_total = load_result.primary_source_rows_total
     load_message = f"training table loaded rows={loaded_rows:,} strategy={data_load_strategy}"
     if primary_source_rows_total is not None:
         load_message += f" primary_source_rows_total={primary_source_rows_total:,}"
     _log(load_message)
 
-    frame = frame.copy()
-    pre_feature_rows = int(len(frame))
     _log(f"pre-feature slice ready rows={pre_feature_rows:,} loaded_rows={loaded_rows:,}")
 
     _log("building features")
