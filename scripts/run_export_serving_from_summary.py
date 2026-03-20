@@ -5,6 +5,8 @@ from collections import defaultdict
 import difflib
 import json
 from pathlib import Path
+import sys
+import time
 import traceback
 from typing import Any
 
@@ -13,6 +15,11 @@ import yaml
 
 
 ROOT = Path(__file__).resolve().parents[1]
+SRC = ROOT / "src"
+if str(SRC) not in sys.path:
+    sys.path.append(str(SRC))
+
+from racing_ml.common.progress import Heartbeat, ProgressBar
 
 
 MONTH_LABELS = {
@@ -29,6 +36,11 @@ MONTH_LABELS = {
     11: "nov",
     12: "dec",
 }
+
+
+def log_progress(message: str) -> None:
+    now = time.strftime("%H:%M:%S")
+    print(f"[export-serving {now}] {message}", flush=True)
 
 
 def _load_summary(summary_file: str) -> dict[str, Any]:
@@ -402,27 +414,41 @@ def main() -> int:
     parser.add_argument("--output-file", default=None)
     parser.add_argument("--format", choices=["yaml", "json"], default="yaml")
     args = parser.parse_args()
+    progress_total = 3 + int(args.check_config_serving) + int(args.sync_config_serving) + int(bool(args.output_file))
+    progress = ProgressBar(total=progress_total, prefix="[export-serving]", logger=log_progress, min_interval_sec=0.0)
 
     try:
-        summary = _load_summary(args.summary_file)
-        score_when_source = args.score_when_source or args.policy_when_source
-        payload = export_serving_from_summary(
-            summary,
-            policy_when_source=args.policy_when_source,
-            score_when_source=score_when_source,
-            default_policy_source=args.default_policy_source,
+        progress.start(
+            message=(
+                f"starting summary={args.summary_file} policy_when_source={args.policy_when_source} "
+                f"score_when_source={args.score_when_source or args.policy_when_source} format={args.format}"
+            )
         )
-        generated_serving = payload["serving"]
+        with Heartbeat("[export-serving]", "loading summary and config", logger=log_progress):
+            summary = _load_summary(args.summary_file)
+            config_path: Path | None = None
+            config_data: dict[str, Any] | None = None
+            if args.config_file:
+                config_path, config_data = _load_yaml_file(args.config_file)
+        progress.update(message=f"inputs loaded summary_file={args.summary_file}")
 
-        config_path: Path | None = None
-        config_data: dict[str, Any] | None = None
-        if args.config_file:
-            config_path, config_data = _load_yaml_file(args.config_file)
+        score_when_source = args.score_when_source or args.policy_when_source
+        with Heartbeat("[export-serving]", "generating serving payload", logger=log_progress):
+            payload = export_serving_from_summary(
+                summary,
+                policy_when_source=args.policy_when_source,
+                score_when_source=score_when_source,
+                default_policy_source=args.default_policy_source,
+            )
+        generated_serving = payload["serving"]
+        progress.update(message="serving payload generated")
 
         if args.check_config_serving:
             if config_data is None:
                 raise ValueError("--check-config-serving requires --config-file")
-            is_match, diff_text = _compare_serving_blocks(generated_serving, config_data.get("serving"))
+            with Heartbeat("[export-serving]", "checking config serving block", logger=log_progress):
+                is_match, diff_text = _compare_serving_blocks(generated_serving, config_data.get("serving"))
+            progress.update(message=f"config serving checked match={'yes' if is_match else 'no'}")
             if is_match:
                 print(f"[export-serving] config serving matches generated block: {config_path}")
             else:
@@ -434,11 +460,13 @@ def main() -> int:
         if args.sync_config_serving:
             if config_data is None or config_path is None:
                 raise ValueError("--sync-config-serving requires --config-file")
-            config_data["serving"] = generated_serving
-            config_path.write_text(
-                yaml.safe_dump(config_data, allow_unicode=True, sort_keys=False),
-                encoding="utf-8",
-            )
+            with Heartbeat("[export-serving]", "syncing config serving block", logger=log_progress):
+                config_data["serving"] = generated_serving
+                config_path.write_text(
+                    yaml.safe_dump(config_data, allow_unicode=True, sort_keys=False),
+                    encoding="utf-8",
+                )
+            progress.update(message=f"config serving synced path={config_path.name}")
             print(f"[export-serving] config serving synced: {config_path}")
 
         if args.format == "json":
@@ -450,10 +478,13 @@ def main() -> int:
             output_path = Path(args.output_file)
             if not output_path.is_absolute():
                 output_path = ROOT / output_path
-            output_path.parent.mkdir(parents=True, exist_ok=True)
-            output_path.write_text(output_text, encoding="utf-8")
+            with Heartbeat("[export-serving]", "writing export output", logger=log_progress):
+                output_path.parent.mkdir(parents=True, exist_ok=True)
+                output_path.write_text(output_text, encoding="utf-8")
+            progress.update(message=f"output saved path={output_path.name}")
             print(f"[export-serving] output saved: {output_path}")
 
+        progress.complete(message="export flow finished")
         print(output_text)
         return 0
     except KeyboardInterrupt:

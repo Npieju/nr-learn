@@ -6,6 +6,7 @@ import os
 from pathlib import Path
 import shutil
 import sys
+import time
 import traceback
 from typing import Any
 
@@ -17,6 +18,7 @@ if str(SRC) not in sys.path:
 import pandas as pd
 
 from racing_ml.common.config import load_yaml
+from racing_ml.common.progress import Heartbeat, ProgressBar
 from racing_ml.common.regime import resolve_regime_name
 from racing_ml.pipeline.backtest_pipeline import run_backtest
 from racing_ml.serving.predict_batch import prepare_prediction_frame, run_predict_from_frame
@@ -113,6 +115,22 @@ PROFILE_PRESETS: dict[str, dict[str, Any]] = {
                 "score_source": "default",
                 "policy_name": "june_runtime_kelly",
             },
+        ],
+    },
+    "best_policy_may_may_weekends": {
+        "config": "configs/model_catboost_value_stack_lgbm_roi_high_coverage_tune_roi012_liquidity_regime_modelswitch_f1_policy_may.yaml",
+        "data_config": "configs/data.yaml",
+        "feature_config": "configs/features_catboost_rich_high_coverage_diag.yaml",
+        "artifact_suffix": "best_policy_may_may_weekends",
+        "cases": [
+            {"date": "2024-05-04", "score_source": "may_runtime_liquidity", "policy_name": "may_runtime_kelly"},
+            {"date": "2024-05-05", "score_source": "may_runtime_liquidity", "policy_name": "may_runtime_kelly"},
+            {"date": "2024-05-11", "score_source": "may_runtime_liquidity", "policy_name": "may_runtime_kelly"},
+            {"date": "2024-05-12", "score_source": "may_runtime_liquidity", "policy_name": "may_runtime_kelly"},
+            {"date": "2024-05-18", "score_source": "may_runtime_liquidity", "policy_name": "may_runtime_kelly"},
+            {"date": "2024-05-19", "score_source": "may_runtime_liquidity", "policy_name": "may_runtime_kelly"},
+            {"date": "2024-05-25", "score_source": "may_runtime_liquidity", "policy_name": "may_runtime_kelly"},
+            {"date": "2024-05-26", "score_source": "may_runtime_liquidity", "policy_name": "may_runtime_kelly"},
         ],
     },
     "best_policy_may_test_partition_window": {
@@ -355,7 +373,39 @@ PROFILE_PRESETS: dict[str, dict[str, Any]] = {
             },
         ],
     },
+    "fallback_hybrid_june_strict_may_weekends": {
+        "config": "configs/model_catboost_value_stack_lgbm_roi_high_coverage_tune_roi012_liquidity_regime_hybrid_june_strict_serving.yaml",
+        "data_config": "configs/data.yaml",
+        "feature_config": "configs/features_catboost_rich_high_coverage_diag.yaml",
+        "artifact_suffix": "fallback_hybrid_june_strict_may_weekends",
+        "cases": [
+            {"date": "2024-05-04", "score_source": "default", "policy_name": "may_runtime_kelly"},
+            {"date": "2024-05-05", "score_source": "default", "policy_name": "may_runtime_kelly"},
+            {"date": "2024-05-11", "score_source": "default", "policy_name": "may_runtime_kelly"},
+            {"date": "2024-05-12", "score_source": "default", "policy_name": "may_runtime_kelly"},
+            {"date": "2024-05-18", "score_source": "default", "policy_name": "may_runtime_kelly"},
+            {"date": "2024-05-19", "score_source": "default", "policy_name": "may_runtime_kelly"},
+            {"date": "2024-05-25", "score_source": "default", "policy_name": "may_runtime_kelly"},
+            {"date": "2024-05-26", "score_source": "default", "policy_name": "may_runtime_kelly"},
+        ],
+    },
 }
+
+PROFILE_ALIASES: dict[str, str] = {
+    "current_best_eval": "best_policy_may",
+    "current_best_eval_window": "best_policy_may_window",
+    "current_best_eval_may_weekends": "best_policy_may_may_weekends",
+    "current_recommended_serving": "fallback_hybrid_june_strict",
+    "current_recommended_serving_window": "fallback_hybrid_june_strict_window",
+    "current_recommended_serving_may_weekends": "fallback_hybrid_june_strict_may_weekends",
+}
+
+LOCK_FILE = ROOT / "artifacts" / "reports" / "run_serving_smoke.lock"
+
+
+def log_progress(message: str) -> None:
+    now = time.strftime("%H:%M:%S")
+    print(f"[serving-smoke {now}] {message}", flush=True)
 
 
 def _resolve_path(path_value: str | Path) -> Path:
@@ -363,6 +413,67 @@ def _resolve_path(path_value: str | Path) -> Path:
     if path.is_absolute():
         return path
     return ROOT / path
+
+
+def _resolve_profile_name(profile_name: str) -> str:
+    return PROFILE_ALIASES.get(profile_name, profile_name)
+
+
+def _pid_is_running(pid: int) -> bool:
+    if pid <= 0:
+        return False
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        return True
+    return True
+
+
+def _acquire_run_lock(lock_path: Path) -> None:
+    lock_path.parent.mkdir(parents=True, exist_ok=True)
+
+    while True:
+        try:
+            fd = os.open(lock_path, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+        except FileExistsError:
+            existing_pid = 0
+            try:
+                payload = json.loads(lock_path.read_text(encoding="utf-8"))
+                existing_pid = int(payload.get("pid", 0) or 0)
+            except Exception:
+                existing_pid = 0
+
+            if _pid_is_running(existing_pid):
+                raise RuntimeError(
+                    "Another run_serving_smoke.py process is already running "
+                    f"(pid={existing_pid}). Wait for it to finish before starting another run."
+                )
+
+            lock_path.unlink(missing_ok=True)
+            continue
+
+        try:
+            payload = {
+                "pid": os.getpid(),
+                "command": "run_serving_smoke.py",
+                "workspace": ROOT.as_posix(),
+            }
+            os.write(fd, json.dumps(payload, ensure_ascii=False, indent=2).encode("utf-8"))
+        finally:
+            os.close(fd)
+        return
+
+
+def _release_run_lock(lock_path: Path) -> None:
+    try:
+        payload = json.loads(lock_path.read_text(encoding="utf-8"))
+    except Exception:
+        payload = {}
+
+    if int(payload.get("pid", 0) or 0) == os.getpid():
+        lock_path.unlink(missing_ok=True)
 
 
 def _display_path(path: Path) -> str:
@@ -554,7 +665,7 @@ def _select_cases(profile_name: str, requested_dates: list[str] | None, model_co
 
 def main() -> int:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--profile", choices=sorted(PROFILE_PRESETS.keys()), required=True)
+    parser.add_argument("--profile", choices=sorted(set(PROFILE_PRESETS) | set(PROFILE_ALIASES)), required=True)
     parser.add_argument("--date", action="append", default=None)
     parser.add_argument("--config", default=None)
     parser.add_argument("--data-config", default=None)
@@ -565,30 +676,47 @@ def main() -> int:
     parser.add_argument("--print-traceback", action="store_true")
     args = parser.parse_args()
 
-    preset = PROFILE_PRESETS[args.profile]
+    resolved_profile = _resolve_profile_name(args.profile)
+    preset = PROFILE_PRESETS[resolved_profile]
     config_path = _resolve_path(args.config or preset["config"])
     data_config_path = _resolve_path(args.data_config or preset["data_config"])
     feature_config_path = _resolve_path(args.feature_config or preset["feature_config"])
-    artifact_suffix = str(args.artifact_suffix or preset["artifact_suffix"]).strip() or args.profile
+    default_artifact_suffix = preset["artifact_suffix"] if args.profile == resolved_profile else args.profile
+    artifact_suffix = str(args.artifact_suffix or default_artifact_suffix).strip() or args.profile
     output_file = _resolve_path(args.output_file) if args.output_file else ROOT / "artifacts" / "reports" / f"serving_smoke_{args.profile}.json"
+    lock_acquired = False
 
     try:
+        progress = ProgressBar(total=4, prefix="[serving-smoke]", logger=log_progress, min_interval_sec=0.0)
+        progress.start(
+            message=(
+                f"acquiring run lock profile={args.profile} resolved_profile={resolved_profile} "
+                f"output={_display_path(output_file)}"
+            )
+        )
+        _acquire_run_lock(LOCK_FILE)
+        lock_acquired = True
+        log_progress(f"run lock acquired path={_display_path(LOCK_FILE)}")
         model_config = load_yaml(config_path)
-        cases = _select_cases(args.profile, args.date, model_config)
+        cases = _select_cases(resolved_profile, args.date, model_config)
         output_file.parent.mkdir(parents=True, exist_ok=True)
         os.chdir(ROOT)
+        progress.update(message=f"profile resolved cases={len(cases)} artifact_suffix={artifact_suffix}")
 
-        print("[serving-smoke] preparing shared prediction frame", flush=True)
-        shared_frame = prepare_prediction_frame(_display_path(data_config_path))
+        with Heartbeat("[serving-smoke]", "preparing shared prediction frame", logger=log_progress):
+            shared_frame = prepare_prediction_frame(_display_path(data_config_path))
         print(
             f"[serving-smoke] shared frame ready rows={len(shared_frame):,} columns={len(shared_frame.columns):,}",
             flush=True,
         )
+        progress.update(message=f"shared frame ready rows={len(shared_frame):,} columns={len(shared_frame.columns):,}")
 
         results: list[dict[str, Any]] = []
         overall_success = True
+        case_progress = ProgressBar(total=max(len(cases), 1), prefix="[serving-smoke cases]", logger=log_progress, min_interval_sec=0.0)
+        case_progress.start(message="starting case execution")
 
-        for case in cases:
+        for index, case in enumerate(cases, start=1):
             case_result: dict[str, Any] = {
                 "date": case["date"],
                 "expected_score_source": case["score_source"],
@@ -602,6 +730,7 @@ def main() -> int:
                 f"expected_policy={case['policy_name']}",
                 flush=True,
             )
+            log_progress(f"case {index}/{len(cases)} started date={case['date']}")
 
             try:
                 run_predict_from_frame(
@@ -653,24 +782,30 @@ def main() -> int:
                     f"policy={prediction_summary['policy_name']} bets={int(backtest_summary.get('policy_bets', 0) or 0)}",
                     flush=True,
                 )
+                case_progress.update(current=index, message=f"date={case['date']} status=ok")
             except Exception as error:
                 overall_success = False
                 case_result.update({"status": "failed", "error": str(error)})
                 print(f"[serving-smoke] failed date={case['date']} error={error}", flush=True)
                 if args.print_traceback:
                     traceback.print_exc()
+                case_progress.update(current=index, message=f"date={case['date']} status=failed")
 
             results.append(case_result)
+        progress.update(message=f"case loop finished success={overall_success}")
 
         summary = {
             "profile": args.profile,
+            "resolved_profile": resolved_profile,
             "config_file": _display_path(config_path),
             "data_config_file": _display_path(data_config_path),
             "feature_config_file": _display_path(feature_config_path),
             "artifact_suffix": artifact_suffix,
             "cases": results,
         }
-        output_file.write_text(json.dumps(summary, ensure_ascii=False, indent=2), encoding="utf-8")
+        with Heartbeat("[serving-smoke]", "writing summary output", logger=log_progress):
+            output_file.write_text(json.dumps(summary, ensure_ascii=False, indent=2), encoding="utf-8")
+        progress.complete(message=f"summary saved path={_display_path(output_file)}")
         print(f"[serving-smoke] summary saved: {_display_path(output_file)}", flush=True)
         return 0 if overall_success else 1
     except KeyboardInterrupt:
@@ -681,6 +816,10 @@ def main() -> int:
         if args.print_traceback:
             traceback.print_exc()
         return 1
+    finally:
+        if lock_acquired:
+            _release_run_lock(LOCK_FILE)
+            log_progress(f"run lock released path={_display_path(LOCK_FILE)}")
 
 
 if __name__ == "__main__":

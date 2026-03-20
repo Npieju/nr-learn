@@ -2,6 +2,7 @@ import argparse
 from pathlib import Path
 import json
 import sys
+import time
 import traceback
 
 import matplotlib
@@ -11,6 +12,11 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
 ROOT = Path(__file__).resolve().parents[1]
+SRC = ROOT / "src"
+if str(SRC) not in sys.path:
+    sys.path.append(str(SRC))
+
+from racing_ml.common.progress import Heartbeat, ProgressBar
 
 
 def latest_file(path: Path, pattern: str) -> Path:
@@ -20,13 +26,20 @@ def latest_file(path: Path, pattern: str) -> Path:
     return files[-1]
 
 
+def log_progress(message: str) -> None:
+    now = time.strftime("%H:%M:%S")
+    print(f"[dashboard {now}] {message}", flush=True)
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--predictions-file", default=None)
     parser.add_argument("--backtest-file", default=None)
     args = parser.parse_args()
+    progress = ProgressBar(total=4, prefix="[dashboard]", logger=log_progress, min_interval_sec=0.0)
 
     try:
+        progress.start("resolving dashboard inputs")
         artifacts = ROOT / "artifacts"
         pred_dir = artifacts / "predictions"
         report_dir = artifacts / "reports"
@@ -34,12 +47,20 @@ def main() -> int:
         pred_path = Path(args.predictions_file) if args.predictions_file else latest_file(pred_dir, "predictions_*.csv")
         backtest_path = Path(args.backtest_file) if args.backtest_file else latest_file(report_dir, "backtest_*.json")
         train_metrics_path = report_dir / "train_metrics.json"
+        progress.update(
+            message=(
+                f"inputs resolved predictions={pred_path.name} backtest={backtest_path.name} "
+                f"train_metrics={train_metrics_path.name}"
+            )
+        )
 
-        pred_df = pd.read_csv(pred_path)
-        with backtest_path.open("r", encoding="utf-8") as file:
-            backtest = json.load(file)
-        with train_metrics_path.open("r", encoding="utf-8") as file:
-            train_metrics = json.load(file)
+        with Heartbeat("[dashboard]", "loading dashboard inputs", logger=log_progress):
+            pred_df = pd.read_csv(pred_path)
+            with backtest_path.open("r", encoding="utf-8") as file:
+                backtest = json.load(file)
+            with train_metrics_path.open("r", encoding="utf-8") as file:
+                train_metrics = json.load(file)
+        progress.update(message=f"inputs loaded rows={len(pred_df):,}")
 
         summary = {
             "prediction_file": pred_path.name,
@@ -58,30 +79,33 @@ def main() -> int:
         stem = pred_path.stem.replace("predictions_", "")
         summary_path = out_dir / f"dashboard_summary_{stem}.json"
         chart_path = out_dir / f"dashboard_{stem}.png"
-
-        with summary_path.open("w", encoding="utf-8") as file:
-            json.dump(summary, file, ensure_ascii=False, indent=2)
-
-        fig, axes = plt.subplots(1, 2, figsize=(13, 4.5))
-        axes[0].hist(pred_df["score"], bins=25, color="#3b82f6", alpha=0.85)
-        axes[0].set_title("Prediction Score Distribution")
-        axes[0].set_xlabel("score")
-
-        if "race_id" in pred_df.columns:
-            race_top = pred_df.groupby("race_id", as_index=False)["score"].max()
-            axes[1].boxplot(race_top["score"], vert=True)
-            axes[1].set_title("Per-race Top Score Boxplot")
-            axes[1].set_ylabel("top score")
-        else:
-            axes[1].text(0.5, 0.5, "race_id not found", ha="center", va="center")
-
-        plt.tight_layout()
-        fig.savefig(chart_path, dpi=140)
-        plt.close(fig)
-
-        top_cols = [c for c in ["race_id", "horse_id", "horse_name", "score", "pred_rank", "rank"] if c in pred_df.columns]
         top20_path = out_dir / f"dashboard_top20_{stem}.csv"
-        pred_df[top_cols].sort_values("score", ascending=False).head(20).to_csv(top20_path, index=False)
+
+        with Heartbeat("[dashboard]", "writing dashboard outputs", logger=log_progress):
+            with summary_path.open("w", encoding="utf-8") as file:
+                json.dump(summary, file, ensure_ascii=False, indent=2)
+
+            fig, axes = plt.subplots(1, 2, figsize=(13, 4.5))
+            axes[0].hist(pred_df["score"], bins=25, color="#3b82f6", alpha=0.85)
+            axes[0].set_title("Prediction Score Distribution")
+            axes[0].set_xlabel("score")
+
+            if "race_id" in pred_df.columns:
+                race_top = pred_df.groupby("race_id", as_index=False)["score"].max()
+                axes[1].boxplot(race_top["score"], vert=True)
+                axes[1].set_title("Per-race Top Score Boxplot")
+                axes[1].set_ylabel("top score")
+            else:
+                axes[1].text(0.5, 0.5, "race_id not found", ha="center", va="center")
+
+            plt.tight_layout()
+            fig.savefig(chart_path, dpi=140)
+            plt.close(fig)
+
+            top_cols = [c for c in ["race_id", "horse_id", "horse_name", "score", "pred_rank", "rank"] if c in pred_df.columns]
+            pred_df[top_cols].sort_values("score", ascending=False).head(20).to_csv(top20_path, index=False)
+        progress.update(message=f"dashboard outputs saved stem={stem}")
+        progress.complete(message="dashboard flow finished")
 
         print(f"[dashboard] summary saved: {summary_path}")
         print(f"[dashboard] chart saved: {chart_path}")

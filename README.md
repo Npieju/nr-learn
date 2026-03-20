@@ -99,6 +99,7 @@ nr-learn/
         - crawler の output CSV は batch ごとに累積更新され、重複キーは最新 batch 側で上書きされます
         - 推奨フローは `run_prepare_netkeiba_ids.py --target race_result` → `run_collect_netkeiba.py --target race_result` or `race_card` → `run_prepare_netkeiba_ids.py --target pedigree` → `run_collect_netkeiba.py --target pedigree` です
 2. 学習
+    - stable alias で主力評価系を呼ぶときは `python scripts/run_train.py --profile current_best_eval`、簡易運用候補を呼ぶときは `python scripts/run_train.py --profile current_recommended_serving` を使えます
     - `python scripts/run_train.py --config configs/model.yaml --data-config configs/data.yaml --feature-config configs/features.yaml`
     - （推奨 / CatBoost win）`python scripts/run_train.py --config configs/model_catboost.yaml --data-config configs/data.yaml --feature-config configs/features_catboost_rich.yaml`
     - （benchmark 用 / CatBoost fundamental win）`python scripts/run_train.py --config configs/model_catboost_fundamental.yaml --data-config configs/data.yaml --feature-config configs/features_catboost_fundamental.yaml`
@@ -127,6 +128,7 @@ nr-learn/
     - bundle manifest: `artifacts/models/policy_stack_v1.bundle.json`
     - 現時点の bundle は registry / orchestration 用の束ね方であり、学習済み meta-model ではありません
 5. 予測と可視化
+    - stable alias での実行は `python scripts/run_predict.py --profile current_best_eval --race-date 2021-07-31` または `python scripts/run_predict.py --profile current_recommended_serving --race-date 2021-07-31` を使えます
     - `python scripts/run_predict.py --config configs/model.yaml --data-config configs/data.yaml --feature-config configs/features.yaml --race-date 2021-07-31`
     - （Top3確率）`python scripts/run_predict.py --config configs/model_top3.yaml --data-config configs/data.yaml --feature-config configs/features.yaml --race-date 2021-07-31`
     - 予測CSV: `artifacts/predictions/predictions_YYYYMMDD.csv`
@@ -135,19 +137,27 @@ nr-learn/
     - Top3確率モデルでは `p_rank1 / p_rank2 / p_rank3` 列が出力されます（各レース内で正規化済み）
     - `p_top3`（= `p_rank1 + p_rank2 + p_rank3`）も出力され、複勝系の期待値計算に利用できます
 6. バックテスト
+    - stable alias での実行は `python scripts/run_backtest.py --profile current_best_eval` または `python scripts/run_backtest.py --profile current_recommended_serving` を使えます
     - `python scripts/run_backtest.py --config configs/model.yaml`
     - （任意）`python scripts/run_backtest.py --config configs/model.yaml --predictions-file artifacts/predictions/predictions_20210731.csv`
     - レポートJSON: `artifacts/reports/backtest_YYYYMMDD.json`
     - 可視化PNG: `artifacts/reports/backtest_YYYYMMDD.png`
 7. Serving smoke validation
+    - 今後の短い別名として、主力比較は `current_best_eval` 系、簡易運用候補は `current_recommended_serving` 系を使えます
     - representative date の score source / fixed policy routing を一括確認するときは `python scripts/run_serving_smoke.py --profile best_policy_may`、`python scripts/run_serving_smoke.py --profile fallback_hybrid`、または June-only simplification probe の `python scripts/run_serving_smoke.py --profile fallback_hybrid_june_strict`
+    - 同じ内容を stable alias で呼ぶ場合は `python scripts/run_serving_smoke.py --profile current_best_eval` と `python scripts/run_serving_smoke.py --profile current_recommended_serving` を使えます
     - `2024-05-25..2024-06-23` の運用 calendar window をまとめて確認するときは `python scripts/run_serving_smoke.py --profile best_policy_may_window`、`python scripts/run_serving_smoke.py --profile fallback_hybrid_window`、または June-only simplification probe の `python scripts/run_serving_smoke.py --profile fallback_hybrid_june_strict_window`
+    - stable alias では `python scripts/run_serving_smoke.py --profile current_best_eval_window` と `python scripts/run_serving_smoke.py --profile current_recommended_serving_window` が使えます
+    - 2024-05 の実週末 8 日 (`05-04/05/11/12/18/19/25/26`) をまとめて確認するときは `python scripts/run_serving_smoke.py --profile best_policy_may_may_weekends` または `python scripts/run_serving_smoke.py --profile fallback_hybrid_june_strict_may_weekends`
+    - stable alias では `python scripts/run_serving_smoke.py --profile current_best_eval_may_weekends` と `python scripts/run_serving_smoke.py --profile current_recommended_serving_may_weekends` が使えます
     - 特定日だけ確認したいときは `--date 2024-09-14` のように絞れます。preset に入っていない日付でも、`serving.score_regime_overrides` / `serving.policy_regime_overrides` を config から自動解決して smoke できます
     - summary は `artifacts/reports/serving_smoke_<profile>.json` に保存され、prediction/backtest artifact は `_policy_may` や `_fallback_hybrid` suffix 付きでも退避されます
     - 2 つの smoke summary を横比較するときは `python scripts/run_serving_smoke_compare.py --left-summary artifacts/reports/serving_smoke_best_policy_may.json --right-summary artifacts/reports/serving_smoke_fallback_hybrid.json`
     - compare 結果は `artifacts/reports/serving_smoke_compare_<left>_vs_<right>.json` と `.csv` に保存されます
     - compare summary には shared representative dates 上の `policy_bets` / `policy_selected_rows` 合計差、`policy_roi` の日次平均差、さらに `policy_return` / `policy_net` の合計差も含まれます
+    - shared prediction frame は 16GB 環境でも 4GB 以上の RSS を使うことがあるため、`run_serving_smoke.py` は直列で回してください。スクリプト側でも lock で多重起動を弾きます
 8. モデル評価（全体＋日別）
+    - stable alias で主力評価系を再計算するときは `python scripts/run_evaluate.py --profile current_best_eval --max-rows 80000`、簡易運用候補を確認するときは `python scripts/run_evaluate.py --profile current_recommended_serving --max-rows 80000` を使えます
     - `python scripts/run_evaluate.py --config configs/model.yaml --data-config configs/data.yaml --feature-config configs/features.yaml --max-rows 80000`
     - （CatBoost win）`python scripts/run_evaluate.py --config configs/model_catboost.yaml --data-config configs/data.yaml --feature-config configs/features_catboost_rich.yaml --max-rows 200000`
     - （benchmark 用 / CatBoost fundamental win）`python scripts/run_evaluate.py --config configs/model_catboost_fundamental.yaml --data-config configs/data.yaml --feature-config configs/features_catboost_fundamental.yaml --max-rows 200000 --wf-mode off`

@@ -19,6 +19,7 @@ if str(SRC) not in sys.path:
 
 from racing_ml.common.config import load_yaml
 from racing_ml.common.artifacts import resolve_output_artifacts
+from racing_ml.common.model_profiles import MODEL_RUN_PROFILES, resolve_model_run_profile
 from racing_ml.common.progress import Heartbeat, ProgressBar
 from racing_ml.common.regime import resolve_regime_name
 from racing_ml.data.dataset_loader import load_training_table
@@ -442,9 +443,10 @@ def main() -> int:
     warnings.filterwarnings("ignore", message="X does not have valid feature names, but LGBMClassifier was fitted with feature names")
 
     parser = argparse.ArgumentParser()
-    parser.add_argument("--config", default="configs/model.yaml")
-    parser.add_argument("--data-config", default="configs/data.yaml")
-    parser.add_argument("--feature-config", default="configs/features.yaml")
+    parser.add_argument("--profile", choices=sorted(MODEL_RUN_PROFILES), default=None)
+    parser.add_argument("--config", default=None)
+    parser.add_argument("--data-config", default=None)
+    parser.add_argument("--feature-config", default=None)
     parser.add_argument("--max-rows", type=int, default=120000)
     parser.add_argument("--start-date", default=None)
     parser.add_argument("--end-date", default=None)
@@ -454,11 +456,25 @@ def main() -> int:
     args = parser.parse_args()
 
     try:
-        model_cfg = load_yaml(ROOT / args.config)
-        data_cfg = load_yaml(ROOT / args.data_config)
-        feature_cfg = load_yaml(ROOT / args.feature_config)
+        if args.profile and any(value is not None for value in (args.config, args.data_config, args.feature_config)):
+            raise ValueError("--profile cannot be combined with --config, --data-config, or --feature-config")
+
+        resolved_profile, model_config_path, data_config_path, feature_config_path = resolve_model_run_profile(
+            args.profile,
+            default_model_config=args.config or "configs/model.yaml",
+            default_data_config=args.data_config or "configs/data.yaml",
+            default_feature_config=args.feature_config or "configs/features.yaml",
+        )
+        model_cfg = load_yaml(ROOT / model_config_path)
+        data_cfg = load_yaml(ROOT / data_config_path)
+        feature_cfg = load_yaml(ROOT / feature_config_path)
         progress = ProgressBar(total=8, prefix="[evaluate]", logger=log_progress, min_interval_sec=0.0)
-        progress.start("configs loaded")
+        progress.start(
+            message=(
+                f"configs loaded profile={resolved_profile or 'custom'} config={model_config_path} "
+                f"data_config={data_config_path} feature_config={feature_config_path}"
+            )
+        )
 
         task = str(model_cfg.get("task", "classification")).strip().lower()
         evaluation_cfg = model_cfg.get("evaluation", {})
@@ -530,7 +546,7 @@ def main() -> int:
         prediction_sources: dict[str, dict[str, Any]] = {
             "default": {
                 "pred": pred,
-                "model_config": str(args.config),
+                "model_config": str(model_config_path),
                 "model_path": output_artifacts.model_path.as_posix(),
                 "feature_count": int(len(feature_selection.feature_columns)),
                 "categorical_feature_count": int(len(feature_selection.categorical_columns)),
@@ -607,9 +623,10 @@ def main() -> int:
                 summary["time_deviation_pred_corr"] = _safe_regression_corr(raw_target, raw_prediction)
 
         summary["run_context"] = {
-            "config": str(args.config),
-            "data_config": str(args.data_config),
-            "feature_config": str(args.feature_config),
+            "profile": resolved_profile,
+            "config": str(model_config_path),
+            "data_config": str(data_config_path),
+            "feature_config": str(feature_config_path),
             "task": task,
             "label_column": label_col,
             "max_rows": int(args.max_rows),
@@ -1014,7 +1031,7 @@ def main() -> int:
         report_dir = ROOT / "artifacts/reports"
         report_dir.mkdir(parents=True, exist_ok=True)
         output_slug = _derive_evaluation_output_slug(
-            args.config,
+            model_config_path,
             model_path,
             prefer_config=bool(isinstance(score_regime_overrides_cfg, list) and score_regime_overrides_cfg),
         )

@@ -5,6 +5,7 @@ import json
 from pathlib import Path
 import re
 import sys
+import time
 import traceback
 from typing import Any
 
@@ -12,6 +13,16 @@ import pandas as pd
 
 
 ROOT = Path(__file__).resolve().parents[1]
+SRC = ROOT / "src"
+if str(SRC) not in sys.path:
+    sys.path.append(str(SRC))
+
+from racing_ml.common.progress import Heartbeat, ProgressBar
+
+
+def log_progress(message: str) -> None:
+    now = time.strftime("%H:%M:%S")
+    print(f"[serving-smoke-compare {now}] {message}", flush=True)
 
 
 def _resolve_path(path_value: str | Path) -> Path:
@@ -186,12 +197,20 @@ def main() -> int:
     parser.add_argument("--output-json", default=None)
     parser.add_argument("--output-csv", default=None)
     args = parser.parse_args()
+    progress = ProgressBar(total=4, prefix="[serving-smoke-compare]", logger=log_progress, min_interval_sec=0.0)
 
     try:
         left_summary_path = _resolve_path(args.left_summary)
         right_summary_path = _resolve_path(args.right_summary)
-        left_summary = _load_summary(left_summary_path)
-        right_summary = _load_summary(right_summary_path)
+        progress.start(
+            message=(
+                f"loading left={_display_path(left_summary_path)} "
+                f"right={_display_path(right_summary_path)}"
+            )
+        )
+        with Heartbeat("[serving-smoke-compare]", "loading summaries", logger=log_progress):
+            left_summary = _load_summary(left_summary_path)
+            right_summary = _load_summary(right_summary_path)
 
         left_label = str(args.left_label or left_summary.get("profile") or left_summary_path.stem).strip()
         right_label = str(args.right_label or right_summary.get("profile") or right_summary_path.stem).strip()
@@ -200,47 +219,50 @@ def main() -> int:
 
         output_json = _resolve_path(args.output_json) if args.output_json else ROOT / "artifacts" / "reports" / f"serving_smoke_compare_{left_slug}_vs_{right_slug}.json"
         output_csv = _resolve_path(args.output_csv) if args.output_csv else ROOT / "artifacts" / "reports" / f"serving_smoke_compare_{left_slug}_vs_{right_slug}.csv"
+        progress.update(message=f"summaries loaded left={left_label} right={right_label}")
 
-        left_cases = _case_map(left_summary, left_label)
-        right_cases = _case_map(right_summary, right_label)
-        dates = sorted(set(left_cases) | set(right_cases))
-        rows = [
-            _shared_row(date_value, left_cases.get(date_value), right_cases.get(date_value), left_label=left_slug, right_label=right_slug)
-            for date_value in dates
-        ]
+        with Heartbeat("[serving-smoke-compare]", "building comparison summary", logger=log_progress):
+            left_cases = _case_map(left_summary, left_label)
+            right_cases = _case_map(right_summary, right_label)
+            dates = sorted(set(left_cases) | set(right_cases))
+            rows = [
+                _shared_row(date_value, left_cases.get(date_value), right_cases.get(date_value), left_label=left_slug, right_label=right_slug)
+                for date_value in dates
+            ]
 
-        shared_dates = [row["date"] for row in rows if row["shared_date"]]
-        shared_ok_dates = [row["date"] for row in rows if row["both_ok"]]
-        differing_score_source_dates = [row["date"] for row in rows if row["shared_date"] and not row["score_source_same"]]
-        differing_policy_dates = [row["date"] for row in rows if row["shared_date"] and not row["policy_name_same"]]
-        left_only_dates = [row["date"] for row in rows if row[f"{left_slug}_present"] and not row[f"{right_slug}_present"]]
-        right_only_dates = [row["date"] for row in rows if row[f"{right_slug}_present"] and not row[f"{left_slug}_present"]]
-        shared_ok_rows = [row for row in rows if row["both_ok"]]
-        matching_score_source_dates = [row["date"] for row in shared_ok_rows if row["score_source_same"]]
-        matching_policy_dates = [row["date"] for row in shared_ok_rows if row["policy_name_same"]]
-        nonzero_policy_bets_delta_dates = [row["date"] for row in shared_ok_rows if _int_or_none(row.get("policy_bets_delta")) not in {None, 0}]
-        nonzero_policy_selected_rows_delta_dates = [
-            row["date"] for row in shared_ok_rows if _int_or_none(row.get("policy_selected_rows_delta")) not in {None, 0}
-        ]
-        nonzero_policy_roi_delta_dates = [row["date"] for row in shared_ok_rows if _float_or_none(row.get("policy_roi_delta")) not in {None, 0.0}]
-        nonzero_policy_return_delta_dates = [row["date"] for row in shared_ok_rows if _float_or_none(row.get("policy_return_delta")) not in {None, 0.0}]
-        nonzero_policy_net_delta_dates = [row["date"] for row in shared_ok_rows if _float_or_none(row.get("policy_net_delta")) not in {None, 0.0}]
-        comparable_policy_roi_dates = [
-            row["date"]
-            for row in shared_ok_rows
-            if _float_or_none(row.get(f"{left_slug}_policy_roi")) is not None and _float_or_none(row.get(f"{right_slug}_policy_roi")) is not None
-        ]
+            shared_dates = [row["date"] for row in rows if row["shared_date"]]
+            shared_ok_dates = [row["date"] for row in rows if row["both_ok"]]
+            differing_score_source_dates = [row["date"] for row in rows if row["shared_date"] and not row["score_source_same"]]
+            differing_policy_dates = [row["date"] for row in rows if row["shared_date"] and not row["policy_name_same"]]
+            left_only_dates = [row["date"] for row in rows if row[f"{left_slug}_present"] and not row[f"{right_slug}_present"]]
+            right_only_dates = [row["date"] for row in rows if row[f"{right_slug}_present"] and not row[f"{left_slug}_present"]]
+            shared_ok_rows = [row for row in rows if row["both_ok"]]
+            matching_score_source_dates = [row["date"] for row in shared_ok_rows if row["score_source_same"]]
+            matching_policy_dates = [row["date"] for row in shared_ok_rows if row["policy_name_same"]]
+            nonzero_policy_bets_delta_dates = [row["date"] for row in shared_ok_rows if _int_or_none(row.get("policy_bets_delta")) not in {None, 0}]
+            nonzero_policy_selected_rows_delta_dates = [
+                row["date"] for row in shared_ok_rows if _int_or_none(row.get("policy_selected_rows_delta")) not in {None, 0}
+            ]
+            nonzero_policy_roi_delta_dates = [row["date"] for row in shared_ok_rows if _float_or_none(row.get("policy_roi_delta")) not in {None, 0.0}]
+            nonzero_policy_return_delta_dates = [row["date"] for row in shared_ok_rows if _float_or_none(row.get("policy_return_delta")) not in {None, 0.0}]
+            nonzero_policy_net_delta_dates = [row["date"] for row in shared_ok_rows if _float_or_none(row.get("policy_net_delta")) not in {None, 0.0}]
+            comparable_policy_roi_dates = [
+                row["date"]
+                for row in shared_ok_rows
+                if _float_or_none(row.get(f"{left_slug}_policy_roi")) is not None and _float_or_none(row.get(f"{right_slug}_policy_roi")) is not None
+            ]
 
-        left_total_policy_bets = _sum_int_field(shared_ok_rows, f"{left_slug}_policy_bets")
-        right_total_policy_bets = _sum_int_field(shared_ok_rows, f"{right_slug}_policy_bets")
-        left_total_policy_selected_rows = _sum_int_field(shared_ok_rows, f"{left_slug}_policy_selected_rows")
-        right_total_policy_selected_rows = _sum_int_field(shared_ok_rows, f"{right_slug}_policy_selected_rows")
-        left_total_policy_return = _sum_float_field(shared_ok_rows, f"{left_slug}_policy_return")
-        right_total_policy_return = _sum_float_field(shared_ok_rows, f"{right_slug}_policy_return")
-        left_total_policy_net = _sum_float_field(shared_ok_rows, f"{left_slug}_policy_net")
-        right_total_policy_net = _sum_float_field(shared_ok_rows, f"{right_slug}_policy_net")
-        left_mean_policy_roi = _mean_float_field(shared_ok_rows, f"{left_slug}_policy_roi")
-        right_mean_policy_roi = _mean_float_field(shared_ok_rows, f"{right_slug}_policy_roi")
+            left_total_policy_bets = _sum_int_field(shared_ok_rows, f"{left_slug}_policy_bets")
+            right_total_policy_bets = _sum_int_field(shared_ok_rows, f"{right_slug}_policy_bets")
+            left_total_policy_selected_rows = _sum_int_field(shared_ok_rows, f"{left_slug}_policy_selected_rows")
+            right_total_policy_selected_rows = _sum_int_field(shared_ok_rows, f"{right_slug}_policy_selected_rows")
+            left_total_policy_return = _sum_float_field(shared_ok_rows, f"{left_slug}_policy_return")
+            right_total_policy_return = _sum_float_field(shared_ok_rows, f"{right_slug}_policy_return")
+            left_total_policy_net = _sum_float_field(shared_ok_rows, f"{left_slug}_policy_net")
+            right_total_policy_net = _sum_float_field(shared_ok_rows, f"{right_slug}_policy_net")
+            left_mean_policy_roi = _mean_float_field(shared_ok_rows, f"{left_slug}_policy_roi")
+            right_mean_policy_roi = _mean_float_field(shared_ok_rows, f"{right_slug}_policy_roi")
+        progress.update(message=f"comparison built union_dates={len(rows)} shared_ok_dates={len(shared_ok_dates)}")
 
         summary = {
             "left": {
@@ -300,9 +322,12 @@ def main() -> int:
             "cases": rows,
         }
 
-        output_json.parent.mkdir(parents=True, exist_ok=True)
-        output_json.write_text(json.dumps(summary, ensure_ascii=False, indent=2), encoding="utf-8")
-        pd.DataFrame(rows).to_csv(output_csv, index=False)
+        with Heartbeat("[serving-smoke-compare]", "writing comparison outputs", logger=log_progress):
+            output_json.parent.mkdir(parents=True, exist_ok=True)
+            output_json.write_text(json.dumps(summary, ensure_ascii=False, indent=2), encoding="utf-8")
+            pd.DataFrame(rows).to_csv(output_csv, index=False)
+        progress.update(message=f"outputs saved json={_display_path(output_json)} csv={_display_path(output_csv)}")
+        progress.complete(message="comparison flow finished")
 
         print(f"[serving-smoke-compare] json saved: {_display_path(output_json)}")
         print(f"[serving-smoke-compare] csv saved: {_display_path(output_csv)}")
