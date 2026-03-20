@@ -100,6 +100,7 @@ nr-learn/
         - 推奨フローは `run_prepare_netkeiba_ids.py --target race_result` → `run_collect_netkeiba.py --target race_result` or `race_card` → `run_prepare_netkeiba_ids.py --target pedigree` → `run_collect_netkeiba.py --target pedigree` です
 2. 学習
     - stable alias で主力評価系を呼ぶときは `python scripts/run_train.py --profile current_best_eval`、簡易運用候補を呼ぶときは `python scripts/run_train.py --profile current_recommended_serving` を使えます
+    - alias の説明と config 対応を見たいときは `python scripts/run_train.py --list-profiles` を使えます。同じ `--list-profiles` は `run_predict.py` / `run_backtest.py` / `run_evaluate.py` でも使えます
     - validation や probe で canonical artifact を上書きしたくないときは `--artifact-suffix train_probe` のように suffix を付けて、model/report/manifest を別名で出せます
     - probe を軽く回したいときは `--max-train-rows 50000 --max-valid-rows 10000` のように学習/検証行数を CLI から一時的に上書きできます
     - `value_blend` 系 config を `run_train.py` で呼んだ場合は、component artifact を読み込んで stack bundle を再構築します。base component の再学習までは行いません

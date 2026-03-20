@@ -19,7 +19,7 @@ if str(SRC) not in sys.path:
 
 from racing_ml.common.config import load_yaml
 from racing_ml.common.artifacts import resolve_output_artifacts
-from racing_ml.common.model_profiles import MODEL_RUN_PROFILES, resolve_model_run_profile
+from racing_ml.common.model_profiles import MODEL_RUN_PROFILES, format_model_run_profiles, resolve_model_run_profile
 from racing_ml.common.progress import Heartbeat, ProgressBar
 from racing_ml.common.regime import resolve_regime_name
 from racing_ml.data.dataset_loader import load_training_table
@@ -443,6 +443,7 @@ def main() -> int:
     warnings.filterwarnings("ignore", message="X does not have valid feature names, but LGBMClassifier was fitted with feature names")
 
     parser = argparse.ArgumentParser()
+    parser.add_argument("--list-profiles", action="store_true")
     parser.add_argument("--profile", choices=sorted(MODEL_RUN_PROFILES), default=None)
     parser.add_argument("--config", default=None)
     parser.add_argument("--data-config", default=None)
@@ -456,6 +457,10 @@ def main() -> int:
     args = parser.parse_args()
 
     try:
+        if args.list_profiles:
+            print(format_model_run_profiles())
+            return 0
+
         if args.profile and any(value is not None for value in (args.config, args.data_config, args.feature_config)):
             raise ValueError("--profile cannot be combined with --config, --data-config, or --feature-config")
 

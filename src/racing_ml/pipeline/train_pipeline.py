@@ -36,6 +36,7 @@ def _run_value_blend_bundle_build(
     feature_path: Path,
     output_cfg: dict,
     artifact_suffix: str | None,
+    profile_name: str | None,
 ) -> None:
     progress = ProgressBar(total=4, prefix="[train-value-blend]", min_interval_sec=0.0)
     progress.start("config loaded")
@@ -89,6 +90,7 @@ def _run_value_blend_bundle_build(
         "market_blend_weight": float(blend_params.get("market_blend_weight", 1.0)),
     }
     run_context = {
+        "profile": profile_name,
         "model_config": str(model_path),
         "data_config": str(data_path),
         "feature_config": str(feature_path),
@@ -153,6 +155,7 @@ def run_train(
     artifact_suffix: str | None = None,
     max_train_rows_override: int | None = None,
     max_valid_rows_override: int | None = None,
+    profile_name: str | None = None,
 ) -> None:
     model_path = Path(model_config_path)
     data_path = Path(data_config_path)
@@ -186,6 +189,7 @@ def run_train(
             feature_path=feature_path,
             output_cfg=output_cfg,
             artifact_suffix=artifact_suffix,
+            profile_name=profile_name,
         )
         return
 
@@ -269,6 +273,7 @@ def run_train(
     with Heartbeat("[train]", "writing training artifacts"):
         policy_constraints = PolicyConstraints.from_config(evaluation_cfg).to_dict()
         run_context = {
+            "profile": profile_name,
             "model_config": str(model_path),
             "data_config": str(data_path),
             "feature_config": str(feature_path),

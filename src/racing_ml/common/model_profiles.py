@@ -5,6 +5,7 @@ from dataclasses import dataclass
 
 @dataclass(frozen=True)
 class ModelRunProfile:
+    description: str
     model_config: str
     data_config: str
     feature_config: str
@@ -12,16 +13,29 @@ class ModelRunProfile:
 
 MODEL_RUN_PROFILES: dict[str, ModelRunProfile] = {
     "current_best_eval": ModelRunProfile(
+        description="Best nested evaluation mainline with May policy and runtime score override support.",
         model_config="configs/model_catboost_value_stack_lgbm_roi_high_coverage_tune_roi012_liquidity_regime_modelswitch_f1_policy_may.yaml",
         data_config="configs/data.yaml",
         feature_config="configs/features_catboost_rich_high_coverage_diag.yaml",
     ),
     "current_recommended_serving": ModelRunProfile(
+        description="Simplified serving default that matches mainline behavior across validated actual-date checks.",
         model_config="configs/model_catboost_value_stack_lgbm_roi_high_coverage_tune_roi012_liquidity_regime_hybrid_june_strict_serving.yaml",
         data_config="configs/data.yaml",
         feature_config="configs/features_catboost_rich_high_coverage_diag.yaml",
     ),
 }
+
+
+def format_model_run_profiles() -> str:
+    lines: list[str] = []
+    for profile_name in sorted(MODEL_RUN_PROFILES):
+        profile = MODEL_RUN_PROFILES[profile_name]
+        lines.append(f"{profile_name}: {profile.description}")
+        lines.append(f"  model_config={profile.model_config}")
+        lines.append(f"  data_config={profile.data_config}")
+        lines.append(f"  feature_config={profile.feature_config}")
+    return "\n".join(lines)
 
 
 def resolve_model_run_profile(
