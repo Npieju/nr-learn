@@ -23,7 +23,7 @@ from racing_ml.common.artifacts import (
     write_json,
 )
 from racing_ml.common.progress import Heartbeat, ProgressBar
-from racing_ml.data.dataset_loader import load_training_table
+from racing_ml.data.dataset_loader import load_training_table, load_training_table_tail
 from racing_ml.evaluation.leakage import run_leakage_audit
 from racing_ml.evaluation.policy import PolicyConstraints, add_market_signals, evaluate_flat_strategy_catalog
 from racing_ml.evaluation.scoring import generate_prediction_outputs, prepare_scored_frame, resolve_odds_column
@@ -264,18 +264,27 @@ def main() -> int:
     raw_dir = dataset_cfg.get("raw_dir", "data/raw")
     split_cfg = data_cfg.get("split", {})
     with Heartbeat("[tune]", "loading training table", logger=log_progress):
-        frame = load_training_table(raw_dir, dataset_config=dataset_cfg, base_dir=ROOT)
-    loaded_rows = int(len(frame))
-    if args.pre_feature_max_rows is not None:
-        if args.pre_feature_max_rows <= 0:
-            raise ValueError("--pre-feature-max-rows must be greater than 0")
-        if len(frame) > args.pre_feature_max_rows:
-            frame = frame.tail(args.pre_feature_max_rows).copy()
+        if args.pre_feature_max_rows is not None:
+            if args.pre_feature_max_rows <= 0:
+                raise ValueError("--pre-feature-max-rows must be greater than 0")
+            frame, primary_source_rows_total = load_training_table_tail(
+                raw_dir,
+                tail_rows=int(args.pre_feature_max_rows),
+                dataset_config=dataset_cfg,
+                base_dir=ROOT,
+            )
+            data_load_strategy = "tail_training_table"
         else:
-            frame = frame.copy()
-    else:
-        frame = frame.copy()
+            frame = load_training_table(raw_dir, dataset_config=dataset_cfg, base_dir=ROOT)
+            primary_source_rows_total = None
+            data_load_strategy = "full_training_table"
+    loaded_rows = int(len(frame))
+    frame = frame.copy()
     pre_feature_rows = int(len(frame))
+    load_message = f"Training table loaded: rows={loaded_rows:,}, strategy={data_load_strategy}"
+    if primary_source_rows_total is not None:
+        load_message += f", primary_source_rows_total={primary_source_rows_total:,}"
+    log_progress(load_message)
     log_progress(f"Pre-feature slice ready: loaded_rows={loaded_rows:,}, rows={pre_feature_rows:,}")
     with Heartbeat("[tune]", "building features", logger=log_progress):
         frame = build_features(frame)
@@ -311,6 +320,8 @@ def main() -> int:
         "task": task,
         "label_column": label_column,
         "loaded_rows": loaded_rows,
+        "data_load_strategy": data_load_strategy,
+        "primary_source_rows_total": int(primary_source_rows_total) if primary_source_rows_total is not None else None,
         "pre_feature_max_rows": int(args.pre_feature_max_rows) if args.pre_feature_max_rows is not None else None,
         "pre_feature_rows": pre_feature_rows,
         "max_candidates": int(args.max_candidates),
