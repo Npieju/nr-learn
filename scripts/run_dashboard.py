@@ -65,11 +65,44 @@ def resolve_profile(*payloads: dict[str, Any] | None) -> str | None:
     return None
 
 
+def collect_input_consistency_issues(
+    *,
+    prediction_file: str,
+    backtest_prediction_file: str | None,
+    prediction_profile: str | None,
+    backtest_profile: str | None,
+    train_profile: str | None,
+) -> list[str]:
+    issues: list[str] = []
+    if backtest_prediction_file and backtest_prediction_file != prediction_file:
+        issues.append(
+            "backtest prediction_file mismatch: "
+            f"dashboard={prediction_file} backtest={backtest_prediction_file}"
+        )
+
+    profile_values = {
+        "prediction": prediction_profile,
+        "backtest": backtest_profile,
+        "train": train_profile,
+    }
+    present_profiles = {name: value for name, value in profile_values.items() if value}
+    if len(set(present_profiles.values())) > 1:
+        joined = ", ".join(f"{name}={value}" for name, value in present_profiles.items())
+        issues.append(f"profile mismatch: {joined}")
+
+    return issues
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--predictions-file", default=None)
     parser.add_argument("--backtest-file", default=None)
     parser.add_argument("--train-metrics-file", default=None)
+    parser.add_argument(
+        "--strict-input-match",
+        action="store_true",
+        help="Fail when prediction/backtest/train provenance disagrees instead of only recording the mismatch.",
+    )
     args = parser.parse_args()
     progress = ProgressBar(total=4, prefix="[dashboard]", logger=log_progress, min_interval_sec=0.0)
 
@@ -114,6 +147,21 @@ def main() -> int:
         )
         backtest_prediction_file = backtest.get("prediction_file")
         prediction_file_display = display_path(pred_path)
+        prediction_profile = prediction_summary.get("profile") if prediction_summary else None
+        backtest_profile = backtest.get("profile")
+        train_profile = train_run_context.get("profile") if isinstance(train_run_context, dict) else None
+        input_consistency_issues = collect_input_consistency_issues(
+            prediction_file=prediction_file_display,
+            backtest_prediction_file=backtest_prediction_file if isinstance(backtest_prediction_file, str) else None,
+            prediction_profile=prediction_profile if isinstance(prediction_profile, str) else None,
+            backtest_profile=backtest_profile if isinstance(backtest_profile, str) else None,
+            train_profile=train_profile if isinstance(train_profile, str) else None,
+        )
+        if input_consistency_issues:
+            for issue in input_consistency_issues:
+                log_progress(f"[dashboard] input mismatch: {issue}")
+            if args.strict_input_match:
+                raise RuntimeError("Dashboard input mismatch detected: " + " | ".join(input_consistency_issues))
 
         summary = {
             "profile": profile_name,
@@ -121,9 +169,9 @@ def main() -> int:
             "prediction_summary_file": display_path(pred_summary_path) if prediction_summary is not None else None,
             "backtest_file": display_path(backtest_path),
             "train_metrics_file": display_path(train_metrics_path),
-            "prediction_profile": prediction_summary.get("profile") if prediction_summary else None,
-            "backtest_profile": backtest.get("profile"),
-            "train_profile": train_run_context.get("profile") if isinstance(train_run_context, dict) else None,
+            "prediction_profile": prediction_profile,
+            "backtest_profile": backtest_profile,
+            "train_profile": train_profile,
             "prediction_target_date": prediction_summary.get("target_date") if prediction_summary else None,
             "score_source": summary_score_source,
             "score_source_model_config": prediction_summary.get("score_source_model_config") if prediction_summary else None,
@@ -132,6 +180,8 @@ def main() -> int:
             "manifest_file": prediction_summary.get("manifest_file") if prediction_summary else None,
             "backtest_prediction_file": backtest_prediction_file,
             "backtest_prediction_matches": backtest_prediction_file == prediction_file_display if isinstance(backtest_prediction_file, str) else None,
+            "input_consistency_ok": not input_consistency_issues,
+            "input_consistency_issues": input_consistency_issues,
             "rows": int(len(pred_df)),
             "races": int(pred_df["race_id"].nunique()) if "race_id" in pred_df.columns else None,
             "top1_hit_rate": backtest.get("top1_hit_rate"),

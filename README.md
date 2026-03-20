@@ -201,8 +201,9 @@ nr-learn/
 10. ダッシュボード（Notebookが止まるときのCLI代替）
     - `python scripts/run_dashboard.py`
     - 必要に応じて `--predictions-file` / `--backtest-file` / `--train-metrics-file` で参照する artifact を固定できます
+    - provenance を厳密に揃えたいときは `--strict-input-match` を付けると、prediction / backtest / train の参照先や `profile` が食い違う場合に失敗します
     - 概要JSON: `artifacts/reports/dashboard/dashboard_summary_YYYYMMDD.json`
-    - 概要JSON には `profile / score_source / policy_name / prediction_file / backtest_file / train_metrics_file` も保存されます
+    - 概要JSON には `profile / score_source / policy_name / prediction_file / backtest_file / train_metrics_file` に加えて `input_consistency_ok / input_consistency_issues` も保存されます
     - 可視化PNG: `artifacts/reports/dashboard/dashboard_YYYYMMDD.png`
     - Top20 CSV: `artifacts/reports/dashboard/dashboard_top20_YYYYMMDD.csv`
 11. 実データで重い場合
