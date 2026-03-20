@@ -176,6 +176,7 @@ nr-learn/
     - （ROI回帰）`python scripts/run_evaluate.py --config configs/model_roi.yaml --data-config configs/data.yaml --feature-config configs/features.yaml --max-rows 80000`
     - （市場乖離/Layer2）`python scripts/run_evaluate.py --config configs/model_alpha.yaml --data-config configs/data.yaml --feature-config configs/features.yaml --max-rows 80000`
     - 最新年だけを切って見たいときは `--start-date` / `--end-date` を併用できます。例: `python scripts/run_evaluate.py --config configs/model_catboost_fundamental_enriched_no_lineage.yaml --data-config configs/data.yaml --feature-config configs/features_catboost_fundamental_enriched_no_lineage.yaml --start-date 2024-01-01 --end-date 2024-01-08 --wf-mode off`
+    - 低メモリ環境で feature build 前に入力を絞りたいときは `--pre-feature-max-rows 5000` を使えます。既存の `--max-rows` は feature build 後の evaluation slice のままです
     - 全体指標: `artifacts/reports/evaluation_summary.json`（常に最新実行）
     - 最新 evaluation manifest: `artifacts/reports/evaluation_manifest.json`
     - モデル別保存: `artifacts/reports/evaluation_summary_<model>.json`
@@ -200,6 +201,7 @@ nr-learn/
 9. ベースライン vs Ranker 比較（同一データでA/B）
     - stable alias で比較する場合は `python scripts/run_ab_compare.py --base-profile current_best_eval --challenger-profile current_recommended_serving --max-rows 30000` を使えます
     - 同一 artifact 比較を禁止したいときは `--require-distinct-artifacts` を付けると、重い feature build 前に fail-fast します
+    - 低メモリ環境で feature build 前に入力を絞りたいときは `--pre-feature-max-rows 5000` を使えます。既存の `--max-rows` は feature build 後の evaluation slice のままです
     - `python scripts/run_ab_compare.py --base-config configs/model.yaml --challenger-config configs/model_ranker.yaml --max-rows 30000`
     - （CatBoost win vs LightGBM baseline）`python scripts/run_ab_compare.py --base-config configs/model.yaml --challenger-config configs/model_catboost.yaml --feature-config configs/features_catboost_rich.yaml --max-rows 30000`
     - 比較サマリ: `artifacts/reports/ab_compare_summary.json`

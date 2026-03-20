@@ -479,6 +479,10 @@ def _build_evaluation_output_manifest(
         "data_config": run_context.get("data_config"),
         "feature_config": run_context.get("feature_config"),
         "task": run_context.get("task"),
+        "loaded_rows": run_context.get("loaded_rows"),
+        "pre_feature_max_rows": run_context.get("pre_feature_max_rows"),
+        "pre_feature_rows": run_context.get("pre_feature_rows"),
+        "requested_max_rows": run_context.get("requested_max_rows"),
         "date_window": summary.get("date_window"),
         "wf_mode": run_context.get("wf_mode"),
         "wf_scheme": run_context.get("wf_scheme"),
@@ -521,6 +525,7 @@ def main() -> int:
     parser.add_argument("--data-config", default=None)
     parser.add_argument("--feature-config", default=None)
     parser.add_argument("--max-rows", type=int, default=120000)
+    parser.add_argument("--pre-feature-max-rows", type=int, default=None)
     parser.add_argument("--start-date", default=None)
     parser.add_argument("--end-date", default=None)
     parser.add_argument("--wf-mode", choices=["off", "fast", "full"], default="fast")
@@ -545,7 +550,7 @@ def main() -> int:
         model_cfg = load_yaml(ROOT / model_config_path)
         data_cfg = load_yaml(ROOT / data_config_path)
         feature_cfg = load_yaml(ROOT / feature_config_path)
-        progress = ProgressBar(total=8, prefix="[evaluate]", logger=log_progress, min_interval_sec=0.0)
+        progress = ProgressBar(total=9, prefix="[evaluate]", logger=log_progress, min_interval_sec=0.0)
         progress.start(
             message=(
                 f"configs loaded profile={resolved_profile or 'custom'} config={model_config_path} "
@@ -568,7 +573,19 @@ def main() -> int:
         label_col = model_cfg.get("label", "is_win")
         with Heartbeat("[evaluate]", "loading training table", logger=log_progress):
             frame = load_training_table(raw_dir, dataset_config=dataset_cfg, base_dir=ROOT)
-        progress.update(message=f"training table loaded rows={len(frame):,}")
+        loaded_rows = int(len(frame))
+        progress.update(message=f"training table loaded rows={loaded_rows:,}")
+        if args.pre_feature_max_rows is not None:
+            if args.pre_feature_max_rows <= 0:
+                raise ValueError("--pre-feature-max-rows must be greater than 0")
+            if len(frame) > args.pre_feature_max_rows:
+                frame = frame.tail(args.pre_feature_max_rows).copy()
+            else:
+                frame = frame.copy()
+        else:
+            frame = frame.copy()
+        pre_feature_rows = int(len(frame))
+        progress.update(message=f"pre-feature slice ready rows={pre_feature_rows:,}")
         with Heartbeat("[evaluate]", "building features", logger=log_progress):
             frame = build_features(frame)
         progress.update(message=f"features built columns={len(frame.columns):,}")
@@ -678,6 +695,10 @@ def main() -> int:
 
         summary = {
             **_base_summary(pred, odds_col=odds_col, score_col="score", include_ev_metrics=include_ev_metrics),
+            "loaded_rows": loaded_rows,
+            "pre_feature_max_rows": int(args.pre_feature_max_rows) if args.pre_feature_max_rows is not None else None,
+            "pre_feature_rows": pre_feature_rows,
+            "requested_max_rows": int(args.max_rows),
             "n_dates": int(pred["date"].nunique()) if "date" in pred.columns else None,
             "auc": _safe_auc(y_eval, outputs.score) if compute_prob_metrics else None,
             "logloss": float(log_loss(y_eval, np.clip(outputs.score, 1e-12, 1 - 1e-12), labels=[0, 1])) if (compute_prob_metrics and score_is_prob) else None,
@@ -707,6 +728,10 @@ def main() -> int:
             "task": task,
             "label_column": label_col,
             "max_rows": int(args.max_rows),
+            "requested_max_rows": int(args.max_rows),
+            "loaded_rows": loaded_rows,
+            "pre_feature_max_rows": int(args.pre_feature_max_rows) if args.pre_feature_max_rows is not None else None,
+            "pre_feature_rows": pre_feature_rows,
             "start_date": args.start_date,
             "end_date": args.end_date,
             "wf_mode": args.wf_mode,

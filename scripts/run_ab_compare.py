@@ -204,6 +204,7 @@ def main() -> int:
     parser.add_argument("--data-config", default=None)
     parser.add_argument("--feature-config", default=None)
     parser.add_argument("--max-rows", type=int, default=30000)
+    parser.add_argument("--pre-feature-max-rows", type=int, default=None)
     parser.add_argument(
         "--require-distinct-artifacts",
         action="store_true",
@@ -256,7 +257,7 @@ def main() -> int:
         )
         if artifact_identity_warnings and args.require_distinct_artifacts:
             raise ValueError("AB compare requires distinct artifacts: " + " | ".join(artifact_identity_warnings))
-        progress = ProgressBar(total=7, prefix="[ab]", logger=log_progress, min_interval_sec=0.0)
+        progress = ProgressBar(total=8, prefix="[ab]", logger=log_progress, min_interval_sec=0.0)
         progress.start(
             message=(
                 f"configs loaded base={base_profile or base_config_path} "
@@ -270,7 +271,20 @@ def main() -> int:
         raw_dir = dataset_cfg.get("raw_dir", "data/raw")
         with Heartbeat("[ab]", "loading training table", logger=log_progress):
             frame = load_training_table(raw_dir, dataset_config=dataset_cfg, base_dir=ROOT)
-        progress.update(message=f"training table loaded rows={len(frame):,}")
+        loaded_rows = int(len(frame))
+        progress.update(message=f"training table loaded rows={loaded_rows:,}")
+
+        if args.pre_feature_max_rows is not None:
+            if args.pre_feature_max_rows <= 0:
+                raise ValueError("--pre-feature-max-rows must be greater than 0")
+            if len(frame) > args.pre_feature_max_rows:
+                frame = frame.tail(args.pre_feature_max_rows).copy()
+            else:
+                frame = frame.copy()
+        else:
+            frame = frame.copy()
+        pre_feature_rows = int(len(frame))
+        progress.update(message=f"pre-feature slice ready rows={pre_feature_rows:,}")
 
         with Heartbeat("[ab]", "building features", logger=log_progress):
             frame = build_features(frame)
@@ -335,6 +349,10 @@ def main() -> int:
             "data_config": data_config_path,
             "feature_config": feature_config_path,
             "max_rows": int(len(frame)),
+            "loaded_rows": loaded_rows,
+            "pre_feature_max_rows": int(args.pre_feature_max_rows) if args.pre_feature_max_rows is not None else None,
+            "pre_feature_rows": pre_feature_rows,
+            "requested_max_rows": int(args.max_rows),
             "label_columns_match": labels_match,
             "distinct_model_artifacts": not same_model_artifact,
             "distinct_manifest_artifacts": (not same_manifest_artifact) if same_manifest_artifact is not None else None,
@@ -352,6 +370,9 @@ def main() -> int:
                 "data_config": data_config_path,
                 "feature_config": feature_config_path,
                 "require_distinct_artifacts": bool(args.require_distinct_artifacts),
+                "loaded_rows": loaded_rows,
+                "pre_feature_max_rows": int(args.pre_feature_max_rows) if args.pre_feature_max_rows is not None else None,
+                "pre_feature_rows": pre_feature_rows,
                 "requested_max_rows": args.max_rows,
                 "actual_rows": int(len(frame)),
             },
