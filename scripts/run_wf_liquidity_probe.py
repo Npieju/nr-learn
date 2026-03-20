@@ -291,6 +291,7 @@ def main() -> int:
         "--feature-config",
         default="configs/features_catboost_rich_high_coverage_diag.yaml",
     )
+    parser.add_argument("--pre-feature-max-rows", type=int, default=None)
     parser.add_argument("--start-date", default="2024-01-01")
     parser.add_argument("--end-date", default="2024-09-30")
     parser.add_argument("--folds", default="4,5")
@@ -318,7 +319,20 @@ def main() -> int:
         dataset_config=data_cfg,
         base_dir=ROOT,
     )
-    _log(f"training table loaded rows={len(frame):,}")
+    loaded_rows = int(len(frame))
+    _log(f"training table loaded rows={loaded_rows:,}")
+
+    if args.pre_feature_max_rows is not None:
+        if args.pre_feature_max_rows <= 0:
+            raise ValueError("--pre-feature-max-rows must be greater than 0")
+        if len(frame) > args.pre_feature_max_rows:
+            frame = frame.tail(args.pre_feature_max_rows).copy()
+        else:
+            frame = frame.copy()
+    else:
+        frame = frame.copy()
+    pre_feature_rows = int(len(frame))
+    _log(f"pre-feature slice ready rows={pre_feature_rows:,} loaded_rows={loaded_rows:,}")
 
     _log("building features")
     frame = build_features(frame)
@@ -482,6 +496,9 @@ def main() -> int:
             "config": args.config,
             "data_config": args.data_config,
             "feature_config": args.feature_config,
+            "loaded_rows": loaded_rows,
+            "pre_feature_max_rows": int(args.pre_feature_max_rows) if args.pre_feature_max_rows is not None else None,
+            "pre_feature_rows": pre_feature_rows,
             "start_date": args.start_date,
             "end_date": args.end_date,
             "folds": sorted(selected_folds),
