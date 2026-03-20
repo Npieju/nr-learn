@@ -200,7 +200,9 @@ nr-learn/
     - 互換のため `strategy_constraints` も同時に残します
 10. ダッシュボード（Notebookが止まるときのCLI代替）
     - `python scripts/run_dashboard.py`
+    - 必要に応じて `--predictions-file` / `--backtest-file` / `--train-metrics-file` で参照する artifact を固定できます
     - 概要JSON: `artifacts/reports/dashboard/dashboard_summary_YYYYMMDD.json`
+    - 概要JSON には `profile / score_source / policy_name / prediction_file / backtest_file / train_metrics_file` も保存されます
     - 可視化PNG: `artifacts/reports/dashboard/dashboard_YYYYMMDD.png`
     - Top20 CSV: `artifacts/reports/dashboard/dashboard_top20_YYYYMMDD.csv`
 11. 実データで重い場合
