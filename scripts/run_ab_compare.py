@@ -91,6 +91,40 @@ def _compare_target_slug(profile_name: str | None, config_path: str) -> str:
     return profile_name or Path(config_path).stem
 
 
+def _resolve_expected_artifacts(model_cfg: dict[str, Any]) -> dict[str, str | None]:
+    output_cfg = model_cfg.get("output", {})
+    output_artifacts = resolve_output_artifacts(output_cfg)
+    model_path = output_artifacts.model_path if output_artifacts.model_path.is_absolute() else (ROOT / output_artifacts.model_path)
+    manifest_path = (
+        output_artifacts.manifest_path
+        if output_artifacts.manifest_path.is_absolute()
+        else (ROOT / output_artifacts.manifest_path)
+    )
+    return {
+        "model_file": _display_path(model_path),
+        "manifest_file": _display_path(manifest_path),
+    }
+
+
+def _collect_artifact_identity_warnings(
+    base_expected_artifacts: dict[str, str | None],
+    challenger_expected_artifacts: dict[str, str | None],
+) -> list[str]:
+    warnings: list[str] = []
+    if base_expected_artifacts.get("model_file") == challenger_expected_artifacts.get("model_file"):
+        warnings.append(
+            "baseline and challenger resolve to the same model_file; "
+            "metric deltas would reflect identical underlying artifacts unless downstream config behavior differs"
+        )
+    base_manifest = base_expected_artifacts.get("manifest_file")
+    challenger_manifest = challenger_expected_artifacts.get("manifest_file")
+    if base_manifest and challenger_manifest and base_manifest == challenger_manifest:
+        warnings.append(
+            "baseline and challenger resolve to the same manifest_file; compare is artifact-identical"
+        )
+    return warnings
+
+
 def _build_output_manifest(
     *,
     base_profile: str | None,
@@ -170,6 +204,11 @@ def main() -> int:
     parser.add_argument("--data-config", default=None)
     parser.add_argument("--feature-config", default=None)
     parser.add_argument("--max-rows", type=int, default=30000)
+    parser.add_argument(
+        "--require-distinct-artifacts",
+        action="store_true",
+        help="Fail before loading data if both sides resolve to the same model or manifest artifact.",
+    )
     args = parser.parse_args()
 
     try:
@@ -209,6 +248,14 @@ def main() -> int:
         challenger_cfg = load_yaml(ROOT / challenger_config_path)
         data_cfg = load_yaml(ROOT / data_config_path)
         feature_cfg = load_yaml(ROOT / feature_config_path)
+        base_expected_artifacts = _resolve_expected_artifacts(base_cfg)
+        challenger_expected_artifacts = _resolve_expected_artifacts(challenger_cfg)
+        artifact_identity_warnings = _collect_artifact_identity_warnings(
+            base_expected_artifacts,
+            challenger_expected_artifacts,
+        )
+        if artifact_identity_warnings and args.require_distinct_artifacts:
+            raise ValueError("AB compare requires distinct artifacts: " + " | ".join(artifact_identity_warnings))
         progress = ProgressBar(total=7, prefix="[ab]", logger=log_progress, min_interval_sec=0.0)
         progress.start(
             message=(
@@ -216,6 +263,8 @@ def main() -> int:
                 f"challenger={challenger_profile or challenger_config_path}"
             )
         )
+        for warning in artifact_identity_warnings:
+            log_progress(f"[ab] preflight warning: {warning}")
 
         dataset_cfg = data_cfg.get("dataset", {})
         raw_dir = dataset_cfg.get("raw_dir", "data/raw")
@@ -255,10 +304,10 @@ def main() -> int:
         progress.update(message="challenger evaluated")
 
         labels_match = base_label_col == challenger_label_col
-        same_model_artifact = base_metrics.get("model_file") == challenger_metrics.get("model_file")
+        same_model_artifact = base_expected_artifacts.get("model_file") == challenger_expected_artifacts.get("model_file")
         same_manifest_artifact = (
-            base_metrics.get("manifest_file") == challenger_metrics.get("manifest_file")
-            if base_metrics.get("manifest_file") and challenger_metrics.get("manifest_file")
+            base_expected_artifacts.get("manifest_file") == challenger_expected_artifacts.get("manifest_file")
+            if base_expected_artifacts.get("manifest_file") and challenger_expected_artifacts.get("manifest_file")
             else None
         )
         warnings: list[str] = []
@@ -266,15 +315,7 @@ def main() -> int:
             warnings.append(
                 f"label mismatch: baseline={base_label_col} challenger={challenger_label_col}; auc delta is omitted"
             )
-        if same_model_artifact:
-            warnings.append(
-                "baseline and challenger resolved to the same model_file; "
-                "metric deltas reflect identical underlying artifacts unless downstream config behavior differs"
-            )
-        if same_manifest_artifact:
-            warnings.append(
-                "baseline and challenger resolved to the same manifest_file; compare is artifact-identical"
-            )
+        warnings.extend(artifact_identity_warnings)
 
         date_window = _date_window_payload(frame)
         versioned_out_path, artifact_manifest = _build_output_manifest(
@@ -299,6 +340,10 @@ def main() -> int:
             "distinct_manifest_artifacts": (not same_manifest_artifact) if same_manifest_artifact is not None else None,
             "comparison_warnings": warnings,
             "date_window": date_window,
+            "expected_artifacts": {
+                "baseline": base_expected_artifacts,
+                "challenger": challenger_expected_artifacts,
+            },
             "run_context": {
                 "base_profile": base_profile,
                 "challenger_profile": challenger_profile,
@@ -306,6 +351,7 @@ def main() -> int:
                 "challenger_config": challenger_config_path,
                 "data_config": data_config_path,
                 "feature_config": feature_config_path,
+                "require_distinct_artifacts": bool(args.require_distinct_artifacts),
                 "requested_max_rows": args.max_rows,
                 "actual_rows": int(len(frame)),
             },

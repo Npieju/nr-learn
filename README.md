@@ -193,11 +193,12 @@ nr-learn/
             - `ev_threshold_1_2_roi`: 期待値1.2以上のみ購入
 9. ベースライン vs Ranker 比較（同一データでA/B）
     - stable alias で比較する場合は `python scripts/run_ab_compare.py --base-profile current_best_eval --challenger-profile current_recommended_serving --max-rows 30000` を使えます
+    - 同一 artifact 比較を禁止したいときは `--require-distinct-artifacts` を付けると、重い feature build 前に fail-fast します
     - `python scripts/run_ab_compare.py --base-config configs/model.yaml --challenger-config configs/model_ranker.yaml --max-rows 30000`
     - （CatBoost win vs LightGBM baseline）`python scripts/run_ab_compare.py --base-config configs/model.yaml --challenger-config configs/model_catboost.yaml --feature-config configs/features_catboost_rich.yaml --max-rows 30000`
     - 比較サマリ: `artifacts/reports/ab_compare_summary.json`
     - versioned 保存: `artifacts/reports/ab_compare_summary_<base>_vs_<challenger>_*.json`
-    - summary には `run_context` / `artifact_manifest` / `date_window` / `comparison_warnings` も保存されます
+    - summary には `run_context` / `artifact_manifest` / `date_window` / `comparison_warnings` / `expected_artifacts` も保存されます
     - 両 side が同じ `model_file` / `manifest_file` に解決された場合は warning が残ります。serving policy だけが違う profile 同士では、このケースが起こりえます
     - Top3確率モデルを比較する場合は `--challenger-config configs/model_top3.yaml` を指定
     - Top3チューニング結果（`artifacts/reports/tune_top3_summary.json`）には `run_context` / `leakage_audit` / `policy_constraints` が保存されます
