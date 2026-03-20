@@ -210,6 +210,7 @@ nr-learn/
     - 両 side が同じ `model_file` / `manifest_file` に解決された場合は warning が残ります。serving policy だけが違う profile 同士では、このケースが起こりえます
     - Top3確率モデルを比較する場合は `--challenger-config configs/model_top3.yaml` を指定
     - Top3チューニング結果（`artifacts/reports/tune_top3_summary.json`）には `run_context` / `leakage_audit` / `policy_constraints` が保存されます
+    - Top3 tuning でも 低メモリ環境で feature build 前に入力を絞りたいときは `--pre-feature-max-rows 5000` を使えます
     - 互換のため `strategy_constraints` も同時に残します
     - value stack tuning は `python scripts/run_tune_value_stack.py --summary-path artifacts/reports/tune_value_stack_summary.json` で実行でき、summary / csv に加えて `tune_value_stack_summary.manifest.json` も出力します
     - 低メモリ環境で feature build 前に入力を絞りたいときは `--pre-feature-max-rows 5000` を使えます。既存の `--max-rows` は feature build 後の evaluation slice のままです

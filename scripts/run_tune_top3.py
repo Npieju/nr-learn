@@ -245,6 +245,7 @@ def main() -> int:
     parser.add_argument("--config", default="configs/model_top3.yaml")
     parser.add_argument("--data-config", default="configs/data.yaml")
     parser.add_argument("--feature-config", default="configs/features.yaml")
+    parser.add_argument("--pre-feature-max-rows", type=int, default=None)
     parser.add_argument("--max-candidates", type=int, default=8)
     parser.add_argument("--max-row-profiles", type=int, default=3)
     parser.add_argument("--max-trials", type=int, default=16)
@@ -264,6 +265,18 @@ def main() -> int:
     split_cfg = data_cfg.get("split", {})
     with Heartbeat("[tune]", "loading training table", logger=log_progress):
         frame = load_training_table(raw_dir, dataset_config=dataset_cfg, base_dir=ROOT)
+    loaded_rows = int(len(frame))
+    if args.pre_feature_max_rows is not None:
+        if args.pre_feature_max_rows <= 0:
+            raise ValueError("--pre-feature-max-rows must be greater than 0")
+        if len(frame) > args.pre_feature_max_rows:
+            frame = frame.tail(args.pre_feature_max_rows).copy()
+        else:
+            frame = frame.copy()
+    else:
+        frame = frame.copy()
+    pre_feature_rows = int(len(frame))
+    log_progress(f"Pre-feature slice ready: loaded_rows={loaded_rows:,}, rows={pre_feature_rows:,}")
     with Heartbeat("[tune]", "building features", logger=log_progress):
         frame = build_features(frame)
 
@@ -297,6 +310,9 @@ def main() -> int:
         "feature_config": str(args.feature_config),
         "task": task,
         "label_column": label_column,
+        "loaded_rows": loaded_rows,
+        "pre_feature_max_rows": int(args.pre_feature_max_rows) if args.pre_feature_max_rows is not None else None,
+        "pre_feature_rows": pre_feature_rows,
         "max_candidates": int(args.max_candidates),
         "max_row_profiles": int(args.max_row_profiles),
         "max_trials": int(args.max_trials),

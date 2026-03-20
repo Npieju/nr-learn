@@ -415,6 +415,7 @@ def main() -> int:
     parser.add_argument("--config", default="configs/model_catboost_value_stack_lgbm_roi_high_coverage_diag.yaml")
     parser.add_argument("--data-config", default="configs/data.yaml")
     parser.add_argument("--feature-config", default="configs/features_catboost_rich_high_coverage_diag.yaml")
+    parser.add_argument("--pre-feature-max-rows", type=int, default=None)
     parser.add_argument("--start-date", default=None)
     parser.add_argument("--end-date", default=None)
     parser.add_argument("--wf-mode", choices=["fast", "full"], default="full")
@@ -433,6 +434,18 @@ def main() -> int:
 
         print("[wf-feasibility] loading training table")
         frame = load_training_table(dataset_cfg.get("raw_dir", "data/raw"), dataset_config=dataset_cfg, base_dir=ROOT)
+        loaded_rows = int(len(frame))
+        if args.pre_feature_max_rows is not None:
+            if args.pre_feature_max_rows <= 0:
+                raise ValueError("--pre-feature-max-rows must be greater than 0")
+            if len(frame) > args.pre_feature_max_rows:
+                frame = frame.tail(args.pre_feature_max_rows).copy()
+            else:
+                frame = frame.copy()
+        else:
+            frame = frame.copy()
+        pre_feature_rows = int(len(frame))
+        print(f"[wf-feasibility] pre-feature slice ready rows={pre_feature_rows:,} loaded_rows={loaded_rows:,}")
         print("[wf-feasibility] building features")
         frame = build_features(frame)
         frame = _filter_frame_by_date_window(frame, start_date=args.start_date, end_date=args.end_date)
@@ -497,6 +510,9 @@ def main() -> int:
                 "config": str(args.config),
                 "data_config": str(args.data_config),
                 "feature_config": str(args.feature_config),
+                "loaded_rows": loaded_rows,
+                "pre_feature_max_rows": int(args.pre_feature_max_rows) if args.pre_feature_max_rows is not None else None,
+                "pre_feature_rows": pre_feature_rows,
                 "start_date": args.start_date,
                 "end_date": args.end_date,
                 "wf_mode": args.wf_mode,
