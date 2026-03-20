@@ -137,6 +137,7 @@ nr-learn/
     - （Top3確率）`python scripts/run_predict.py --config configs/model_top3.yaml --data-config configs/data.yaml --feature-config configs/features.yaml --race-date 2021-07-31`
     - 予測CSV: `artifacts/predictions/predictions_YYYYMMDD.csv`
     - 可視化PNG: `artifacts/predictions/predictions_YYYYMMDD.png`
+    - `predict` は sidecar として `artifacts/predictions/predictions_YYYYMMDD.summary.json` も出力し、`profile / score_source / policy_name` を保存します
     - 対応する manifest が存在する場合は利用 artifact も出力されます
     - Top3確率モデルでは `p_rank1 / p_rank2 / p_rank3` 列が出力されます（各レース内で正規化済み）
     - `p_top3`（= `p_rank1 + p_rank2 + p_rank3`）も出力され、複勝系の期待値計算に利用できます
@@ -146,6 +147,7 @@ nr-learn/
     - （任意）`python scripts/run_backtest.py --config configs/model.yaml --predictions-file artifacts/predictions/predictions_20210731.csv`
     - レポートJSON: `artifacts/reports/backtest_YYYYMMDD.json`
     - 可視化PNG: `artifacts/reports/backtest_YYYYMMDD.png`
+    - alias で backtest した場合、JSON には `profile` も保存されます
 7. Serving smoke validation
     - 今後の短い別名として、主力比較は `current_best_eval` 系、簡易運用候補は `current_recommended_serving` 系を使えます
     - representative date の score source / fixed policy routing を一括確認するときは `python scripts/run_serving_smoke.py --profile best_policy_may`、`python scripts/run_serving_smoke.py --profile fallback_hybrid`、または June-only simplification probe の `python scripts/run_serving_smoke.py --profile fallback_hybrid_june_strict`

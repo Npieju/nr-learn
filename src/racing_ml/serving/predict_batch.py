@@ -12,7 +12,7 @@ import pandas as pd
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
-from racing_ml.common.artifacts import resolve_output_artifacts
+from racing_ml.common.artifacts import resolve_output_artifacts, write_json
 from racing_ml.common.config import load_yaml
 from racing_ml.common.progress import Heartbeat, ProgressBar
 from racing_ml.common.regime import resolve_regime_override
@@ -145,6 +145,7 @@ def run_predict_from_frame(
     feature_config_path: str | Path,
     frame: pd.DataFrame,
     race_date: str | None = None,
+    profile_name: str | None = None,
 ) -> None:
     workspace_root = Path.cwd()
     resolved_model_config_path = _resolve_workspace_path(model_config_path, workspace_root)
@@ -276,11 +277,28 @@ def run_predict_from_frame(
     date_tag = pd.Timestamp(target_date).strftime("%Y%m%d")
     csv_path = out_dir / f"predictions_{date_tag}.csv"
     png_path = out_dir / f"predictions_{date_tag}.png"
+    summary_path = out_dir / f"predictions_{date_tag}.summary.json"
 
     with Heartbeat("[predict]", "writing prediction outputs", logger=log_progress):
         output = pred_frame[columns].sort_values(["race_id", "pred_rank"]).reset_index(drop=True)
         output.to_csv(csv_path, index=False)
         _plot_predictions(output, png_path)
+        prediction_summary = {
+            "profile": profile_name,
+            "target_date": str(pd.Timestamp(target_date).date()),
+            "prediction_file": _display_path(csv_path, workspace_root),
+            "chart_file": _display_path(png_path, workspace_root),
+            "summary_file": _display_path(summary_path, workspace_root),
+            "score_source": score_source_name,
+            "score_source_model_config": _display_path(active_model_config_path, workspace_root),
+            "policy_name": policy_name,
+            "policy_strategy_kind": policy_strategy_kind,
+            "policy_selected_rows": int(output["policy_selected"].fillna(False).sum()) if "policy_selected" in output.columns else 0,
+            "records": int(len(output)),
+            "num_races": int(output["race_id"].nunique()),
+            "manifest_file": _display_path(manifest_path, workspace_root) if manifest_path.exists() else None,
+        }
+        write_json(summary_path, prediction_summary)
     progress.complete(message="prediction outputs written")
 
     print(f"[predict] target date: {pd.Timestamp(target_date).date()}")
@@ -293,6 +311,7 @@ def run_predict_from_frame(
         print(f"[predict] policy selected rows: {selected_rows}")
     print(f"[predict] predictions saved: {csv_path}")
     print(f"[predict] chart saved: {png_path}")
+    print(f"[predict] summary saved: {summary_path}")
     if manifest_path.exists():
         print(f"[predict] manifest: {manifest_path}")
     print(f"[predict] records: {len(output)}")
@@ -303,6 +322,7 @@ def run_predict(
     data_config_path: str,
     feature_config_path: str,
     race_date: str | None = None,
+    profile_name: str | None = None,
 ) -> None:
     frame = prepare_prediction_frame(data_config_path)
     run_predict_from_frame(
@@ -310,4 +330,5 @@ def run_predict(
         feature_config_path=feature_config_path,
         frame=frame,
         race_date=race_date,
+        profile_name=profile_name,
     )

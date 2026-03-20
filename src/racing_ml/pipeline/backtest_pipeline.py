@@ -120,7 +120,7 @@ def _plot_backtest(frame: pd.DataFrame, out_path: Path) -> None:
     plt.close(fig)
 
 
-def run_backtest(config_path: str, predictions_file: str | None = None) -> None:
+def run_backtest(config_path: str, predictions_file: str | None = None, profile_name: str | None = None) -> None:
     resolved_config_path = Path(config_path)
     if not resolved_config_path.is_absolute():
         resolved_config_path = Path.cwd() / resolved_config_path
@@ -162,6 +162,8 @@ def run_backtest(config_path: str, predictions_file: str | None = None) -> None:
             "simple_top1_win_roi": _simple_win_roi(frame),
             "ev_top1_win_roi": _ev_top1_roi(frame),
         }
+        if profile_name is not None:
+            metrics["profile"] = profile_name
         if "score_source" in frame.columns:
             score_source_counts = frame["score_source"].fillna("default").astype(str).value_counts().to_dict()
             metrics["score_source_count"] = int(len(score_source_counts))

@@ -48,7 +48,7 @@ def main() -> int:
                 f"predictions_file={args.predictions_file or 'latest'}"
             )
         )
-        run_backtest(config_path, args.predictions_file)
+        run_backtest(config_path, args.predictions_file, profile_name=resolved_profile)
         progress.complete(message="backtest flow finished")
         return 0
     except KeyboardInterrupt:

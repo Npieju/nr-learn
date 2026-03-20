@@ -55,6 +55,7 @@ def main() -> int:
             data_config_path=data_config_path,
             feature_config_path=feature_config_path,
             race_date=args.race_date,
+            profile_name=resolved_profile,
         )
         progress.complete(message="prediction flow finished")
         return 0
