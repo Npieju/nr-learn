@@ -13,7 +13,7 @@ if str(SRC) not in sys.path:
 from racing_ml.common.artifacts import write_json
 from racing_ml.common.config import load_yaml
 from racing_ml.common.progress import Heartbeat, ProgressBar
-from racing_ml.data.dataset_loader import load_training_table
+from racing_ml.data.dataset_loader import load_training_table, load_training_table_tail
 from racing_ml.features.builder import build_features
 from racing_ml.features.selection import resolve_feature_selection
 
@@ -144,10 +144,22 @@ def main() -> int:
         dataset_cfg = data_cfg.get("dataset", {})
         raw_dir = dataset_cfg.get("raw_dir", "data/raw")
         with Heartbeat("[feature-gap]", "loading training table", logger=log_progress):
-            frame = load_training_table(raw_dir, dataset_config=dataset_cfg, base_dir=ROOT)
-        if args.max_rows and len(frame) > args.max_rows:
-            frame = frame.tail(int(args.max_rows)).reset_index(drop=True)
-        progress.update(message=f"training slice ready rows={len(frame):,}")
+            if args.max_rows and int(args.max_rows) > 0:
+                frame, primary_source_rows_total = load_training_table_tail(
+                    raw_dir,
+                    tail_rows=int(args.max_rows),
+                    dataset_config=dataset_cfg,
+                    base_dir=ROOT,
+                )
+            else:
+                frame = load_training_table(raw_dir, dataset_config=dataset_cfg, base_dir=ROOT)
+                primary_source_rows_total = int(len(frame))
+        progress.update(
+            message=(
+                f"training slice ready rows={len(frame):,} "
+                f"primary_source_rows_total={primary_source_rows_total:,}"
+            )
+        )
 
         with Heartbeat("[feature-gap]", "building features", logger=log_progress):
             feature_frame = build_features(frame)
@@ -190,6 +202,7 @@ def main() -> int:
                 "model_config": args.model_config,
                 "template_config": args.template_config,
                 "max_rows": int(args.max_rows),
+                "primary_source_rows_total": int(primary_source_rows_total),
                 "coverage_threshold": coverage_threshold,
                 "rows_evaluated": int(len(frame)),
                 "feature_columns_total": int(len(feature_frame.columns)),

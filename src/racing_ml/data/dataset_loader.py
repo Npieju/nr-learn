@@ -347,6 +347,69 @@ def _load_candidate_table(candidate: Path, table_cfg: dict[str, Any]) -> pd.Data
     return table
 
 
+def _read_csv_tail(csv_path: Path, tail_rows: int) -> tuple[pd.DataFrame, int]:
+    if tail_rows <= 0:
+        raise ValueError("tail_rows must be greater than 0")
+
+    chunk_size = max(min(int(tail_rows) * 4, 200000), 50000)
+    total_rows = 0
+    tail_frame: pd.DataFrame | None = None
+
+    for chunk in pd.read_csv(csv_path, low_memory=False, chunksize=chunk_size):
+        total_rows += int(len(chunk))
+        if tail_frame is None or tail_frame.empty:
+            tail_frame = chunk
+        else:
+            tail_frame = pd.concat([tail_frame, chunk], ignore_index=True)
+        if len(tail_frame) > int(tail_rows) * 3:
+            tail_frame = tail_frame.tail(int(tail_rows)).reset_index(drop=True)
+
+    if tail_frame is None:
+        return pd.DataFrame(), 0
+
+    return tail_frame.tail(int(tail_rows)).reset_index(drop=True), total_rows
+
+
+def _resolve_recent_date_floor(frame: pd.DataFrame) -> pd.Timestamp | None:
+    if "date" not in frame.columns:
+        return None
+
+    date_series = pd.to_datetime(frame["date"], errors="coerce").dropna()
+    if date_series.empty:
+        return None
+
+    return pd.Timestamp(date_series.min())
+
+
+def _restrict_table_to_join_keys(table: pd.DataFrame, base_frame: pd.DataFrame, join_on: list[str]) -> pd.DataFrame:
+    available_join_on = [column for column in join_on if column in table.columns and column in base_frame.columns]
+    if not available_join_on:
+        return table
+
+    join_keys = base_frame[available_join_on].drop_duplicates()
+    if join_keys.empty:
+        return table.iloc[0:0].copy()
+
+    return table.merge(join_keys, on=available_join_on, how="inner")
+
+
+def _sort_and_tail(frame: pd.DataFrame, max_rows: int | None) -> pd.DataFrame:
+    if max_rows is None or max_rows <= 0 or len(frame) <= max_rows:
+        return frame.reset_index(drop=True)
+
+    if "date" in frame.columns:
+        ordered = frame.copy()
+        ordered["_date_order"] = pd.to_datetime(ordered["date"], errors="coerce")
+        sort_columns = ["_date_order"]
+        if "race_id" in ordered.columns:
+            sort_columns.append("race_id")
+        ordered = ordered.sort_values(sort_columns, na_position="last")
+        ordered = ordered.tail(int(max_rows)).drop(columns=["_date_order"])
+        return ordered.reset_index(drop=True)
+
+    return frame.tail(int(max_rows)).reset_index(drop=True)
+
+
 def _load_matching_table(
     *,
     table_cfg: dict[str, Any],
@@ -468,9 +531,15 @@ def _merge_table(
         merged = merged.drop(columns=[supplemental_column])
 
     return merged
-
-
-def _append_external_tables(frame: pd.DataFrame, raw_dir: Path, dataset_config: dict[str, Any] | None, base_dir: Path | None) -> pd.DataFrame:
+def _append_external_tables(
+    frame: pd.DataFrame,
+    raw_dir: Path,
+    dataset_config: dict[str, Any] | None,
+    base_dir: Path | None,
+    *,
+    recent_date_floor: pd.Timestamp | None = None,
+    max_rows: int | None = None,
+) -> pd.DataFrame:
     dataset_cfg = _resolve_dataset_config(dataset_config)
     append_tables = dataset_cfg.get("append_tables", [])
     if not isinstance(append_tables, list) or not append_tables:
@@ -503,12 +572,18 @@ def _append_external_tables(frame: pd.DataFrame, raw_dir: Path, dataset_config: 
         if append_frame is None or append_frame.empty:
             continue
 
+        if recent_date_floor is not None and "date" in append_frame.columns:
+            append_dates = pd.to_datetime(append_frame["date"], errors="coerce")
+            recent_append_frame = append_frame.loc[append_dates.notna() & (append_dates >= recent_date_floor)].copy()
+            if not recent_append_frame.empty:
+                append_frame = recent_append_frame
+
         combined = pd.concat([frame, append_frame], ignore_index=True, sort=False)
         dedupe_on = _normalize_string_list(table_cfg.get("dedupe_on")) or ["race_id", "horse_id"]
         dedupe_on = [column for column in dedupe_on if column in combined.columns]
         if dedupe_on:
             combined = combined.drop_duplicates(subset=dedupe_on, keep="first")
-        frame = combined.reset_index(drop=True)
+        frame = _sort_and_tail(combined, max_rows)
 
     return frame
 
@@ -564,6 +639,10 @@ def _merge_supplemental_tables(
         dedupe_on = [column for column in dedupe_on if column in supplemental_frame.columns]
         if dedupe_on:
             supplemental_frame = supplemental_frame.drop_duplicates(subset=dedupe_on, keep="first")
+
+        supplemental_frame = _restrict_table_to_join_keys(supplemental_frame, frame, join_on)
+        if supplemental_frame.empty:
+            continue
 
         value_columns = [column for column in supplemental_frame.columns if column not in join_on]
         frame = _merge_table(
@@ -664,6 +743,33 @@ def load_training_table(
     frame = _ensure_minimum_columns(frame)
     frame = frame.sort_values(["date", "race_id"]).reset_index(drop=True)
     return frame
+
+
+def load_training_table_tail(
+    raw_dir: str | Path,
+    *,
+    tail_rows: int,
+    dataset_config: dict[str, Any] | None = None,
+    base_dir: str | Path | None = None,
+) -> tuple[pd.DataFrame, int]:
+    base_path = Path(base_dir) if base_dir is not None else None
+    raw_path = _resolve_path(raw_dir, base_path)
+    dataset_path = _pick_dataset(raw_path)
+    frame, primary_source_rows_total = _read_csv_tail(dataset_path, int(tail_rows))
+    frame = _normalize_columns(frame)
+    recent_date_floor = _resolve_recent_date_floor(frame)
+    frame = _append_external_tables(
+        frame,
+        raw_path,
+        dataset_config=dataset_config,
+        base_dir=base_path,
+        recent_date_floor=recent_date_floor,
+        max_rows=int(tail_rows),
+    )
+    frame = _merge_supplemental_tables(frame, raw_path, dataset_config=dataset_config, base_dir=base_path)
+    frame = _ensure_minimum_columns(frame)
+    frame = frame.sort_values(["date", "race_id"]).tail(int(tail_rows)).reset_index(drop=True)
+    return frame, int(primary_source_rows_total)
 
 
 def inspect_dataset_sources(

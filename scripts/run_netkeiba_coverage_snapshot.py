@@ -14,7 +14,7 @@ if str(SRC) not in sys.path:
 
 from racing_ml.common.artifacts import write_json
 from racing_ml.common.config import load_yaml
-from racing_ml.data.dataset_loader import load_training_table
+from racing_ml.data.dataset_loader import load_training_table, load_training_table_tail
 
 
 DEFAULT_COLUMNS = [
@@ -321,10 +321,19 @@ def main() -> int:
         data_cfg = load_yaml(ROOT / args.config)
         dataset_cfg = data_cfg.get("dataset", {})
         raw_dir = dataset_cfg.get("raw_dir", "data/raw")
-        frame = load_training_table(raw_dir, dataset_config=dataset_cfg, base_dir=ROOT)
-
         tail_rows = max(int(args.tail_rows), 0)
-        tail_frame = frame.tail(tail_rows).reset_index(drop=True) if tail_rows > 0 and len(frame) > tail_rows else frame.copy()
+        if tail_rows > 0:
+            tail_frame, primary_source_rows_total = load_training_table_tail(
+                raw_dir,
+                tail_rows=tail_rows,
+                dataset_config=dataset_cfg,
+                base_dir=ROOT,
+            )
+            frame = tail_frame.copy()
+        else:
+            frame = load_training_table(raw_dir, dataset_config=dataset_cfg, base_dir=ROOT)
+            primary_source_rows_total = int(len(frame))
+            tail_frame = frame.copy()
 
         result_path = ROOT / "data/external/netkeiba/results/netkeiba_race_result_crawled.csv"
         race_card_path = ROOT / "data/external/netkeiba/racecard/netkeiba_racecard_crawled.csv"
@@ -353,7 +362,7 @@ def main() -> int:
             "run_context": {
                 "config": args.config,
                 "tail_rows": int(args.tail_rows),
-                "rows_total": int(len(frame)),
+                "primary_source_rows_total": int(primary_source_rows_total),
                 "rows_tail": int(len(tail_frame)),
             },
             "crawl_lock": _build_crawl_lock_state(DEFAULT_CRAWL_LOCK_PATH),
