@@ -57,7 +57,7 @@ def _derive_wf_slug(wf_mode: str, wf_scheme: str) -> str:
 
 
 def _derive_output_slug(config_path: str, model_path: Path) -> str:
-    candidates = [model_path.stem, Path(config_path).stem]
+    candidates = [Path(config_path).stem, model_path.stem]
     for candidate in candidates:
         text = str(candidate).strip()
         if not text:

@@ -199,6 +199,9 @@ nr-learn/
     - manifest の整合性を点検するときは `python scripts/run_validate_evaluation_manifest.py --manifest artifacts/reports/evaluation_manifest.json` を使えます
     - latest + versioned manifest をまとめて点検するときは `python scripts/run_validate_evaluation_manifest.py --all-manifests` を使えます
     - 必要に応じて `--output artifacts/reports/evaluation_manifest_validation.json` で validation report を保存できます
+    - 昇格可否を機械判定したいときは `python scripts/run_promotion_gate.py --evaluation-manifest artifacts/reports/evaluation_manifest.json` を使えます。matching な `wf_feasibility_diag_*.json` があれば config/data/feature tuple で自動解決し、見つからない場合は `--wf-summary <path>` を明示します
+    - promotion gate は evaluation manifest 整合性、evaluation の `stability_assessment=representative`、matching な walk-forward feasibility summary の `stability_assessment=representative`、そして feasible fold 数をまとめて見ます。fold の valid/test は短窓になりやすいため `probe_only` でも即 fail にはせず warning として扱います
+    - gate report はデフォルトで `artifacts/reports/promotion_gate_report.json` に保存されます。長期運用の昇格判断は短い probe ROI ではなく、この report を起点に確認する想定です
 9. ベースライン vs Ranker 比較（同一データでA/B）
     - stable alias で比較する場合は `python scripts/run_ab_compare.py --base-profile current_best_eval --challenger-profile current_recommended_serving --max-rows 30000` を使えます
     - 同一 artifact 比較を禁止したいときは `--require-distinct-artifacts` を付けると、重い feature build 前に fail-fast します
@@ -219,6 +222,7 @@ nr-learn/
     - value stack tuning summary には `run_context` / `search_space` / `component_artifacts` / `output_files` / `loaded_rows` / `data_load_strategy` / `primary_source_rows_total` / `pre_feature_max_rows` が、manifest には summary/csv の checksum と row-count 整合性が保存されます
     - value stack tuning summary / manifest、Top3 tuning summary、walk-forward 診断系 (`run_wf_feasibility_diag.py` / `run_wf_liquidity_probe.py`) にも `stability_assessment` / `stability_guardrail` が入り、短い tuning/probe window を昇格判断に使わないための support 情報を残します。Top3 tuning は candidate ごとの `roi_detail.stability_guardrail` も保存します
     - walk-forward の診断系 (`run_wf_feasibility_diag.py` / `run_wf_liquidity_probe.py`) も `--pre-feature-max-rows` 指定時は recent tail loader を使い、summary `run_context` に `data_load_strategy` と `primary_source_rows_total` を残します
+    - walk-forward 診断 artifact の file 名 slug は model file 名ではなく config 名を優先して作ります。runtime score override で同じ model bundle を共有していても、report 名が実行 config と一致するようにするためです
 10. ダッシュボード（Notebookが止まるときのCLI代替）
     - `python scripts/run_dashboard.py`
     - 必要に応じて `--predictions-file` / `--backtest-file` / `--train-metrics-file` で参照する artifact を固定できます
