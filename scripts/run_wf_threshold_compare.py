@@ -87,6 +87,58 @@ def _summarize_numeric(values: list[float]) -> dict[str, float | int | None]:
     }
 
 
+def _candidate_signature(row: dict[str, Any] | None) -> str | None:
+    if row is None:
+        return None
+    fields = [
+        "strategy_kind",
+        "blend_weight",
+        "min_edge",
+        "min_prob",
+        "fractional_kelly",
+        "max_fraction",
+        "odds_min",
+        "odds_max",
+        "top_k",
+        "min_expected_value",
+    ]
+    parts: list[str] = []
+    for field in fields:
+        value = _value_or_none(row.get(field))
+        parts.append(f"{field}={value}")
+    return "|".join(parts)
+
+
+def _candidate_snapshot(row: dict[str, Any] | None) -> dict[str, Any]:
+    if row is None:
+        return {
+            "strategy": None,
+            "signature": None,
+            "blend_weight": None,
+            "min_edge": None,
+            "min_prob": None,
+            "fractional_kelly": None,
+            "max_fraction": None,
+            "odds_min": None,
+            "odds_max": None,
+            "top_k": None,
+            "min_expected_value": None,
+        }
+    return {
+        "strategy": _value_or_none(row.get("strategy_kind")),
+        "signature": _candidate_signature(row),
+        "blend_weight": _value_or_none(row.get("blend_weight")),
+        "min_edge": _value_or_none(row.get("min_edge")),
+        "min_prob": _value_or_none(row.get("min_prob")),
+        "fractional_kelly": _value_or_none(row.get("fractional_kelly")),
+        "max_fraction": _value_or_none(row.get("max_fraction")),
+        "odds_min": _value_or_none(row.get("odds_min")),
+        "odds_max": _value_or_none(row.get("odds_max")),
+        "top_k": _value_or_none(row.get("top_k")),
+        "min_expected_value": _value_or_none(row.get("min_expected_value")),
+    }
+
+
 def _resolve_source_summary_path(path: Path, payload: dict[str, Any]) -> Path:
     run_context = payload.get("run_context") if isinstance(payload.get("run_context"), dict) else {}
     raw = run_context.get("wf_summary")
@@ -152,6 +204,13 @@ def _build_threshold_fold_diagnostics(
     bankroll_gap_values: list[float] = []
     min_bets_gap_values: list[float] = []
     max_bets_values: list[float] = []
+    blocked_signature_counts: Counter[str] = Counter()
+    blocked_signature_counts_by_status: dict[str, Counter[str]] = {
+        "min_bets": Counter(),
+        "min_final_bankroll": Counter(),
+        "max_drawdown": Counter(),
+        "other": Counter(),
+    }
 
     folds = summary.get("folds") if isinstance(summary.get("folds"), list) else []
     for fold in folds:
@@ -218,20 +277,41 @@ def _build_threshold_fold_diagnostics(
             feasible_bankroll = float(best_feasible.get("final_bankroll") or 0.0)
             feasible_bankroll_values.append(feasible_bankroll)
             status_counts[status] += 1
+            feasible_snapshot = _candidate_snapshot(best_feasible)
             fold_rows.append(
                 {
                     "fold": fold_index,
                     "valid_races": valid_races,
                     "min_bets_required": min_bets_required,
                     "status": status,
-                    "best_feasible_strategy": best_feasible.get("strategy_kind"),
+                    "best_feasible_strategy": feasible_snapshot["strategy"],
+                    "best_feasible_signature": feasible_snapshot["signature"],
+                    "best_feasible_blend_weight": feasible_snapshot["blend_weight"],
+                    "best_feasible_min_edge": feasible_snapshot["min_edge"],
+                    "best_feasible_min_prob": feasible_snapshot["min_prob"],
+                    "best_feasible_fractional_kelly": feasible_snapshot["fractional_kelly"],
+                    "best_feasible_max_fraction": feasible_snapshot["max_fraction"],
+                    "best_feasible_odds_min": feasible_snapshot["odds_min"],
+                    "best_feasible_odds_max": feasible_snapshot["odds_max"],
+                    "best_feasible_top_k": feasible_snapshot["top_k"],
+                    "best_feasible_min_expected_value": feasible_snapshot["min_expected_value"],
                     "best_feasible_bets": int(best_feasible.get("bets") or 0),
                     "best_feasible_roi": best_feasible.get("roi"),
                     "best_feasible_final_bankroll": best_feasible.get("final_bankroll"),
                     "best_feasible_max_drawdown": best_feasible.get("max_drawdown"),
                     "bankroll_gap_to_min": 0.0,
                     "min_bets_gap": max(0, min_bets_required - int(best_feasible.get("bets") or 0)),
-                    "best_over_bet_floor_strategy": best_feasible.get("strategy_kind"),
+                    "best_over_bet_floor_strategy": feasible_snapshot["strategy"],
+                    "best_over_bet_floor_signature": feasible_snapshot["signature"],
+                    "best_over_bet_floor_blend_weight": feasible_snapshot["blend_weight"],
+                    "best_over_bet_floor_min_edge": feasible_snapshot["min_edge"],
+                    "best_over_bet_floor_min_prob": feasible_snapshot["min_prob"],
+                    "best_over_bet_floor_fractional_kelly": feasible_snapshot["fractional_kelly"],
+                    "best_over_bet_floor_max_fraction": feasible_snapshot["max_fraction"],
+                    "best_over_bet_floor_odds_min": feasible_snapshot["odds_min"],
+                    "best_over_bet_floor_odds_max": feasible_snapshot["odds_max"],
+                    "best_over_bet_floor_top_k": feasible_snapshot["top_k"],
+                    "best_over_bet_floor_min_expected_value": feasible_snapshot["min_expected_value"],
                     "best_over_bet_floor_bets": int(best_feasible.get("bets") or 0),
                     "best_over_bet_floor_final_bankroll": best_feasible.get("final_bankroll"),
                     "max_bets_any_candidate": int(best_feasible.get("bets") or 0),
@@ -245,6 +325,10 @@ def _build_threshold_fold_diagnostics(
             bankroll_gap = max(0.0, constraints.min_final_bankroll - float(best_over_bet_floor.get("final_bankroll") or 0.0))
             bankroll_gap_values.append(bankroll_gap)
             status_counts[status] += 1
+            blocked_snapshot = _candidate_snapshot(best_over_bet_floor)
+            if blocked_snapshot["signature"]:
+                blocked_signature_counts[str(blocked_snapshot["signature"])] += 1
+                blocked_signature_counts_by_status[status][str(blocked_snapshot["signature"])] += 1
             fold_rows.append(
                 {
                     "fold": fold_index,
@@ -252,13 +336,33 @@ def _build_threshold_fold_diagnostics(
                     "min_bets_required": min_bets_required,
                     "status": status,
                     "best_feasible_strategy": None,
+                    "best_feasible_signature": None,
+                    "best_feasible_blend_weight": None,
+                    "best_feasible_min_edge": None,
+                    "best_feasible_min_prob": None,
+                    "best_feasible_fractional_kelly": None,
+                    "best_feasible_max_fraction": None,
+                    "best_feasible_odds_min": None,
+                    "best_feasible_odds_max": None,
+                    "best_feasible_top_k": None,
+                    "best_feasible_min_expected_value": None,
                     "best_feasible_bets": None,
                     "best_feasible_roi": None,
                     "best_feasible_final_bankroll": None,
                     "best_feasible_max_drawdown": None,
                     "bankroll_gap_to_min": bankroll_gap,
                     "min_bets_gap": 0,
-                    "best_over_bet_floor_strategy": best_over_bet_floor.get("strategy_kind"),
+                    "best_over_bet_floor_strategy": blocked_snapshot["strategy"],
+                    "best_over_bet_floor_signature": blocked_snapshot["signature"],
+                    "best_over_bet_floor_blend_weight": blocked_snapshot["blend_weight"],
+                    "best_over_bet_floor_min_edge": blocked_snapshot["min_edge"],
+                    "best_over_bet_floor_min_prob": blocked_snapshot["min_prob"],
+                    "best_over_bet_floor_fractional_kelly": blocked_snapshot["fractional_kelly"],
+                    "best_over_bet_floor_max_fraction": blocked_snapshot["max_fraction"],
+                    "best_over_bet_floor_odds_min": blocked_snapshot["odds_min"],
+                    "best_over_bet_floor_odds_max": blocked_snapshot["odds_max"],
+                    "best_over_bet_floor_top_k": blocked_snapshot["top_k"],
+                    "best_over_bet_floor_min_expected_value": blocked_snapshot["min_expected_value"],
                     "best_over_bet_floor_bets": int(best_over_bet_floor.get("bets") or 0),
                     "best_over_bet_floor_final_bankroll": best_over_bet_floor.get("final_bankroll"),
                     "max_bets_any_candidate": int(max_bets_candidate.get("bets") or 0) if isinstance(max_bets_candidate, dict) else None,
@@ -279,6 +383,10 @@ def _build_threshold_fold_diagnostics(
         max_bets_values.append(float(best_support_candidate.get("bets") or 0))
         status = "min_bets"
         status_counts[status] += 1
+        support_snapshot = _candidate_snapshot(best_support_candidate)
+        if support_snapshot["signature"]:
+            blocked_signature_counts[str(support_snapshot["signature"])] += 1
+            blocked_signature_counts_by_status[status][str(support_snapshot["signature"])] += 1
         fold_rows.append(
             {
                 "fold": fold_index,
@@ -286,21 +394,47 @@ def _build_threshold_fold_diagnostics(
                 "min_bets_required": min_bets_required,
                 "status": status,
                 "best_feasible_strategy": None,
+                "best_feasible_signature": None,
+                "best_feasible_blend_weight": None,
+                "best_feasible_min_edge": None,
+                "best_feasible_min_prob": None,
+                "best_feasible_fractional_kelly": None,
+                "best_feasible_max_fraction": None,
+                "best_feasible_odds_min": None,
+                "best_feasible_odds_max": None,
+                "best_feasible_top_k": None,
+                "best_feasible_min_expected_value": None,
                 "best_feasible_bets": None,
                 "best_feasible_roi": None,
                 "best_feasible_final_bankroll": None,
                 "best_feasible_max_drawdown": None,
                 "bankroll_gap_to_min": None,
                 "min_bets_gap": min_bets_gap,
-                "best_over_bet_floor_strategy": None,
-                "best_over_bet_floor_bets": None,
-                "best_over_bet_floor_final_bankroll": None,
+                "best_over_bet_floor_strategy": support_snapshot["strategy"],
+                "best_over_bet_floor_signature": support_snapshot["signature"],
+                "best_over_bet_floor_blend_weight": support_snapshot["blend_weight"],
+                "best_over_bet_floor_min_edge": support_snapshot["min_edge"],
+                "best_over_bet_floor_min_prob": support_snapshot["min_prob"],
+                "best_over_bet_floor_fractional_kelly": support_snapshot["fractional_kelly"],
+                "best_over_bet_floor_max_fraction": support_snapshot["max_fraction"],
+                "best_over_bet_floor_odds_min": support_snapshot["odds_min"],
+                "best_over_bet_floor_odds_max": support_snapshot["odds_max"],
+                "best_over_bet_floor_top_k": support_snapshot["top_k"],
+                "best_over_bet_floor_min_expected_value": support_snapshot["min_expected_value"],
+                "best_over_bet_floor_bets": int(best_support_candidate.get("bets") or 0),
+                "best_over_bet_floor_final_bankroll": best_support_candidate.get("final_bankroll"),
                 "max_bets_any_candidate": int(best_support_candidate.get("bets") or 0),
             }
         )
 
     diagnostics = {
         "status_counts": dict(status_counts),
+        "blocked_signature_counts": dict(blocked_signature_counts),
+        "blocked_signature_counts_by_status": {
+            status: dict(counter)
+            for status, counter in blocked_signature_counts_by_status.items()
+            if counter
+        },
         "feasible_final_bankroll_summary": _summarize_numeric(feasible_bankroll_values),
         "blocked_bankroll_gap_summary": _summarize_numeric(bankroll_gap_values),
         "min_bets_gap_summary": _summarize_numeric(min_bets_gap_values),
@@ -364,6 +498,7 @@ def _build_comparison(report_paths: list[Path], thresholds: list[int]) -> tuple[
             support_summary = analysis.get("best_feasible_bet_support_summary") if isinstance(analysis.get("best_feasible_bet_support_summary"), dict) else {}
             bankroll_diagnostics, threshold_fold_rows = _build_threshold_fold_diagnostics(path, payload, threshold, source_cache)
             status_counts = bankroll_diagnostics.get("status_counts") if isinstance(bankroll_diagnostics.get("status_counts"), dict) else {}
+            blocked_signature_counts = bankroll_diagnostics.get("blocked_signature_counts") if isinstance(bankroll_diagnostics.get("blocked_signature_counts"), dict) else {}
             feasible_bankroll_summary = bankroll_diagnostics.get("feasible_final_bankroll_summary") if isinstance(bankroll_diagnostics.get("feasible_final_bankroll_summary"), dict) else {}
             blocked_bankroll_gap_summary = bankroll_diagnostics.get("blocked_bankroll_gap_summary") if isinstance(bankroll_diagnostics.get("blocked_bankroll_gap_summary"), dict) else {}
             min_bets_gap_summary = bankroll_diagnostics.get("min_bets_gap_summary") if isinstance(bankroll_diagnostics.get("min_bets_gap_summary"), dict) else {}
@@ -382,6 +517,8 @@ def _build_comparison(report_paths: list[Path], thresholds: list[int]) -> tuple[
                     "status_min_bets_count": int(status_counts.get("min_bets") or 0),
                     "status_min_final_bankroll_count": int(status_counts.get("min_final_bankroll") or 0),
                     "status_max_drawdown_count": int(status_counts.get("max_drawdown") or 0),
+                    "top_blocked_signature": next(iter(blocked_signature_counts), None),
+                    "top_blocked_signature_count": int(next(iter(blocked_signature_counts.values()), 0)),
                     "feasible_bankroll_min": feasible_bankroll_summary.get("min"),
                     "feasible_bankroll_median": feasible_bankroll_summary.get("median"),
                     "feasible_bankroll_max": feasible_bankroll_summary.get("max"),
@@ -417,6 +554,7 @@ def main() -> int:
     parser.add_argument("--thresholds", default="100,60,55,45,34")
     parser.add_argument("--output", default="artifacts/reports/wf_threshold_compare.json")
     parser.add_argument("--summary-csv", default="artifacts/reports/wf_threshold_compare.csv")
+    parser.add_argument("--fold-summary-csv", default=None)
     args = parser.parse_args()
 
     report_paths = _parse_path_list(args.reports)
@@ -427,14 +565,20 @@ def main() -> int:
     summary_csv_path = Path(args.summary_csv)
     if not summary_csv_path.is_absolute():
         summary_csv_path = (ROOT / summary_csv_path).resolve()
+    fold_summary_csv_path = Path(args.fold_summary_csv) if args.fold_summary_csv else summary_csv_path.with_name(f"{summary_csv_path.stem}_folds.csv")
+    if not fold_summary_csv_path.is_absolute():
+        fold_summary_csv_path = (ROOT / fold_summary_csv_path).resolve()
 
     comparison, threshold_df = _build_comparison(report_paths, thresholds)
+    fold_df = pd.DataFrame(comparison.get("fold_snapshots") or [])
     output_path.parent.mkdir(parents=True, exist_ok=True)
     write_json(output_path, comparison)
     threshold_df.to_csv(summary_csv_path, index=False)
+    fold_df.to_csv(fold_summary_csv_path, index=False)
 
     print(f"saved threshold comparison to {output_path.relative_to(ROOT)}")
     print(f"saved threshold comparison table to {summary_csv_path.relative_to(ROOT)}")
+    print(f"saved threshold fold table to {fold_summary_csv_path.relative_to(ROOT)}")
     for report in comparison.get("reports") or []:
         print(
             "label={label} strictest1={strictest_for_1_fold} strictest3={strictest_for_3_folds} "
