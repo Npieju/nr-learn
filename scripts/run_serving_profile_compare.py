@@ -147,6 +147,27 @@ def _bankroll_sweep_command(
     ]
 
 
+def _dashboard_command(
+    *,
+    manifest_file: Path,
+    output_summary: Path,
+    output_chart: Path,
+    output_csv: Path,
+) -> list[str]:
+    return [
+        sys.executable,
+        "scripts/run_serving_compare_dashboard.py",
+        "--manifest-file",
+        _display_path(manifest_file),
+        "--output-summary",
+        _display_path(output_summary),
+        "--output-chart",
+        _display_path(output_chart),
+        "--output-csv",
+        _display_path(output_csv),
+    ]
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--list-profiles", action="store_true")
@@ -166,6 +187,10 @@ def main() -> int:
     parser.add_argument("--initial-bankroll", type=float, default=1.0)
     parser.add_argument("--bankroll-json-output", default=None)
     parser.add_argument("--bankroll-csv-output", default=None)
+    parser.add_argument("--run-dashboard", action="store_true")
+    parser.add_argument("--dashboard-summary-output", default=None)
+    parser.add_argument("--dashboard-chart-output", default=None)
+    parser.add_argument("--dashboard-csv-output", default=None)
     parser.add_argument("--manifest-output", default=None)
     args = parser.parse_args()
 
@@ -194,6 +219,11 @@ def main() -> int:
     bankroll_json_output = _resolve_path(args.bankroll_json_output) if args.bankroll_json_output else report_dir / f"serving_stateful_bankroll_sweep_{left_suffix}_vs_{right_suffix}.json"
     bankroll_csv_output = _resolve_path(args.bankroll_csv_output) if args.bankroll_csv_output else report_dir / f"serving_stateful_bankroll_sweep_{left_suffix}_vs_{right_suffix}.csv"
     manifest_output = _resolve_path(args.manifest_output) if args.manifest_output else report_dir / f"serving_smoke_profile_compare_{left_suffix}_vs_{right_suffix}.json"
+    dashboard_dir = report_dir / "dashboard"
+    dashboard_stem = f"serving_compare_dashboard_{left_suffix}_vs_{right_suffix}"
+    dashboard_summary_output = _resolve_path(args.dashboard_summary_output) if args.dashboard_summary_output else dashboard_dir / f"{dashboard_stem}.json"
+    dashboard_chart_output = _resolve_path(args.dashboard_chart_output) if args.dashboard_chart_output else dashboard_dir / f"{dashboard_stem}.png"
+    dashboard_csv_output = _resolve_path(args.dashboard_csv_output) if args.dashboard_csv_output else dashboard_dir / f"{dashboard_stem}.csv"
 
     log_progress(
         "resolved compare run "
@@ -267,15 +297,32 @@ def main() -> int:
             "compare_csv": _display_path(compare_csv_output),
             "bankroll_sweep_json": _display_path(bankroll_json_output) if args.run_bankroll_sweep else None,
             "bankroll_sweep_csv": _display_path(bankroll_csv_output) if args.run_bankroll_sweep else None,
+            "dashboard_summary": _display_path(dashboard_summary_output) if args.run_dashboard else None,
+            "dashboard_chart": _display_path(dashboard_chart_output) if args.run_dashboard else None,
+            "dashboard_csv": _display_path(dashboard_csv_output) if args.run_dashboard else None,
         },
     }
     write_json(manifest_output, manifest_payload)
+    if args.run_dashboard:
+        _run_command(
+            _dashboard_command(
+                manifest_file=manifest_output,
+                output_summary=dashboard_summary_output,
+                output_chart=dashboard_chart_output,
+                output_csv=dashboard_csv_output,
+            ),
+            label="compare dashboard",
+        )
     print(f"[serving-profile-compare] manifest saved: {_display_path(manifest_output)}", flush=True)
     print(f"[serving-profile-compare] compare json: {_display_path(compare_json_output)}", flush=True)
     print(f"[serving-profile-compare] compare csv: {_display_path(compare_csv_output)}", flush=True)
     if args.run_bankroll_sweep:
         print(f"[serving-profile-compare] bankroll sweep json: {_display_path(bankroll_json_output)}", flush=True)
         print(f"[serving-profile-compare] bankroll sweep csv: {_display_path(bankroll_csv_output)}", flush=True)
+    if args.run_dashboard:
+        print(f"[serving-profile-compare] dashboard summary: {_display_path(dashboard_summary_output)}", flush=True)
+        print(f"[serving-profile-compare] dashboard chart: {_display_path(dashboard_chart_output)}", flush=True)
+        print(f"[serving-profile-compare] dashboard csv: {_display_path(dashboard_csv_output)}", flush=True)
     return 0
 
 
