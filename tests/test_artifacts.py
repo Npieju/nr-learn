@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+from datetime import datetime
 import json
 import tempfile
 import unittest
 from pathlib import Path
 
+import joblib
 import pandas as pd
 
 from racing_ml.common.artifacts import (
@@ -15,11 +17,15 @@ from racing_ml.common.artifacts import (
     build_training_report_payload,
     display_path,
     derive_manifest_file_name,
+    dump_joblib_file,
     ensure_output_directory_path,
     ensure_output_file_path,
+    read_json,
     relativize_path,
     resolve_component_from_config,
     resolve_output_artifacts,
+    save_figure,
+    utc_now_iso,
     write_csv_file,
     write_json,
     write_text_file,
@@ -27,6 +33,17 @@ from racing_ml.common.artifacts import (
 
 
 class ArtifactHelpersTest(unittest.TestCase):
+    class _FakeFigure:
+        def __init__(self) -> None:
+            self.saved_path: Path | None = None
+            self.saved_kwargs: dict[str, object] | None = None
+
+        def savefig(self, path: str | Path, **kwargs: object) -> None:
+            path_obj = Path(path)
+            path_obj.write_text("fake-figure", encoding="utf-8")
+            self.saved_path = path_obj
+            self.saved_kwargs = dict(kwargs)
+
     def _write_component_files(
         self,
         workspace_root: Path,
@@ -166,6 +183,40 @@ evaluation:
             self.assertEqual(json.loads(json_path.read_text(encoding="utf-8"))["accuracy"], 0.75)
             self.assertEqual(text_path.read_text(encoding="utf-8"), "ok\n")
             self.assertIn("race_id,score", csv_path.read_text(encoding="utf-8"))
+
+    def test_read_json_round_trips_written_payload(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            json_path = Path(tmp_dir) / "metrics.json"
+            write_json(json_path, {"accuracy": 0.91, "notes": ["ok"]})
+
+            self.assertEqual(read_json(json_path), {"accuracy": 0.91, "notes": ["ok"]})
+
+    def test_save_figure_writes_file_and_forwards_kwargs(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            target = Path(tmp_dir) / "plots" / "curve.png"
+            figure = self._FakeFigure()
+
+            save_figure(target, figure, dpi=150, bbox_inches="tight")
+
+            self.assertEqual(figure.saved_path, target)
+            self.assertEqual(figure.saved_kwargs, {"dpi": 150, "bbox_inches": "tight"})
+            self.assertEqual(target.read_text(encoding="utf-8"), "fake-figure")
+
+    def test_dump_joblib_file_writes_payload(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            target = Path(tmp_dir) / "models" / "payload.joblib"
+
+            dump_joblib_file(target, {"threshold": 0.42, "enabled": True})
+
+            self.assertEqual(joblib.load(target), {"threshold": 0.42, "enabled": True})
+
+    def test_utc_now_iso_uses_utc_z_suffix_without_microseconds(self) -> None:
+        value = utc_now_iso()
+
+        self.assertTrue(value.endswith("Z"))
+        self.assertNotIn(".", value)
+        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+        self.assertIsNotNone(parsed.tzinfo)
 
     def test_build_model_manifest_relativizes_paths_and_preserves_metadata(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
