@@ -6,6 +6,8 @@ import json
 from pathlib import Path
 from typing import Any
 
+import joblib
+
 from racing_ml.common.config import load_yaml
 
 
@@ -67,6 +69,32 @@ def relativize_path(path: str | Path | None, workspace_root: Path) -> str | None
         return path_obj.as_posix()
 
 
+def display_path(path: str | Path, workspace_root: Path | None = None) -> str:
+    path_obj = Path(path)
+    if not path_obj.is_absolute():
+        return path_obj.as_posix()
+
+    root = (workspace_root or Path.cwd()).resolve()
+    try:
+        return path_obj.relative_to(root).as_posix()
+    except ValueError:
+        return path_obj.as_posix()
+
+
+def ensure_output_file_path(path: str | Path, *, label: str, workspace_root: Path | None = None) -> Path:
+    path_obj = Path(path)
+    if path_obj.exists() and path_obj.is_dir():
+        raise IsADirectoryError(f"{label} must be a file path, got directory: {display_path(path_obj, workspace_root)}")
+    return path_obj
+
+
+def ensure_output_directory_path(path: str | Path, *, label: str, workspace_root: Path | None = None) -> Path:
+    path_obj = Path(path)
+    if path_obj.exists() and path_obj.is_file():
+        raise NotADirectoryError(f"{label} must be a directory path, got file: {display_path(path_obj, workspace_root)}")
+    return path_obj
+
+
 def utc_now_iso() -> str:
     return datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
 
@@ -77,10 +105,34 @@ def read_json(path: str | Path) -> Any:
 
 
 def write_json(path: str | Path, payload: Any) -> None:
-    path_obj = Path(path)
+    path_obj = ensure_output_file_path(path, label="output")
     path_obj.parent.mkdir(parents=True, exist_ok=True)
     with path_obj.open("w", encoding="utf-8") as file:
         json.dump(payload, file, ensure_ascii=False, indent=2)
+
+
+def write_text_file(path: str | Path, text: str, *, label: str = "output") -> None:
+    path_obj = ensure_output_file_path(path, label=label)
+    path_obj.parent.mkdir(parents=True, exist_ok=True)
+    path_obj.write_text(text, encoding="utf-8")
+
+
+def write_csv_file(path: str | Path, frame: Any, *, index: bool = False, label: str = "output") -> None:
+    path_obj = ensure_output_file_path(path, label=label)
+    path_obj.parent.mkdir(parents=True, exist_ok=True)
+    frame.to_csv(path_obj, index=index)
+
+
+def save_figure(path: str | Path, figure: Any, *, label: str = "output", **savefig_kwargs: Any) -> None:
+    path_obj = ensure_output_file_path(path, label=label)
+    path_obj.parent.mkdir(parents=True, exist_ok=True)
+    figure.savefig(path_obj, **savefig_kwargs)
+
+
+def dump_joblib_file(path: str | Path, payload: Any, *, label: str = "output") -> None:
+    path_obj = ensure_output_file_path(path, label=label)
+    path_obj.parent.mkdir(parents=True, exist_ok=True)
+    joblib.dump(payload, path_obj)
 
 
 def build_training_report_payload(

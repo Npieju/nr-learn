@@ -5,6 +5,7 @@ import json
 from collections import Counter
 from pathlib import Path
 import sys
+import time
 import traceback
 
 import joblib
@@ -15,8 +16,12 @@ SRC = ROOT / "src"
 if str(SRC) not in sys.path:
     sys.path.append(str(SRC))
 
+from racing_ml.common.artifacts import display_path as artifact_display_path
+from racing_ml.common.artifacts import ensure_output_file_path as artifact_ensure_output_file_path
 from racing_ml.common.artifacts import resolve_output_artifacts
+from racing_ml.common.artifacts import write_csv_file, write_text_file
 from racing_ml.common.config import load_yaml
+from racing_ml.common.progress import Heartbeat, ProgressBar
 from racing_ml.data.dataset_loader import load_training_table_for_feature_build
 from racing_ml.evaluation.policy import (
     PolicyConstraints,
@@ -32,6 +37,11 @@ from racing_ml.evaluation.stability import build_stability_guardrail
 from racing_ml.evaluation.walk_forward import build_nested_wf_slices, fit_isotonic, _resolve_search_candidate_values
 from racing_ml.features.builder import build_features
 from racing_ml.features.selection import prepare_model_input_frame, resolve_feature_selection, resolve_model_feature_selection
+
+
+def log_progress(message: str) -> None:
+    now = time.strftime("%H:%M:%S")
+    print(f"[wf-feasibility {now}] {message}", flush=True)
 
 
 def _sanitize_output_slug(value: str) -> str:
@@ -428,6 +438,7 @@ def main() -> int:
     args = parser.parse_args()
 
     try:
+        progress = ProgressBar(total=6, prefix="[wf-feasibility]", logger=log_progress, min_interval_sec=0.0)
         model_cfg = load_yaml(ROOT / args.config)
         data_cfg = load_yaml(ROOT / args.data_config)
         feature_cfg = load_yaml(ROOT / args.feature_config)
@@ -436,14 +447,16 @@ def main() -> int:
         evaluation_cfg = model_cfg.get("evaluation", {})
         search_config = evaluation_cfg.get("policy_search", {})
         constraints = PolicyConstraints.from_config(evaluation_cfg)
+        progress.start(message="configs loaded")
 
         print("[wf-feasibility] loading training table")
-        load_result = load_training_table_for_feature_build(
-            dataset_cfg.get("raw_dir", "data/raw"),
-            pre_feature_max_rows=int(args.pre_feature_max_rows) if args.pre_feature_max_rows is not None else None,
-            dataset_config=dataset_cfg,
-            base_dir=ROOT,
-        )
+        with Heartbeat("[wf-feasibility]", "loading training table", logger=log_progress):
+            load_result = load_training_table_for_feature_build(
+                dataset_cfg.get("raw_dir", "data/raw"),
+                pre_feature_max_rows=int(args.pre_feature_max_rows) if args.pre_feature_max_rows is not None else None,
+                dataset_config=dataset_cfg,
+                base_dir=ROOT,
+            )
         frame = load_result.frame
         loaded_rows = load_result.loaded_rows
         pre_feature_rows = load_result.pre_feature_rows
@@ -454,13 +467,17 @@ def main() -> int:
             load_message += f" primary_source_rows_total={primary_source_rows_total:,}"
         print(load_message)
         print(f"[wf-feasibility] pre-feature slice ready rows={pre_feature_rows:,} loaded_rows={loaded_rows:,}")
+        progress.update(message=f"training table loaded rows={loaded_rows:,}")
         print("[wf-feasibility] building features")
-        frame = build_features(frame)
+        with Heartbeat("[wf-feasibility]", "building features", logger=log_progress):
+            frame = build_features(frame)
         frame = _filter_frame_by_date_window(frame, start_date=args.start_date, end_date=args.end_date)
+        progress.update(message=f"features ready rows={len(frame):,}")
 
         output_artifacts = resolve_output_artifacts(model_cfg.get("output", {}))
         model_path = ROOT / output_artifacts.model_path
-        model = joblib.load(model_path)
+        with Heartbeat("[wf-feasibility]", f"loading model {model_path.name}", logger=log_progress):
+            model = joblib.load(model_path)
         fallback_selection = resolve_feature_selection(frame, feature_cfg, label_column=label_col)
         feature_selection = resolve_model_feature_selection(model, fallback_selection)
         x_eval = prepare_model_input_frame(frame, feature_selection.feature_columns, feature_selection.categorical_columns)
@@ -469,7 +486,8 @@ def main() -> int:
             raise RuntimeError("Odds column is required for feasibility diagnostic")
 
         print("[wf-feasibility] running model inference")
-        outputs = generate_prediction_outputs(model, x_eval, race_ids=frame["race_id"])
+        with Heartbeat("[wf-feasibility]", "running model inference", logger=log_progress):
+            outputs = generate_prediction_outputs(model, x_eval, race_ids=frame["race_id"])
         pred = prepare_scored_frame(frame, outputs.score, odds_col=odds_col, score_col="score")
         pred = add_market_signals(pred, score_col="score", odds_col=odds_col)
         stability_guardrail = build_stability_guardrail(frame=pred)
@@ -493,9 +511,12 @@ def main() -> int:
         )
         if not nested_slices:
             raise RuntimeError("No nested walk-forward slices available for the requested window")
+        progress.update(message=f"wf slices ready folds={len(nested_slices)}")
 
         fold_summaries: list[dict[str, object]] = []
         detail_rows: list[dict[str, object]] = []
+        fold_progress = ProgressBar(total=max(len(nested_slices), 1), prefix="[wf-feasibility folds]", logger=log_progress, min_interval_sec=0.0)
+        fold_progress.start(message="analyzing folds")
         for fold_index, (train_df, valid_df, test_df) in enumerate(nested_slices, start=1):
             print(f"[wf-feasibility] analyzing fold {fold_index}/{len(nested_slices)}")
             fold_summary, fold_detail = _summarize_fold_candidates(
@@ -511,6 +532,8 @@ def main() -> int:
             )
             fold_summaries.append(fold_summary)
             detail_rows.extend(fold_detail)
+            fold_progress.update(message=f"fold={fold_index} candidates={len(fold_detail)}")
+        progress.update(message="fold analysis completed")
 
         output_slug = _derive_output_slug(args.config, model_path)
         date_slug = _derive_date_window_slug(args.start_date, args.end_date)
@@ -519,6 +542,8 @@ def main() -> int:
         report_dir.mkdir(parents=True, exist_ok=True)
         summary_path = report_dir / f"wf_feasibility_diag_{output_slug}{date_slug}{wf_slug}.json"
         detail_path = report_dir / f"wf_feasibility_diag_{output_slug}{date_slug}{wf_slug}.csv"
+        artifact_ensure_output_file_path(summary_path, label="summary output", workspace_root=ROOT)
+        artifact_ensure_output_file_path(detail_path, label="detail output", workspace_root=ROOT)
 
         summary_payload = {
             "run_context": {
@@ -545,23 +570,28 @@ def main() -> int:
             "stability_guardrail": stability_guardrail,
             "folds": fold_summaries,
         }
-        summary_path.write_text(json.dumps(summary_payload, ensure_ascii=False, indent=2), encoding="utf-8")
+        with Heartbeat("[wf-feasibility]", "writing feasibility outputs", logger=log_progress):
+            write_text_file(summary_path, json.dumps(summary_payload, ensure_ascii=False, indent=2), label="summary output")
 
-        detail_frame = pd.DataFrame(detail_rows)
-        if not detail_frame.empty:
-            detail_frame = detail_frame.copy()
-            detail_frame["gate_failures"] = detail_frame["gate_failures"].apply(lambda values: ",".join(values) if isinstance(values, list) else str(values or ""))
-            detail_frame.to_csv(detail_path, index=False)
-        else:
-            pd.DataFrame(columns=["fold", "strategy_kind", "gate_failures"]).to_csv(detail_path, index=False)
+            detail_frame = pd.DataFrame(detail_rows)
+            if not detail_frame.empty:
+                detail_frame = detail_frame.copy()
+                detail_frame["gate_failures"] = detail_frame["gate_failures"].apply(lambda values: ",".join(values) if isinstance(values, list) else str(values or ""))
+                write_csv_file(detail_path, detail_frame, index=False, label="detail output")
+            else:
+                write_csv_file(detail_path, pd.DataFrame(columns=["fold", "strategy_kind", "gate_failures"]), index=False, label="detail output")
 
         print(f"[wf-feasibility] summary saved: {summary_path}")
         print(f"[wf-feasibility] detail saved: {detail_path}")
         print(json.dumps(fold_summaries, ensure_ascii=False, indent=2))
+        progress.complete(message="feasibility diagnostic completed")
         return 0
     except KeyboardInterrupt:
         print("[wf-feasibility] interrupted by user")
         return 130
+    except (ValueError, FileNotFoundError, IsADirectoryError, RuntimeError) as error:
+        print(f"[wf-feasibility] failed: {error}")
+        return 1
     except Exception as error:
         print(f"[wf-feasibility] failed: {error}")
         traceback.print_exc()

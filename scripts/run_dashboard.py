@@ -1,6 +1,5 @@
 import argparse
 from pathlib import Path
-import json
 import sys
 import time
 import traceback
@@ -17,6 +16,9 @@ SRC = ROOT / "src"
 if str(SRC) not in sys.path:
     sys.path.append(str(SRC))
 
+from racing_ml.common.artifacts import display_path as artifact_display_path
+from racing_ml.common.artifacts import ensure_output_file_path as artifact_ensure_output_file_path
+from racing_ml.common.artifacts import save_figure, write_csv_file, write_json
 from racing_ml.common.progress import Heartbeat, ProgressBar
 
 
@@ -30,14 +32,6 @@ def latest_file(path: Path, pattern: str) -> Path:
 def log_progress(message: str) -> None:
     now = time.strftime("%H:%M:%S")
     print(f"[dashboard {now}] {message}", flush=True)
-
-
-def display_path(path: Path) -> str:
-    resolved = path if path.is_absolute() else (Path.cwd() / path).resolve()
-    try:
-        return str(resolved.relative_to(ROOT))
-    except ValueError:
-        return str(resolved)
 
 
 def load_optional_json(path: Path) -> dict[str, Any] | None:
@@ -146,7 +140,7 @@ def main() -> int:
             prediction_summary.get("policy_strategy_kind") if prediction_summary else backtest.get("policy_strategy_kind")
         )
         backtest_prediction_file = backtest.get("prediction_file")
-        prediction_file_display = display_path(pred_path)
+        prediction_file_display = artifact_display_path(pred_path, workspace_root=ROOT)
         prediction_profile = prediction_summary.get("profile") if prediction_summary else None
         backtest_profile = backtest.get("profile")
         train_profile = train_run_context.get("profile") if isinstance(train_run_context, dict) else None
@@ -166,9 +160,9 @@ def main() -> int:
         summary = {
             "profile": profile_name,
             "prediction_file": prediction_file_display,
-            "prediction_summary_file": display_path(pred_summary_path) if prediction_summary is not None else None,
-            "backtest_file": display_path(backtest_path),
-            "train_metrics_file": display_path(train_metrics_path),
+            "prediction_summary_file": artifact_display_path(pred_summary_path, workspace_root=ROOT) if prediction_summary is not None else None,
+            "backtest_file": artifact_display_path(backtest_path, workspace_root=ROOT),
+            "train_metrics_file": artifact_display_path(train_metrics_path, workspace_root=ROOT),
             "prediction_profile": prediction_profile,
             "backtest_profile": backtest_profile,
             "train_profile": train_profile,
@@ -200,10 +194,12 @@ def main() -> int:
         summary_path = out_dir / f"dashboard_summary_{stem}.json"
         chart_path = out_dir / f"dashboard_{stem}.png"
         top20_path = out_dir / f"dashboard_top20_{stem}.csv"
+        artifact_ensure_output_file_path(summary_path, label="summary output", workspace_root=ROOT)
+        artifact_ensure_output_file_path(chart_path, label="chart output", workspace_root=ROOT)
+        artifact_ensure_output_file_path(top20_path, label="top20 output", workspace_root=ROOT)
 
         with Heartbeat("[dashboard]", "writing dashboard outputs", logger=log_progress):
-            with summary_path.open("w", encoding="utf-8") as file:
-                json.dump(summary, file, ensure_ascii=False, indent=2)
+            write_json(summary_path, summary)
 
             fig, axes = plt.subplots(1, 2, figsize=(13, 4.5))
             axes[0].hist(pred_df["score"], bins=25, color="#3b82f6", alpha=0.85)
@@ -219,11 +215,11 @@ def main() -> int:
                 axes[1].text(0.5, 0.5, "race_id not found", ha="center", va="center")
 
             plt.tight_layout()
-            fig.savefig(chart_path, dpi=140)
+            save_figure(chart_path, fig, dpi=140)
             plt.close(fig)
 
             top_cols = [c for c in ["race_id", "horse_id", "horse_name", "score", "pred_rank", "rank"] if c in pred_df.columns]
-            pred_df[top_cols].sort_values("score", ascending=False).head(20).to_csv(top20_path, index=False)
+            write_csv_file(top20_path, pred_df[top_cols].sort_values("score", ascending=False).head(20), index=False)
         progress.update(message=f"dashboard outputs saved stem={stem}")
         progress.complete(message="dashboard flow finished")
 
@@ -237,6 +233,9 @@ def main() -> int:
     except KeyboardInterrupt:
         print("[dashboard] interrupted by user")
         return 130
+    except (ValueError, FileNotFoundError, IsADirectoryError, RuntimeError) as error:
+        print(f"[dashboard] failed: {error}")
+        return 1
     except Exception as error:
         print(f"[dashboard] failed: {error}")
         traceback.print_exc()

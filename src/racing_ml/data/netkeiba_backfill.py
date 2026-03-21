@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 import os
 from pathlib import Path
 import shlex
@@ -8,6 +7,7 @@ import subprocess
 import time
 from typing import Any
 
+from racing_ml.common.artifacts import write_json
 from racing_ml.common.progress import Heartbeat
 from racing_ml.data.dataset_loader import load_training_table
 from racing_ml.data.netkeiba_crawler import crawl_netkeiba_from_config, netkeiba_crawl_lock
@@ -34,9 +34,7 @@ def _extract_target(summary: dict[str, Any], target_name: str) -> dict[str, Any]
 
 
 def _write_json(path: Path, data: dict[str, Any]) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open("w", encoding="utf-8") as file:
-        json.dump(data, file, ensure_ascii=False, indent=2)
+    write_json(path, data)
 
 
 def _run_post_cycle_command(

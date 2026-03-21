@@ -5,7 +5,6 @@ import json
 from pathlib import Path
 from typing import Any
 
-import joblib
 import numpy as np
 import pandas as pd
 from sklearn.compose import ColumnTransformer
@@ -16,6 +15,7 @@ from sklearn.metrics import log_loss, ndcg_score, roc_auc_score
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import OneHotEncoder
 
+from racing_ml.common.artifacts import dump_joblib_file, write_json
 from racing_ml.common.progress import Heartbeat, ProgressBar
 from racing_ml.features.selection import prepare_model_input_frame
 
@@ -913,9 +913,8 @@ def train_and_evaluate(
     model_file = model_path / model_file_name
     report_file = report_path / report_file_name
     with Heartbeat("[train-fit]", "writing model/report files"):
-        joblib.dump(trained_model, model_file)
-        with report_file.open("w", encoding="utf-8") as file:
-            json.dump(metrics, file, ensure_ascii=False, indent=2)
+        dump_joblib_file(model_file, trained_model, label="model output")
+        write_json(report_file, metrics)
     fit_progress.complete(message="model/report files written")
 
     return TrainResult(

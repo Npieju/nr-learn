@@ -17,7 +17,10 @@ if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
 from racing_ml.common.config import load_yaml
+from racing_ml.common.artifacts import display_path as artifact_display_path
+from racing_ml.common.artifacts import ensure_output_file_path as artifact_ensure_output_file_path
 from racing_ml.common.artifacts import utc_now_iso, write_json
+from racing_ml.common.artifacts import write_text_file
 from racing_ml.common.progress import Heartbeat, ProgressBar
 from racing_ml.data.dataset_loader import load_training_table_for_feature_build
 from racing_ml.evaluation.policy import compute_market_prob, evaluate_fixed_stake_summary
@@ -31,13 +34,6 @@ from racing_ml.models.value_blend import load_component_from_config
 def log_progress(message: str) -> None:
     now = time.strftime("%H:%M:%S")
     print(f"[stack-tune {now}] {message}", flush=True)
-
-
-def _display_path(path: Path) -> str:
-    try:
-        return str(path.relative_to(ROOT))
-    except ValueError:
-        return str(path)
 
 
 def _date_window_payload(frame: pd.DataFrame) -> dict[str, str | int | None]:
@@ -291,9 +287,9 @@ def _build_tuning_manifest(
         "best_params": best_params,
         "component_artifacts": component_artifacts,
         "files": {
-            "summary": _display_path(summary_path),
-            "csv": _display_path(csv_path),
-            "manifest": _display_path(manifest_path),
+            "summary": artifact_display_path(summary_path, workspace_root=ROOT),
+            "csv": artifact_display_path(csv_path, workspace_root=ROOT),
+            "manifest": artifact_display_path(manifest_path, workspace_root=ROOT),
         },
         "checksums": {
             "summary_sha256": summary_sha256,
@@ -330,6 +326,12 @@ def main() -> int:
 
     try:
         progress = ProgressBar(total=7, prefix="[stack-tune]", logger=log_progress, min_interval_sec=0.0)
+        summary_path = ROOT / args.summary_path
+        csv_path = summary_path.with_suffix(".csv")
+        manifest_path = summary_path.with_suffix(".manifest.json")
+        artifact_ensure_output_file_path(summary_path, label="summary output", workspace_root=ROOT)
+        artifact_ensure_output_file_path(csv_path, label="csv output", workspace_root=ROOT)
+        artifact_ensure_output_file_path(manifest_path, label="manifest output", workspace_root=ROOT)
 
         config = load_yaml(ROOT / args.config)
         data_cfg = load_yaml(ROOT / args.data_config)
@@ -448,10 +450,7 @@ def main() -> int:
         result_df = result_df.sort_values(sort_columns, ascending=ascending, na_position="last").reset_index(drop=True)
         progress.update(message=f"results ranked sort_by={args.sort_by}")
 
-        summary_path = ROOT / args.summary_path
         summary_path.parent.mkdir(parents=True, exist_ok=True)
-        csv_path = summary_path.with_suffix(".csv")
-        manifest_path = summary_path.with_suffix(".manifest.json")
         best_params = _merge_candidate_params(params, result_df.iloc[0][[
             "alpha_weight",
             "alpha_scale",
@@ -509,9 +508,9 @@ def main() -> int:
                 "component_names": sorted(component_bundles.keys()),
             },
             "output_files": {
-                "summary": _display_path(summary_path),
-                "csv": _display_path(csv_path),
-                "manifest": _display_path(manifest_path),
+                "summary": artifact_display_path(summary_path, workspace_root=ROOT),
+                "csv": artifact_display_path(csv_path, workspace_root=ROOT),
+                "manifest": artifact_display_path(manifest_path, workspace_root=ROOT),
             },
             "best_params": best_params,
             "top_results": result_df.head(args.top_n).to_dict(orient="records"),
@@ -559,8 +558,8 @@ def main() -> int:
             stability_guardrail=stability_guardrail,
         )
         with Heartbeat("[stack-tune]", "writing tuning outputs", logger=log_progress):
-            csv_path.write_text(csv_text, encoding="utf-8")
-            summary_path.write_text(summary_text, encoding="utf-8")
+            write_text_file(csv_path, csv_text, label="csv output")
+            write_text_file(summary_path, summary_text, label="summary output")
             write_json(manifest_path, manifest_payload)
         progress.complete(message=f"tuning outputs written candidates={len(result_df):,}")
 
@@ -573,6 +572,9 @@ def main() -> int:
     except KeyboardInterrupt:
         print("[stack-tune] interrupted by user")
         return 130
+    except (ValueError, FileNotFoundError, IsADirectoryError, RuntimeError) as error:
+        print(f"[stack-tune] failed: {error}")
+        return 1
     except Exception as error:
         print(f"[stack-tune] failed: {error}")
         traceback.print_exc()

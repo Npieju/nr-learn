@@ -62,6 +62,9 @@ def main() -> int:
     except KeyboardInterrupt:
         print("[predict] interrupted by user")
         return 130
+    except (ValueError, FileNotFoundError, IsADirectoryError) as error:
+        print(f"[predict] failed: {error}")
+        return 1
     except Exception as error:
         print(f"[predict] failed: {error}")
         traceback.print_exc()

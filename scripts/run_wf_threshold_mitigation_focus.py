@@ -4,6 +4,8 @@ import argparse
 from collections import Counter
 from pathlib import Path
 import sys
+import time
+import traceback
 from typing import Any
 
 import pandas as pd
@@ -14,8 +16,16 @@ SRC = ROOT / "src"
 if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
-from racing_ml.common.artifacts import read_json, write_json
+from racing_ml.common.artifacts import display_path as artifact_display_path
+from racing_ml.common.artifacts import ensure_output_file_path as artifact_ensure_output_file_path
+from racing_ml.common.artifacts import read_json, write_csv_file, write_json
+from racing_ml.common.progress import Heartbeat, ProgressBar
 from racing_ml.evaluation.policy import PolicyConstraints, apply_selection_mode, evaluate_candidate_gate
+
+
+def log_progress(message: str) -> None:
+    now = time.strftime("%H:%M:%S")
+    print(f"[wf-mitigation-focus {now}] {message}", flush=True)
 
 
 SIGNATURE_FIELDS = [
@@ -343,24 +353,42 @@ def main() -> int:
     parser.add_argument("--summary-csv", default="artifacts/reports/wf_threshold_mitigation_focus.csv")
     args = parser.parse_args()
 
-    candidate_ranks = [int(value.strip()) for value in str(args.candidate_ranks).split(",") if value.strip()]
-    if len(candidate_ranks) != 2:
-        raise ValueError("--candidate-ranks must contain exactly two ranks")
+    try:
+        candidate_ranks = [int(value.strip()) for value in str(args.candidate_ranks).split(",") if value.strip()]
+        if len(candidate_ranks) != 2:
+            raise ValueError("--candidate-ranks must contain exactly two ranks")
 
-    compare_payload = _load_json(_normalize_path(args.compare_report))
-    shortlist_payload = _load_json(_normalize_path(args.shortlist_report))
-    report, summary_df = _build_focus(compare_payload, shortlist_payload, candidate_ranks)
+        compare_payload = _load_json(_normalize_path(args.compare_report))
+        shortlist_payload = _load_json(_normalize_path(args.shortlist_report))
+        progress = ProgressBar(total=3, prefix="[wf-mitigation-focus]", logger=log_progress, min_interval_sec=0.0)
+        progress.start(message="loading compare and shortlist reports")
+        with Heartbeat("[wf-mitigation-focus]", "building focus comparison", logger=log_progress):
+            report, summary_df = _build_focus(compare_payload, shortlist_payload, candidate_ranks)
 
-    output_path = _normalize_path(args.output)
-    summary_csv_path = _normalize_path(args.summary_csv)
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-    write_json(output_path, report)
-    summary_df.to_csv(summary_csv_path, index=False)
+        output_path = _normalize_path(args.output)
+        summary_csv_path = _normalize_path(args.summary_csv)
+        artifact_ensure_output_file_path(output_path, label="output", workspace_root=ROOT)
+        artifact_ensure_output_file_path(summary_csv_path, label="summary csv", workspace_root=ROOT)
+        progress.update(message=f"focus built occurrences={report.get('occurrence_count')}")
+        with Heartbeat("[wf-mitigation-focus]", "writing focus outputs", logger=log_progress):
+            write_json(output_path, report)
+            write_csv_file(summary_csv_path, summary_df, index=False)
 
-    print(f"saved mitigation focus to {output_path.relative_to(ROOT)}")
-    print(f"saved mitigation focus table to {summary_csv_path.relative_to(ROOT)}")
-    print(f"recommendation_counts={report['recommendation_counts']}")
-    return 0
+        print(f"saved mitigation focus to {output_path.relative_to(ROOT)}")
+        print(f"saved mitigation focus table to {summary_csv_path.relative_to(ROOT)}")
+        print(f"recommendation_counts={report['recommendation_counts']}")
+        progress.complete(message="mitigation focus completed")
+        return 0
+    except KeyboardInterrupt:
+        print("[wf-mitigation-focus] interrupted by user")
+        return 130
+    except (ValueError, FileNotFoundError, IsADirectoryError, RuntimeError) as error:
+        print(f"[wf-mitigation-focus] failed: {error}")
+        return 1
+    except Exception as error:
+        print(f"[wf-mitigation-focus] failed: {error}")
+        traceback.print_exc()
+        return 1
 
 
 if __name__ == "__main__":

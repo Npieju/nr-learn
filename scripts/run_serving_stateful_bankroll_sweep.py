@@ -5,6 +5,8 @@ import json
 from itertools import product
 from pathlib import Path
 import sys
+import time
+import traceback
 from typing import Any
 
 import pandas as pd
@@ -14,6 +16,11 @@ ROOT = Path(__file__).resolve().parents[1]
 SRC = ROOT / "src"
 if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
+
+from racing_ml.common.artifacts import display_path as artifact_display_path
+from racing_ml.common.artifacts import ensure_output_file_path as artifact_ensure_output_file_path
+from racing_ml.common.artifacts import write_csv_file, write_json
+from racing_ml.common.progress import Heartbeat, ProgressBar
 
 
 def _normalize_path(raw: str | Path) -> Path:
@@ -32,6 +39,11 @@ def _load_json(path: Path) -> dict[str, Any]:
 
 
 _BACKTEST_CACHE: dict[Path, dict[str, Any]] = {}
+
+
+def log_progress(message: str) -> None:
+    now = time.strftime("%H:%M:%S")
+    print(f"[bankroll-sweep {now}] {message}", flush=True)
 
 
 def _parse_floats(raw: str) -> list[float]:
@@ -199,109 +211,134 @@ def main() -> int:
     )
     args = parser.parse_args()
 
-    summary_paths = [_normalize_path(path) for path in args.summary_files]
-    summaries = [_load_json(path) for path in summary_paths]
-    labels = [label.strip() for label in str(args.labels).split(",")] if args.labels else [path.stem for path in summary_paths]
-    if len(labels) != len(summary_paths):
-        raise ValueError("labels count must match summary-files count")
-    if len(summary_paths) < 2:
-        raise ValueError("at least two summaries are required")
+    try:
+        summary_paths = [_normalize_path(path) for path in args.summary_files]
+        progress = ProgressBar(total=5, prefix="[bankroll-sweep]", logger=log_progress, min_interval_sec=0.0)
+        progress.start(message=f"loading summaries count={len(summary_paths)}")
+        with Heartbeat("[bankroll-sweep]", "loading summary files", logger=log_progress):
+            summaries = [_load_json(path) for path in summary_paths]
+        labels = [label.strip() for label in str(args.labels).split(",")] if args.labels else [path.stem for path in summary_paths]
+        if len(labels) != len(summary_paths):
+            raise ValueError("labels count must match summary-files count")
+        if len(summary_paths) < 2:
+            raise ValueError("at least two summaries are required")
 
-    case_maps = [_case_map(summary) for summary in summaries]
-    shared_dates = sorted(set.intersection(*(set(case_map.keys()) for case_map in case_maps)))
-    if not shared_dates:
-        raise ValueError("no shared dates across summaries")
+        case_maps = [_case_map(summary) for summary in summaries]
+        shared_dates = sorted(set.intersection(*(set(case_map.keys()) for case_map in case_maps)))
+        if not shared_dates:
+            raise ValueError("no shared dates across summaries")
 
-    floor_values = sorted(set(_parse_floats(args.bankroll_floor_values)), reverse=True)
-    n_floors = len(summary_paths) - 1
-    floor_candidates = [combo for combo in product(floor_values, repeat=n_floors) if list(combo) == sorted(combo, reverse=True)]
-    if not floor_candidates:
-        raise ValueError("no valid floor combinations generated")
+        floor_values = sorted(set(_parse_floats(args.bankroll_floor_values)), reverse=True)
+        n_floors = len(summary_paths) - 1
+        floor_candidates = [combo for combo in product(floor_values, repeat=n_floors) if list(combo) == sorted(combo, reverse=True)]
+        if not floor_candidates:
+            raise ValueError("no valid floor combinations generated")
+        progress.update(message=f"shared_dates={len(shared_dates)} floor_candidates={len(floor_candidates)}")
 
-    sweep_rows: list[dict[str, Any]] = []
-    best_result: dict[str, Any] | None = None
+        sweep_rows: list[dict[str, Any]] = []
+        best_result: dict[str, Any] | None = None
 
-    pure_stage_results: list[dict[str, Any]] = []
-    for stage_index in range(len(summary_paths)):
-        pure_result = _simulate_pure_stage_path(
+        pure_stage_results: list[dict[str, Any]] = []
+        pure_progress = ProgressBar(total=max(len(summary_paths), 1), prefix="[bankroll-sweep pure]", logger=log_progress, min_interval_sec=0.0)
+        pure_progress.start(message="evaluating pure stage paths")
+        for stage_index in range(len(summary_paths)):
+            pure_result = _simulate_pure_stage_path(
+                ordered_dates=shared_dates,
+                labels=labels,
+                case_maps=case_maps,
+                stage_index=stage_index,
+                initial_bankroll=float(args.initial_bankroll),
+            )
+            pure_stage_results.append(pure_result)
+            pure_row = {
+                "selection_mode": "pure_stage",
+                "selected_stage_index": int(stage_index + 1),
+                "selected_label": labels[stage_index],
+                "floors": None,
+                "final_bankroll": float(pure_result["final_bankroll"]),
+                "total_bets": int(pure_result["total_bets"]),
+            }
+            for label, count in pure_result["stage_use_counts"].items():
+                pure_row[f"use_count_{label}"] = int(count)
+            sweep_rows.append(pure_row)
+            if best_result is None or float(pure_result["final_bankroll"]) > float(best_result["final_bankroll"]):
+                best_result = pure_result
+            pure_progress.update(message=f"stage={labels[stage_index]} final={pure_result['final_bankroll']:.4f}")
+        progress.update(message="pure stage paths evaluated")
+
+        grid_progress = ProgressBar(total=max(len(floor_candidates), 1), prefix="[bankroll-sweep grid]", logger=log_progress, min_interval_sec=0.0)
+        grid_progress.start(message="evaluating threshold grid")
+        for floors_tuple in floor_candidates:
+            floors = [float(value) for value in floors_tuple]
+            result = _simulate_path(
+                ordered_dates=shared_dates,
+                labels=labels,
+                case_maps=case_maps,
+                floors=floors,
+                initial_bankroll=float(args.initial_bankroll),
+            )
+            row = {
+                "selection_mode": "threshold_grid",
+                "selected_stage_index": None,
+                "selected_label": None,
+                "floors": floors,
+                "final_bankroll": float(result["final_bankroll"]),
+                "total_bets": int(result["total_bets"]),
+            }
+            for label, count in result["stage_use_counts"].items():
+                row[f"use_count_{label}"] = int(count)
+            sweep_rows.append(row)
+            if best_result is None or float(result["final_bankroll"]) > float(best_result["final_bankroll"]):
+                best_result = result
+            grid_progress.update(message=f"floors={floors} final={result['final_bankroll']:.4f}")
+        progress.update(message="threshold grid evaluated")
+
+        baseline_result = _simulate_path(
             ordered_dates=shared_dates,
-            labels=labels,
-            case_maps=case_maps,
-            stage_index=stage_index,
+            labels=[labels[0]],
+            case_maps=[case_maps[0]],
+            floors=[],
             initial_bankroll=float(args.initial_bankroll),
         )
-        pure_stage_results.append(pure_result)
-        pure_row = {
-            "selection_mode": "pure_stage",
-            "selected_stage_index": int(stage_index + 1),
-            "selected_label": labels[stage_index],
-            "floors": None,
-            "final_bankroll": float(pure_result["final_bankroll"]),
-            "total_bets": int(pure_result["total_bets"]),
+
+        payload = {
+            "summary_files": [str(path.relative_to(ROOT)) for path in summary_paths],
+            "labels": labels,
+            "shared_dates": shared_dates,
+            "initial_bankroll": float(args.initial_bankroll),
+            "baseline_only": {
+                "label": labels[0],
+                "final_bankroll": float(baseline_result["final_bankroll"]),
+                "total_bets": int(baseline_result["total_bets"]),
+            },
+            "best_result": best_result,
+            "pure_stage_results": pure_stage_results,
+            "sweep": sweep_rows,
         }
-        for label, count in pure_result["stage_use_counts"].items():
-            pure_row[f"use_count_{label}"] = int(count)
-        sweep_rows.append(pure_row)
-        if best_result is None or float(pure_result["final_bankroll"]) > float(best_result["final_bankroll"]):
-            best_result = pure_result
 
-    for floors_tuple in floor_candidates:
-        floors = [float(value) for value in floors_tuple]
-        result = _simulate_path(
-            ordered_dates=shared_dates,
-            labels=labels,
-            case_maps=case_maps,
-            floors=floors,
-            initial_bankroll=float(args.initial_bankroll),
-        )
-        row = {
-            "selection_mode": "threshold_grid",
-            "selected_stage_index": None,
-            "selected_label": None,
-            "floors": floors,
-            "final_bankroll": float(result["final_bankroll"]),
-            "total_bets": int(result["total_bets"]),
-        }
-        for label, count in result["stage_use_counts"].items():
-            row[f"use_count_{label}"] = int(count)
-        sweep_rows.append(row)
-        if best_result is None or float(result["final_bankroll"]) > float(best_result["final_bankroll"]):
-            best_result = result
+        output_json = _normalize_path(args.output_json)
+        output_csv = _normalize_path(args.output_csv)
+        artifact_ensure_output_file_path(output_json, label="output json", workspace_root=ROOT)
+        artifact_ensure_output_file_path(output_csv, label="output csv", workspace_root=ROOT)
+        with Heartbeat("[bankroll-sweep]", "writing sweep outputs", logger=log_progress):
+            write_json(output_json, payload)
+            write_csv_file(output_csv, pd.DataFrame(sweep_rows).sort_values("final_bankroll", ascending=False), index=False)
 
-    baseline_result = _simulate_path(
-        ordered_dates=shared_dates,
-        labels=[labels[0]],
-        case_maps=[case_maps[0]],
-        floors=[],
-        initial_bankroll=float(args.initial_bankroll),
-    )
-
-    payload = {
-        "summary_files": [str(path.relative_to(ROOT)) for path in summary_paths],
-        "labels": labels,
-        "shared_dates": shared_dates,
-        "initial_bankroll": float(args.initial_bankroll),
-        "baseline_only": {
-            "label": labels[0],
-            "final_bankroll": float(baseline_result["final_bankroll"]),
-            "total_bets": int(baseline_result["total_bets"]),
-        },
-        "best_result": best_result,
-        "pure_stage_results": pure_stage_results,
-        "sweep": sweep_rows,
-    }
-
-    output_json = _normalize_path(args.output_json)
-    output_csv = _normalize_path(args.output_csv)
-    output_json.parent.mkdir(parents=True, exist_ok=True)
-    with output_json.open("w", encoding="utf-8") as file:
-        json.dump(payload, file, ensure_ascii=False, indent=2)
-    pd.DataFrame(sweep_rows).sort_values("final_bankroll", ascending=False).to_csv(output_csv, index=False)
-
-    print(f"saved sweep json to {output_json.relative_to(ROOT)}")
-    print(f"saved sweep csv to {output_csv.relative_to(ROOT)}")
-    print(f"shared_dates={len(shared_dates)} best_final_bankroll={payload['best_result']['final_bankroll'] if payload['best_result'] else None}")
-    return 0
+        print(f"saved sweep json to {output_json.relative_to(ROOT)}")
+        print(f"saved sweep csv to {output_csv.relative_to(ROOT)}")
+        print(f"shared_dates={len(shared_dates)} best_final_bankroll={payload['best_result']['final_bankroll'] if payload['best_result'] else None}")
+        progress.complete(message="sweep completed")
+        return 0
+    except KeyboardInterrupt:
+        print("[bankroll-sweep] interrupted by user")
+        return 130
+    except (ValueError, FileNotFoundError, IsADirectoryError) as error:
+        print(f"[bankroll-sweep] failed: {error}")
+        return 1
+    except Exception as error:
+        print(f"[bankroll-sweep] failed: {error}")
+        traceback.print_exc()
+        return 1
 
 
 if __name__ == "__main__":

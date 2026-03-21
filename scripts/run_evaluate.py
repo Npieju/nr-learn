@@ -19,7 +19,9 @@ if str(SRC) not in sys.path:
     sys.path.append(str(SRC))
 
 from racing_ml.common.config import load_yaml
-from racing_ml.common.artifacts import resolve_output_artifacts, utc_now_iso, write_json
+from racing_ml.common.artifacts import display_path as artifact_display_path
+from racing_ml.common.artifacts import ensure_output_file_path as artifact_ensure_output_file_path
+from racing_ml.common.artifacts import resolve_output_artifacts, utc_now_iso, write_json, write_text_file
 from racing_ml.common.model_profiles import MODEL_RUN_PROFILES, format_model_run_profiles, resolve_model_run_profile
 from racing_ml.common.progress import Heartbeat, ProgressBar
 from racing_ml.common.regime import resolve_regime_name
@@ -441,13 +443,6 @@ def _derive_evaluation_output_slug(config_path: str, model_path: Path, *, prefer
     return "model"
 
 
-def _display_path(path: Path) -> str:
-    try:
-        return str(path.relative_to(ROOT))
-    except ValueError:
-        return str(path)
-
-
 def _sha256_text(text: str) -> str:
     return hashlib.sha256(text.encode("utf-8")).hexdigest()
 
@@ -506,12 +501,12 @@ def _build_evaluation_output_manifest(
         },
         "source_model_manifest": run_context.get("artifact_manifest"),
         "files": {
-            "latest_summary": _display_path(latest_summary_path),
-            "latest_by_date": _display_path(latest_by_date_path) if latest_by_date_path is not None else None,
-            "latest_manifest": _display_path(latest_manifest_path),
-            "versioned_summary": _display_path(versioned_summary_path),
-            "versioned_by_date": _display_path(versioned_by_date_path) if versioned_by_date_path is not None else None,
-            "versioned_manifest": _display_path(versioned_manifest_path),
+            "latest_summary": artifact_display_path(latest_summary_path, workspace_root=ROOT),
+            "latest_by_date": artifact_display_path(latest_by_date_path, workspace_root=ROOT) if latest_by_date_path is not None else None,
+            "latest_manifest": artifact_display_path(latest_manifest_path, workspace_root=ROOT),
+            "versioned_summary": artifact_display_path(versioned_summary_path, workspace_root=ROOT),
+            "versioned_by_date": artifact_display_path(versioned_by_date_path, workspace_root=ROOT) if versioned_by_date_path is not None else None,
+            "versioned_manifest": artifact_display_path(versioned_manifest_path, workspace_root=ROOT),
         },
         "checksums": {
             "summary_sha256": summary_sha256,
@@ -1163,17 +1158,24 @@ def main() -> int:
         versioned_summary_path = report_dir / f"evaluation_summary_{output_slug}{date_window_slug}{wf_slug}.json"
         versioned_by_date_path = report_dir / f"evaluation_by_date_{output_slug}{date_window_slug}{wf_slug}.csv"
         versioned_manifest_path = report_dir / f"evaluation_manifest_{output_slug}{date_window_slug}{wf_slug}.json"
+        artifact_ensure_output_file_path(summary_path, label="latest summary output", workspace_root=ROOT)
+        artifact_ensure_output_file_path(manifest_path, label="latest manifest output", workspace_root=ROOT)
+        artifact_ensure_output_file_path(versioned_summary_path, label="versioned summary output", workspace_root=ROOT)
+        artifact_ensure_output_file_path(versioned_manifest_path, label="versioned manifest output", workspace_root=ROOT)
+        if not by_date.empty:
+            artifact_ensure_output_file_path(by_date_path, label="latest by-date output", workspace_root=ROOT)
+            artifact_ensure_output_file_path(versioned_by_date_path, label="versioned by-date output", workspace_root=ROOT)
 
         latest_by_date_output_path = by_date_path if not by_date.empty else None
         versioned_by_date_output_path = versioned_by_date_path if not by_date.empty else None
 
         summary["output_files"] = {
-            "latest_summary": _display_path(summary_path),
-            "latest_by_date": _display_path(latest_by_date_output_path) if latest_by_date_output_path is not None else None,
-            "latest_manifest": _display_path(manifest_path),
-            "versioned_summary": _display_path(versioned_summary_path),
-            "versioned_by_date": _display_path(versioned_by_date_output_path) if versioned_by_date_output_path is not None else None,
-            "versioned_manifest": _display_path(versioned_manifest_path),
+            "latest_summary": artifact_display_path(summary_path, workspace_root=ROOT),
+            "latest_by_date": artifact_display_path(latest_by_date_output_path, workspace_root=ROOT) if latest_by_date_output_path is not None else None,
+            "latest_manifest": artifact_display_path(manifest_path, workspace_root=ROOT),
+            "versioned_summary": artifact_display_path(versioned_summary_path, workspace_root=ROOT),
+            "versioned_by_date": artifact_display_path(versioned_by_date_output_path, workspace_root=ROOT) if versioned_by_date_output_path is not None else None,
+            "versioned_manifest": artifact_display_path(versioned_manifest_path, workspace_root=ROOT),
         }
 
         summary_text = json.dumps(summary, ensure_ascii=False, indent=2)
@@ -1194,13 +1196,13 @@ def main() -> int:
         )
 
         with Heartbeat("[evaluate]", "writing evaluation outputs", logger=log_progress):
-            summary_path.write_text(summary_text, encoding="utf-8")
-            versioned_summary_path.write_text(summary_text, encoding="utf-8")
+            write_text_file(summary_path, summary_text, label="latest summary output")
+            write_text_file(versioned_summary_path, summary_text, label="versioned summary output")
             write_json(manifest_path, evaluation_manifest)
             write_json(versioned_manifest_path, evaluation_manifest)
             if by_date_text is not None:
-                by_date_path.write_text(by_date_text, encoding="utf-8")
-                versioned_by_date_path.write_text(by_date_text, encoding="utf-8")
+                write_text_file(by_date_path, by_date_text, label="latest by-date output")
+                write_text_file(versioned_by_date_path, by_date_text, label="versioned by-date output")
         progress.complete(message="evaluation outputs written")
 
         print(f"[evaluate] summary saved: {summary_path}")
@@ -1216,6 +1218,9 @@ def main() -> int:
     except KeyboardInterrupt:
         print("[evaluate] interrupted by user")
         return 130
+    except (ValueError, FileNotFoundError, IsADirectoryError, RuntimeError) as error:
+        print(f"[evaluate] failed: {error}")
+        return 1
     except Exception as error:
         print(f"[evaluate] failed: {error}")
         traceback.print_exc()

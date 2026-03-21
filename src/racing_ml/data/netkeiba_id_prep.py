@@ -5,6 +5,7 @@ from typing import Any
 
 import pandas as pd
 
+from racing_ml.common.artifacts import write_csv_file
 from racing_ml.data.dataset_loader import load_training_table
 from racing_ml.data.netkeiba_race_list import discover_netkeiba_race_ids_from_race_list
 
@@ -233,8 +234,7 @@ def _build_horse_key_frame(
 
 
 def _write_id_frame(frame: pd.DataFrame, output_path: Path) -> None:
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-    frame.to_csv(output_path, index=False)
+    write_csv_file(output_path, frame, index=False, label="id output")
 
 
 def prepare_netkeiba_ids_from_config(

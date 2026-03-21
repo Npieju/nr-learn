@@ -15,6 +15,7 @@ import requests
 from bs4 import BeautifulSoup
 from bs4.element import Tag
 
+from racing_ml.common.artifacts import write_csv_file, write_json, write_text_file
 from racing_ml.common.progress import ProgressBar
 
 
@@ -629,8 +630,7 @@ def _load_or_fetch_html(
             time.sleep(sleep_sec)
 
     html = _fetch_html(session, url, settings)
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-    output_path.write_text(html, encoding="utf-8")
+    write_text_file(output_path, html, label="raw html output")
     return html, True, time.perf_counter()
 
 
@@ -689,8 +689,7 @@ def _write_cumulative_output(output_file: Path, batch_frame: pd.DataFrame, dedup
             combined = combined.drop_duplicates(subset=columns, keep="last")
         combined = combined.reset_index(drop=True)
 
-    output_file.parent.mkdir(parents=True, exist_ok=True)
-    combined.to_csv(output_file, index=False)
+    write_csv_file(output_file, combined, index=False, label="crawl output")
     return combined, existing_rows
 
 
@@ -714,9 +713,7 @@ def _build_lock_path(base_path: Path) -> Path:
 
 
 def _write_json(path: Path, data: dict[str, Any]) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open("w", encoding="utf-8") as file:
-        json.dump(data, file, ensure_ascii=False, indent=2)
+    write_json(path, data)
 
 
 def _build_target_report(

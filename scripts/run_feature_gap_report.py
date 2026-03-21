@@ -1,16 +1,19 @@
 import argparse
-import csv
 from pathlib import Path
 import sys
 import time
 import traceback
+
+import pandas as pd
 
 ROOT = Path(__file__).resolve().parents[1]
 SRC = ROOT / "src"
 if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
-from racing_ml.common.artifacts import write_json
+from racing_ml.common.artifacts import display_path as artifact_display_path
+from racing_ml.common.artifacts import ensure_output_file_path as artifact_ensure_output_file_path
+from racing_ml.common.artifacts import write_csv_file, write_json
 from racing_ml.common.config import load_yaml
 from racing_ml.common.progress import Heartbeat, ProgressBar
 from racing_ml.data.dataset_loader import load_training_table, load_training_table_tail
@@ -110,12 +113,8 @@ def _build_feature_rows(frame, selected_columns: list[str], force_include_column
 
 
 def _write_csv(path: Path, rows: list[dict[str, object]], fieldnames: list[str]) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open("w", encoding="utf-8", newline="") as file:
-        writer = csv.DictWriter(file, fieldnames=fieldnames)
-        writer.writeheader()
-        for row in rows:
-            writer.writerow(row)
+    normalized_rows = [{field: row.get(field) for field in fieldnames} for row in rows]
+    write_csv_file(path, pd.DataFrame(normalized_rows, columns=fieldnames), index=False, label="csv output")
 
 
 def main() -> int:
@@ -227,6 +226,9 @@ def main() -> int:
         summary_output = ROOT / (args.summary_output or f"artifacts/reports/feature_gap_summary_{slug}.json")
         feature_output = ROOT / (args.feature_output or f"artifacts/reports/feature_gap_feature_coverage_{slug}.csv")
         raw_output = ROOT / (args.raw_output or f"artifacts/reports/feature_gap_raw_column_coverage_{slug}.csv")
+        artifact_ensure_output_file_path(summary_output, label="summary output", workspace_root=ROOT)
+        artifact_ensure_output_file_path(feature_output, label="feature output", workspace_root=ROOT)
+        artifact_ensure_output_file_path(raw_output, label="raw output", workspace_root=ROOT)
 
         with Heartbeat("[feature-gap]", "writing report files", logger=log_progress):
             write_json(summary_output, report)
@@ -252,6 +254,9 @@ def main() -> int:
     except KeyboardInterrupt:
         print("[feature-gap] interrupted by user")
         return 130
+    except (ValueError, FileNotFoundError, IsADirectoryError) as error:
+        print(f"[feature-gap] failed: {error}")
+        return 1
     except Exception as error:
         print(f"[feature-gap] failed: {error}")
         traceback.print_exc()

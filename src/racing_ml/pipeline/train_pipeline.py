@@ -1,11 +1,11 @@
 from pathlib import Path
 
-import joblib
-
 from racing_ml.common.artifacts import (
     append_suffix_to_file_name,
     build_model_manifest,
     build_training_report_payload,
+    dump_joblib_file,
+    ensure_output_file_path,
     resolve_output_artifacts,
     write_json,
 )
@@ -72,11 +72,14 @@ def _run_value_blend_bundle_build(
     model_artifact_path = workspace_root / output_artifacts.model_path
     report_path = workspace_root / output_artifacts.report_path
     manifest_path = workspace_root / output_artifacts.manifest_path
+    ensure_output_file_path(model_artifact_path, label="model output", workspace_root=workspace_root)
+    ensure_output_file_path(report_path, label="report output", workspace_root=workspace_root)
+    ensure_output_file_path(manifest_path, label="manifest output", workspace_root=workspace_root)
     model_artifact_path.parent.mkdir(parents=True, exist_ok=True)
     report_path.parent.mkdir(parents=True, exist_ok=True)
 
     with Heartbeat("[train-value-blend]", "writing stack artifact"):
-        joblib.dump(model_bundle, model_artifact_path)
+        dump_joblib_file(model_artifact_path, model_bundle, label="model output")
     progress.update(message="stack artifact written")
 
     component_names = list(model_bundle.get("component_metadata", {}).keys())

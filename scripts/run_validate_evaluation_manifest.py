@@ -9,6 +9,8 @@ SRC = ROOT / "src"
 if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
+from racing_ml.common.artifacts import display_path as artifact_display_path
+from racing_ml.common.artifacts import ensure_output_file_path as artifact_ensure_output_file_path
 from racing_ml.common.artifacts import write_json
 from racing_ml.common.progress import Heartbeat, ProgressBar
 from racing_ml.evaluation.manifest_validation import (
@@ -66,6 +68,7 @@ def main() -> int:
                 output_path = resolve_artifact_path(ROOT, args.output)
                 if output_path is None:
                     raise ValueError("Output path could not be resolved")
+                artifact_ensure_output_file_path(output_path, label="output", workspace_root=ROOT)
                 with Heartbeat("[eval-manifest batch]", "writing validation report", logger=log_progress):
                     write_json(output_path, aggregate_report)
                 print(f"[eval-manifest batch] report saved: {output_path}")
@@ -92,6 +95,7 @@ def main() -> int:
             output_path = resolve_artifact_path(ROOT, args.output)
             if output_path is None:
                 raise ValueError("Output path could not be resolved")
+            artifact_ensure_output_file_path(output_path, label="output", workspace_root=ROOT)
             with Heartbeat("[eval-manifest]", "writing validation report", logger=log_progress):
                 write_json(output_path, report)
             print(f"[eval-manifest] report saved: {output_path}")
@@ -108,6 +112,9 @@ def main() -> int:
     except KeyboardInterrupt:
         print("[eval-manifest] interrupted by user")
         return 130
+    except (ValueError, FileNotFoundError, IsADirectoryError) as error:
+        print(f"[eval-manifest] failed: {error}")
+        return 1
     except Exception as error:
         print(f"[eval-manifest] failed: {error}")
         traceback.print_exc()

@@ -4,6 +4,8 @@ import argparse
 from collections import Counter
 from pathlib import Path
 import sys
+import time
+import traceback
 from typing import Any
 
 import pandas as pd
@@ -14,8 +16,16 @@ SRC = ROOT / "src"
 if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
-from racing_ml.common.artifacts import read_json, write_json
+from racing_ml.common.artifacts import display_path as artifact_display_path
+from racing_ml.common.artifacts import ensure_output_file_path as artifact_ensure_output_file_path
+from racing_ml.common.artifacts import read_json, write_csv_file, write_json
+from racing_ml.common.progress import Heartbeat, ProgressBar
 from racing_ml.evaluation.policy import PolicyConstraints, apply_selection_mode, evaluate_candidate_gate
+
+
+def log_progress(message: str) -> None:
+    now = time.strftime("%H:%M:%S")
+    print(f"[wf-signature-drilldown {now}] {message}", flush=True)
 
 
 SIGNATURE_FIELDS = [
@@ -443,24 +453,42 @@ def main() -> int:
     parser.add_argument("--summary-csv", default="artifacts/reports/wf_threshold_signature_drilldown.csv")
     args = parser.parse_args()
 
-    compare_report_path = _normalize_path(args.compare_report)
-    output_path = _normalize_path(args.output)
-    summary_csv_path = _normalize_path(args.summary_csv)
+    try:
+        compare_report_path = _normalize_path(args.compare_report)
+        output_path = _normalize_path(args.output)
+        summary_csv_path = _normalize_path(args.summary_csv)
+        artifact_ensure_output_file_path(output_path, label="output", workspace_root=ROOT)
+        artifact_ensure_output_file_path(summary_csv_path, label="summary csv", workspace_root=ROOT)
 
-    compare_payload = _load_compare_report(compare_report_path)
-    signature = _resolve_signature(compare_payload, args.signature)
-    report, summary_df = _build_drilldown(compare_payload, signature)
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-    write_json(output_path, report)
-    summary_df.to_csv(summary_csv_path, index=False)
+        progress = ProgressBar(total=3, prefix="[wf-signature-drilldown]", logger=log_progress, min_interval_sec=0.0)
+        progress.start(message="loading compare report")
+        compare_payload = _load_compare_report(compare_report_path)
+        signature = _resolve_signature(compare_payload, args.signature)
+        with Heartbeat("[wf-signature-drilldown]", "building drilldown report", logger=log_progress):
+            report, summary_df = _build_drilldown(compare_payload, signature)
+        progress.update(message=f"drilldown built occurrences={report.get('blocked_occurrence_count')}")
+        with Heartbeat("[wf-signature-drilldown]", "writing drilldown outputs", logger=log_progress):
+            write_json(output_path, report)
+            write_csv_file(summary_csv_path, summary_df, index=False)
 
-    print(f"saved threshold signature drilldown to {output_path.relative_to(ROOT)}")
-    print(f"saved threshold signature drilldown table to {summary_csv_path.relative_to(ROOT)}")
-    print(f"signature={signature}")
-    print(f"blocked_occurrence_count={report['blocked_occurrence_count']}")
-    print(f"status_counts={report['status_counts']}")
-    print(f"best_feasible_signature_counts={report['best_feasible_signature_counts']}")
-    return 0
+        print(f"saved threshold signature drilldown to {output_path.relative_to(ROOT)}")
+        print(f"saved threshold signature drilldown table to {summary_csv_path.relative_to(ROOT)}")
+        print(f"signature={signature}")
+        print(f"blocked_occurrence_count={report['blocked_occurrence_count']}")
+        print(f"status_counts={report['status_counts']}")
+        print(f"best_feasible_signature_counts={report['best_feasible_signature_counts']}")
+        progress.complete(message="signature drilldown completed")
+        return 0
+    except KeyboardInterrupt:
+        print("[wf-signature-drilldown] interrupted by user")
+        return 130
+    except (ValueError, FileNotFoundError, IsADirectoryError, RuntimeError) as error:
+        print(f"[wf-signature-drilldown] failed: {error}")
+        return 1
+    except Exception as error:
+        print(f"[wf-signature-drilldown] failed: {error}")
+        traceback.print_exc()
+        return 1
 
 
 if __name__ == "__main__":

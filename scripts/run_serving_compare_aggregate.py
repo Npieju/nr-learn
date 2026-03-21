@@ -20,6 +20,9 @@ SRC = ROOT / "src"
 if str(SRC) not in sys.path:
     sys.path.append(str(SRC))
 
+from racing_ml.common.artifacts import display_path as artifact_display_path
+from racing_ml.common.artifacts import ensure_output_file_path as artifact_ensure_output_file_path
+from racing_ml.common.artifacts import save_figure, write_csv_file, write_json
 from racing_ml.common.progress import Heartbeat, ProgressBar
 
 
@@ -33,14 +36,6 @@ def resolve_path(path_value: str | Path) -> Path:
     if path.is_absolute():
         return path
     return ROOT / path
-
-
-def display_path(path: Path) -> str:
-    resolved = path if path.is_absolute() else (Path.cwd() / path).resolve()
-    try:
-        return str(resolved.relative_to(ROOT))
-    except ValueError:
-        return str(resolved)
 
 
 def load_json(path: Path) -> dict[str, Any]:
@@ -120,8 +115,10 @@ def _extract_row_from_dashboard_summary(path: Path, payload: dict[str, Any]) -> 
     baseline_only = bankroll.get("baseline_only") if isinstance(bankroll.get("baseline_only"), dict) else {}
     return {
         "window_label": payload.get("window_label"),
-        "source_file": display_path(path),
+        "source_file": artifact_display_path(path if path.is_absolute() else (Path.cwd() / path).resolve(), workspace_root=ROOT),
         "source_kind": "dashboard_summary",
+        "manifest_status": payload.get("manifest_status"),
+        "manifest_decision": payload.get("manifest_decision"),
         "left_profile": (payload.get("left") or {}).get("profile"),
         "right_profile": (payload.get("right") or {}).get("profile"),
         "date_count": _safe_int(payload.get("date_count")),
@@ -160,8 +157,10 @@ def _extract_row_from_compare_manifest(path: Path, payload: dict[str, Any]) -> d
     right_pure_final_bankroll = _compute_pure_final_bankroll(right_summary_path)
     return {
         "window_label": payload.get("window_label"),
-        "source_file": display_path(path),
+        "source_file": artifact_display_path(path if path.is_absolute() else (Path.cwd() / path).resolve(), workspace_root=ROOT),
         "source_kind": "compare_manifest",
+        "manifest_status": payload.get("status"),
+        "manifest_decision": payload.get("decision"),
         "left_profile": (payload.get("left") or {}).get("profile"),
         "right_profile": (payload.get("right") or {}).get("profile"),
         "date_count": len(payload.get("dates") or []),
@@ -216,6 +215,9 @@ def main() -> int:
         output_summary = resolve_path(args.output_summary)
         output_chart = resolve_path(args.output_chart)
         output_csv = resolve_path(args.output_csv)
+        artifact_ensure_output_file_path(output_summary, label="output summary", workspace_root=ROOT)
+        artifact_ensure_output_file_path(output_chart, label="output chart", workspace_root=ROOT)
+        artifact_ensure_output_file_path(output_csv, label="output csv", workspace_root=ROOT)
 
         progress.start(message=f"loading {input_kind} count={len(input_paths)}")
         with Heartbeat("[serving-compare-aggregate]", "loading summaries", logger=log_progress):
@@ -229,11 +231,13 @@ def main() -> int:
 
         frame = pd.DataFrame(rows).sort_values(["window_label", "date_count"], ascending=[True, True]).reset_index(drop=True)
         aggregate_payload = {
-            "input_files": [display_path(path) for path in input_paths],
+            "input_files": [artifact_display_path(path if path.is_absolute() else (Path.cwd() / path).resolve(), workspace_root=ROOT) for path in input_paths],
             "input_kind": "dashboard_summaries" if args.dashboard_summaries else "compare_manifests",
             "window_count": int(len(frame)),
             "rows": frame.to_dict(orient="records"),
             "summary": {
+                "manifest_status_counts": frame["manifest_status"].fillna("unknown").value_counts().to_dict() if "manifest_status" in frame.columns else {},
+                "manifest_decision_counts": frame["manifest_decision"].fillna("unknown").value_counts().to_dict() if "manifest_decision" in frame.columns else {},
                 "windows_with_positive_net_delta": [
                     str(row["window_label"]) for row in frame.to_dict(orient="records") if _safe_float(row.get("net_delta_right_minus_left")) is not None and float(row["net_delta_right_minus_left"]) > 0.0
                 ],
@@ -247,11 +251,8 @@ def main() -> int:
         progress.update(message=f"aggregate assembled windows={len(frame)}")
 
         with Heartbeat("[serving-compare-aggregate]", "writing aggregate outputs", logger=log_progress):
-            output_summary.parent.mkdir(parents=True, exist_ok=True)
-            with output_summary.open("w", encoding="utf-8") as file:
-                json.dump(aggregate_payload, file, ensure_ascii=False, indent=2)
-
-            frame.to_csv(output_csv, index=False)
+            write_json(output_summary, aggregate_payload)
+            write_csv_file(output_csv, frame, index=False)
 
             fig, axes = plt.subplots(1, 2, figsize=(14, 4.8))
             x_values = list(range(len(frame)))
@@ -284,18 +285,21 @@ def main() -> int:
             axes[1].set_ylabel("pure bankroll delta right minus left")
 
             plt.tight_layout()
-            fig.savefig(output_chart, dpi=140)
+            save_figure(output_chart, fig, dpi=140)
             plt.close(fig)
         progress.complete(message=f"aggregate outputs saved windows={len(frame)}")
 
-        print(f"[serving-compare-aggregate] summary saved: {display_path(output_summary)}")
-        print(f"[serving-compare-aggregate] chart saved: {display_path(output_chart)}")
-        print(f"[serving-compare-aggregate] csv saved: {display_path(output_csv)}")
+        print(f"[serving-compare-aggregate] summary saved: {artifact_display_path(output_summary if output_summary.is_absolute() else (Path.cwd() / output_summary).resolve(), workspace_root=ROOT)}")
+        print(f"[serving-compare-aggregate] chart saved: {artifact_display_path(output_chart if output_chart.is_absolute() else (Path.cwd() / output_chart).resolve(), workspace_root=ROOT)}")
+        print(f"[serving-compare-aggregate] csv saved: {artifact_display_path(output_csv if output_csv.is_absolute() else (Path.cwd() / output_csv).resolve(), workspace_root=ROOT)}")
         print(f"[serving-compare-aggregate] metrics: {aggregate_payload['summary']}")
         return 0
     except KeyboardInterrupt:
         print("[serving-compare-aggregate] interrupted by user")
         return 130
+    except (ValueError, FileNotFoundError, IsADirectoryError) as error:
+        print(f"[serving-compare-aggregate] failed: {error}")
+        return 1
     except Exception as error:
         print(f"[serving-compare-aggregate] failed: {error}")
         traceback.print_exc()

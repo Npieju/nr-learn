@@ -68,6 +68,9 @@ def main() -> int:
     except KeyboardInterrupt:
         print("[train] interrupted by user")
         return 130
+    except (ValueError, FileNotFoundError, IsADirectoryError) as error:
+        print(f"[train] failed: {error}")
+        return 1
     except Exception as error:
         print(f"[train] failed: {error}")
         traceback.print_exc()

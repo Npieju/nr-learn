@@ -3,6 +3,7 @@ import json
 import os
 from pathlib import Path
 import sys
+import time
 import traceback
 
 import pandas as pd
@@ -12,8 +13,11 @@ SRC = ROOT / "src"
 if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
+from racing_ml.common.artifacts import display_path as artifact_display_path
+from racing_ml.common.artifacts import ensure_output_file_path as artifact_ensure_output_file_path
 from racing_ml.common.artifacts import write_json
 from racing_ml.common.config import load_yaml
+from racing_ml.common.progress import Heartbeat, ProgressBar
 from racing_ml.data.dataset_loader import load_training_table, load_training_table_tail
 
 
@@ -32,6 +36,11 @@ TARGET_MANIFEST_PATHS = {
     "pedigree": ROOT / "artifacts/reports/netkeiba_crawl_manifest_pedigree.json",
 }
 DEFAULT_CRAWL_LOCK_PATH = ROOT / "artifacts/reports/netkeiba_crawl_manifest.json.lock"
+
+
+def log_progress(message: str) -> None:
+    now = time.strftime("%H:%M:%S")
+    print(f"[netkeiba-snapshot {now}] {message}", flush=True)
 
 
 def _safe_ratio(series: pd.Series | None) -> float | None:
@@ -318,34 +327,43 @@ def main() -> int:
     args = parser.parse_args()
 
     try:
+        progress = ProgressBar(total=4, prefix="[netkeiba-snapshot]", logger=log_progress, min_interval_sec=0.0)
+        output_path = ROOT / args.output
+        artifact_ensure_output_file_path(output_path, label="output", workspace_root=ROOT)
         data_cfg = load_yaml(ROOT / args.config)
         dataset_cfg = data_cfg.get("dataset", {})
         raw_dir = dataset_cfg.get("raw_dir", "data/raw")
         tail_rows = max(int(args.tail_rows), 0)
+        progress.start(message=f"config loaded tail_rows={tail_rows}")
         if tail_rows > 0:
-            tail_frame, primary_source_rows_total = load_training_table_tail(
-                raw_dir,
-                tail_rows=tail_rows,
-                dataset_config=dataset_cfg,
-                base_dir=ROOT,
-            )
+            with Heartbeat("[netkeiba-snapshot]", "loading tail training table", logger=log_progress):
+                tail_frame, primary_source_rows_total = load_training_table_tail(
+                    raw_dir,
+                    tail_rows=tail_rows,
+                    dataset_config=dataset_cfg,
+                    base_dir=ROOT,
+                )
             frame = tail_frame.copy()
         else:
-            frame = load_training_table(raw_dir, dataset_config=dataset_cfg, base_dir=ROOT)
+            with Heartbeat("[netkeiba-snapshot]", "loading full training table", logger=log_progress):
+                frame = load_training_table(raw_dir, dataset_config=dataset_cfg, base_dir=ROOT)
             primary_source_rows_total = int(len(frame))
             tail_frame = frame.copy()
+        progress.update(message=f"training data loaded rows={len(frame)}")
 
         result_path = ROOT / "data/external/netkeiba/results/netkeiba_race_result_crawled.csv"
         race_card_path = ROOT / "data/external/netkeiba/racecard/netkeiba_racecard_crawled.csv"
         pedigree_path = ROOT / "data/external/netkeiba/pedigree/netkeiba_pedigree_crawled.csv"
 
-        race_result = _read_external(result_path)
-        race_card = _read_external(race_card_path)
-        pedigree = _read_external(pedigree_path)
+        with Heartbeat("[netkeiba-snapshot]", "loading external outputs", logger=log_progress):
+            race_result = _read_external(result_path)
+            race_card = _read_external(race_card_path)
+            pedigree = _read_external(pedigree_path)
         target_states = {
             target_name: _build_target_state(path)
             for target_name, path in TARGET_MANIFEST_PATHS.items()
         }
+        progress.update(message="external outputs loaded")
 
         paired_race_ids: set[object] = set()
         if "race_id" in race_result.columns and "race_id" in race_card.columns:
@@ -383,9 +401,10 @@ def main() -> int:
             },
             "readiness": _build_readiness(target_states, alignment),
         }
-        write_json(ROOT / args.output, payload)
+        with Heartbeat("[netkeiba-snapshot]", "writing snapshot output", logger=log_progress):
+            write_json(output_path, payload)
 
-        print(f"[netkeiba-snapshot] output={ROOT / args.output}")
+        print(f"[netkeiba-snapshot] output={output_path}")
         print(f"[netkeiba-snapshot] alignment={payload['alignment']}")
         readiness = payload["readiness"]
         reason_text = "; ".join(readiness["reasons"]) if readiness["reasons"] else "none"
@@ -402,10 +421,14 @@ def main() -> int:
                 for column, metrics in scope_payload.items()
             )
             print(f"[netkeiba-snapshot] {scope_name}: {summary}")
+        progress.complete(message="snapshot completed")
         return 0
     except KeyboardInterrupt:
         print("[netkeiba-snapshot] interrupted by user")
         return 130
+    except (ValueError, FileNotFoundError, IsADirectoryError) as error:
+        print(f"[netkeiba-snapshot] failed: {error}")
+        return 1
     except Exception as error:
         print(f"[netkeiba-snapshot] failed: {error}")
         traceback.print_exc()

@@ -108,4 +108,6 @@
 
 - システムの中身を知りたい場合は [system_architecture.md](system_architecture.md) を読む。
 - 何を良い成績とみなすかを知りたい場合は [benchmarks.md](benchmarks.md) を読む。
+- 日々の進め方や revision の切り方を知りたい場合は [development_flow.md](development_flow.md) を読む。
+- 実際にどの CLI をどう叩くかを知りたい場合は [command_reference.md](command_reference.md) を読む。
 - 外部データの扱いを知りたい場合は [data_extension.md](data_extension.md) を読む。

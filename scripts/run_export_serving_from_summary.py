@@ -19,6 +19,9 @@ SRC = ROOT / "src"
 if str(SRC) not in sys.path:
     sys.path.append(str(SRC))
 
+from racing_ml.common.artifacts import display_path as artifact_display_path
+from racing_ml.common.artifacts import ensure_output_file_path as artifact_ensure_output_file_path
+from racing_ml.common.artifacts import write_text_file
 from racing_ml.common.progress import Heartbeat, ProgressBar
 
 
@@ -460,11 +463,13 @@ def main() -> int:
         if args.sync_config_serving:
             if config_data is None or config_path is None:
                 raise ValueError("--sync-config-serving requires --config-file")
+            artifact_ensure_output_file_path(config_path, label="config file", workspace_root=ROOT)
             with Heartbeat("[export-serving]", "syncing config serving block", logger=log_progress):
                 config_data["serving"] = generated_serving
-                config_path.write_text(
+                write_text_file(
+                    config_path,
                     yaml.safe_dump(config_data, allow_unicode=True, sort_keys=False),
-                    encoding="utf-8",
+                    label="config file",
                 )
             progress.update(message=f"config serving synced path={config_path.name}")
             print(f"[export-serving] config serving synced: {config_path}")
@@ -478,9 +483,9 @@ def main() -> int:
             output_path = Path(args.output_file)
             if not output_path.is_absolute():
                 output_path = ROOT / output_path
+            artifact_ensure_output_file_path(output_path, label="output file", workspace_root=ROOT)
             with Heartbeat("[export-serving]", "writing export output", logger=log_progress):
-                output_path.parent.mkdir(parents=True, exist_ok=True)
-                output_path.write_text(output_text, encoding="utf-8")
+                write_text_file(output_path, output_text, label="output file")
             progress.update(message=f"output saved path={output_path.name}")
             print(f"[export-serving] output saved: {output_path}")
 
@@ -490,6 +495,9 @@ def main() -> int:
     except KeyboardInterrupt:
         print("[export-serving] interrupted by user")
         return 130
+    except (ValueError, FileNotFoundError, IsADirectoryError) as error:
+        print(f"[export-serving] failed: {error}")
+        return 1
     except Exception as error:
         print(f"[export-serving] failed: {error}")
         traceback.print_exc()

@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 from pathlib import Path
 import time
 
@@ -11,6 +10,7 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
 from racing_ml.common.config import load_yaml
+from racing_ml.common.artifacts import save_figure, write_json
 from racing_ml.common.progress import Heartbeat, ProgressBar
 from racing_ml.evaluation.policy import run_policy_strategy, simulate_annotated_runtime_policy
 from racing_ml.evaluation.scoring import resolve_odds_column
@@ -115,8 +115,7 @@ def _plot_backtest(frame: pd.DataFrame, out_path: Path) -> None:
         axes[1].set_title("Hit rate chart unavailable")
 
     plt.tight_layout()
-    out_path.parent.mkdir(parents=True, exist_ok=True)
-    fig.savefig(out_path, dpi=140)
+    save_figure(out_path, fig, label="chart output", dpi=140)
     plt.close(fig)
 
 
@@ -227,8 +226,7 @@ def run_backtest(config_path: str, predictions_file: str | None = None, profile_
     png_path = report_dir / f"backtest_{stem}.png"
 
     with Heartbeat("[backtest]", "writing backtest outputs", logger=log_progress):
-        with json_path.open("w", encoding="utf-8") as file:
-            json.dump(metrics, file, ensure_ascii=False, indent=2)
+        write_json(json_path, metrics)
 
         _plot_backtest(frame, png_path)
     progress.complete(message="backtest outputs written")

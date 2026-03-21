@@ -1,5 +1,4 @@
 import argparse
-import json
 from pathlib import Path
 import sys
 import time
@@ -10,6 +9,9 @@ SRC = ROOT / "src"
 if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
+from racing_ml.common.artifacts import display_path as artifact_display_path
+from racing_ml.common.artifacts import ensure_output_file_path as artifact_ensure_output_file_path
+from racing_ml.common.artifacts import write_json
 from racing_ml.common.config import load_yaml
 from racing_ml.common.progress import Heartbeat, ProgressBar
 from racing_ml.data.dataset_loader import inspect_dataset_sources
@@ -29,6 +31,8 @@ def main() -> int:
     try:
         progress = ProgressBar(total=3, prefix="[data-validate]", logger=log_progress, min_interval_sec=0.0)
         progress.start("starting validation")
+        output_path = ROOT / args.output
+        artifact_ensure_output_file_path(output_path, label="output", workspace_root=ROOT)
         data_cfg = load_yaml(ROOT / args.config)
         dataset_cfg = data_cfg.get("dataset", {})
         raw_dir = dataset_cfg.get("raw_dir", "data/raw")
@@ -38,11 +42,8 @@ def main() -> int:
             report = inspect_dataset_sources(raw_dir, dataset_config=dataset_cfg, base_dir=ROOT)
         progress.update(message="dataset sources inspected")
 
-        output_path = ROOT / args.output
-        output_path.parent.mkdir(parents=True, exist_ok=True)
         with Heartbeat("[data-validate]", "writing validation report", logger=log_progress):
-            with output_path.open("w", encoding="utf-8") as file:
-                json.dump(report, file, ensure_ascii=False, indent=2)
+            write_json(output_path, report)
         progress.complete(message="validation report written")
 
         healthy_statuses = {"ok", "optional_missing"}
@@ -60,6 +61,9 @@ def main() -> int:
     except KeyboardInterrupt:
         print("[data-validate] interrupted by user")
         return 130
+    except (ValueError, FileNotFoundError, IsADirectoryError) as error:
+        print(f"[data-validate] failed: {error}")
+        return 1
     except Exception as error:
         print(f"[data-validate] failed: {error}")
         traceback.print_exc()

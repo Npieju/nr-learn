@@ -20,6 +20,9 @@ SRC = ROOT / "src"
 if str(SRC) not in sys.path:
     sys.path.append(str(SRC))
 
+from racing_ml.common.artifacts import display_path as artifact_display_path
+from racing_ml.common.artifacts import ensure_output_file_path as artifact_ensure_output_file_path
+from racing_ml.common.artifacts import save_figure, write_csv_file, write_json
 from racing_ml.common.progress import Heartbeat, ProgressBar
 
 
@@ -33,14 +36,6 @@ def latest_file(path: Path, pattern: str) -> Path:
 def log_progress(message: str) -> None:
     now = time.strftime("%H:%M:%S")
     print(f"[serving-compare-dashboard {now}] {message}", flush=True)
-
-
-def display_path(path: Path) -> str:
-    resolved = path if path.is_absolute() else (Path.cwd() / path).resolve()
-    try:
-        return str(resolved.relative_to(ROOT))
-    except ValueError:
-        return str(resolved)
 
 
 def resolve_path(path_value: str | Path) -> Path:
@@ -203,7 +198,7 @@ def main() -> int:
         dashboard_dir = report_dir / "dashboard"
         manifest_path = Path(args.manifest_file) if args.manifest_file else latest_file(report_dir, "serving_smoke_profile_compare_*.json")
         manifest_path = resolve_path(manifest_path)
-        progress.start(message=f"resolving inputs manifest={display_path(manifest_path)}")
+        progress.start(message=f"resolving inputs manifest={artifact_display_path(manifest_path if manifest_path.is_absolute() else (Path.cwd() / manifest_path).resolve(), workspace_root=ROOT)}")
 
         manifest_payload = load_json(manifest_path)
         compare_path = resolve_path(args.compare_json or manifest_payload.get("outputs", {}).get("compare_json"))
@@ -216,7 +211,10 @@ def main() -> int:
         output_summary = resolve_path(args.output_summary) if args.output_summary else dashboard_dir / f"{summary_stem}.json"
         output_chart = resolve_path(args.output_chart) if args.output_chart else dashboard_dir / f"{summary_stem}.png"
         output_csv = resolve_path(args.output_csv) if args.output_csv else dashboard_dir / f"{summary_stem}.csv"
-        progress.update(message=f"inputs resolved compare={display_path(compare_path)} bankroll={display_path(bankroll_path) if bankroll_path else 'none'}")
+        artifact_ensure_output_file_path(output_summary, label="output summary", workspace_root=ROOT)
+        artifact_ensure_output_file_path(output_chart, label="output chart", workspace_root=ROOT)
+        artifact_ensure_output_file_path(output_csv, label="output csv", workspace_root=ROOT)
+        progress.update(message=f"inputs resolved compare={artifact_display_path(compare_path if compare_path.is_absolute() else (Path.cwd() / compare_path).resolve(), workspace_root=ROOT)} bankroll={artifact_display_path(bankroll_path if bankroll_path.is_absolute() else (Path.cwd() / bankroll_path).resolve(), workspace_root=ROOT) if bankroll_path else 'none'}")
 
         with Heartbeat("[serving-compare-dashboard]", "loading compare artifacts", logger=log_progress):
             compare_payload = load_json(compare_path)
@@ -245,9 +243,11 @@ def main() -> int:
         best_result = bankroll_payload.get("best_result") if isinstance(bankroll_payload, dict) else None
         baseline_only = bankroll_payload.get("baseline_only") if isinstance(bankroll_payload, dict) else None
         summary_payload = {
-            "manifest_file": display_path(manifest_path),
-            "compare_json": display_path(compare_path),
-            "bankroll_sweep_json": display_path(bankroll_path) if bankroll_path else None,
+            "manifest_file": artifact_display_path(manifest_path if manifest_path.is_absolute() else (Path.cwd() / manifest_path).resolve(), workspace_root=ROOT),
+            "manifest_status": manifest_payload.get("status"),
+            "manifest_decision": manifest_payload.get("decision"),
+            "compare_json": artifact_display_path(compare_path if compare_path.is_absolute() else (Path.cwd() / compare_path).resolve(), workspace_root=ROOT),
+            "bankroll_sweep_json": artifact_display_path(bankroll_path if bankroll_path.is_absolute() else (Path.cwd() / bankroll_path).resolve(), workspace_root=ROOT) if bankroll_path else None,
             "window_label": manifest_payload.get("window_label"),
             "prediction_backend": manifest_payload.get("prediction_backend"),
             "date_count": len(manifest_payload.get("dates", [])),
@@ -292,11 +292,8 @@ def main() -> int:
         progress.update(message=f"summary assembled rows={len(case_df)}")
 
         with Heartbeat("[serving-compare-dashboard]", "writing dashboard outputs", logger=log_progress):
-            output_summary.parent.mkdir(parents=True, exist_ok=True)
-            with output_summary.open("w", encoding="utf-8") as file:
-                json.dump(summary_payload, file, ensure_ascii=False, indent=2)
-
-            case_df.to_csv(output_csv, index=False)
+            write_json(output_summary, summary_payload)
+            write_csv_file(output_csv, case_df, index=False)
 
             fig, axes = plt.subplots(1, 2, figsize=(14, 4.8))
             x_values = list(range(len(case_df)))
@@ -323,18 +320,21 @@ def main() -> int:
             axes[1].legend()
 
             plt.tight_layout()
-            fig.savefig(output_chart, dpi=140)
+            save_figure(output_chart, fig, dpi=140)
             plt.close(fig)
         progress.complete(message=f"dashboard outputs saved stem={summary_stem}")
 
-        print(f"[serving-compare-dashboard] summary saved: {display_path(output_summary)}")
-        print(f"[serving-compare-dashboard] chart saved: {display_path(output_chart)}")
-        print(f"[serving-compare-dashboard] csv saved: {display_path(output_csv)}")
+        print(f"[serving-compare-dashboard] summary saved: {artifact_display_path(output_summary if output_summary.is_absolute() else (Path.cwd() / output_summary).resolve(), workspace_root=ROOT)}")
+        print(f"[serving-compare-dashboard] chart saved: {artifact_display_path(output_chart if output_chart.is_absolute() else (Path.cwd() / output_chart).resolve(), workspace_root=ROOT)}")
+        print(f"[serving-compare-dashboard] csv saved: {artifact_display_path(output_csv if output_csv.is_absolute() else (Path.cwd() / output_csv).resolve(), workspace_root=ROOT)}")
         print(f"[serving-compare-dashboard] metrics: {summary_payload}")
         return 0
     except KeyboardInterrupt:
         print("[serving-compare-dashboard] interrupted by user")
         return 130
+    except (ValueError, FileNotFoundError, IsADirectoryError) as error:
+        print(f"[serving-compare-dashboard] failed: {error}")
+        return 1
     except Exception as error:
         print(f"[serving-compare-dashboard] failed: {error}")
         traceback.print_exc()

@@ -4,6 +4,8 @@ import argparse
 from collections import Counter, defaultdict
 from pathlib import Path
 import sys
+import time
+import traceback
 from typing import Any
 
 import pandas as pd
@@ -14,7 +16,15 @@ SRC = ROOT / "src"
 if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
-from racing_ml.common.artifacts import read_json, write_json
+from racing_ml.common.artifacts import display_path as artifact_display_path
+from racing_ml.common.artifacts import ensure_output_file_path as artifact_ensure_output_file_path
+from racing_ml.common.artifacts import read_json, write_csv_file, write_json
+from racing_ml.common.progress import Heartbeat, ProgressBar
+
+
+def log_progress(message: str) -> None:
+    now = time.strftime("%H:%M:%S")
+    print(f"[wf-signature-report {now}] {message}", flush=True)
 
 
 def _summarize_numeric(values: list[float]) -> dict[str, float | int | None]:
@@ -153,24 +163,42 @@ def main() -> int:
     parser.add_argument("--summary-csv", default="artifacts/reports/wf_threshold_signature_report.csv")
     args = parser.parse_args()
 
-    compare_report_path = _normalize_path(args.compare_report)
-    output_path = _normalize_path(args.output)
-    summary_csv_path = _normalize_path(args.summary_csv)
+    try:
+        compare_report_path = _normalize_path(args.compare_report)
+        output_path = _normalize_path(args.output)
+        summary_csv_path = _normalize_path(args.summary_csv)
+        artifact_ensure_output_file_path(output_path, label="output", workspace_root=ROOT)
+        artifact_ensure_output_file_path(summary_csv_path, label="summary csv", workspace_root=ROOT)
 
-    payload = _load_compare(compare_report_path)
-    report, summary_df = _build_signature_report(payload)
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-    write_json(output_path, report)
-    summary_df.to_csv(summary_csv_path, index=False)
+        progress = ProgressBar(total=3, prefix="[wf-signature-report]", logger=log_progress, min_interval_sec=0.0)
+        progress.start(message="loading compare report")
+        payload = _load_compare(compare_report_path)
+        with Heartbeat("[wf-signature-report]", "building signature report", logger=log_progress):
+            report, summary_df = _build_signature_report(payload)
+        progress.update(message=f"report built signatures={report.get('blocked_signature_count')}")
+        with Heartbeat("[wf-signature-report]", "writing signature outputs", logger=log_progress):
+            write_json(output_path, report)
+            write_csv_file(summary_csv_path, summary_df, index=False)
 
-    print(f"saved threshold signature report to {output_path.relative_to(ROOT)}")
-    print(f"saved threshold signature table to {summary_csv_path.relative_to(ROOT)}")
-    for row in report.get("blocked_signature_overview") or []:
-        print(
-            f"count={row['count']} strategy={row.get('strategy')} min_prob={row.get('min_prob')} "
-            f"blend_weight={row.get('blend_weight')} top_k={row.get('top_k')} min_ev={row.get('min_expected_value')}"
-        )
-    return 0
+        print(f"saved threshold signature report to {output_path.relative_to(ROOT)}")
+        print(f"saved threshold signature table to {summary_csv_path.relative_to(ROOT)}")
+        for row in report.get("blocked_signature_overview") or []:
+            print(
+                f"count={row['count']} strategy={row.get('strategy')} min_prob={row.get('min_prob')} "
+                f"blend_weight={row.get('blend_weight')} top_k={row.get('top_k')} min_ev={row.get('min_expected_value')}"
+            )
+        progress.complete(message="signature report completed")
+        return 0
+    except KeyboardInterrupt:
+        print("[wf-signature-report] interrupted by user")
+        return 130
+    except (ValueError, FileNotFoundError, IsADirectoryError, RuntimeError) as error:
+        print(f"[wf-signature-report] failed: {error}")
+        return 1
+    except Exception as error:
+        print(f"[wf-signature-report] failed: {error}")
+        traceback.print_exc()
+        return 1
 
 
 if __name__ == "__main__":

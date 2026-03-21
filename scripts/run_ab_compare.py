@@ -15,6 +15,8 @@ SRC = ROOT / "src"
 if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
+from racing_ml.common.artifacts import display_path as artifact_display_path
+from racing_ml.common.artifacts import ensure_output_file_path as artifact_ensure_output_file_path
 from racing_ml.common.artifacts import resolve_output_artifacts, write_json
 from racing_ml.common.config import load_yaml
 from racing_ml.common.model_profiles import MODEL_RUN_PROFILES, format_model_run_profiles, resolve_model_run_profile
@@ -30,14 +32,6 @@ from racing_ml.features.selection import FeatureSelection, prepare_model_input_f
 def log_progress(message: str) -> None:
     now = time.strftime("%H:%M:%S")
     print(f"[ab {now}] {message}", flush=True)
-
-
-def _display_path(path: Path) -> str:
-    resolved = path if path.is_absolute() else (ROOT / path).resolve()
-    try:
-        return str(resolved.relative_to(ROOT))
-    except ValueError:
-        return str(resolved)
 
 
 def _date_window_payload(frame: pd.DataFrame) -> dict[str, str | int | None]:
@@ -102,8 +96,8 @@ def _resolve_expected_artifacts(model_cfg: dict[str, Any]) -> dict[str, str | No
         else (ROOT / output_artifacts.manifest_path)
     )
     return {
-        "model_file": _display_path(model_path),
-        "manifest_file": _display_path(manifest_path),
+        "model_file": artifact_display_path(model_path, workspace_root=ROOT),
+        "manifest_file": artifact_display_path(manifest_path, workspace_root=ROOT),
     }
 
 
@@ -147,8 +141,8 @@ def _build_output_manifest(
     date_slug = f"_{'_'.join(date_bits)}" if date_bits else ""
     versioned_path = report_dir / f"ab_compare_summary_{base_slug}_vs_{challenger_slug}{date_slug}_rows_{row_count}.json"
     return versioned_path, {
-        "latest_summary": _display_path(latest_path),
-        "versioned_summary": _display_path(versioned_path),
+        "latest_summary": artifact_display_path(latest_path, workspace_root=ROOT),
+        "versioned_summary": artifact_display_path(versioned_path, workspace_root=ROOT),
     }
 
 
@@ -414,6 +408,8 @@ def main() -> int:
             )
 
         out_path = ROOT / "artifacts/reports/ab_compare_summary.json"
+        artifact_ensure_output_file_path(out_path, label="latest summary output", workspace_root=ROOT)
+        artifact_ensure_output_file_path(versioned_out_path, label="versioned summary output", workspace_root=ROOT)
         out_path.parent.mkdir(parents=True, exist_ok=True)
         with Heartbeat("[ab]", "writing comparison summary", logger=log_progress):
             write_json(out_path, summary)
@@ -431,6 +427,9 @@ def main() -> int:
     except KeyboardInterrupt:
         print("[ab] interrupted by user")
         return 130
+    except (ValueError, FileNotFoundError, IsADirectoryError, RuntimeError) as error:
+        print(f"[ab] failed: {error}")
+        return 1
     except Exception as error:
         print(f"[ab] failed: {error}")
         traceback.print_exc()

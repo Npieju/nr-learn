@@ -3,6 +3,7 @@ from pathlib import Path
 import shlex
 import subprocess
 import sys
+import time
 import traceback
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -10,12 +11,27 @@ SRC = ROOT / "src"
 if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
+from racing_ml.common.artifacts import display_path as artifact_display_path
+from racing_ml.common.artifacts import ensure_output_file_path as artifact_ensure_output_file_path
 from racing_ml.common.artifacts import read_json, utc_now_iso, write_json
+from racing_ml.common.progress import Heartbeat, ProgressBar
+
+
+def log_progress(message: str) -> None:
+    now = time.strftime("%H:%M:%S")
+    print(f"[netkeiba-benchmark-gate {now}] {message}", flush=True)
 
 
 def _resolve_path(path_text: str) -> Path:
     path = Path(path_text)
     return path if path.is_absolute() else (ROOT / path)
+
+
+def _safe_write_manifest(path: Path, payload: dict[str, object]) -> None:
+    if path.exists() and path.is_dir():
+        return
+    path.parent.mkdir(parents=True, exist_ok=True)
+    write_json(path, payload)
 
 
 def _run_command(command: list[str], *, cwd: Path, label: str) -> dict[str, object]:
@@ -67,9 +83,15 @@ def main() -> int:
             "skip_evaluate": bool(args.skip_evaluate),
         },
     }
-    write_json(manifest_path, payload)
 
     try:
+        artifact_ensure_output_file_path(manifest_path, label="manifest output", workspace_root=ROOT)
+        artifact_ensure_output_file_path(snapshot_path, label="snapshot output", workspace_root=ROOT)
+        _safe_write_manifest(manifest_path, payload)
+
+        total_steps = 3 + int(not args.skip_train) + int(not args.skip_evaluate)
+        progress = ProgressBar(total=total_steps, prefix="[netkeiba-benchmark-gate]", logger=log_progress, min_interval_sec=0.0)
+        progress.start(message="gate manifest initialized")
         snapshot_command = [
             sys.executable,
             str(ROOT / "scripts/run_netkeiba_coverage_snapshot.py"),
@@ -80,13 +102,15 @@ def main() -> int:
             "--output",
             str(snapshot_path),
         ]
-        snapshot_result = _run_command(snapshot_command, cwd=ROOT, label="snapshot")
+        with Heartbeat("[netkeiba-benchmark-gate]", "running snapshot", logger=log_progress):
+            snapshot_result = _run_command(snapshot_command, cwd=ROOT, label="snapshot")
         payload["snapshot"] = snapshot_result
         if int(snapshot_result["exit_code"]) != 0:
             payload["status"] = "snapshot_failed"
             payload["finished_at"] = utc_now_iso()
-            write_json(manifest_path, payload)
+            _safe_write_manifest(manifest_path, payload)
             return int(snapshot_result["exit_code"]) or 1
+        progress.update(message="snapshot completed")
 
         snapshot_payload = read_json(snapshot_path)
         readiness = dict(snapshot_payload.get("readiness", {})) if isinstance(snapshot_payload, dict) else {}
@@ -101,7 +125,8 @@ def main() -> int:
         if not bool(readiness.get("benchmark_rerun_ready", False)):
             payload["status"] = "not_ready"
             payload["finished_at"] = utc_now_iso()
-            write_json(manifest_path, payload)
+            _safe_write_manifest(manifest_path, payload)
+            progress.complete(message="snapshot says not ready")
             print(
                 "[netkeiba-benchmark-gate] "
                 f"not ready: action={readiness.get('recommended_action')} reasons={readiness.get('reasons')}",
@@ -120,13 +145,15 @@ def main() -> int:
                 "--feature-config",
                 args.feature_config,
             ]
-            train_result = _run_command(train_command, cwd=ROOT, label="train")
+            with Heartbeat("[netkeiba-benchmark-gate]", "running train", logger=log_progress):
+                train_result = _run_command(train_command, cwd=ROOT, label="train")
             payload["train"] = train_result
             if int(train_result["exit_code"]) != 0:
                 payload["status"] = "train_failed"
                 payload["finished_at"] = utc_now_iso()
-                write_json(manifest_path, payload)
+                _safe_write_manifest(manifest_path, payload)
                 return int(train_result["exit_code"]) or 1
+            progress.update(message="train completed")
 
         if not args.skip_evaluate:
             evaluate_command = [
@@ -145,30 +172,41 @@ def main() -> int:
                 "--wf-scheme",
                 args.wf_scheme,
             ]
-            evaluate_result = _run_command(evaluate_command, cwd=ROOT, label="evaluate")
+            with Heartbeat("[netkeiba-benchmark-gate]", "running evaluate", logger=log_progress):
+                evaluate_result = _run_command(evaluate_command, cwd=ROOT, label="evaluate")
             payload["evaluate"] = evaluate_result
             if int(evaluate_result["exit_code"]) != 0:
                 payload["status"] = "evaluate_failed"
                 payload["finished_at"] = utc_now_iso()
-                write_json(manifest_path, payload)
+                _safe_write_manifest(manifest_path, payload)
                 return int(evaluate_result["exit_code"]) or 1
+            progress.update(message="evaluate completed")
 
         payload["status"] = "completed"
         payload["finished_at"] = utc_now_iso()
-        write_json(manifest_path, payload)
+        with Heartbeat("[netkeiba-benchmark-gate]", "writing gate manifest", logger=log_progress):
+            _safe_write_manifest(manifest_path, payload)
+        progress.complete(message="benchmark gate completed")
         print("[netkeiba-benchmark-gate] completed", flush=True)
         return 0
     except KeyboardInterrupt:
         payload["status"] = "interrupted"
         payload["finished_at"] = utc_now_iso()
-        write_json(manifest_path, payload)
+        _safe_write_manifest(manifest_path, payload)
         print("[netkeiba-benchmark-gate] interrupted by user")
         return 130
+    except (ValueError, FileNotFoundError, IsADirectoryError) as error:
+        payload["status"] = "failed"
+        payload["finished_at"] = utc_now_iso()
+        payload["error"] = str(error)
+        _safe_write_manifest(manifest_path, payload)
+        print(f"[netkeiba-benchmark-gate] failed: {error}")
+        return 1
     except Exception as error:
         payload["status"] = "failed"
         payload["finished_at"] = utc_now_iso()
         payload["error"] = str(error)
-        write_json(manifest_path, payload)
+        _safe_write_manifest(manifest_path, payload)
         print(f"[netkeiba-benchmark-gate] failed: {error}")
         traceback.print_exc()
         return 1

@@ -1,6 +1,7 @@
 import argparse
 from pathlib import Path
 import sys
+import time
 import traceback
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -9,8 +10,14 @@ if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
 from racing_ml.common.config import load_yaml
+from racing_ml.common.progress import Heartbeat, ProgressBar
 from racing_ml.data.netkeiba_crawler import netkeiba_crawl_lock
 from racing_ml.data.netkeiba_id_prep import prepare_netkeiba_ids_from_config
+
+
+def log_progress(message: str) -> None:
+    now = time.strftime("%H:%M:%S")
+    print(f"[prepare-netkeiba-ids {now}] {message}", flush=True)
 
 
 def main() -> int:
@@ -29,8 +36,11 @@ def main() -> int:
     args = parser.parse_args()
 
     try:
+        progress = ProgressBar(total=3, prefix="[prepare-netkeiba-ids]", logger=log_progress, min_interval_sec=0.0)
         data_config = load_yaml(ROOT / args.data_config)
         crawl_config = load_yaml(ROOT / args.crawl_config)
+        progress.start(message=f"configs loaded target={args.target} source={args.race_id_source}")
+
         def _run_prepare() -> dict[str, object]:
             return prepare_netkeiba_ids_from_config(
                 data_config,
@@ -49,9 +59,13 @@ def main() -> int:
 
         if args.race_id_source == "race_list":
             with netkeiba_crawl_lock(crawl_config, base_dir=ROOT):
-                summary = _run_prepare()
+                with Heartbeat("[prepare-netkeiba-ids]", "preparing ids with crawl lock", logger=log_progress):
+                    summary = _run_prepare()
         else:
-            summary = _run_prepare()
+            with Heartbeat("[prepare-netkeiba-ids]", "preparing ids", logger=log_progress):
+                summary = _run_prepare()
+
+        progress.update(message=f"reports ready count={len(summary.get('reports', []))}")
 
         for report in summary.get("reports", []):
             output_files = ", ".join(report.get("output_files", []))
@@ -61,10 +75,14 @@ def main() -> int:
                 f"kind={report.get('kind')} targets={targets} rows={report.get('row_count')} source={report.get('source', summary.get('race_id_source'))}"
             )
             print(f"[prepare-netkeiba-ids] outputs: {output_files}")
+        progress.complete(message="id preparation completed")
         return 0
     except KeyboardInterrupt:
         print("[prepare-netkeiba-ids] interrupted by user")
         return 130
+    except (ValueError, FileNotFoundError, IsADirectoryError) as error:
+        print(f"[prepare-netkeiba-ids] failed: {error}")
+        return 1
     except Exception as error:
         print(f"[prepare-netkeiba-ids] failed: {error}")
         traceback.print_exc()

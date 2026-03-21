@@ -12,7 +12,7 @@ import pandas as pd
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
-from racing_ml.common.artifacts import resolve_output_artifacts, write_json
+from racing_ml.common.artifacts import resolve_output_artifacts, save_figure, write_csv_file, write_json
 from racing_ml.common.config import load_yaml
 from racing_ml.common.progress import Heartbeat, ProgressBar
 from racing_ml.common.regime import resolve_regime_override
@@ -120,8 +120,7 @@ def _plot_predictions(predictions: pd.DataFrame, out_path: Path) -> None:
     axes[1].set_ylabel("Count")
 
     plt.tight_layout()
-    out_path.parent.mkdir(parents=True, exist_ok=True)
-    fig.savefig(out_path, dpi=140)
+    save_figure(out_path, fig, label="chart output", dpi=140)
     plt.close(fig)
 
 
@@ -284,7 +283,7 @@ def run_predict_from_frame(
 
     with Heartbeat("[predict]", "writing prediction outputs", logger=log_progress):
         output = pred_frame[columns].sort_values(["race_id", "pred_rank"]).reset_index(drop=True)
-        output.to_csv(csv_path, index=False)
+        write_csv_file(csv_path, output, index=False, label="prediction output")
         _plot_predictions(output, png_path)
         prediction_summary = {
             "profile": profile_name,

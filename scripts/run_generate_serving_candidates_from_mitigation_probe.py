@@ -4,6 +4,8 @@ import argparse
 from collections import Counter
 from pathlib import Path
 import sys
+import time
+import traceback
 from typing import Any
 
 import yaml
@@ -14,7 +16,15 @@ SRC = ROOT / "src"
 if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
-from racing_ml.common.artifacts import read_json, write_json
+from racing_ml.common.artifacts import display_path as artifact_display_path
+from racing_ml.common.artifacts import ensure_output_file_path as artifact_ensure_output_file_path
+from racing_ml.common.artifacts import read_json, write_json, write_text_file
+from racing_ml.common.progress import Heartbeat, ProgressBar
+
+
+def log_progress(message: str) -> None:
+    now = time.strftime("%H:%M:%S")
+    print(f"[serving-candidates {now}] {message}", flush=True)
 
 
 def _normalize_path(raw: str) -> Path:
@@ -133,20 +143,42 @@ def main() -> int:
     parser.add_argument("--output-yaml", default="artifacts/reports/generated_serving_candidates_from_mitigation_probe.yaml")
     args = parser.parse_args()
 
-    policy_probe = _load_json(_normalize_path(args.policy_probe))
-    payload = _build_candidates(policy_probe)
+    try:
+        progress = ProgressBar(total=3, prefix="[serving-candidates]", logger=log_progress, min_interval_sec=0.0)
+        progress.start(message="loading mitigation probe")
+        policy_probe = _load_json(_normalize_path(args.policy_probe))
+        with Heartbeat("[serving-candidates]", "building runtime candidates", logger=log_progress):
+            payload = _build_candidates(policy_probe)
+        progress.update(message="candidate payload built")
 
-    output_json = _normalize_path(args.output_json)
-    output_yaml = _normalize_path(args.output_yaml)
-    output_json.parent.mkdir(parents=True, exist_ok=True)
-    write_json(output_json, payload)
-    with output_yaml.open("w", encoding="utf-8") as file:
-        yaml.safe_dump(payload, file, sort_keys=False, allow_unicode=False)
+        output_json = _normalize_path(args.output_json)
+        output_yaml = _normalize_path(args.output_yaml)
+        artifact_ensure_output_file_path(output_json, label="output json", workspace_root=ROOT)
+        artifact_ensure_output_file_path(output_yaml, label="output yaml", workspace_root=ROOT)
+        output_json.parent.mkdir(parents=True, exist_ok=True)
+        with Heartbeat("[serving-candidates]", "writing candidate outputs", logger=log_progress):
+            write_json(output_json, payload)
+            write_text_file(
+                output_yaml,
+                yaml.safe_dump(payload, sort_keys=False, allow_unicode=False),
+                label="output yaml",
+            )
 
-    print(f"saved serving candidate json to {output_json.relative_to(ROOT)}")
-    print(f"saved serving candidate yaml to {output_yaml.relative_to(ROOT)}")
-    print(f"runtime_ready_candidates={list(payload['runtime_ready_candidates'].keys())}")
-    return 0
+        print(f"saved serving candidate json to {output_json.relative_to(ROOT)}")
+        print(f"saved serving candidate yaml to {output_yaml.relative_to(ROOT)}")
+        print(f"runtime_ready_candidates={list(payload['runtime_ready_candidates'].keys())}")
+        progress.complete(message="serving candidates written")
+        return 0
+    except KeyboardInterrupt:
+        print("[serving-candidates] interrupted by user")
+        return 130
+    except (ValueError, FileNotFoundError, IsADirectoryError, RuntimeError) as error:
+        print(f"[serving-candidates] failed: {error}")
+        return 1
+    except Exception as error:
+        print(f"[serving-candidates] failed: {error}")
+        traceback.print_exc()
+        return 1
 
 
 if __name__ == "__main__":

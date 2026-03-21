@@ -5,6 +5,8 @@ import json
 from copy import deepcopy
 from pathlib import Path
 import sys
+import time
+import traceback
 from typing import Any
 
 import yaml
@@ -14,6 +16,16 @@ ROOT = Path(__file__).resolve().parents[1]
 SRC = ROOT / "src"
 if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
+
+from racing_ml.common.artifacts import ensure_output_directory_path as artifact_ensure_output_directory_path
+from racing_ml.common.artifacts import ensure_output_file_path as artifact_ensure_output_file_path
+from racing_ml.common.artifacts import write_json, write_text_file
+from racing_ml.common.progress import Heartbeat, ProgressBar
+
+
+def log_progress(message: str) -> None:
+    now = time.strftime("%H:%M:%S")
+    print(f"[serving-variants {now}] {message}", flush=True)
 
 
 def _normalize_path(raw: str) -> Path:
@@ -114,63 +126,84 @@ def main() -> int:
     )
     args = parser.parse_args()
 
-    base_config_path = _normalize_path(args.base_config)
-    candidate_report_path = _normalize_path(args.candidate_report)
-    output_dir = _normalize_path(args.output_dir)
-    output_report_path = _normalize_path(args.output_report)
+    try:
+        base_config_path = _normalize_path(args.base_config)
+        candidate_report_path = _normalize_path(args.candidate_report)
+        output_dir = _normalize_path(args.output_dir)
+        output_report_path = _normalize_path(args.output_report)
+        artifact_ensure_output_directory_path(output_dir, label="output dir", workspace_root=ROOT)
+        artifact_ensure_output_file_path(output_report_path, label="output report", workspace_root=ROOT)
 
-    base_config = _load_yaml(base_config_path)
-    payload = _load_json(candidate_report_path)
-    candidates = _candidate_configs(payload)
+        progress = ProgressBar(total=4, prefix="[serving-variants]", logger=log_progress, min_interval_sec=0.0)
+        progress.start(message="loading base config and candidate report")
+        base_config = _load_yaml(base_config_path)
+        payload = _load_json(candidate_report_path)
+        candidates = _candidate_configs(payload)
 
-    output_dir.mkdir(parents=True, exist_ok=True)
-    output_report_path.parent.mkdir(parents=True, exist_ok=True)
+        output_dir.mkdir(parents=True, exist_ok=True)
+        base_stem = base_config_path.stem
+        variant_modes = {
+            "single_policy": "",
+            "hybrid_keep_kelly": "_hybrid_keep_kelly",
+        }
+        generated_variants: list[dict[str, Any]] = []
+        variant_progress = ProgressBar(total=max(len(candidates) * len(variant_modes), 1), prefix="[serving-variants files]", logger=log_progress, min_interval_sec=0.0)
+        variant_progress.start(message="writing serving variants")
+        for candidate_name, policy in candidates.items():
+            for mode, suffix in variant_modes.items():
+                variant_name = f"{base_stem}_{_slugify(candidate_name)}{suffix}"
+                variant_path = output_dir / f"{variant_name}.yaml"
+                variant_config = _variant_config(base_config, policy, mode=mode)
+                write_text_file(
+                    variant_path,
+                    yaml.safe_dump(variant_config, sort_keys=False, allow_unicode=False),
+                    label="variant config",
+                )
+                generated_variants.append(
+                    {
+                        "candidate_name": candidate_name,
+                        "mode": mode,
+                        "config_file": str(variant_path.relative_to(ROOT)),
+                        "policy_name": str(policy.get("name", "")),
+                        "strategy_kind": str(policy.get("strategy_kind", "")),
+                        "evidence_count": int(
+                            ((payload.get("runtime_ready_candidates") or {}).get(candidate_name) or {}).get("evidence_count", 0)
+                        ),
+                    }
+                )
+                variant_progress.update(message=f"{candidate_name}:{mode}")
+        progress.update(message=f"variant files generated count={len(generated_variants)}")
 
-    base_stem = base_config_path.stem
-    variant_modes = {
-        "single_policy": "",
-        "hybrid_keep_kelly": "_hybrid_keep_kelly",
-    }
-    generated_variants: list[dict[str, Any]] = []
-    for candidate_name, policy in candidates.items():
-        for mode, suffix in variant_modes.items():
-            variant_name = f"{base_stem}_{_slugify(candidate_name)}{suffix}"
-            variant_path = output_dir / f"{variant_name}.yaml"
-            variant_config = _variant_config(base_config, policy, mode=mode)
-            with variant_path.open("w", encoding="utf-8") as file:
-                yaml.safe_dump(variant_config, file, sort_keys=False, allow_unicode=False)
-            generated_variants.append(
-                {
-                    "candidate_name": candidate_name,
-                    "mode": mode,
-                    "config_file": str(variant_path.relative_to(ROOT)),
-                    "policy_name": str(policy.get("name", "")),
-                    "strategy_kind": str(policy.get("strategy_kind", "")),
-                    "evidence_count": int(
-                        ((payload.get("runtime_ready_candidates") or {}).get(candidate_name) or {}).get("evidence_count", 0)
-                    ),
-                }
+        report_payload = {
+            "base_config": str(base_config_path.relative_to(ROOT)),
+            "candidate_report": str(candidate_report_path.relative_to(ROOT)),
+            "generated_variants": generated_variants,
+            "notes": [
+                "These variants keep the base model/components and replace serving.policy with a single runtime-ready portfolio candidate.",
+                "single_policy variants remove policy_regime_overrides intentionally so each generated config is a directly loadable single-policy serving probe.",
+                "hybrid_keep_kelly variants keep only the existing Kelly month overrides and swap the default portfolio policy for the candidate.",
+            ],
+        }
+        with Heartbeat("[serving-variants]", "writing variant report", logger=log_progress):
+            write_json(output_report_path, report_payload)
+
+        print(f"saved variant report to {output_report_path.relative_to(ROOT)}")
+        for variant in generated_variants:
+            print(
+                f"generated {variant['candidate_name']} mode={variant['mode']} -> {variant['config_file']} policy={variant['policy_name']}"
             )
-
-    report_payload = {
-        "base_config": str(base_config_path.relative_to(ROOT)),
-        "candidate_report": str(candidate_report_path.relative_to(ROOT)),
-        "generated_variants": generated_variants,
-        "notes": [
-            "These variants keep the base model/components and replace serving.policy with a single runtime-ready portfolio candidate.",
-            "single_policy variants remove policy_regime_overrides intentionally so each generated config is a directly loadable single-policy serving probe.",
-            "hybrid_keep_kelly variants keep only the existing Kelly month overrides and swap the default portfolio policy for the candidate.",
-        ],
-    }
-    with output_report_path.open("w", encoding="utf-8") as file:
-        json.dump(report_payload, file, ensure_ascii=False, indent=2)
-
-    print(f"saved variant report to {output_report_path.relative_to(ROOT)}")
-    for variant in generated_variants:
-        print(
-            f"generated {variant['candidate_name']} mode={variant['mode']} -> {variant['config_file']} policy={variant['policy_name']}"
-        )
-    return 0
+        progress.complete(message="serving variants completed")
+        return 0
+    except KeyboardInterrupt:
+        print("[serving-variants] interrupted by user")
+        return 130
+    except (ValueError, FileNotFoundError, IsADirectoryError, NotADirectoryError, RuntimeError) as error:
+        print(f"[serving-variants] failed: {error}")
+        return 1
+    except Exception as error:
+        print(f"[serving-variants] failed: {error}")
+        traceback.print_exc()
+        return 1
 
 
 if __name__ == "__main__":

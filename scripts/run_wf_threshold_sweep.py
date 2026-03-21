@@ -4,6 +4,8 @@ import argparse
 from collections import Counter
 from pathlib import Path
 import sys
+import time
+import traceback
 from typing import Any
 
 import pandas as pd
@@ -14,8 +16,16 @@ SRC = ROOT / "src"
 if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
-from racing_ml.common.artifacts import read_json, write_json
+from racing_ml.common.artifacts import display_path as artifact_display_path
+from racing_ml.common.artifacts import ensure_output_file_path as artifact_ensure_output_file_path
+from racing_ml.common.artifacts import read_json, write_csv_file, write_json
+from racing_ml.common.progress import Heartbeat, ProgressBar
 from racing_ml.evaluation.policy import PolicyConstraints, apply_selection_mode, evaluate_candidate_gate
+
+
+def log_progress(message: str) -> None:
+    now = time.strftime("%H:%M:%S")
+    print(f"[wf-threshold-sweep {now}] {message}", flush=True)
 
 
 def _parse_int_list(raw: str) -> list[int]:
@@ -362,181 +372,203 @@ def main() -> int:
     parser.add_argument("--summary-csv", default=None)
     args = parser.parse_args()
 
-    summary_path = (ROOT / args.wf_summary).resolve() if not Path(args.wf_summary).is_absolute() else Path(args.wf_summary)
-    detail_csv_path = _resolve_detail_csv(summary_path, args.wf_detail_csv)
-    output_path = (
-        (ROOT / args.output).resolve() if args.output and not Path(args.output).is_absolute() else Path(args.output)
-    ) if args.output else _default_output_path(summary_path)
-    summary_csv_path = (
-        (ROOT / args.summary_csv).resolve() if args.summary_csv and not Path(args.summary_csv).is_absolute() else Path(args.summary_csv)
-    ) if args.summary_csv else _default_csv_output_path(output_path)
+    try:
+        summary_path = (ROOT / args.wf_summary).resolve() if not Path(args.wf_summary).is_absolute() else Path(args.wf_summary)
+        output_path = (
+            (ROOT / args.output).resolve() if args.output and not Path(args.output).is_absolute() else Path(args.output)
+        ) if args.output else _default_output_path(summary_path)
+        summary_csv_path = (
+            (ROOT / args.summary_csv).resolve() if args.summary_csv and not Path(args.summary_csv).is_absolute() else Path(args.summary_csv)
+        ) if args.summary_csv else _default_csv_output_path(output_path)
+        artifact_ensure_output_file_path(output_path, label="output", workspace_root=ROOT)
+        artifact_ensure_output_file_path(summary_csv_path, label="summary csv", workspace_root=ROOT)
+        detail_csv_path = _resolve_detail_csv(summary_path, args.wf_detail_csv)
 
-    wf_summary = _load_summary(summary_path)
-    detail_df = pd.read_csv(detail_csv_path)
-    if "fold" not in detail_df.columns:
-        raise ValueError(f"WF detail CSV does not contain 'fold': {detail_csv_path}")
-    detail_df["fold"] = pd.to_numeric(detail_df["fold"], errors="coerce").fillna(0).astype(int)
+        wf_summary = _load_summary(summary_path)
+        progress = ProgressBar(total=4, prefix="[wf-threshold-sweep]", logger=log_progress, min_interval_sec=0.0)
+        progress.start(message="loading summary and detail")
+        with Heartbeat("[wf-threshold-sweep]", "loading wf inputs", logger=log_progress):
+            detail_df = pd.read_csv(detail_csv_path)
+        if "fold" not in detail_df.columns:
+            raise ValueError(f"WF detail CSV does not contain 'fold': {detail_csv_path}")
+        detail_df["fold"] = pd.to_numeric(detail_df["fold"], errors="coerce").fillna(0).astype(int)
 
-    policy_constraints = wf_summary.get("policy_constraints") if isinstance(wf_summary.get("policy_constraints"), dict) else {}
-    base_constraints = PolicyConstraints(
-        min_bet_ratio=float(policy_constraints.get("min_bet_ratio") or 0.05),
-        min_bets_abs=int(policy_constraints.get("min_bets_abs") or 100),
-        max_drawdown=float(policy_constraints.get("max_drawdown") or 0.40),
-        min_final_bankroll=float(policy_constraints.get("min_final_bankroll") or 0.85),
-        selection_mode=str(policy_constraints.get("selection_mode") or "gate_then_roi"),
-    )
-    min_bets_abs_values = _parse_int_list(args.min_bets_abs_values)
-
-    folds_payload = wf_summary.get("folds") if isinstance(wf_summary.get("folds"), list) else []
-    fold_meta = {
-        int(fold.get("fold") or 0): fold
-        for fold in folds_payload
-        if isinstance(fold, dict) and int(fold.get("fold") or 0) > 0
-    }
-    if not fold_meta:
-        raise ValueError(f"WF summary does not contain fold metadata: {summary_path}")
-    stability_context = _build_stability_context(wf_summary, fold_meta)
-    target_feasible_fold_counts = _parse_target_fold_counts(
-        args.target_feasible_fold_counts,
-        max_fold_count=len(fold_meta),
-    )
-
-    analyses: list[dict[str, Any]] = []
-    preview_rows: list[dict[str, Any]] = []
-    for min_bets_abs in min_bets_abs_values:
-        sweep_constraints = PolicyConstraints(
-            min_bet_ratio=base_constraints.min_bet_ratio,
-            min_bets_abs=int(min_bets_abs),
-            max_drawdown=base_constraints.max_drawdown,
-            min_final_bankroll=base_constraints.min_final_bankroll,
-            selection_mode=base_constraints.selection_mode,
+        policy_constraints = wf_summary.get("policy_constraints") if isinstance(wf_summary.get("policy_constraints"), dict) else {}
+        base_constraints = PolicyConstraints(
+            min_bet_ratio=float(policy_constraints.get("min_bet_ratio") or 0.05),
+            min_bets_abs=int(policy_constraints.get("min_bets_abs") or 100),
+            max_drawdown=float(policy_constraints.get("max_drawdown") or 0.40),
+            min_final_bankroll=float(policy_constraints.get("min_final_bankroll") or 0.85),
+            selection_mode=str(policy_constraints.get("selection_mode") or "gate_then_roi"),
         )
-        analysis = _analyze_threshold(
-            detail_df,
-            fold_meta,
-            constraints=sweep_constraints,
-            min_feasible_folds=int(args.min_feasible_folds),
+        min_bets_abs_values = _parse_int_list(args.min_bets_abs_values)
+
+        folds_payload = wf_summary.get("folds") if isinstance(wf_summary.get("folds"), list) else []
+        fold_meta = {
+            int(fold.get("fold") or 0): fold
+            for fold in folds_payload
+            if isinstance(fold, dict) and int(fold.get("fold") or 0) > 0
+        }
+        if not fold_meta:
+            raise ValueError(f"WF summary does not contain fold metadata: {summary_path}")
+        stability_context = _build_stability_context(wf_summary, fold_meta)
+        target_feasible_fold_counts = _parse_target_fold_counts(
+            args.target_feasible_fold_counts,
+            max_fold_count=len(fold_meta),
         )
-        analyses.append(analysis)
-        preview_rows.append(
-            {
-                "min_bets_abs": int(min_bets_abs),
-                "feasible_fold_count": int(analysis["feasible_fold_count"]),
-                "blocked_fold_count": int(analysis["blocked_fold_count"]),
-                "passes_min_feasible_folds_preview": bool(analysis["passes_min_feasible_folds_preview"]),
-                "dominant_failure_reason": analysis.get("dominant_failure_reason"),
-                "dominant_failure_count": int(analysis.get("dominant_failure_count") or 0),
-                "binding_min_bets_source_counts": str(analysis.get("binding_min_bets_source_counts") or {}),
-                "feasible_folds": ",".join(str(fold) for fold in analysis.get("feasible_folds") or []),
-            }
-        )
-        for target_fold_count in target_feasible_fold_counts:
-            preview_rows[-1][f"passes_{target_fold_count}_feasible_folds"] = bool(
-                int(analysis["feasible_fold_count"]) >= int(target_fold_count)
+        progress.update(message=f"inputs ready thresholds={len(min_bets_abs_values)} folds={len(fold_meta)}")
+
+        analyses: list[dict[str, Any]] = []
+        preview_rows: list[dict[str, Any]] = []
+        analysis_progress = ProgressBar(total=max(len(min_bets_abs_values), 1), prefix="[wf-threshold-sweep runs]", logger=log_progress, min_interval_sec=0.0)
+        analysis_progress.start(message="evaluating thresholds")
+        for min_bets_abs in min_bets_abs_values:
+            sweep_constraints = PolicyConstraints(
+                min_bet_ratio=base_constraints.min_bet_ratio,
+                min_bets_abs=int(min_bets_abs),
+                max_drawdown=base_constraints.max_drawdown,
+                min_final_bankroll=base_constraints.min_final_bankroll,
+                selection_mode=base_constraints.selection_mode,
             )
+            analysis = _analyze_threshold(
+                detail_df,
+                fold_meta,
+                constraints=sweep_constraints,
+                min_feasible_folds=int(args.min_feasible_folds),
+            )
+            analyses.append(analysis)
+            preview_rows.append(
+                {
+                    "min_bets_abs": int(min_bets_abs),
+                    "feasible_fold_count": int(analysis["feasible_fold_count"]),
+                    "blocked_fold_count": int(analysis["blocked_fold_count"]),
+                    "passes_min_feasible_folds_preview": bool(analysis["passes_min_feasible_folds_preview"]),
+                    "dominant_failure_reason": analysis.get("dominant_failure_reason"),
+                    "dominant_failure_count": int(analysis.get("dominant_failure_count") or 0),
+                    "binding_min_bets_source_counts": str(analysis.get("binding_min_bets_source_counts") or {}),
+                    "feasible_folds": ",".join(str(fold) for fold in analysis.get("feasible_folds") or []),
+                }
+            )
+            for target_fold_count in target_feasible_fold_counts:
+                preview_rows[-1][f"passes_{target_fold_count}_feasible_folds"] = bool(
+                    int(analysis["feasible_fold_count"]) >= int(target_fold_count)
+                )
+            analysis_progress.update(message=f"min_bets_abs={min_bets_abs} feasible={analysis['feasible_fold_count']}")
+        progress.update(message="threshold analyses completed")
 
-    previous_analysis: dict[str, Any] | None = None
-    for analysis in sorted(analyses, key=lambda item: int(item["policy_constraints"]["min_bets_abs"]), reverse=True):
-        if previous_analysis is None:
-            analysis["threshold_transition_from_previous"] = None
-        else:
-            prev_folds = set(int(fold) for fold in previous_analysis.get("feasible_folds") or [])
-            curr_folds = set(int(fold) for fold in analysis.get("feasible_folds") or [])
-            prev_signatures = previous_analysis.get("best_feasible_signature_by_fold") or {}
-            curr_signatures = analysis.get("best_feasible_signature_by_fold") or {}
-            changed_folds: list[int] = []
-            for fold in sorted(curr_folds & prev_folds):
-                if curr_signatures.get(str(fold)) != prev_signatures.get(str(fold)):
-                    changed_folds.append(int(fold))
-            analysis["threshold_transition_from_previous"] = {
-                "previous_min_bets_abs": int(previous_analysis["policy_constraints"]["min_bets_abs"]),
-                "newly_feasible_folds": sorted(int(fold) for fold in (curr_folds - prev_folds)),
-                "dropped_feasible_folds": sorted(int(fold) for fold in (prev_folds - curr_folds)),
-                "best_feasible_changed_folds": changed_folds,
-                "feasible_candidate_count_delta": int(analysis.get("feasible_candidate_count_total") or 0)
-                - int(previous_analysis.get("feasible_candidate_count_total") or 0),
-            }
-        previous_analysis = analysis
+        previous_analysis: dict[str, Any] | None = None
+        for analysis in sorted(analyses, key=lambda item: int(item["policy_constraints"]["min_bets_abs"]), reverse=True):
+            if previous_analysis is None:
+                analysis["threshold_transition_from_previous"] = None
+            else:
+                prev_folds = set(int(fold) for fold in previous_analysis.get("feasible_folds") or [])
+                curr_folds = set(int(fold) for fold in analysis.get("feasible_folds") or [])
+                prev_signatures = previous_analysis.get("best_feasible_signature_by_fold") or {}
+                curr_signatures = analysis.get("best_feasible_signature_by_fold") or {}
+                changed_folds: list[int] = []
+                for fold in sorted(curr_folds & prev_folds):
+                    if curr_signatures.get(str(fold)) != prev_signatures.get(str(fold)):
+                        changed_folds.append(int(fold))
+                analysis["threshold_transition_from_previous"] = {
+                    "previous_min_bets_abs": int(previous_analysis["policy_constraints"]["min_bets_abs"]),
+                    "newly_feasible_folds": sorted(int(fold) for fold in (curr_folds - prev_folds)),
+                    "dropped_feasible_folds": sorted(int(fold) for fold in (prev_folds - curr_folds)),
+                    "best_feasible_changed_folds": changed_folds,
+                    "feasible_candidate_count_delta": int(analysis.get("feasible_candidate_count_total") or 0)
+                    - int(previous_analysis.get("feasible_candidate_count_total") or 0),
+                }
+            previous_analysis = analysis
 
-    threshold_to_feasible = {
-        int(analysis["policy_constraints"]["min_bets_abs"]): int(analysis["feasible_fold_count"])
-        for analysis in analyses
-    }
-    fold_first_feasible_threshold: dict[str, int | None] = {}
-    for fold_index in sorted(fold_meta):
-        first_threshold: int | None = None
-        for analysis in sorted(analyses, key=lambda item: int(item["policy_constraints"]["min_bets_abs"])):
-            fold_summary = next((fold for fold in analysis.get("folds", []) if int(fold.get("fold") or 0) == fold_index), None)
-            if isinstance(fold_summary, dict) and int(fold_summary.get("feasible_candidates") or 0) > 0:
-                first_threshold = int(analysis["policy_constraints"]["min_bets_abs"])
-                break
-        fold_first_feasible_threshold[str(fold_index)] = first_threshold
+        threshold_to_feasible = {
+            int(analysis["policy_constraints"]["min_bets_abs"]): int(analysis["feasible_fold_count"])
+            for analysis in analyses
+        }
+        fold_first_feasible_threshold: dict[str, int | None] = {}
+        for fold_index in sorted(fold_meta):
+            first_threshold: int | None = None
+            for analysis in sorted(analyses, key=lambda item: int(item["policy_constraints"]["min_bets_abs"])):
+                fold_summary = next((fold for fold in analysis.get("folds", []) if int(fold.get("fold") or 0) == fold_index), None)
+                if isinstance(fold_summary, dict) and int(fold_summary.get("feasible_candidates") or 0) > 0:
+                    first_threshold = int(analysis["policy_constraints"]["min_bets_abs"])
+                    break
+            fold_first_feasible_threshold[str(fold_index)] = first_threshold
 
-    first_threshold_with_any_feasible_fold = next(
-        (
-            int(analysis["policy_constraints"]["min_bets_abs"])
-            for analysis in sorted(analyses, key=lambda item: int(item["policy_constraints"]["min_bets_abs"]))
-            if int(analysis.get("feasible_fold_count") or 0) > 0
-        ),
-        None,
-    )
-    first_threshold_passing_preview = next(
-        (
-            int(analysis["policy_constraints"]["min_bets_abs"])
-            for analysis in sorted(analyses, key=lambda item: int(item["policy_constraints"]["min_bets_abs"]))
-            if bool(analysis.get("passes_min_feasible_folds_preview"))
-        ),
-        None,
-    )
-    strictest_threshold_passing_feasible_fold_targets: dict[str, int | None] = {}
-    for target_fold_count in target_feasible_fold_counts:
-        strictest_threshold_passing_feasible_fold_targets[str(target_fold_count)] = next(
+        first_threshold_with_any_feasible_fold = next(
             (
                 int(analysis["policy_constraints"]["min_bets_abs"])
-                for analysis in sorted(
-                    analyses,
-                    key=lambda item: int(item["policy_constraints"]["min_bets_abs"]),
-                    reverse=True,
-                )
-                if int(analysis.get("feasible_fold_count") or 0) >= int(target_fold_count)
+                for analysis in sorted(analyses, key=lambda item: int(item["policy_constraints"]["min_bets_abs"]))
+                if int(analysis.get("feasible_fold_count") or 0) > 0
             ),
             None,
         )
-
-    report = {
-        "run_context": {
-            "wf_summary": str(summary_path.relative_to(ROOT)),
-            "wf_detail_csv": str(detail_csv_path.relative_to(ROOT)),
-            "min_bets_abs_values": min_bets_abs_values,
-            "min_feasible_folds_preview": int(args.min_feasible_folds),
-            "target_feasible_fold_counts": target_feasible_fold_counts,
-        },
-        "source_run_context": wf_summary.get("run_context"),
-        "stability_context": stability_context,
-        "baseline_policy_constraints": base_constraints.to_dict(),
-        "feasible_fold_counts_by_threshold": threshold_to_feasible,
-        "first_threshold_with_any_feasible_fold": first_threshold_with_any_feasible_fold,
-        "first_threshold_passing_min_feasible_folds_preview": first_threshold_passing_preview,
-        "strictest_threshold_passing_feasible_fold_targets": strictest_threshold_passing_feasible_fold_targets,
-        "fold_first_feasible_min_bets_abs": fold_first_feasible_threshold,
-        "threshold_analyses": analyses,
-    }
-
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-    write_json(output_path, report)
-    pd.DataFrame(preview_rows).to_csv(summary_csv_path, index=False)
-
-    print(f"saved sweep report to {output_path.relative_to(ROOT)}")
-    print(f"saved sweep table to {summary_csv_path.relative_to(ROOT)}")
-    for warning in stability_context.get("warnings") or []:
-        print(f"warning={warning}")
-    for row in preview_rows:
-        print(
-            "min_bets_abs={min_bets_abs} feasible_folds={feasible_fold_count} blocked_folds={blocked_fold_count} "
-            "passes_preview={passes_min_feasible_folds_preview} dominant_failure={dominant_failure_reason}".format(**row)
+        first_threshold_passing_preview = next(
+            (
+                int(analysis["policy_constraints"]["min_bets_abs"])
+                for analysis in sorted(analyses, key=lambda item: int(item["policy_constraints"]["min_bets_abs"]))
+                if bool(analysis.get("passes_min_feasible_folds_preview"))
+            ),
+            None,
         )
-    print(f"strictest_threshold_passing_feasible_fold_targets={strictest_threshold_passing_feasible_fold_targets}")
-    return 0
+        strictest_threshold_passing_feasible_fold_targets: dict[str, int | None] = {}
+        for target_fold_count in target_feasible_fold_counts:
+            strictest_threshold_passing_feasible_fold_targets[str(target_fold_count)] = next(
+                (
+                    int(analysis["policy_constraints"]["min_bets_abs"])
+                    for analysis in sorted(
+                        analyses,
+                        key=lambda item: int(item["policy_constraints"]["min_bets_abs"]),
+                        reverse=True,
+                    )
+                    if int(analysis.get("feasible_fold_count") or 0) >= int(target_fold_count)
+                ),
+                None,
+            )
+
+        report = {
+            "run_context": {
+                "wf_summary": str(summary_path.relative_to(ROOT)),
+                "wf_detail_csv": str(detail_csv_path.relative_to(ROOT)),
+                "min_bets_abs_values": min_bets_abs_values,
+                "min_feasible_folds_preview": int(args.min_feasible_folds),
+                "target_feasible_fold_counts": target_feasible_fold_counts,
+            },
+            "source_run_context": wf_summary.get("run_context"),
+            "stability_context": stability_context,
+            "baseline_policy_constraints": base_constraints.to_dict(),
+            "feasible_fold_counts_by_threshold": threshold_to_feasible,
+            "first_threshold_with_any_feasible_fold": first_threshold_with_any_feasible_fold,
+            "first_threshold_passing_min_feasible_folds_preview": first_threshold_passing_preview,
+            "strictest_threshold_passing_feasible_fold_targets": strictest_threshold_passing_feasible_fold_targets,
+            "fold_first_feasible_min_bets_abs": fold_first_feasible_threshold,
+            "threshold_analyses": analyses,
+        }
+
+        with Heartbeat("[wf-threshold-sweep]", "writing sweep outputs", logger=log_progress):
+            write_json(output_path, report)
+            write_csv_file(summary_csv_path, pd.DataFrame(preview_rows), index=False)
+
+        print(f"saved sweep report to {output_path.relative_to(ROOT)}")
+        print(f"saved sweep table to {summary_csv_path.relative_to(ROOT)}")
+        for warning in stability_context.get("warnings") or []:
+            print(f"warning={warning}")
+        for row in preview_rows:
+            print(
+                "min_bets_abs={min_bets_abs} feasible_folds={feasible_fold_count} blocked_folds={blocked_fold_count} "
+                "passes_preview={passes_min_feasible_folds_preview} dominant_failure={dominant_failure_reason}".format(**row)
+            )
+        print(f"strictest_threshold_passing_feasible_fold_targets={strictest_threshold_passing_feasible_fold_targets}")
+        progress.complete(message="threshold sweep completed")
+        return 0
+    except KeyboardInterrupt:
+        print("[wf-threshold-sweep] interrupted by user")
+        return 130
+    except (ValueError, FileNotFoundError, IsADirectoryError, RuntimeError) as error:
+        print(f"[wf-threshold-sweep] failed: {error}")
+        return 1
+    except Exception as error:
+        print(f"[wf-threshold-sweep] failed: {error}")
+        traceback.print_exc()
+        return 1
 
 
 if __name__ == "__main__":

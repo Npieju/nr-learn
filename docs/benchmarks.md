@@ -4,6 +4,9 @@
 
 この文書は、`nr-learn` で何を良い結果とみなすかを定義するための正本である。
 
+日常運用の区切り方や `revision` の切り方は、[development_flow.md](development_flow.md) を参照する。
+formal な evaluation 導線は、[evaluation_guide.md](evaluation_guide.md) を参照する。
+
 ここで決めるのは次の 3 点である。
 
 1. 何の指標で評価するか。
@@ -107,6 +110,8 @@ actual calendar の比較では、次を確認する。
 
 - summary から復元した serving ルールが、実日付でも同じように動くか確認できるため。
 - nested 上の改善が、actual calendar でも意味を持つかを見られるため。
+
+ただし、短い serving validation は smoke / probe であり、正式な採用判断は `stability_assessment=representative` と promotion gate を通した revision 単位で行う。
 
 ## 8. 採用ルール
 

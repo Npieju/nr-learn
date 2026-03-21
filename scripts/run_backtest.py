@@ -54,6 +54,9 @@ def main() -> int:
     except KeyboardInterrupt:
         print("[backtest] interrupted by user")
         return 130
+    except (ValueError, FileNotFoundError, IsADirectoryError) as error:
+        print(f"[backtest] failed: {error}")
+        return 1
     except Exception as error:
         print(f"[backtest] failed: {error}")
         traceback.print_exc()

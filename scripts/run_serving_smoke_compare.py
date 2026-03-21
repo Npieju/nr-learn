@@ -17,6 +17,9 @@ SRC = ROOT / "src"
 if str(SRC) not in sys.path:
     sys.path.append(str(SRC))
 
+from racing_ml.common.artifacts import display_path as artifact_display_path
+from racing_ml.common.artifacts import ensure_output_file_path as artifact_ensure_output_file_path
+from racing_ml.common.artifacts import write_csv_file, write_text_file
 from racing_ml.common.progress import Heartbeat, ProgressBar
 
 
@@ -30,13 +33,6 @@ def _resolve_path(path_value: str | Path) -> Path:
     if path.is_absolute():
         return path
     return ROOT / path
-
-
-def _display_path(path: Path) -> str:
-    try:
-        return path.relative_to(ROOT).as_posix()
-    except ValueError:
-        return path.as_posix()
 
 
 def _load_summary(path_value: str | Path) -> dict[str, Any]:
@@ -214,8 +210,8 @@ def main() -> int:
         right_summary_path = _resolve_path(args.right_summary)
         progress.start(
             message=(
-                f"loading left={_display_path(left_summary_path)} "
-                f"right={_display_path(right_summary_path)}"
+                f"loading left={artifact_display_path(left_summary_path, workspace_root=ROOT)} "
+                f"right={artifact_display_path(right_summary_path, workspace_root=ROOT)}"
             )
         )
         with Heartbeat("[serving-smoke-compare]", "loading summaries", logger=log_progress):
@@ -229,6 +225,8 @@ def main() -> int:
 
         output_json = _resolve_path(args.output_json) if args.output_json else ROOT / "artifacts" / "reports" / f"serving_smoke_compare_{left_slug}_vs_{right_slug}.json"
         output_csv = _resolve_path(args.output_csv) if args.output_csv else ROOT / "artifacts" / "reports" / f"serving_smoke_compare_{left_slug}_vs_{right_slug}.csv"
+        artifact_ensure_output_file_path(output_json, label="output json", workspace_root=ROOT)
+        artifact_ensure_output_file_path(output_csv, label="output csv", workspace_root=ROOT)
         progress.update(message=f"summaries loaded left={left_label} right={right_label}")
 
         with Heartbeat("[serving-smoke-compare]", "building comparison summary", logger=log_progress):
@@ -277,14 +275,14 @@ def main() -> int:
         summary = {
             "left": {
                 "label": left_label,
-                "summary_file": _display_path(left_summary_path),
+                "summary_file": artifact_display_path(left_summary_path, workspace_root=ROOT),
                 "profile": left_summary.get("profile"),
                 "config_file": left_summary.get("config_file"),
                 "num_cases": len(left_cases),
             },
             "right": {
                 "label": right_label,
-                "summary_file": _display_path(right_summary_path),
+                "summary_file": artifact_display_path(right_summary_path, workspace_root=ROOT),
                 "profile": right_summary.get("profile"),
                 "config_file": right_summary.get("config_file"),
                 "num_cases": len(right_cases),
@@ -333,14 +331,13 @@ def main() -> int:
         }
 
         with Heartbeat("[serving-smoke-compare]", "writing comparison outputs", logger=log_progress):
-            output_json.parent.mkdir(parents=True, exist_ok=True)
-            output_json.write_text(json.dumps(summary, ensure_ascii=False, indent=2), encoding="utf-8")
-            pd.DataFrame(rows).to_csv(output_csv, index=False)
-        progress.update(message=f"outputs saved json={_display_path(output_json)} csv={_display_path(output_csv)}")
+            write_text_file(output_json, json.dumps(summary, ensure_ascii=False, indent=2), label="output json")
+            write_csv_file(output_csv, pd.DataFrame(rows), index=False, label="output csv")
+        progress.update(message=f"outputs saved json={artifact_display_path(output_json, workspace_root=ROOT)} csv={artifact_display_path(output_csv, workspace_root=ROOT)}")
         progress.complete(message="comparison flow finished")
 
-        print(f"[serving-smoke-compare] json saved: {_display_path(output_json)}")
-        print(f"[serving-smoke-compare] csv saved: {_display_path(output_csv)}")
+        print(f"[serving-smoke-compare] json saved: {artifact_display_path(output_json, workspace_root=ROOT)}")
+        print(f"[serving-smoke-compare] csv saved: {artifact_display_path(output_csv, workspace_root=ROOT)}")
         print(f"[serving-smoke-compare] shared_dates={shared_dates}")
         print(f"[serving-smoke-compare] differing_score_source_dates={differing_score_source_dates}")
         print(f"[serving-smoke-compare] differing_policy_dates={differing_policy_dates}")
@@ -362,6 +359,9 @@ def main() -> int:
     except KeyboardInterrupt:
         print("[serving-smoke-compare] interrupted by user")
         return 130
+    except (ValueError, FileNotFoundError, IsADirectoryError) as error:
+        print(f"[serving-smoke-compare] failed: {error}")
+        return 1
     except Exception as error:
         print(f"[serving-smoke-compare] failed: {error}")
         traceback.print_exc()

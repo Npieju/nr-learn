@@ -4,6 +4,8 @@ import argparse
 from collections import Counter
 from pathlib import Path
 import sys
+import time
+import traceback
 from typing import Any
 
 import pandas as pd
@@ -14,8 +16,16 @@ SRC = ROOT / "src"
 if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
-from racing_ml.common.artifacts import read_json, write_json
+from racing_ml.common.artifacts import display_path as artifact_display_path
+from racing_ml.common.artifacts import ensure_output_file_path as artifact_ensure_output_file_path
+from racing_ml.common.artifacts import read_json, write_csv_file, write_json
+from racing_ml.common.progress import Heartbeat, ProgressBar
 from racing_ml.evaluation.policy import PolicyConstraints, apply_selection_mode, evaluate_candidate_gate
+
+
+def log_progress(message: str) -> None:
+    now = time.strftime("%H:%M:%S")
+    print(f"[wf-threshold-compare {now}] {message}", flush=True)
 
 
 def _parse_path_list(raw_values: list[str]) -> list[Path]:
@@ -557,34 +567,53 @@ def main() -> int:
     parser.add_argument("--fold-summary-csv", default=None)
     args = parser.parse_args()
 
-    report_paths = _parse_path_list(args.reports)
-    thresholds = _parse_thresholds(args.thresholds)
-    output_path = Path(args.output)
-    if not output_path.is_absolute():
-        output_path = (ROOT / output_path).resolve()
-    summary_csv_path = Path(args.summary_csv)
-    if not summary_csv_path.is_absolute():
-        summary_csv_path = (ROOT / summary_csv_path).resolve()
-    fold_summary_csv_path = Path(args.fold_summary_csv) if args.fold_summary_csv else summary_csv_path.with_name(f"{summary_csv_path.stem}_folds.csv")
-    if not fold_summary_csv_path.is_absolute():
-        fold_summary_csv_path = (ROOT / fold_summary_csv_path).resolve()
+    try:
+        report_paths = _parse_path_list(args.reports)
+        thresholds = _parse_thresholds(args.thresholds)
+        output_path = Path(args.output)
+        if not output_path.is_absolute():
+            output_path = (ROOT / output_path).resolve()
+        summary_csv_path = Path(args.summary_csv)
+        if not summary_csv_path.is_absolute():
+            summary_csv_path = (ROOT / summary_csv_path).resolve()
+        fold_summary_csv_path = Path(args.fold_summary_csv) if args.fold_summary_csv else summary_csv_path.with_name(f"{summary_csv_path.stem}_folds.csv")
+        if not fold_summary_csv_path.is_absolute():
+            fold_summary_csv_path = (ROOT / fold_summary_csv_path).resolve()
+        artifact_ensure_output_file_path(output_path, label="output", workspace_root=ROOT)
+        artifact_ensure_output_file_path(summary_csv_path, label="summary csv", workspace_root=ROOT)
+        artifact_ensure_output_file_path(fold_summary_csv_path, label="fold summary csv", workspace_root=ROOT)
 
-    comparison, threshold_df = _build_comparison(report_paths, thresholds)
-    fold_df = pd.DataFrame(comparison.get("fold_snapshots") or [])
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-    write_json(output_path, comparison)
-    threshold_df.to_csv(summary_csv_path, index=False)
-    fold_df.to_csv(fold_summary_csv_path, index=False)
+        progress = ProgressBar(total=3, prefix="[wf-threshold-compare]", logger=log_progress, min_interval_sec=0.0)
+        progress.start(message=f"comparing reports={len(report_paths)} thresholds={len(thresholds)}")
+        with Heartbeat("[wf-threshold-compare]", "building threshold comparison", logger=log_progress):
+            comparison, threshold_df = _build_comparison(report_paths, thresholds)
+        fold_df = pd.DataFrame(comparison.get("fold_snapshots") or [])
+        progress.update(message=f"comparison built rows={len(threshold_df)} fold_rows={len(fold_df)}")
+        with Heartbeat("[wf-threshold-compare]", "writing comparison outputs", logger=log_progress):
+            write_json(output_path, comparison)
+            write_csv_file(summary_csv_path, threshold_df, index=False)
+            write_csv_file(fold_summary_csv_path, fold_df, index=False)
 
-    print(f"saved threshold comparison to {output_path.relative_to(ROOT)}")
-    print(f"saved threshold comparison table to {summary_csv_path.relative_to(ROOT)}")
-    print(f"saved threshold fold table to {fold_summary_csv_path.relative_to(ROOT)}")
-    for report in comparison.get("reports") or []:
-        print(
-            "label={label} strictest1={strictest_for_1_fold} strictest3={strictest_for_3_folds} "
-            "strictest5={strictest_for_5_folds} warnings={warning_count}".format(**report)
-        )
-    return 0
+        print(f"saved threshold comparison to {output_path.relative_to(ROOT)}")
+        print(f"saved threshold comparison table to {summary_csv_path.relative_to(ROOT)}")
+        print(f"saved threshold fold table to {fold_summary_csv_path.relative_to(ROOT)}")
+        for report in comparison.get("reports") or []:
+            print(
+                "label={label} strictest1={strictest_for_1_fold} strictest3={strictest_for_3_folds} "
+                "strictest5={strictest_for_5_folds} warnings={warning_count}".format(**report)
+            )
+        progress.complete(message="threshold comparison completed")
+        return 0
+    except KeyboardInterrupt:
+        print("[wf-threshold-compare] interrupted by user")
+        return 130
+    except (ValueError, FileNotFoundError, IsADirectoryError, RuntimeError) as error:
+        print(f"[wf-threshold-compare] failed: {error}")
+        return 1
+    except Exception as error:
+        print(f"[wf-threshold-compare] failed: {error}")
+        traceback.print_exc()
+        return 1
 
 
 if __name__ == "__main__":

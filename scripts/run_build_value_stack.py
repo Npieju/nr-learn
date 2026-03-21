@@ -1,6 +1,7 @@
 import argparse
 from pathlib import Path
 import sys
+import time
 import traceback
 
 import joblib
@@ -10,11 +11,16 @@ SRC = ROOT / "src"
 if str(SRC) not in sys.path:
     sys.path.append(str(SRC))
 
-from racing_ml.common.artifacts import build_model_manifest, build_training_report_payload, resolve_output_artifacts, write_json
+from racing_ml.common.artifacts import build_model_manifest, build_training_report_payload, display_path as artifact_display_path, dump_joblib_file, ensure_output_file_path as artifact_ensure_output_file_path, resolve_output_artifacts, write_json
 from racing_ml.common.config import load_yaml
 from racing_ml.common.progress import Heartbeat, ProgressBar
 from racing_ml.evaluation.policy import PolicyConstraints
 from racing_ml.models.value_blend import build_value_blend_bundle, load_component_from_config
+
+
+def log_progress(message: str) -> None:
+    now = time.strftime("%H:%M:%S")
+    print(f"[value-stack {now}] {message}", flush=True)
 
 
 def main() -> int:
@@ -26,7 +32,7 @@ def main() -> int:
 
     try:
         config = load_yaml(ROOT / args.config)
-        progress = ProgressBar(total=4, prefix="[value-stack]", min_interval_sec=0.0)
+        progress = ProgressBar(total=4, prefix="[value-stack]", logger=log_progress, min_interval_sec=0.0)
         progress.start("config loaded")
         components_cfg = config.get("components", {})
         output_cfg = config.get("output", {})
@@ -59,11 +65,12 @@ def main() -> int:
         model_path = ROOT / output_artifacts.model_path
         report_path = ROOT / output_artifacts.report_path
         manifest_path = ROOT / output_artifacts.manifest_path
-        model_path.parent.mkdir(parents=True, exist_ok=True)
-        report_path.parent.mkdir(parents=True, exist_ok=True)
+        artifact_ensure_output_file_path(model_path, label="model output", workspace_root=ROOT)
+        artifact_ensure_output_file_path(report_path, label="report output", workspace_root=ROOT)
+        artifact_ensure_output_file_path(manifest_path, label="manifest output", workspace_root=ROOT)
 
         with Heartbeat("[value-stack]", "writing stack artifact"):
-            joblib.dump(model_bundle, model_path)
+            dump_joblib_file(model_path, model_bundle, label="model output")
         progress.update(message="stack artifact written")
 
         component_names = list(model_bundle.get("component_metadata", {}).keys())
@@ -135,6 +142,9 @@ def main() -> int:
     except KeyboardInterrupt:
         print("[value-stack] interrupted by user")
         return 130
+    except (ValueError, FileNotFoundError, IsADirectoryError, RuntimeError) as error:
+        print(f"[value-stack] failed: {error}")
+        return 1
     except Exception as error:
         print(f"[value-stack] failed: {error}")
         traceback.print_exc()

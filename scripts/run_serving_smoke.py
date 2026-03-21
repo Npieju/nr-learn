@@ -17,6 +17,9 @@ if str(SRC) not in sys.path:
 
 import pandas as pd
 
+from racing_ml.common.artifacts import display_path as artifact_display_path
+from racing_ml.common.artifacts import ensure_output_file_path as artifact_ensure_output_file_path
+from racing_ml.common.artifacts import write_json
 from racing_ml.common.config import load_yaml
 from racing_ml.common.model_profiles import MODEL_RUN_PROFILES
 from racing_ml.common.progress import Heartbeat, ProgressBar
@@ -500,13 +503,6 @@ def _release_run_lock(lock_path: Path) -> None:
         lock_path.unlink(missing_ok=True)
 
 
-def _display_path(path: Path) -> str:
-    try:
-        return path.relative_to(ROOT).as_posix()
-    except ValueError:
-        return path.as_posix()
-
-
 def _date_tag(date_value: str) -> str:
     return pd.Timestamp(date_value).strftime("%Y%m%d")
 
@@ -534,7 +530,7 @@ def _copy_with_suffix(path: Path, suffix: str) -> str | None:
         return None
     destination = path.with_name(f"{path.stem}_{suffix}{path.suffix}")
     shutil.copy2(path, destination)
-    return _display_path(destination)
+    return artifact_display_path(destination, workspace_root=ROOT)
 
 
 def _single_value(values: list[str], label: str) -> str:
@@ -721,26 +717,26 @@ def main() -> int:
     lock_acquired = False
 
     try:
+        artifact_ensure_output_file_path(output_file, label="output file", workspace_root=ROOT)
         progress = ProgressBar(total=4, prefix="[serving-smoke]", logger=log_progress, min_interval_sec=0.0)
         progress.start(
             message=(
                 f"acquiring run lock profile={args.profile} resolved_profile={resolved_profile} "
-                f"output={_display_path(output_file)}"
+                f"output={artifact_display_path(output_file, workspace_root=ROOT)}"
             )
         )
         _acquire_run_lock(LOCK_FILE)
         lock_acquired = True
-        log_progress(f"run lock acquired path={_display_path(LOCK_FILE)}")
+        log_progress(f"run lock acquired path={artifact_display_path(LOCK_FILE, workspace_root=ROOT)}")
         model_config = load_yaml(config_path)
         cases = _select_cases(resolved_profile, args.date, model_config)
-        output_file.parent.mkdir(parents=True, exist_ok=True)
         os.chdir(ROOT)
         progress.update(message=f"profile resolved cases={len(cases)} artifact_suffix={artifact_suffix} backend={args.prediction_backend}")
 
         shared_frame = None
         if args.prediction_backend == "fresh":
             with Heartbeat("[serving-smoke]", "preparing shared prediction frame", logger=log_progress):
-                shared_frame = prepare_prediction_frame(_display_path(data_config_path))
+                shared_frame = prepare_prediction_frame(artifact_display_path(data_config_path, workspace_root=ROOT))
             print(
                 f"[serving-smoke] shared frame ready rows={len(shared_frame):,} columns={len(shared_frame.columns):,}",
                 flush=True,
@@ -774,15 +770,18 @@ def main() -> int:
             try:
                 if args.prediction_backend == "fresh":
                     run_predict_from_frame(
-                        model_config_path=_display_path(config_path),
-                        feature_config_path=_display_path(feature_config_path),
+                        model_config_path=artifact_display_path(config_path, workspace_root=ROOT),
+                        feature_config_path=artifact_display_path(feature_config_path, workspace_root=ROOT),
                         frame=shared_frame,
                         race_date=case["date"],
                     )
                     if not prediction_csv.exists():
                         raise FileNotFoundError(f"Prediction artifact not found: {prediction_csv}")
 
-                    run_backtest(_display_path(config_path), _display_path(prediction_csv))
+                    run_backtest(
+                        artifact_display_path(config_path, workspace_root=ROOT),
+                        artifact_display_path(prediction_csv, workspace_root=ROOT),
+                    )
                     if not backtest_json.exists():
                         raise FileNotFoundError(f"Backtest artifact not found: {backtest_json}")
                 else:
@@ -824,15 +823,15 @@ def main() -> int:
                         archived_artifacts = {
                             "prediction_csv": _copy_with_suffix(prediction_csv, artifact_suffix),
                             "prediction_png": _copy_with_suffix(prediction_png, artifact_suffix),
-                            "backtest_json": _display_path(backtest_json),
-                            "backtest_png": _display_path(backtest_png),
+                            "backtest_json": artifact_display_path(backtest_json, workspace_root=ROOT),
+                            "backtest_png": artifact_display_path(backtest_png, workspace_root=ROOT),
                         }
 
                 case_result.update(
                     {
                         "status": "ok",
-                        "prediction_file": _display_path(prediction_csv),
-                        "backtest_file": _display_path(backtest_json),
+                        "prediction_file": artifact_display_path(prediction_csv, workspace_root=ROOT),
+                        "backtest_file": artifact_display_path(backtest_json, workspace_root=ROOT),
                         "score_source": prediction_summary["score_source"],
                         "policy_name": str(backtest_summary.get("policy_name", "")),
                         "policy_selected_rows": int(backtest_summary.get("policy_selected_rows", 0) or 0),
@@ -861,20 +860,25 @@ def main() -> int:
         summary = {
             "profile": args.profile,
             "resolved_profile": resolved_profile,
-            "config_file": _display_path(config_path),
-            "data_config_file": _display_path(data_config_path),
-            "feature_config_file": _display_path(feature_config_path),
+            "config_file": artifact_display_path(config_path, workspace_root=ROOT),
+            "data_config_file": artifact_display_path(data_config_path, workspace_root=ROOT),
+            "feature_config_file": artifact_display_path(feature_config_path, workspace_root=ROOT),
             "artifact_suffix": artifact_suffix,
             "cases": results,
         }
         with Heartbeat("[serving-smoke]", "writing summary output", logger=log_progress):
-            output_file.write_text(json.dumps(summary, ensure_ascii=False, indent=2), encoding="utf-8")
-        progress.complete(message=f"summary saved path={_display_path(output_file)}")
-        print(f"[serving-smoke] summary saved: {_display_path(output_file)}", flush=True)
+            write_json(output_file, summary)
+        progress.complete(message=f"summary saved path={artifact_display_path(output_file, workspace_root=ROOT)}")
+        print(f"[serving-smoke] summary saved: {artifact_display_path(output_file, workspace_root=ROOT)}", flush=True)
         return 0 if overall_success else 1
     except KeyboardInterrupt:
         print("[serving-smoke] interrupted by user")
         return 130
+    except (ValueError, FileNotFoundError, IsADirectoryError) as error:
+        print(f"[serving-smoke] failed: {error}")
+        if args.print_traceback:
+            traceback.print_exc()
+        return 1
     except Exception as error:
         print(f"[serving-smoke] failed: {error}")
         if args.print_traceback:
@@ -883,7 +887,7 @@ def main() -> int:
     finally:
         if lock_acquired:
             _release_run_lock(LOCK_FILE)
-            log_progress(f"run lock released path={_display_path(LOCK_FILE)}")
+            log_progress(f"run lock released path={artifact_display_path(LOCK_FILE, workspace_root=ROOT)}")
 
 
 if __name__ == "__main__":

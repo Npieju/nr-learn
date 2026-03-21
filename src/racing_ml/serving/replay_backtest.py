@@ -1,11 +1,11 @@
 from __future__ import annotations
 
-import json
 from pathlib import Path
 from typing import Any
 
 import pandas as pd
 
+from racing_ml.common.artifacts import write_json
 from racing_ml.evaluation.policy import run_policy_strategy, simulate_annotated_runtime_policy
 from racing_ml.evaluation.scoring import resolve_odds_column
 from racing_ml.pipeline.backtest_pipeline import _ev_top1_roi, _plot_backtest, _simple_win_roi, _topk_hit_rate
@@ -119,7 +119,6 @@ def write_prediction_backtest_artifacts(
         workspace_root=workspace_root,
     )
     output_json_path.parent.mkdir(parents=True, exist_ok=True)
-    with output_json_path.open("w", encoding="utf-8") as file:
-        json.dump(metrics, file, ensure_ascii=False, indent=2)
+    write_json(output_json_path, metrics)
     _plot_backtest(frame, output_png_path)
     return metrics

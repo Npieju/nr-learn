@@ -5,6 +5,8 @@ import shutil
 
 import pandas as pd
 
+from racing_ml.common.artifacts import write_csv_file
+
 
 def _copy_csv_tree(source_root: Path, target_root: Path) -> int:
     copied = 0
@@ -82,5 +84,5 @@ def create_sample_dataset(target_dir: str) -> Path:
 
     frame = pd.DataFrame(rows)
     frame["is_win"] = (frame["rank"] == 1).astype(int)
-    frame.to_csv(sample_path, index=False)
+    write_csv_file(sample_path, frame, index=False, label="sample dataset output")
     return sample_path

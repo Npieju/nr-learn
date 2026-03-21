@@ -16,6 +16,8 @@ if str(SRC) not in sys.path:
 
 from racing_ml.common.config import load_yaml
 from racing_ml.common.artifacts import (
+    display_path as artifact_display_path,
+    ensure_output_file_path as artifact_ensure_output_file_path,
     build_model_manifest,
     build_training_report_payload,
     derive_manifest_file_name,
@@ -246,9 +248,7 @@ def _write_summary(
         "best_validation_stability_assessment": ((best_row or {}).get("roi_detail") or {}).get("stability_assessment") if isinstance(best_row, dict) else None,
         "best_validation_stability_guardrail": ((best_row or {}).get("roi_detail") or {}).get("stability_guardrail") if isinstance(best_row, dict) else None,
     }
-    out_path.parent.mkdir(parents=True, exist_ok=True)
-    with out_path.open("w", encoding="utf-8") as file:
-        json.dump(summary, file, ensure_ascii=False, indent=2)
+    write_json(out_path, summary)
 
 
 def main() -> int:
@@ -268,365 +268,378 @@ def main() -> int:
     parser.add_argument("--summary-path", default="artifacts/reports/tune_top3_summary.json")
     args = parser.parse_args()
 
-    log_progress("Loading configs...")
-    model_cfg = load_yaml(ROOT / args.config)
-    data_cfg = load_yaml(ROOT / args.data_config)
-    feature_cfg = load_yaml(ROOT / args.feature_config)
-
-    dataset_cfg = data_cfg.get("dataset", {})
-    raw_dir = dataset_cfg.get("raw_dir", "data/raw")
-    split_cfg = data_cfg.get("split", {})
-    with Heartbeat("[tune]", "loading training table", logger=log_progress):
-        load_result = load_training_table_for_feature_build(
-            raw_dir,
-            pre_feature_max_rows=int(args.pre_feature_max_rows) if args.pre_feature_max_rows is not None else None,
-            dataset_config=dataset_cfg,
-            base_dir=ROOT,
-        )
-    frame = load_result.frame
-    loaded_rows = load_result.loaded_rows
-    pre_feature_rows = load_result.pre_feature_rows
-    data_load_strategy = load_result.data_load_strategy
-    primary_source_rows_total = load_result.primary_source_rows_total
-    load_message = f"Training table loaded: rows={loaded_rows:,}, strategy={data_load_strategy}"
-    if primary_source_rows_total is not None:
-        load_message += f", primary_source_rows_total={primary_source_rows_total:,}"
-    log_progress(load_message)
-    log_progress(f"Pre-feature slice ready: loaded_rows={loaded_rows:,}, rows={pre_feature_rows:,}")
-    with Heartbeat("[tune]", "building features", logger=log_progress):
-        frame = build_features(frame)
-    data_stability_guardrail = build_stability_guardrail(frame=frame)
-
-    label_column = model_cfg.get("label", "is_win")
-    feature_selection = resolve_feature_selection(frame, feature_cfg, label_column=label_column)
-    feature_columns = feature_selection.feature_columns
-    task = str(model_cfg.get("task", "multi_position"))
-
-    base_params = model_cfg.get("model", {}).get("params", {})
-    training_cfg = model_cfg.get("training", {})
-    evaluation_cfg = model_cfg.get("evaluation", {})
-    output_cfg = model_cfg.get("output", {})
-    output_artifacts = resolve_output_artifacts(output_cfg)
-    model_name = model_cfg.get("model", {}).get("name", "lightgbm")
-    device_type = str(base_params.get("device_type", "cpu")).strip().lower() or "cpu"
-    leakage_cfg = evaluation_cfg.get("leakage_audit", {})
-    leakage_enabled = bool(leakage_cfg.get("enabled", True))
-
-    base_constraints = PolicyConstraints.from_config(evaluation_cfg)
-    constraints = _override_constraints(base_constraints, args)
-
-    if leakage_enabled:
-        with Heartbeat("[tune]", "running leakage audit", logger=log_progress):
-            leakage_audit = run_leakage_audit(frame=frame, feature_columns=feature_columns, label_column=label_column)
-    else:
-        leakage_audit = {"enabled": False}
-
-    run_context = {
-        "config": str(args.config),
-        "data_config": str(args.data_config),
-        "feature_config": str(args.feature_config),
-        "task": task,
-        "label_column": label_column,
-        "loaded_rows": loaded_rows,
-        "data_load_strategy": data_load_strategy,
-        "primary_source_rows_total": int(primary_source_rows_total) if primary_source_rows_total is not None else None,
-        "pre_feature_max_rows": int(args.pre_feature_max_rows) if args.pre_feature_max_rows is not None else None,
-        "pre_feature_rows": pre_feature_rows,
-        "max_candidates": int(args.max_candidates),
-        "max_row_profiles": int(args.max_row_profiles),
-        "max_trials": int(args.max_trials),
-        "rows_total": int(len(frame)),
-        "device_type": device_type,
-        "feature_selection_mode": feature_selection.mode,
-        "feature_count": int(len(feature_selection.feature_columns)),
-        "categorical_feature_count": int(len(feature_selection.categorical_columns)),
-        "artifact_model_dir": output_artifacts.model_dir.as_posix(),
-        "artifact_report_dir": output_artifacts.report_dir.as_posix(),
-        "stability_assessment": data_stability_guardrail["assessment"],
-        **constraints.to_dict(),
-    }
-    if data_stability_guardrail["assessment"] != "representative":
-        log_progress(
-            "Data stability guardrail="
-            f"{data_stability_guardrail['assessment']}: "
-            f"{'; '.join(data_stability_guardrail.get('warnings', [])[:2])}"
-        )
-
-    log_progress(f"Runtime device_type from config: {device_type}")
-
-    model_candidates = build_model_candidates(base_params, model_name)[: max(1, args.max_candidates)]
-    row_profiles = build_row_profiles(training_cfg)[: max(1, args.max_row_profiles)]
-
-    trial_plan: list[tuple[dict, dict[str, int]]] = []
-    for model_candidate in model_candidates:
-        for row_profile in row_profiles:
-            trial_plan.append((model_candidate, row_profile))
-    trial_plan = trial_plan[: max(1, args.max_trials)]
-
-    log_progress(
-        "Prepared trial plan: "
-        f"model_candidates={len(model_candidates)}, row_profiles={len(row_profiles)}, trials={len(trial_plan)}"
-    )
-
-    out_path = ROOT / args.summary_path
-    run_rows: list[dict] = []
-    failures: list[dict] = []
-    best_row: dict | None = None
-    best_score = float("-inf")
-
-    completed_candidates: set[int] = set()
-    if args.resume and out_path.exists():
-        try:
-            with out_path.open("r", encoding="utf-8") as file:
-                prev = json.load(file)
-            prev_runs = prev.get("runs", []) if isinstance(prev, dict) else []
-            prev_failures = prev.get("failures", []) if isinstance(prev, dict) else []
-            for row in prev_runs:
-                if isinstance(row, dict) and isinstance(row.get("candidate"), int):
-                    run_rows.append(row)
-                    completed_candidates.add(int(row["candidate"]))
-                    row_score = float(row.get("score", float("-inf")))
-                    if row_score > best_score:
-                        best_score = row_score
-                        best_row = row
-            for failure in prev_failures:
-                if isinstance(failure, dict):
-                    failures.append(failure)
-            log_progress(f"Resume loaded: completed={len(run_rows)}, failures={len(failures)}")
-        except Exception as error:
-            log_progress(f"Resume failed; starting fresh. reason={error}")
-
-    started_at = time.perf_counter()
-    total_trials = len(trial_plan)
-    attempted_trials = 0
-    trial_progress = ProgressBar(total=max(total_trials, 1), prefix="[tune trials]", logger=log_progress, min_interval_sec=0.0)
-    trial_progress.start(message="candidate execution started")
-    log_progress("Tuning started.")
-
     try:
-        for idx, (params, row_profile) in enumerate(trial_plan, start=1):
-            if idx in completed_candidates:
-                attempted_trials += 1
-                elapsed = time.perf_counter() - started_at
-                rate = (attempted_trials / elapsed) if elapsed > 0 else 0.0
-                remaining = max(total_trials - attempted_trials, 0)
-                eta = (remaining / rate) if rate > 0 else float("inf")
-                eta_text = format_duration(eta) if eta != float("inf") else "--"
-                log_progress(
-                    f"Skip candidate {idx}/{total_trials} (already completed), "
-                    f"progress={attempted_trials}/{total_trials}, elapsed={format_duration(elapsed)}, eta={eta_text}"
-                )
-                trial_progress.update(message=f"candidate {idx} skipped")
-                continue
+        out_path = ROOT / args.summary_path
+        artifact_ensure_output_file_path(out_path, label="summary path", workspace_root=ROOT)
 
-            model_file = f"tune_top3_{idx}.joblib"
-            report_file = f"tune_top3_{idx}.json"
-            candidate_output_cfg = dict(output_cfg)
-            candidate_output_cfg["model_file"] = model_file
-            candidate_output_cfg["report_file"] = report_file
-            candidate_output_cfg["manifest_file"] = derive_manifest_file_name(model_file)
-            candidate_artifacts = resolve_output_artifacts(candidate_output_cfg)
-            candidate_started_at = time.perf_counter()
+        log_progress("Loading configs...")
+        model_cfg = load_yaml(ROOT / args.config)
+        data_cfg = load_yaml(ROOT / args.data_config)
+        feature_cfg = load_yaml(ROOT / args.feature_config)
+
+        dataset_cfg = data_cfg.get("dataset", {})
+        raw_dir = dataset_cfg.get("raw_dir", "data/raw")
+        split_cfg = data_cfg.get("split", {})
+        with Heartbeat("[tune]", "loading training table", logger=log_progress):
+            load_result = load_training_table_for_feature_build(
+                raw_dir,
+                pre_feature_max_rows=int(args.pre_feature_max_rows) if args.pre_feature_max_rows is not None else None,
+                dataset_config=dataset_cfg,
+                base_dir=ROOT,
+            )
+        frame = load_result.frame
+        loaded_rows = load_result.loaded_rows
+        pre_feature_rows = load_result.pre_feature_rows
+        data_load_strategy = load_result.data_load_strategy
+        primary_source_rows_total = load_result.primary_source_rows_total
+        load_message = f"Training table loaded: rows={loaded_rows:,}, strategy={data_load_strategy}"
+        if primary_source_rows_total is not None:
+            load_message += f", primary_source_rows_total={primary_source_rows_total:,}"
+        log_progress(load_message)
+        log_progress(f"Pre-feature slice ready: loaded_rows={loaded_rows:,}, rows={pre_feature_rows:,}")
+        with Heartbeat("[tune]", "building features", logger=log_progress):
+            frame = build_features(frame)
+        data_stability_guardrail = build_stability_guardrail(frame=frame)
+
+        label_column = model_cfg.get("label", "is_win")
+        feature_selection = resolve_feature_selection(frame, feature_cfg, label_column=label_column)
+        feature_columns = feature_selection.feature_columns
+        task = str(model_cfg.get("task", "multi_position"))
+
+        base_params = model_cfg.get("model", {}).get("params", {})
+        training_cfg = model_cfg.get("training", {})
+        evaluation_cfg = model_cfg.get("evaluation", {})
+        output_cfg = model_cfg.get("output", {})
+        output_artifacts = resolve_output_artifacts(output_cfg)
+        model_name = model_cfg.get("model", {}).get("name", "lightgbm")
+        device_type = str(base_params.get("device_type", "cpu")).strip().lower() or "cpu"
+        leakage_cfg = evaluation_cfg.get("leakage_audit", {})
+        leakage_enabled = bool(leakage_cfg.get("enabled", True))
+
+        base_constraints = PolicyConstraints.from_config(evaluation_cfg)
+        constraints = _override_constraints(base_constraints, args)
+
+        if leakage_enabled:
+            with Heartbeat("[tune]", "running leakage audit", logger=log_progress):
+                leakage_audit = run_leakage_audit(frame=frame, feature_columns=feature_columns, label_column=label_column)
+        else:
+            leakage_audit = {"enabled": False}
+
+        run_context = {
+            "config": str(args.config),
+            "data_config": str(args.data_config),
+            "feature_config": str(args.feature_config),
+            "task": task,
+            "label_column": label_column,
+            "loaded_rows": loaded_rows,
+            "data_load_strategy": data_load_strategy,
+            "primary_source_rows_total": int(primary_source_rows_total) if primary_source_rows_total is not None else None,
+            "pre_feature_max_rows": int(args.pre_feature_max_rows) if args.pre_feature_max_rows is not None else None,
+            "pre_feature_rows": pre_feature_rows,
+            "max_candidates": int(args.max_candidates),
+            "max_row_profiles": int(args.max_row_profiles),
+            "max_trials": int(args.max_trials),
+            "rows_total": int(len(frame)),
+            "device_type": device_type,
+            "feature_selection_mode": feature_selection.mode,
+            "feature_count": int(len(feature_selection.feature_columns)),
+            "categorical_feature_count": int(len(feature_selection.categorical_columns)),
+            "artifact_model_dir": output_artifacts.model_dir.as_posix(),
+            "artifact_report_dir": output_artifacts.report_dir.as_posix(),
+            "stability_assessment": data_stability_guardrail["assessment"],
+            **constraints.to_dict(),
+        }
+        if data_stability_guardrail["assessment"] != "representative":
             log_progress(
-                f"Candidate {idx}/{total_trials} started: "
-                f"rows={row_profile}, lr={params.get('learning_rate')}, leaves={params.get('num_leaves')}, n_estimators={params.get('n_estimators')}"
+                "Data stability guardrail="
+                f"{data_stability_guardrail['assessment']}: "
+                f"{'; '.join(data_stability_guardrail.get('warnings', [])[:2])}"
             )
 
+        log_progress(f"Runtime device_type from config: {device_type}")
+
+        model_candidates = build_model_candidates(base_params, model_name)[: max(1, args.max_candidates)]
+        row_profiles = build_row_profiles(training_cfg)[: max(1, args.max_row_profiles)]
+
+        trial_plan: list[tuple[dict, dict[str, int]]] = []
+        for model_candidate in model_candidates:
+            for row_profile in row_profiles:
+                trial_plan.append((model_candidate, row_profile))
+        trial_plan = trial_plan[: max(1, args.max_trials)]
+
+        log_progress(
+            "Prepared trial plan: "
+            f"model_candidates={len(model_candidates)}, row_profiles={len(row_profiles)}, trials={len(trial_plan)}"
+        )
+
+        run_rows: list[dict] = []
+        failures: list[dict] = []
+        best_row: dict | None = None
+        best_score = float("-inf")
+
+        completed_candidates: set[int] = set()
+        if args.resume and out_path.exists():
             try:
-                log_progress(f"Candidate {idx}/{total_trials}: training model...")
-                result = train_and_evaluate(
-                    frame=frame,
-                    feature_columns=feature_columns,
-                    label_column=label_column,
-                    task=task,
-                    model_name=model_name,
-                    model_params=params,
-                    train_end=split_cfg.get("train_end", "2022-12-31"),
-                    valid_start=split_cfg.get("valid_start", "2023-01-01"),
-                    valid_end=split_cfg.get("valid_end", "2023-12-31"),
-                    max_train_rows=int(row_profile["max_train_rows"]),
-                    max_valid_rows=int(row_profile["max_valid_rows"]),
-                    early_stopping_rounds=training_cfg.get("early_stopping_rounds", 120),
-                    allow_fallback=bool(training_cfg.get("allow_fallback_model", False)),
-                    model_dir=output_cfg.get("model_dir", "artifacts/models"),
-                    report_dir=output_cfg.get("report_dir", "artifacts/reports"),
-                    model_file_name=model_file,
-                    report_file_name=report_file,
-                    categorical_features=feature_selection.categorical_columns,
+                with out_path.open("r", encoding="utf-8") as file:
+                    prev = json.load(file)
+                prev_runs = prev.get("runs", []) if isinstance(prev, dict) else []
+                prev_failures = prev.get("failures", []) if isinstance(prev, dict) else []
+                for row in prev_runs:
+                    if isinstance(row, dict) and isinstance(row.get("candidate"), int):
+                        run_rows.append(row)
+                        completed_candidates.add(int(row["candidate"]))
+                        row_score = float(row.get("score", float("-inf")))
+                        if row_score > best_score:
+                            best_score = row_score
+                            best_row = row
+                for failure in prev_failures:
+                    if isinstance(failure, dict):
+                        failures.append(failure)
+                log_progress(f"Resume loaded: completed={len(run_rows)}, failures={len(failures)}")
+            except Exception as error:
+                log_progress(f"Resume failed; starting fresh. reason={error}")
+
+        started_at = time.perf_counter()
+        total_trials = len(trial_plan)
+        attempted_trials = 0
+        trial_progress = ProgressBar(total=max(total_trials, 1), prefix="[tune trials]", logger=log_progress, min_interval_sec=0.0)
+        trial_progress.start(message="candidate execution started")
+        log_progress("Tuning started.")
+
+        try:
+            for idx, (params, row_profile) in enumerate(trial_plan, start=1):
+                if idx in completed_candidates:
+                    attempted_trials += 1
+                    elapsed = time.perf_counter() - started_at
+                    rate = (attempted_trials / elapsed) if elapsed > 0 else 0.0
+                    remaining = max(total_trials - attempted_trials, 0)
+                    eta = (remaining / rate) if rate > 0 else float("inf")
+                    eta_text = format_duration(eta) if eta != float("inf") else "--"
+                    log_progress(
+                        f"Skip candidate {idx}/{total_trials} (already completed), "
+                        f"progress={attempted_trials}/{total_trials}, elapsed={format_duration(elapsed)}, eta={eta_text}"
+                    )
+                    trial_progress.update(message=f"candidate {idx} skipped")
+                    continue
+
+                model_file = f"tune_top3_{idx}.joblib"
+                report_file = f"tune_top3_{idx}.json"
+                candidate_output_cfg = dict(output_cfg)
+                candidate_output_cfg["model_file"] = model_file
+                candidate_output_cfg["report_file"] = report_file
+                candidate_output_cfg["manifest_file"] = derive_manifest_file_name(model_file)
+                candidate_artifacts = resolve_output_artifacts(candidate_output_cfg)
+                candidate_started_at = time.perf_counter()
+                log_progress(
+                    f"Candidate {idx}/{total_trials} started: "
+                    f"rows={row_profile}, lr={params.get('learning_rate')}, leaves={params.get('num_leaves')}, n_estimators={params.get('n_estimators')}"
                 )
 
-                model_path = result.model_path if result.model_path.is_absolute() else (ROOT / result.model_path)
-                valid_frame = _time_valid_slice(
-                    frame,
-                    valid_start=split_cfg.get("valid_start", "2020-01-01"),
-                    valid_end=split_cfg.get("valid_end", "2021-07-31"),
-                    max_valid_rows=int(row_profile["max_valid_rows"]),
-                )
-                with Heartbeat("[tune]", f"candidate {idx}: policy scoring", logger=log_progress):
-                    score, roi_detail = objective_score(
-                        model_path,
-                        valid_frame,
-                        fallback_selection=feature_selection,
-                        constraints=constraints,
+                try:
+                    log_progress(f"Candidate {idx}/{total_trials}: training model...")
+                    result = train_and_evaluate(
+                        frame=frame,
+                        feature_columns=feature_columns,
+                        label_column=label_column,
+                        task=task,
+                        model_name=model_name,
+                        model_params=params,
+                        train_end=split_cfg.get("train_end", "2022-12-31"),
+                        valid_start=split_cfg.get("valid_start", "2023-01-01"),
+                        valid_end=split_cfg.get("valid_end", "2023-12-31"),
+                        max_train_rows=int(row_profile["max_train_rows"]),
+                        max_valid_rows=int(row_profile["max_valid_rows"]),
+                        early_stopping_rounds=training_cfg.get("early_stopping_rounds", 120),
+                        allow_fallback=bool(training_cfg.get("allow_fallback_model", False)),
+                        model_dir=output_cfg.get("model_dir", "artifacts/models"),
+                        report_dir=output_cfg.get("report_dir", "artifacts/reports"),
+                        model_file_name=model_file,
+                        report_file_name=report_file,
+                        categorical_features=feature_selection.categorical_columns,
                     )
 
-                candidate_run_context = {
-                    **run_context,
-                    "candidate": int(idx),
-                    "params": params,
-                    "rows_train_max": int(row_profile["max_train_rows"]),
-                    "rows_valid_max": int(row_profile["max_valid_rows"]),
-                    "split_train_end": split_cfg.get("train_end", "2022-12-31"),
-                    "split_valid_start": split_cfg.get("valid_start", "2023-01-01"),
-                    "split_valid_end": split_cfg.get("valid_end", "2023-12-31"),
-                    "artifact_model": candidate_artifacts.model_path.as_posix(),
-                    "artifact_report": candidate_artifacts.report_path.as_posix(),
-                    "artifact_manifest": candidate_artifacts.manifest_path.as_posix(),
-                }
-                report_payload = build_training_report_payload(
-                    metrics=result.metrics,
-                    run_context=candidate_run_context,
-                    leakage_audit=leakage_audit,
-                    policy_constraints=constraints.to_dict(),
-                    extra_metadata={
-                        "objective": "validation_policy_gate_then_roi",
-                        "training_profile": row_profile,
-                        "roi_detail": roi_detail,
-                    },
-                )
-                write_json(result.report_path, report_payload)
+                    model_path = result.model_path if result.model_path.is_absolute() else (ROOT / result.model_path)
+                    valid_frame = _time_valid_slice(
+                        frame,
+                        valid_start=split_cfg.get("valid_start", "2020-01-01"),
+                        valid_end=split_cfg.get("valid_end", "2021-07-31"),
+                        max_valid_rows=int(row_profile["max_valid_rows"]),
+                    )
+                    with Heartbeat("[tune]", f"candidate {idx}: policy scoring", logger=log_progress):
+                        score, roi_detail = objective_score(
+                            model_path,
+                            valid_frame,
+                            fallback_selection=feature_selection,
+                            constraints=constraints,
+                        )
 
-                manifest_abs = candidate_artifacts.manifest_path if candidate_artifacts.manifest_path.is_absolute() else (ROOT / candidate_artifacts.manifest_path)
-                manifest_payload = build_model_manifest(
-                    workspace_root=ROOT,
-                    model_config_path=ROOT / args.config,
-                    data_config_path=ROOT / args.data_config,
-                    feature_config_path=ROOT / args.feature_config,
-                    model_path=result.model_path,
-                    report_path=result.report_path,
-                    task=task,
-                    label_column=label_column,
-                    model_name=model_name,
-                    used_features=result.used_features,
-                    categorical_columns=result.categorical_features,
-                    metrics=result.metrics,
-                    run_context=candidate_run_context,
-                    leakage_audit=leakage_audit,
-                    policy_constraints=constraints.to_dict(),
-                    extra_metadata={
+                    candidate_run_context = {
+                        **run_context,
                         "candidate": int(idx),
                         "params": params,
-                        "training_profile": row_profile,
-                        "objective": "validation_policy_gate_then_roi",
+                        "rows_train_max": int(row_profile["max_train_rows"]),
+                        "rows_valid_max": int(row_profile["max_valid_rows"]),
+                        "split_train_end": split_cfg.get("train_end", "2022-12-31"),
+                        "split_valid_start": split_cfg.get("valid_start", "2023-01-01"),
+                        "split_valid_end": split_cfg.get("valid_end", "2023-12-31"),
+                        "artifact_model": candidate_artifacts.model_path.as_posix(),
+                        "artifact_report": candidate_artifacts.report_path.as_posix(),
+                        "artifact_manifest": candidate_artifacts.manifest_path.as_posix(),
+                    }
+                    report_payload = build_training_report_payload(
+                        metrics=result.metrics,
+                        run_context=candidate_run_context,
+                        leakage_audit=leakage_audit,
+                        policy_constraints=constraints.to_dict(),
+                        extra_metadata={
+                            "objective": "validation_policy_gate_then_roi",
+                            "training_profile": row_profile,
+                            "roi_detail": roi_detail,
+                        },
+                    )
+                    write_json(result.report_path, report_payload)
+
+                    manifest_abs = candidate_artifacts.manifest_path if candidate_artifacts.manifest_path.is_absolute() else (ROOT / candidate_artifacts.manifest_path)
+                    manifest_payload = build_model_manifest(
+                        workspace_root=ROOT,
+                        model_config_path=ROOT / args.config,
+                        data_config_path=ROOT / args.data_config,
+                        feature_config_path=ROOT / args.feature_config,
+                        model_path=result.model_path,
+                        report_path=result.report_path,
+                        task=task,
+                        label_column=label_column,
+                        model_name=model_name,
+                        used_features=result.used_features,
+                        categorical_columns=result.categorical_features,
+                        metrics=result.metrics,
+                        run_context=candidate_run_context,
+                        leakage_audit=leakage_audit,
+                        policy_constraints=constraints.to_dict(),
+                        extra_metadata={
+                            "candidate": int(idx),
+                            "params": params,
+                            "training_profile": row_profile,
+                            "objective": "validation_policy_gate_then_roi",
+                            "roi_detail": roi_detail,
+                        },
+                    )
+                    write_json(manifest_abs, manifest_payload)
+
+                    row = {
+                        "candidate": idx,
+                        "score": score,
+                        "params": params,
+                        "training": row_profile,
                         "roi_detail": roi_detail,
-                    },
-                )
-                write_json(manifest_abs, manifest_payload)
+                        "metrics": result.metrics,
+                        "model_file": model_file,
+                        "report_file": report_file,
+                        "manifest_file": candidate_artifacts.manifest_path.as_posix(),
+                        "status": "ok",
+                    }
+                    run_rows.append(row)
+                    log_progress(
+                        f"Candidate {idx}/{total_trials} finished: score={score:.6f}, "
+                        f"roi={roi_detail.get('roi')}, bets={roi_detail.get('bets')}, "
+                        f"dd={roi_detail.get('max_drawdown')}, feasible={roi_detail.get('is_feasible')}"
+                    )
+                    log_progress(f"Candidate {idx}/{total_trials}: gpu_enabled={result.metrics.get('gpu_enabled')}")
 
-                row = {
-                    "candidate": idx,
-                    "score": score,
-                    "params": params,
-                    "training": row_profile,
-                    "roi_detail": roi_detail,
-                    "metrics": result.metrics,
-                    "model_file": model_file,
-                    "report_file": report_file,
-                    "manifest_file": candidate_artifacts.manifest_path.as_posix(),
-                    "status": "ok",
-                }
-                run_rows.append(row)
-                log_progress(
-                    f"Candidate {idx}/{total_trials} finished: score={score:.6f}, "
-                    f"roi={roi_detail.get('roi')}, bets={roi_detail.get('bets')}, "
-                    f"dd={roi_detail.get('max_drawdown')}, feasible={roi_detail.get('is_feasible')}"
-                )
-                log_progress(f"Candidate {idx}/{total_trials}: gpu_enabled={result.metrics.get('gpu_enabled')}")
+                    row_feasible = bool((row.get("roi_detail") or {}).get("is_feasible"))
+                    current_best_feasible = bool((best_row or {}).get("roi_detail", {}).get("is_feasible")) if isinstance(best_row, dict) else False
 
-                row_feasible = bool((row.get("roi_detail") or {}).get("is_feasible"))
-                current_best_feasible = bool((best_row or {}).get("roi_detail", {}).get("is_feasible")) if isinstance(best_row, dict) else False
+                    should_update = False
+                    if best_row is None:
+                        should_update = True
+                    elif row_feasible and not current_best_feasible:
+                        should_update = True
+                    elif row_feasible == current_best_feasible and score > best_score:
+                        should_update = True
 
-                should_update = False
-                if best_row is None:
-                    should_update = True
-                elif row_feasible and not current_best_feasible:
-                    should_update = True
-                elif row_feasible == current_best_feasible and score > best_score:
-                    should_update = True
+                    if should_update:
+                        best_score = score
+                        best_row = row
+                except Exception as error:
+                    failure = {
+                        "candidate": idx,
+                        "params": params,
+                        "training": row_profile,
+                        "error": str(error),
+                        "traceback": traceback.format_exc(),
+                        "status": "error",
+                    }
+                    failures.append(failure)
+                    log_progress(f"Candidate {idx}/{total_trials} failed: {error}")
+                finally:
+                    attempted_trials += 1
+                    elapsed = time.perf_counter() - started_at
+                    rate = (attempted_trials / elapsed) if elapsed > 0 else 0.0
+                    remaining = max(total_trials - attempted_trials, 0)
+                    eta = (remaining / rate) if rate > 0 else float("inf")
+                    eta_text = format_duration(eta) if eta != float("inf") else "--"
+                    candidate_elapsed = time.perf_counter() - candidate_started_at
+                    log_progress(
+                        f"Progress {attempted_trials}/{total_trials} ({(attempted_trials / total_trials):.1%}), "
+                        f"candidate_elapsed={format_duration(candidate_elapsed)}, total_elapsed={format_duration(elapsed)}, eta={eta_text}"
+                    )
+                    trial_progress.update(message=f"candidate {idx} done, eta={eta_text}")
+                    log_progress("Writing partial summary...")
+                    _write_summary(
+                        out_path=out_path,
+                        args=args,
+                        model_candidates=model_candidates,
+                        row_profiles=row_profiles,
+                        trial_plan=trial_plan,
+                        run_rows=run_rows,
+                        best_row=best_row,
+                        failures=failures,
+                        run_context=run_context,
+                        leakage_audit=leakage_audit,
+                        policy_constraints=constraints.to_dict(),
+                        data_stability_guardrail=data_stability_guardrail,
+                    )
+        except KeyboardInterrupt:
+            log_progress("Interrupted by user; partial summary saved")
+            return 130
 
-                if should_update:
-                    best_score = score
-                    best_row = row
-            except Exception as error:
-                failure = {
-                    "candidate": idx,
-                    "params": params,
-                    "training": row_profile,
-                    "error": str(error),
-                    "traceback": traceback.format_exc(),
-                    "status": "error",
-                }
-                failures.append(failure)
-                log_progress(f"Candidate {idx}/{total_trials} failed: {error}")
-            finally:
-                attempted_trials += 1
-                elapsed = time.perf_counter() - started_at
-                rate = (attempted_trials / elapsed) if elapsed > 0 else 0.0
-                remaining = max(total_trials - attempted_trials, 0)
-                eta = (remaining / rate) if rate > 0 else float("inf")
-                eta_text = format_duration(eta) if eta != float("inf") else "--"
-                candidate_elapsed = time.perf_counter() - candidate_started_at
-                log_progress(
-                    f"Progress {attempted_trials}/{total_trials} ({(attempted_trials / total_trials):.1%}), "
-                    f"candidate_elapsed={format_duration(candidate_elapsed)}, total_elapsed={format_duration(elapsed)}, eta={eta_text}"
-                )
-                trial_progress.update(message=f"candidate {idx} done, eta={eta_text}")
-                log_progress("Writing partial summary...")
-                _write_summary(
-                    out_path=out_path,
-                    args=args,
-                    model_candidates=model_candidates,
-                    row_profiles=row_profiles,
-                    trial_plan=trial_plan,
-                    run_rows=run_rows,
-                    best_row=best_row,
-                    failures=failures,
-                    run_context=run_context,
-                    leakage_audit=leakage_audit,
-                    policy_constraints=constraints.to_dict(),
-                    data_stability_guardrail=data_stability_guardrail,
-                )
+        if best_row is None:
+            raise RuntimeError("No tuning candidate was evaluated")
+
+        _write_summary(
+            out_path=out_path,
+            args=args,
+            model_candidates=model_candidates,
+            row_profiles=row_profiles,
+            trial_plan=trial_plan,
+            run_rows=run_rows,
+            best_row=best_row,
+            failures=failures,
+            run_context=run_context,
+            leakage_audit=leakage_audit,
+            policy_constraints=constraints.to_dict(),
+            data_stability_guardrail=data_stability_guardrail,
+        )
+
+        total_elapsed = time.perf_counter() - started_at
+        trial_progress.complete(message="candidate execution finished")
+        log_progress(f"Summary saved: {out_path}")
+        log_progress(f"Best candidate: {best_row['candidate']}")
+        log_progress(f"Best score: {best_score:.6f}")
+        log_progress(f"Best params: {best_row['params']}")
+        log_progress(f"Best metrics: {best_row['metrics']}")
+        log_progress(f"Tuning completed in {format_duration(total_elapsed)}")
+        return 0
     except KeyboardInterrupt:
-        log_progress("Interrupted by user; partial summary saved")
+        print("[tune] interrupted by user")
         return 130
-
-    if best_row is None:
-        raise RuntimeError("No tuning candidate was evaluated")
-
-    _write_summary(
-        out_path=out_path,
-        args=args,
-        model_candidates=model_candidates,
-        row_profiles=row_profiles,
-        trial_plan=trial_plan,
-        run_rows=run_rows,
-        best_row=best_row,
-        failures=failures,
-        run_context=run_context,
-        leakage_audit=leakage_audit,
-        policy_constraints=constraints.to_dict(),
-        data_stability_guardrail=data_stability_guardrail,
-    )
-
-    total_elapsed = time.perf_counter() - started_at
-    trial_progress.complete(message="candidate execution finished")
-    log_progress(f"Summary saved: {out_path}")
-    log_progress(f"Best candidate: {best_row['candidate']}")
-    log_progress(f"Best score: {best_score:.6f}")
-    log_progress(f"Best params: {best_row['params']}")
-    log_progress(f"Best metrics: {best_row['metrics']}")
-    log_progress(f"Tuning completed in {format_duration(total_elapsed)}")
-    return 0
+    except (ValueError, FileNotFoundError, IsADirectoryError, RuntimeError) as error:
+        print(f"[tune] failed: {error}")
+        return 1
+    except Exception as error:
+        print(f"[tune] failed: {error}")
+        traceback.print_exc()
+        return 1
 
 
 if __name__ == "__main__":
