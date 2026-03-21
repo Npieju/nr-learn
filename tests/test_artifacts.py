@@ -8,13 +8,18 @@ from pathlib import Path
 import pandas as pd
 
 from racing_ml.common.artifacts import (
+    absolutize_path,
     append_suffix_to_file_name,
     build_bundle_manifest,
     build_model_manifest,
+    build_training_report_payload,
     display_path,
+    derive_manifest_file_name,
     ensure_output_directory_path,
     ensure_output_file_path,
+    relativize_path,
     resolve_component_from_config,
+    resolve_output_artifacts,
     write_csv_file,
     write_json,
     write_text_file,
@@ -88,6 +93,45 @@ evaluation:
             "reports/train_metrics_20260321.json",
         )
 
+    def test_derive_manifest_file_name_uses_model_stem(self) -> None:
+        self.assertEqual(derive_manifest_file_name("baseline_model.joblib"), "baseline_model.manifest.json")
+        self.assertEqual(derive_manifest_file_name("models/stack.pkl"), "stack.manifest.json")
+
+    def test_resolve_output_artifacts_uses_defaults(self) -> None:
+        artifacts = resolve_output_artifacts()
+
+        self.assertEqual(artifacts.model_dir, Path("artifacts/models"))
+        self.assertEqual(artifacts.report_dir, Path("artifacts/reports"))
+        self.assertEqual(artifacts.model_path, Path("artifacts/models/baseline_model.joblib"))
+        self.assertEqual(artifacts.report_path, Path("artifacts/reports/train_metrics.json"))
+        self.assertEqual(artifacts.manifest_path, Path("artifacts/models/baseline_model.manifest.json"))
+
+    def test_resolve_output_artifacts_honors_custom_names(self) -> None:
+        artifacts = resolve_output_artifacts(
+            {
+                "model_dir": "custom/models",
+                "report_dir": "custom/reports",
+                "model_file": "stack.pkl",
+                "report_file": "summary.json",
+                "manifest_file": "stack.custom.manifest.json",
+            }
+        )
+
+        self.assertEqual(artifacts.model_path, Path("custom/models/stack.pkl"))
+        self.assertEqual(artifacts.report_path, Path("custom/reports/summary.json"))
+        self.assertEqual(artifacts.manifest_path, Path("custom/models/stack.custom.manifest.json"))
+
+    def test_absolutize_and_relativize_path_handle_workspace_and_external_paths(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            workspace_root = Path(tmp_dir)
+            relative = absolutize_path("artifacts/models/model.joblib", workspace_root)
+            external = workspace_root.parent / "outside.json"
+
+            self.assertEqual(relative, workspace_root / "artifacts" / "models" / "model.joblib")
+            self.assertEqual(relativize_path(relative, workspace_root), "artifacts/models/model.joblib")
+            self.assertEqual(relativize_path(external, workspace_root), external.as_posix())
+            self.assertIsNone(relativize_path(None, workspace_root))
+
     def test_display_path_relativizes_absolute_paths_under_workspace(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
             workspace_root = Path(tmp_dir)
@@ -151,6 +195,21 @@ evaluation:
             self.assertEqual(manifest["features"]["count"], 2)
             self.assertEqual(manifest["features"]["categorical_count"], 1)
             self.assertEqual(manifest["metadata"], {"revision": "r1"})
+
+    def test_build_training_report_payload_keeps_context_and_optional_sections(self) -> None:
+        payload = build_training_report_payload(
+            metrics={"accuracy": 0.8},
+            run_context={"rows": 120},
+            leakage_audit={"status": "ok"},
+            policy_constraints={"max_odds": 50},
+            extra_metadata={"revision": "r2"},
+        )
+
+        self.assertEqual(payload["accuracy"], 0.8)
+        self.assertEqual(payload["run_context"], {"rows": 120})
+        self.assertEqual(payload["leakage_audit"], {"status": "ok"})
+        self.assertEqual(payload["policy_constraints"], {"max_odds": 50})
+        self.assertEqual(payload["metadata"], {"revision": "r2"})
 
     def test_resolve_component_from_config_prefers_manifest_metrics(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
