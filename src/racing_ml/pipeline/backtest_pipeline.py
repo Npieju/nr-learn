@@ -12,7 +12,7 @@ import matplotlib.pyplot as plt
 
 from racing_ml.common.config import load_yaml
 from racing_ml.common.progress import Heartbeat, ProgressBar
-from racing_ml.evaluation.policy import run_policy_strategy
+from racing_ml.evaluation.policy import run_policy_strategy, simulate_annotated_runtime_policy
 from racing_ml.evaluation.scoring import resolve_odds_column
 from racing_ml.serving.runtime_policy import annotate_runtime_policy, resolve_runtime_policy
 
@@ -180,17 +180,20 @@ def run_backtest(config_path: str, predictions_file: str | None = None, profile_
                 policy_config=policy_config,
                 score_col="score",
             )
-            policy_metrics = run_policy_strategy(
-                policy_frame,
-                prob_col="policy_prob",
-                odds_col=odds_col,
-                params=policy_config,
-            )
             policy_strategy_kind = str(policy_config.get("strategy_kind", "")).strip().lower()
+            if policy_strategy_kind == "staged":
+                policy_metrics = simulate_annotated_runtime_policy(policy_frame, odds_col)
+            else:
+                policy_metrics = run_policy_strategy(
+                    policy_frame,
+                    prob_col="policy_prob",
+                    odds_col=odds_col,
+                    params=policy_config,
+                )
             selected_mask = policy_frame["policy_selected"].fillna(False).astype(bool)
             metrics["policy_name"] = policy_name
             metrics["policy_strategy_kind"] = policy_strategy_kind
-            metrics["policy_blend_weight"] = float(policy_config.get("blend_weight", 1.0))
+            metrics["policy_blend_weight"] = None if policy_strategy_kind == "staged" else float(policy_config.get("blend_weight", 1.0))
             metrics["policy_selected_rows"] = int(selected_mask.sum())
             metrics["policy_selected_races"] = int(policy_frame.loc[selected_mask, "race_id"].nunique()) if selected_mask.any() else 0
             if policy_strategy_kind == "portfolio":
@@ -200,6 +203,15 @@ def run_backtest(config_path: str, predictions_file: str | None = None, profile_
                 metrics["policy_final_bankroll"] = policy_metrics.get("portfolio_final_bankroll")
                 metrics["policy_max_drawdown"] = policy_metrics.get("portfolio_max_drawdown")
                 metrics["policy_avg_synthetic_odds"] = policy_metrics.get("portfolio_avg_synthetic_odds")
+            elif policy_strategy_kind == "staged":
+                metrics["policy_roi"] = policy_metrics.get("policy_roi")
+                metrics["policy_bets"] = int(policy_metrics.get("policy_bets") or 0)
+                metrics["policy_hit_rate"] = policy_metrics.get("policy_hit_rate")
+                metrics["policy_final_bankroll"] = policy_metrics.get("policy_final_bankroll")
+                metrics["policy_max_drawdown"] = policy_metrics.get("policy_max_drawdown")
+                metrics["policy_avg_synthetic_odds"] = policy_metrics.get("policy_avg_synthetic_odds")
+                selected_stage_values = policy_frame.loc[selected_mask, "policy_stage_name"].dropna().astype(str).tolist() if "policy_stage_name" in policy_frame.columns else []
+                metrics["policy_stage_names"] = sorted(set(selected_stage_values))
             else:
                 metrics["policy_roi"] = policy_metrics.get("kelly_roi")
                 metrics["policy_bets"] = int(policy_metrics.get("kelly_bets") or 0)

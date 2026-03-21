@@ -668,6 +668,91 @@ def _no_bet_policy_metrics(initial_bankroll: float = 1.0) -> dict[str, float | i
     }
 
 
+def simulate_annotated_runtime_policy(
+    frame: pd.DataFrame,
+    odds_col: str | None,
+    *,
+    selection_col: str = "policy_selected",
+    weight_col: str = "policy_weight",
+    strategy_col: str = "policy_selected_strategy_kind",
+    initial_bankroll: float = 1.0,
+) -> dict[str, float | int | None]:
+    if odds_col is None or "rank" not in frame.columns or "race_id" not in frame.columns:
+        return {
+            "policy_roi": None,
+            "policy_bets": 0,
+            "policy_hit_rate": None,
+            "policy_final_bankroll": initial_bankroll,
+            "policy_max_drawdown": 0.0,
+            "policy_avg_synthetic_odds": None,
+        }
+
+    bankroll = float(initial_bankroll)
+    peak_bankroll = float(initial_bankroll)
+    max_drawdown = 0.0
+    total_bet = 0.0
+    total_return = 0.0
+    race_bets = 0
+    race_hits = 0
+    synthetic_odds_hits: list[float] = []
+
+    for _, group in frame.groupby("race_id", sort=False):
+        selected = group[group[selection_col].fillna(False).astype(bool)].copy()
+        if selected.empty:
+            continue
+
+        strategy_values = selected[strategy_col].dropna().astype(str).str.strip().str.lower().unique().tolist()
+        strategy_kind = strategy_values[0] if strategy_values else "portfolio"
+        payout = 0.0
+
+        if strategy_kind == "kelly":
+            pick = selected.sort_values(weight_col, ascending=False).iloc[0]
+            weight = to_float(pick.get(weight_col)) or 0.0
+            stake = bankroll * max(weight, 0.0)
+            if stake <= 0:
+                continue
+
+            race_bets += 1
+            total_bet += stake
+            rank = to_float(pick.get("rank"))
+            odds = to_float(pick.get(odds_col))
+            if rank is not None and int(rank) == 1 and odds is not None and odds > 0:
+                payout = stake * odds
+                race_hits += 1
+        else:
+            stake = 1.0
+            race_bets += 1
+            total_bet += stake
+            for _, pick in selected.iterrows():
+                rank = to_float(pick.get("rank"))
+                odds = to_float(pick.get(odds_col))
+                weight = to_float(pick.get(weight_col)) or 0.0
+                if rank is not None and int(rank) == 1 and odds is not None and odds > 0:
+                    payout += stake * weight * odds
+            if payout > 0:
+                race_hits += 1
+                synthetic_odds_hits.append(float(payout / stake))
+
+        total_return += payout
+        bankroll = bankroll - stake + payout
+        peak_bankroll = max(peak_bankroll, bankroll)
+        if peak_bankroll > 0:
+            drawdown = max((peak_bankroll - bankroll) / peak_bankroll, 0.0)
+            max_drawdown = max(max_drawdown, drawdown)
+
+    roi = (total_return / total_bet) if total_bet > 0 else None
+    hit_rate = (race_hits / race_bets) if race_bets > 0 else None
+    avg_synth_odds = float(np.mean(synthetic_odds_hits)) if synthetic_odds_hits else None
+    return {
+        "policy_roi": float(roi) if roi is not None else None,
+        "policy_bets": int(race_bets),
+        "policy_hit_rate": float(hit_rate) if hit_rate is not None else None,
+        "policy_final_bankroll": float(bankroll),
+        "policy_max_drawdown": float(max_drawdown),
+        "policy_avg_synthetic_odds": avg_synth_odds,
+    }
+
+
 def run_policy_strategy(frame: pd.DataFrame, prob_col: str, odds_col: str, params: dict[str, float | str]) -> dict[str, float | int | None]:
     strategy_kind = str(params.get("strategy_kind", "kelly"))
     if strategy_kind == "no_bet":

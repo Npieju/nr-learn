@@ -243,6 +243,9 @@ def run_predict_from_frame(
     for extra_col in [
         "policy_name",
         "policy_strategy_kind",
+        "policy_stage_name",
+        "policy_stage_index",
+        "policy_selected_strategy_kind",
         "policy_selected",
         "policy_selection_rank",
         "policy_weight",
