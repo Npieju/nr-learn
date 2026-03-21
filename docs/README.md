@@ -34,6 +34,7 @@
 - バックテスト: [scripts/run_backtest.py](../scripts/run_backtest.py)
 - serving smoke: [scripts/run_serving_smoke.py](../scripts/run_serving_smoke.py)
 - serving compare dashboard: [scripts/run_serving_compare_dashboard.py](../scripts/run_serving_compare_dashboard.py)
+- serving compare aggregate: [scripts/run_serving_compare_aggregate.py](../scripts/run_serving_compare_aggregate.py)
 
 ## 補足
 
