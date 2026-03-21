@@ -53,6 +53,36 @@ def _load_summary(path: Path) -> dict[str, Any]:
     return payload
 
 
+def _build_stability_context(wf_summary: dict[str, Any], fold_meta: dict[int, dict[str, Any]]) -> dict[str, Any]:
+    valid_counts: Counter[str] = Counter()
+    test_counts: Counter[str] = Counter()
+    for fold in fold_meta.values():
+        valid_counts[str(fold.get("valid_stability_assessment") or "unknown")] += 1
+        test_counts[str(fold.get("test_stability_assessment") or "unknown")] += 1
+
+    warnings: list[str] = []
+    overall_assessment = str(wf_summary.get("stability_assessment") or "unknown")
+    if overall_assessment != "representative":
+        warnings.append(
+            "WF summary is not representative; threshold sweep results should not be used for promotion decisions."
+        )
+    if valid_counts and valid_counts.get("probe_only", 0) == len(fold_meta):
+        warnings.append(
+            "All WF validation folds are probe_only; threshold sweep is directional analysis, not long-horizon evidence."
+        )
+    if test_counts and test_counts.get("probe_only", 0) == len(fold_meta):
+        warnings.append(
+            "All WF test folds are probe_only; threshold sweep does not replace representative out-of-sample validation."
+        )
+
+    return {
+        "wf_summary_stability_assessment": overall_assessment,
+        "valid_fold_stability_counts": dict(valid_counts),
+        "test_fold_stability_counts": dict(test_counts),
+        "warnings": warnings,
+    }
+
+
 def _resolve_detail_csv(summary_path: Path, explicit_path: str | None) -> Path:
     if explicit_path:
         return (ROOT / explicit_path).resolve() if not Path(explicit_path).is_absolute() else Path(explicit_path)
@@ -299,6 +329,7 @@ def main() -> int:
     }
     if not fold_meta:
         raise ValueError(f"WF summary does not contain fold metadata: {summary_path}")
+    stability_context = _build_stability_context(wf_summary, fold_meta)
     target_feasible_fold_counts = _parse_target_fold_counts(
         args.target_feasible_fold_counts,
         max_fold_count=len(fold_meta),
@@ -392,6 +423,7 @@ def main() -> int:
             "target_feasible_fold_counts": target_feasible_fold_counts,
         },
         "source_run_context": wf_summary.get("run_context"),
+        "stability_context": stability_context,
         "baseline_policy_constraints": base_constraints.to_dict(),
         "feasible_fold_counts_by_threshold": threshold_to_feasible,
         "first_threshold_with_any_feasible_fold": first_threshold_with_any_feasible_fold,
@@ -407,6 +439,8 @@ def main() -> int:
 
     print(f"saved sweep report to {output_path.relative_to(ROOT)}")
     print(f"saved sweep table to {summary_csv_path.relative_to(ROOT)}")
+    for warning in stability_context.get("warnings") or []:
+        print(f"warning={warning}")
     for row in preview_rows:
         print(
             "min_bets_abs={min_bets_abs} feasible_folds={feasible_fold_count} blocked_folds={blocked_fold_count} "
