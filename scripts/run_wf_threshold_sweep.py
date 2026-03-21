@@ -31,6 +31,21 @@ def _parse_int_list(raw: str) -> list[int]:
     return deduped
 
 
+def _parse_target_fold_counts(raw: str, *, max_fold_count: int) -> list[int]:
+    values: list[int] = []
+    for part in (raw or "").split(","):
+        token = part.strip()
+        if not token:
+            continue
+        value = int(token)
+        if value <= 0:
+            continue
+        values.append(min(value, max_fold_count))
+    if not values:
+        values = [1]
+    return sorted(set(values))
+
+
 def _load_summary(path: Path) -> dict[str, Any]:
     payload = read_json(path)
     if not isinstance(payload, dict):
@@ -246,6 +261,7 @@ def main() -> int:
     parser.add_argument("--wf-detail-csv", default=None)
     parser.add_argument("--min-bets-abs-values", default="100,80,60,40")
     parser.add_argument("--min-feasible-folds", type=int, default=1)
+    parser.add_argument("--target-feasible-fold-counts", default="1,3,5")
     parser.add_argument("--output", default=None)
     parser.add_argument("--summary-csv", default=None)
     args = parser.parse_args()
@@ -283,6 +299,10 @@ def main() -> int:
     }
     if not fold_meta:
         raise ValueError(f"WF summary does not contain fold metadata: {summary_path}")
+    target_feasible_fold_counts = _parse_target_fold_counts(
+        args.target_feasible_fold_counts,
+        max_fold_count=len(fold_meta),
+    )
 
     analyses: list[dict[str, Any]] = []
     preview_rows: list[dict[str, Any]] = []
@@ -313,6 +333,10 @@ def main() -> int:
                 "feasible_folds": ",".join(str(fold) for fold in analysis.get("feasible_folds") or []),
             }
         )
+        for target_fold_count in target_feasible_fold_counts:
+            preview_rows[-1][f"passes_{target_fold_count}_feasible_folds"] = bool(
+                int(analysis["feasible_fold_count"]) >= int(target_fold_count)
+            )
 
     threshold_to_feasible = {
         int(analysis["policy_constraints"]["min_bets_abs"]): int(analysis["feasible_fold_count"])
@@ -344,6 +368,20 @@ def main() -> int:
         ),
         None,
     )
+    strictest_threshold_passing_feasible_fold_targets: dict[str, int | None] = {}
+    for target_fold_count in target_feasible_fold_counts:
+        strictest_threshold_passing_feasible_fold_targets[str(target_fold_count)] = next(
+            (
+                int(analysis["policy_constraints"]["min_bets_abs"])
+                for analysis in sorted(
+                    analyses,
+                    key=lambda item: int(item["policy_constraints"]["min_bets_abs"]),
+                    reverse=True,
+                )
+                if int(analysis.get("feasible_fold_count") or 0) >= int(target_fold_count)
+            ),
+            None,
+        )
 
     report = {
         "run_context": {
@@ -351,12 +389,14 @@ def main() -> int:
             "wf_detail_csv": str(detail_csv_path.relative_to(ROOT)),
             "min_bets_abs_values": min_bets_abs_values,
             "min_feasible_folds_preview": int(args.min_feasible_folds),
+            "target_feasible_fold_counts": target_feasible_fold_counts,
         },
         "source_run_context": wf_summary.get("run_context"),
         "baseline_policy_constraints": base_constraints.to_dict(),
         "feasible_fold_counts_by_threshold": threshold_to_feasible,
         "first_threshold_with_any_feasible_fold": first_threshold_with_any_feasible_fold,
         "first_threshold_passing_min_feasible_folds_preview": first_threshold_passing_preview,
+        "strictest_threshold_passing_feasible_fold_targets": strictest_threshold_passing_feasible_fold_targets,
         "fold_first_feasible_min_bets_abs": fold_first_feasible_threshold,
         "threshold_analyses": analyses,
     }
@@ -372,6 +412,7 @@ def main() -> int:
             "min_bets_abs={min_bets_abs} feasible_folds={feasible_fold_count} blocked_folds={blocked_fold_count} "
             "passes_preview={passes_min_feasible_folds_preview} dominant_failure={dominant_failure_reason}".format(**row)
         )
+    print(f"strictest_threshold_passing_feasible_fold_targets={strictest_threshold_passing_feasible_fold_targets}")
     return 0
 
 
