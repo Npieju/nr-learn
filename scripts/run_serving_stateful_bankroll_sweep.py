@@ -138,6 +138,51 @@ def _simulate_path(
     }
 
 
+def _simulate_pure_stage_path(
+    *,
+    ordered_dates: list[str],
+    labels: list[str],
+    case_maps: list[dict[str, dict[str, Any]]],
+    stage_index: int,
+    initial_bankroll: float,
+) -> dict[str, Any]:
+    bankroll = float(initial_bankroll)
+    rows: list[dict[str, Any]] = []
+    stage_use_counts = {label: 0 for label in labels}
+
+    for date_value in ordered_dates:
+        case = case_maps[stage_index][date_value]
+        start_bankroll = bankroll
+        multiplier = _daily_multiplier(case)
+        bankroll = bankroll * multiplier
+        label = labels[stage_index]
+        stage_use_counts[label] += 1
+        rows.append(
+            {
+                "date": date_value,
+                "selected_label": label,
+                "selected_stage_index": stage_index + 1,
+                "start_bankroll": start_bankroll,
+                "end_bankroll": bankroll,
+                "daily_multiplier": multiplier,
+                "policy_bets": _daily_bets(case),
+                "policy_name": case.get("policy_name"),
+                "policy_strategy_kind": _load_backtest_metrics(case).get("policy_strategy_kind"),
+            }
+        )
+
+    return {
+        "floors": None,
+        "selection_mode": "pure_stage",
+        "selected_stage_index": int(stage_index + 1),
+        "selected_label": labels[stage_index],
+        "final_bankroll": bankroll,
+        "stage_use_counts": stage_use_counts,
+        "total_bets": int(sum(int(row["policy_bets"]) for row in rows)),
+        "path": rows,
+    }
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--summary-files", nargs="+", required=True)
@@ -175,6 +220,31 @@ def main() -> int:
 
     sweep_rows: list[dict[str, Any]] = []
     best_result: dict[str, Any] | None = None
+
+    pure_stage_results: list[dict[str, Any]] = []
+    for stage_index in range(len(summary_paths)):
+        pure_result = _simulate_pure_stage_path(
+            ordered_dates=shared_dates,
+            labels=labels,
+            case_maps=case_maps,
+            stage_index=stage_index,
+            initial_bankroll=float(args.initial_bankroll),
+        )
+        pure_stage_results.append(pure_result)
+        pure_row = {
+            "selection_mode": "pure_stage",
+            "selected_stage_index": int(stage_index + 1),
+            "selected_label": labels[stage_index],
+            "floors": None,
+            "final_bankroll": float(pure_result["final_bankroll"]),
+            "total_bets": int(pure_result["total_bets"]),
+        }
+        for label, count in pure_result["stage_use_counts"].items():
+            pure_row[f"use_count_{label}"] = int(count)
+        sweep_rows.append(pure_row)
+        if best_result is None or float(pure_result["final_bankroll"]) > float(best_result["final_bankroll"]):
+            best_result = pure_result
+
     for floors_tuple in floor_candidates:
         floors = [float(value) for value in floors_tuple]
         result = _simulate_path(
@@ -185,6 +255,9 @@ def main() -> int:
             initial_bankroll=float(args.initial_bankroll),
         )
         row = {
+            "selection_mode": "threshold_grid",
+            "selected_stage_index": None,
+            "selected_label": None,
             "floors": floors,
             "final_bankroll": float(result["final_bankroll"]),
             "total_bets": int(result["total_bets"]),
@@ -214,6 +287,7 @@ def main() -> int:
             "total_bets": int(baseline_result["total_bets"]),
         },
         "best_result": best_result,
+        "pure_stage_results": pure_stage_results,
         "sweep": sweep_rows,
     }
 
