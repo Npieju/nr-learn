@@ -23,6 +23,7 @@ from racing_ml.common.progress import Heartbeat, ProgressBar
 from racing_ml.common.regime import resolve_regime_name
 from racing_ml.pipeline.backtest_pipeline import run_backtest
 from racing_ml.serving.predict_batch import prepare_prediction_frame, run_predict_from_frame
+from racing_ml.serving.replay_backtest import write_prediction_backtest_artifacts
 from racing_ml.serving.runtime_policy import resolve_runtime_policy
 
 
@@ -522,6 +523,12 @@ def _backtest_paths(date_value: str) -> tuple[Path, Path]:
     return base_dir / f"backtest_{date_tag}.json", base_dir / f"backtest_{date_tag}.png"
 
 
+def _backtest_paths_with_suffix(date_value: str, suffix: str) -> tuple[Path, Path]:
+    date_tag = _date_tag(date_value)
+    base_dir = ROOT / "artifacts" / "reports"
+    return base_dir / f"backtest_{date_tag}_{suffix}.json", base_dir / f"backtest_{date_tag}_{suffix}.png"
+
+
 def _copy_with_suffix(path: Path, suffix: str) -> str | None:
     if not path.exists():
         return None
@@ -622,6 +629,7 @@ def _validate_case(
     prediction_summary: dict[str, Any],
     backtest_summary: dict[str, Any],
     expected_config_path: Path,
+    validate_prediction_policy: bool = True,
 ) -> None:
     if prediction_summary["resolved_date"] != case["date"]:
         raise ValueError(
@@ -633,7 +641,7 @@ def _validate_case(
             f"Score source mismatch for {case['date']}: expected {case['score_source']} got {prediction_summary['score_source']}"
         )
 
-    if prediction_summary["policy_name"] != case["policy_name"]:
+    if validate_prediction_policy and prediction_summary["policy_name"] != case["policy_name"]:
         raise ValueError(
             f"Policy mismatch in predictions for {case['date']}: expected {case['policy_name']} got {prediction_summary['policy_name']}"
         )
@@ -649,7 +657,7 @@ def _validate_case(
             f"Backtest score sources mismatch for {case['date']}: expected {[case['score_source']]} got {sorted(score_sources.keys())}"
         )
 
-    if int(backtest_summary.get("policy_selected_rows", 0) or 0) != int(prediction_summary["policy_selected_rows"]):
+    if validate_prediction_policy and int(backtest_summary.get("policy_selected_rows", 0) or 0) != int(prediction_summary["policy_selected_rows"]):
         raise ValueError(
             f"Selected-row mismatch for {case['date']}: predictions={prediction_summary['policy_selected_rows']} backtest={backtest_summary.get('policy_selected_rows')}"
         )
@@ -692,6 +700,7 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--profile", choices=sorted(set(PROFILE_PRESETS) | set(PROFILE_ALIASES) | set(MODEL_RUN_PROFILES)), required=True)
     parser.add_argument("--date", action="append", default=None)
+    parser.add_argument("--prediction-backend", choices=["fresh", "replay-existing"], default="fresh")
     parser.add_argument("--config", default=None)
     parser.add_argument("--data-config", default=None)
     parser.add_argument("--feature-config", default=None)
@@ -726,15 +735,19 @@ def main() -> int:
         cases = _select_cases(resolved_profile, args.date, model_config)
         output_file.parent.mkdir(parents=True, exist_ok=True)
         os.chdir(ROOT)
-        progress.update(message=f"profile resolved cases={len(cases)} artifact_suffix={artifact_suffix}")
+        progress.update(message=f"profile resolved cases={len(cases)} artifact_suffix={artifact_suffix} backend={args.prediction_backend}")
 
-        with Heartbeat("[serving-smoke]", "preparing shared prediction frame", logger=log_progress):
-            shared_frame = prepare_prediction_frame(_display_path(data_config_path))
-        print(
-            f"[serving-smoke] shared frame ready rows={len(shared_frame):,} columns={len(shared_frame.columns):,}",
-            flush=True,
-        )
-        progress.update(message=f"shared frame ready rows={len(shared_frame):,} columns={len(shared_frame.columns):,}")
+        shared_frame = None
+        if args.prediction_backend == "fresh":
+            with Heartbeat("[serving-smoke]", "preparing shared prediction frame", logger=log_progress):
+                shared_frame = prepare_prediction_frame(_display_path(data_config_path))
+            print(
+                f"[serving-smoke] shared frame ready rows={len(shared_frame):,} columns={len(shared_frame.columns):,}",
+                flush=True,
+            )
+            progress.update(message=f"shared frame ready rows={len(shared_frame):,} columns={len(shared_frame.columns):,}")
+        else:
+            progress.update(message="using replay-existing backend with canonical prediction CSV artifacts")
 
         results: list[dict[str, Any]] = []
         overall_success = True
@@ -749,6 +762,7 @@ def main() -> int:
             }
             prediction_csv, prediction_png = _prediction_paths(case["date"])
             backtest_json, backtest_png = _backtest_paths(case["date"])
+            replay_backtest_json, replay_backtest_png = _backtest_paths_with_suffix(case["date"], artifact_suffix)
 
             print(
                 f"[serving-smoke] running date={case['date']} expected_score_source={case['score_source']} "
@@ -758,18 +772,34 @@ def main() -> int:
             log_progress(f"case {index}/{len(cases)} started date={case['date']}")
 
             try:
-                run_predict_from_frame(
-                    model_config_path=_display_path(config_path),
-                    feature_config_path=_display_path(feature_config_path),
-                    frame=shared_frame,
-                    race_date=case["date"],
-                )
-                if not prediction_csv.exists():
-                    raise FileNotFoundError(f"Prediction artifact not found: {prediction_csv}")
+                if args.prediction_backend == "fresh":
+                    run_predict_from_frame(
+                        model_config_path=_display_path(config_path),
+                        feature_config_path=_display_path(feature_config_path),
+                        frame=shared_frame,
+                        race_date=case["date"],
+                    )
+                    if not prediction_csv.exists():
+                        raise FileNotFoundError(f"Prediction artifact not found: {prediction_csv}")
 
-                run_backtest(_display_path(config_path), _display_path(prediction_csv))
-                if not backtest_json.exists():
-                    raise FileNotFoundError(f"Backtest artifact not found: {backtest_json}")
+                    run_backtest(_display_path(config_path), _display_path(prediction_csv))
+                    if not backtest_json.exists():
+                        raise FileNotFoundError(f"Backtest artifact not found: {backtest_json}")
+                else:
+                    if not prediction_csv.exists():
+                        raise FileNotFoundError(f"Canonical prediction artifact not found for replay: {prediction_csv}")
+                    frame = pd.read_csv(prediction_csv)
+                    write_prediction_backtest_artifacts(
+                        frame,
+                        model_config=model_config,
+                        config_path=config_path,
+                        prediction_path=prediction_csv,
+                        workspace_root=ROOT,
+                        output_json_path=replay_backtest_json,
+                        output_png_path=replay_backtest_png,
+                    )
+                    backtest_json = replay_backtest_json
+                    backtest_png = replay_backtest_png
 
                 prediction_summary = _prediction_summary(prediction_csv)
                 backtest_summary = _backtest_summary(backtest_json)
@@ -778,16 +808,25 @@ def main() -> int:
                     prediction_summary=prediction_summary,
                     backtest_summary=backtest_summary,
                     expected_config_path=config_path,
+                    validate_prediction_policy=args.prediction_backend == "fresh",
                 )
 
                 archived_artifacts = {}
                 if not args.no_archive_artifacts:
-                    archived_artifacts = {
-                        "prediction_csv": _copy_with_suffix(prediction_csv, artifact_suffix),
-                        "prediction_png": _copy_with_suffix(prediction_png, artifact_suffix),
-                        "backtest_json": _copy_with_suffix(backtest_json, artifact_suffix),
-                        "backtest_png": _copy_with_suffix(backtest_png, artifact_suffix),
-                    }
+                    if args.prediction_backend == "fresh":
+                        archived_artifacts = {
+                            "prediction_csv": _copy_with_suffix(prediction_csv, artifact_suffix),
+                            "prediction_png": _copy_with_suffix(prediction_png, artifact_suffix),
+                            "backtest_json": _copy_with_suffix(backtest_json, artifact_suffix),
+                            "backtest_png": _copy_with_suffix(backtest_png, artifact_suffix),
+                        }
+                    else:
+                        archived_artifacts = {
+                            "prediction_csv": _copy_with_suffix(prediction_csv, artifact_suffix),
+                            "prediction_png": _copy_with_suffix(prediction_png, artifact_suffix),
+                            "backtest_json": _display_path(backtest_json),
+                            "backtest_png": _display_path(backtest_png),
+                        }
 
                 case_result.update(
                     {
@@ -795,8 +834,8 @@ def main() -> int:
                         "prediction_file": _display_path(prediction_csv),
                         "backtest_file": _display_path(backtest_json),
                         "score_source": prediction_summary["score_source"],
-                        "policy_name": prediction_summary["policy_name"],
-                        "policy_selected_rows": prediction_summary["policy_selected_rows"],
+                        "policy_name": str(backtest_summary.get("policy_name", "")),
+                        "policy_selected_rows": int(backtest_summary.get("policy_selected_rows", 0) or 0),
                         "policy_bets": int(backtest_summary.get("policy_bets", 0) or 0),
                         "policy_roi": backtest_summary.get("policy_roi"),
                         "archived_artifacts": archived_artifacts,
@@ -804,7 +843,7 @@ def main() -> int:
                 )
                 print(
                     f"[serving-smoke] ok date={case['date']} score_source={prediction_summary['score_source']} "
-                    f"policy={prediction_summary['policy_name']} bets={int(backtest_summary.get('policy_bets', 0) or 0)}",
+                    f"policy={str(backtest_summary.get('policy_name', ''))} bets={int(backtest_summary.get('policy_bets', 0) or 0)}",
                     flush=True,
                 )
                 case_progress.update(current=index, message=f"date={case['date']} status=ok")
