@@ -33,6 +33,7 @@
 - 予測: [scripts/run_predict.py](../scripts/run_predict.py)
 - バックテスト: [scripts/run_backtest.py](../scripts/run_backtest.py)
 - serving smoke: [scripts/run_serving_smoke.py](../scripts/run_serving_smoke.py)
+- serving compare dashboard: [scripts/run_serving_compare_dashboard.py](../scripts/run_serving_compare_dashboard.py)
 
 ## 補足
 
