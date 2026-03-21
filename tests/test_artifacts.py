@@ -9,10 +9,12 @@ import pandas as pd
 
 from racing_ml.common.artifacts import (
     append_suffix_to_file_name,
+    build_bundle_manifest,
     build_model_manifest,
     display_path,
     ensure_output_directory_path,
     ensure_output_file_path,
+    resolve_component_from_config,
     write_csv_file,
     write_json,
     write_text_file,
@@ -20,6 +22,62 @@ from racing_ml.common.artifacts import (
 
 
 class ArtifactHelpersTest(unittest.TestCase):
+    def _write_component_files(
+        self,
+        workspace_root: Path,
+        *,
+        include_manifest: bool = True,
+        include_report: bool = True,
+        manifest_metrics: dict[str, object] | None = None,
+        report_metrics: dict[str, object] | None = None,
+    ) -> Path:
+        config_path = workspace_root / "configs" / "component.yaml"
+        config_path.parent.mkdir(parents=True, exist_ok=True)
+        config_path.write_text(
+            """
+task: regression
+label: payout
+model:
+  name: catboost
+output:
+  model_dir: artifacts/models
+  report_dir: artifacts/reports
+  model_file: component.joblib
+  report_file: component_metrics.json
+evaluation:
+  policy:
+    min_rows: 100
+""".strip()
+            + "\n",
+            encoding="utf-8",
+        )
+
+        model_path = workspace_root / "artifacts" / "models" / "component.joblib"
+        model_path.parent.mkdir(parents=True, exist_ok=True)
+        model_path.write_text("model", encoding="utf-8")
+
+        if include_report:
+            report_path = workspace_root / "artifacts" / "reports" / "component_metrics.json"
+            report_path.parent.mkdir(parents=True, exist_ok=True)
+            report_path.write_text(
+                json.dumps(report_metrics or {"rmse": 1.23, "run_context": {"rows": 10}}),
+                encoding="utf-8",
+            )
+
+        if include_manifest:
+            manifest_path = workspace_root / "artifacts" / "models" / "component.manifest.json"
+            manifest_path.write_text(
+                json.dumps(
+                    {
+                        "metrics": manifest_metrics
+                        or {"rmse": 0.99, "run_context": {"rows": 20}, "metadata": {"source": "manifest"}}
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+        return config_path
+
     def test_append_suffix_to_file_name_keeps_original_when_suffix_blank(self) -> None:
         self.assertEqual(append_suffix_to_file_name("report.json", None), "report.json")
         self.assertEqual(append_suffix_to_file_name("report.json", "  "), "report.json")
@@ -93,6 +151,75 @@ class ArtifactHelpersTest(unittest.TestCase):
             self.assertEqual(manifest["features"]["count"], 2)
             self.assertEqual(manifest["features"]["categorical_count"], 1)
             self.assertEqual(manifest["metadata"], {"revision": "r1"})
+
+    def test_resolve_component_from_config_prefers_manifest_metrics(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            workspace_root = Path(tmp_dir)
+            config_path = self._write_component_files(workspace_root)
+
+            component = resolve_component_from_config(
+                workspace_root=workspace_root,
+                component_name="primary",
+                config_path=config_path,
+            )
+
+            self.assertEqual(component["name"], "primary")
+            self.assertEqual(component["task"], "regression")
+            self.assertEqual(component["label_column"], "payout")
+            self.assertEqual(component["model_name"], "catboost")
+            self.assertEqual(component["model_path"], "artifacts/models/component.joblib")
+            self.assertEqual(component["manifest_path"], "artifacts/models/component.manifest.json")
+            self.assertEqual(component["report_path"], "artifacts/reports/component_metrics.json")
+            self.assertEqual(component["metrics"], {"rmse": 0.99})
+            self.assertEqual(component["evaluation_policy"], {"min_rows": 100})
+
+    def test_resolve_component_from_config_falls_back_to_report_metrics(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            workspace_root = Path(tmp_dir)
+            config_path = self._write_component_files(
+                workspace_root,
+                include_manifest=False,
+                report_metrics={"rmse": 1.23, "metadata": {"source": "report"}, "policy_constraints": {"cap": 1}},
+            )
+
+            component = resolve_component_from_config(
+                workspace_root=workspace_root,
+                component_name="fallback",
+                config_path=config_path,
+            )
+
+            self.assertIsNone(component["manifest_path"])
+            self.assertEqual(component["metrics"], {"rmse": 1.23})
+
+    def test_resolve_component_from_config_requires_model_file(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            workspace_root = Path(tmp_dir)
+            config_path = workspace_root / "configs" / "component.yaml"
+            config_path.parent.mkdir(parents=True, exist_ok=True)
+            config_path.write_text(
+                "output:\n  model_dir: artifacts/models\n  model_file: missing.joblib\n",
+                encoding="utf-8",
+            )
+
+            with self.assertRaisesRegex(FileNotFoundError, "Component 'missing' model file not found"):
+                resolve_component_from_config(
+                    workspace_root=workspace_root,
+                    component_name="missing",
+                    config_path=config_path,
+                )
+
+    def test_build_bundle_manifest_counts_components(self) -> None:
+        manifest = build_bundle_manifest(
+            bundle_name="stack_a",
+            bundle_kind="ensemble",
+            primary_component="win",
+            components={"win": {"model_path": "artifacts/models/win.joblib"}, "place": {"model_path": "artifacts/models/place.joblib"}},
+        )
+
+        self.assertEqual(manifest["bundle_name"], "stack_a")
+        self.assertEqual(manifest["primary_component"], "win")
+        self.assertEqual(manifest["metadata"]["component_count"], 2)
+        self.assertEqual(manifest["metadata"]["component_names"], ["win", "place"])
 
 
 if __name__ == "__main__":
