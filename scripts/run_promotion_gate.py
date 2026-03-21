@@ -91,12 +91,25 @@ def _resolve_matching_wf_summary(
     return latest_match[1], latest_match[2]
 
 
-def _summarize_wf_feasibility_diagnostics(folds: list[dict[str, Any]]) -> dict[str, Any]:
+def _summarize_wf_feasibility_diagnostics(
+    folds: list[dict[str, Any]],
+    *,
+    policy_constraints: dict[str, Any] | None = None,
+) -> dict[str, Any]:
     failure_reason_counts: Counter[str] = Counter()
     min_bets_required_by_fold: dict[str, int] = {}
+    ratio_bets_required_by_fold: dict[str, int] = {}
+    binding_min_bets_source_by_fold: dict[str, str] = {}
+    binding_source_counts: Counter[str] = Counter()
     best_fallback_by_fold: list[dict[str, Any]] = []
     closest_infeasible_by_fold: list[dict[str, Any]] = []
     max_infeasible_bets = 0
+    absolute_min_bets_required = 0
+    min_bet_ratio = 0.0
+
+    if isinstance(policy_constraints, dict):
+        absolute_min_bets_required = int(policy_constraints.get("min_bets_abs") or 0)
+        min_bet_ratio = float(policy_constraints.get("min_bet_ratio") or 0.0)
 
     for fold in folds:
         fold_index = int((fold or {}).get("fold") or 0)
@@ -108,7 +121,21 @@ def _summarize_wf_feasibility_diagnostics(folds: list[dict[str, Any]]) -> dict[s
                 except Exception:
                     continue
 
-        min_bets_required_by_fold[str(fold_index)] = int((fold or {}).get("min_bets_required") or 0)
+        min_bets_required = int((fold or {}).get("min_bets_required") or 0)
+        min_bets_required_by_fold[str(fold_index)] = min_bets_required
+        valid_races = int((fold or {}).get("valid_races") or 0)
+        ratio_required = int(valid_races * min_bet_ratio)
+        ratio_bets_required_by_fold[str(fold_index)] = ratio_required
+        if min_bets_required <= 0:
+            binding_source = "unknown"
+        elif min_bets_required == absolute_min_bets_required and absolute_min_bets_required >= ratio_required:
+            binding_source = "absolute"
+        elif min_bets_required == ratio_required and ratio_required > absolute_min_bets_required:
+            binding_source = "ratio"
+        else:
+            binding_source = "mixed"
+        binding_min_bets_source_by_fold[str(fold_index)] = binding_source
+        binding_source_counts[binding_source] += 1
 
         best_fallback = (fold or {}).get("best_fallback")
         if isinstance(best_fallback, dict):
@@ -149,7 +176,12 @@ def _summarize_wf_feasibility_diagnostics(folds: list[dict[str, Any]]) -> dict[s
         "dominant_failure_reason": dominant_failure_reason,
         "dominant_failure_count": int(dominant_failure_count),
         "failure_reason_counts_total": dict(failure_reason_counts),
+        "min_bet_ratio": float(min_bet_ratio),
+        "min_bets_abs": int(absolute_min_bets_required),
         "min_bets_required_by_fold": min_bets_required_by_fold,
+        "ratio_bets_required_by_fold": ratio_bets_required_by_fold,
+        "binding_min_bets_source_by_fold": binding_min_bets_source_by_fold,
+        "binding_min_bets_source_counts": dict(binding_source_counts),
         "max_infeasible_bets_observed": int(max_infeasible_bets),
         "best_fallback_by_fold": best_fallback_by_fold,
         "closest_infeasible_by_fold": closest_infeasible_by_fold,
@@ -312,7 +344,10 @@ def main() -> int:
 
         valid_probe_only_count = sum(1 for fold in folds if (fold or {}).get("valid_stability_assessment") == "probe_only")
         test_probe_only_count = sum(1 for fold in folds if (fold or {}).get("test_stability_assessment") == "probe_only")
-        wf_diagnostics = _summarize_wf_feasibility_diagnostics(folds)
+        wf_diagnostics = _summarize_wf_feasibility_diagnostics(
+            folds,
+            policy_constraints=(wf_summary_payload or {}).get("policy_constraints") if isinstance((wf_summary_payload or {}).get("policy_constraints"), dict) else None,
+        )
         if folds and valid_probe_only_count == len(folds) and test_probe_only_count == len(folds):
             warnings.append("All walk-forward valid/test slices are probe_only; use fold-level ROI only as directional evidence.")
         if feasible_fold_count == 0 and wf_diagnostics.get("dominant_failure_reason") is not None:
@@ -345,6 +380,7 @@ def main() -> int:
                 "wf_valid_probe_only_count": int(valid_probe_only_count),
                 "wf_test_probe_only_count": int(test_probe_only_count),
                 "wf_dominant_failure_reason": wf_diagnostics.get("dominant_failure_reason"),
+                "wf_binding_min_bets_source_counts": wf_diagnostics.get("binding_min_bets_source_counts"),
                 "wf_max_infeasible_bets_observed": wf_diagnostics.get("max_infeasible_bets_observed"),
                 "auto_resolved_wf_summary": bool(auto_resolved_wf_path),
             },
