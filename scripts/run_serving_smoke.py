@@ -18,6 +18,7 @@ if str(SRC) not in sys.path:
 import pandas as pd
 
 from racing_ml.common.config import load_yaml
+from racing_ml.common.model_profiles import MODEL_RUN_PROFILES
 from racing_ml.common.progress import Heartbeat, ProgressBar
 from racing_ml.common.regime import resolve_regime_name
 from racing_ml.pipeline.backtest_pipeline import run_backtest
@@ -419,6 +420,28 @@ def _resolve_profile_name(profile_name: str) -> str:
     return PROFILE_ALIASES.get(profile_name, profile_name)
 
 
+def _resolve_profile_defaults(resolved_profile: str) -> dict[str, str]:
+    if resolved_profile in PROFILE_PRESETS:
+        preset = PROFILE_PRESETS[resolved_profile]
+        return {
+            "config": str(preset["config"]),
+            "data_config": str(preset["data_config"]),
+            "feature_config": str(preset["feature_config"]),
+            "artifact_suffix": str(preset["artifact_suffix"]),
+        }
+
+    model_profile = MODEL_RUN_PROFILES.get(resolved_profile)
+    if model_profile is None:
+        raise ValueError(f"Unknown serving smoke profile: {resolved_profile}")
+
+    return {
+        "config": model_profile.model_config,
+        "data_config": model_profile.data_config,
+        "feature_config": model_profile.feature_config,
+        "artifact_suffix": resolved_profile,
+    }
+
+
 def _pid_is_running(pid: int) -> bool:
     if pid <= 0:
         return False
@@ -639,9 +662,11 @@ def _validate_case(
 
 
 def _select_cases(profile_name: str, requested_dates: list[str] | None, model_config: dict[str, Any]) -> list[dict[str, Any]]:
-    preset = PROFILE_PRESETS[profile_name]
-    cases = list(preset["cases"])
+    preset = PROFILE_PRESETS.get(profile_name)
+    cases = list(preset["cases"]) if preset is not None else []
     if not requested_dates:
+        if preset is None:
+            raise ValueError(f"Profile {profile_name} requires at least one --date because it has no built-in case preset")
         return cases
 
     normalized_dates: list[str] = []
@@ -665,7 +690,7 @@ def _select_cases(profile_name: str, requested_dates: list[str] | None, model_co
 
 def main() -> int:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--profile", choices=sorted(set(PROFILE_PRESETS) | set(PROFILE_ALIASES)), required=True)
+    parser.add_argument("--profile", choices=sorted(set(PROFILE_PRESETS) | set(PROFILE_ALIASES) | set(MODEL_RUN_PROFILES)), required=True)
     parser.add_argument("--date", action="append", default=None)
     parser.add_argument("--config", default=None)
     parser.add_argument("--data-config", default=None)
@@ -677,11 +702,11 @@ def main() -> int:
     args = parser.parse_args()
 
     resolved_profile = _resolve_profile_name(args.profile)
-    preset = PROFILE_PRESETS[resolved_profile]
-    config_path = _resolve_path(args.config or preset["config"])
-    data_config_path = _resolve_path(args.data_config or preset["data_config"])
-    feature_config_path = _resolve_path(args.feature_config or preset["feature_config"])
-    default_artifact_suffix = preset["artifact_suffix"] if args.profile == resolved_profile else args.profile
+    defaults = _resolve_profile_defaults(resolved_profile)
+    config_path = _resolve_path(args.config or defaults["config"])
+    data_config_path = _resolve_path(args.data_config or defaults["data_config"])
+    feature_config_path = _resolve_path(args.feature_config or defaults["feature_config"])
+    default_artifact_suffix = defaults["artifact_suffix"] if args.profile == resolved_profile else args.profile
     artifact_suffix = str(args.artifact_suffix or default_artifact_suffix).strip() or args.profile
     output_file = _resolve_path(args.output_file) if args.output_file else ROOT / "artifacts" / "reports" / f"serving_smoke_{args.profile}.json"
     lock_acquired = False
