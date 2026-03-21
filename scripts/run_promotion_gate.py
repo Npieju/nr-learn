@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+from collections import Counter
 from pathlib import Path
 import sys
 import time
@@ -88,6 +89,71 @@ def _resolve_matching_wf_summary(
     if latest_match is None:
         return None, None
     return latest_match[1], latest_match[2]
+
+
+def _summarize_wf_feasibility_diagnostics(folds: list[dict[str, Any]]) -> dict[str, Any]:
+    failure_reason_counts: Counter[str] = Counter()
+    min_bets_required_by_fold: dict[str, int] = {}
+    best_fallback_by_fold: list[dict[str, Any]] = []
+    closest_infeasible_by_fold: list[dict[str, Any]] = []
+    max_infeasible_bets = 0
+
+    for fold in folds:
+        fold_index = int((fold or {}).get("fold") or 0)
+        failure_counts = (fold or {}).get("failure_reason_counts")
+        if isinstance(failure_counts, dict):
+            for reason, count in failure_counts.items():
+                try:
+                    failure_reason_counts[str(reason)] += int(count)
+                except Exception:
+                    continue
+
+        min_bets_required_by_fold[str(fold_index)] = int((fold or {}).get("min_bets_required") or 0)
+
+        best_fallback = (fold or {}).get("best_fallback")
+        if isinstance(best_fallback, dict):
+            best_fallback_by_fold.append(
+                {
+                    "fold": fold_index,
+                    "strategy_kind": best_fallback.get("strategy_kind"),
+                    "bets": int(best_fallback.get("bets") or 0),
+                    "roi": best_fallback.get("roi"),
+                    "final_bankroll": best_fallback.get("final_bankroll"),
+                    "max_drawdown": best_fallback.get("max_drawdown"),
+                    "gate_failures": list(best_fallback.get("gate_failures") or []),
+                }
+            )
+            max_infeasible_bets = max(max_infeasible_bets, int(best_fallback.get("bets") or 0))
+
+        closest_infeasible = (fold or {}).get("closest_infeasible")
+        if isinstance(closest_infeasible, list) and closest_infeasible:
+            first_candidate = closest_infeasible[0]
+            if isinstance(first_candidate, dict):
+                closest_infeasible_by_fold.append(
+                    {
+                        "fold": fold_index,
+                        "strategy_kind": first_candidate.get("strategy_kind"),
+                        "bets": int(first_candidate.get("bets") or 0),
+                        "roi": first_candidate.get("roi"),
+                        "final_bankroll": first_candidate.get("final_bankroll"),
+                        "max_drawdown": first_candidate.get("max_drawdown"),
+                        "gate_failures": list(first_candidate.get("gate_failures") or []),
+                    }
+                )
+                max_infeasible_bets = max(max_infeasible_bets, int(first_candidate.get("bets") or 0))
+
+    dominant_failure_reason = failure_reason_counts.most_common(1)[0][0] if failure_reason_counts else None
+    dominant_failure_count = failure_reason_counts.most_common(1)[0][1] if failure_reason_counts else 0
+
+    return {
+        "dominant_failure_reason": dominant_failure_reason,
+        "dominant_failure_count": int(dominant_failure_count),
+        "failure_reason_counts_total": dict(failure_reason_counts),
+        "min_bets_required_by_fold": min_bets_required_by_fold,
+        "max_infeasible_bets_observed": int(max_infeasible_bets),
+        "best_fallback_by_fold": best_fallback_by_fold,
+        "closest_infeasible_by_fold": closest_infeasible_by_fold,
+    }
 
 
 def main() -> int:
@@ -246,8 +312,14 @@ def main() -> int:
 
         valid_probe_only_count = sum(1 for fold in folds if (fold or {}).get("valid_stability_assessment") == "probe_only")
         test_probe_only_count = sum(1 for fold in folds if (fold or {}).get("test_stability_assessment") == "probe_only")
+        wf_diagnostics = _summarize_wf_feasibility_diagnostics(folds)
         if folds and valid_probe_only_count == len(folds) and test_probe_only_count == len(folds):
             warnings.append("All walk-forward valid/test slices are probe_only; use fold-level ROI only as directional evidence.")
+        if feasible_fold_count == 0 and wf_diagnostics.get("dominant_failure_reason") is not None:
+            warnings.append(
+                "No feasible walk-forward folds were found; dominant gate failure reason="
+                f"{wf_diagnostics['dominant_failure_reason']}"
+            )
 
         output_payload = {
             "status": "pass" if not blocking_reasons else "block",
@@ -259,6 +331,7 @@ def main() -> int:
             "checks": checks,
             "blocking_reasons": blocking_reasons,
             "warnings": warnings,
+            "wf_diagnostics": wf_diagnostics,
             "summary": {
                 "profile": manifest_payload.get("profile"),
                 "config": manifest_payload.get("config"),
@@ -271,6 +344,8 @@ def main() -> int:
                 "wf_feasible_fold_count": int(feasible_fold_count),
                 "wf_valid_probe_only_count": int(valid_probe_only_count),
                 "wf_test_probe_only_count": int(test_probe_only_count),
+                "wf_dominant_failure_reason": wf_diagnostics.get("dominant_failure_reason"),
+                "wf_max_infeasible_bets_observed": wf_diagnostics.get("max_infeasible_bets_observed"),
                 "auto_resolved_wf_summary": bool(auto_resolved_wf_path),
             },
         }

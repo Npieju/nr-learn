@@ -198,9 +198,11 @@ nr-learn/
             - `ev_threshold_1_2_roi`: 期待値1.2以上のみ購入
     - manifest の整合性を点検するときは `python scripts/run_validate_evaluation_manifest.py --manifest artifacts/reports/evaluation_manifest.json` を使えます
     - latest + versioned manifest をまとめて点検するときは `python scripts/run_validate_evaluation_manifest.py --all-manifests` を使えます
+    - versioned manifest 単体も独立に検証できます。latest が別 run に進んだ後でも、`evaluation_manifest_<model>_...json` は自分の versioned summary / by-date / manifest と整合していれば `ok` になります
     - 必要に応じて `--output artifacts/reports/evaluation_manifest_validation.json` で validation report を保存できます
     - 昇格可否を機械判定したいときは `python scripts/run_promotion_gate.py --evaluation-manifest artifacts/reports/evaluation_manifest.json` を使えます。matching な `wf_feasibility_diag_*.json` があれば config/data/feature tuple で自動解決し、見つからない場合は `--wf-summary <path>` を明示します
     - promotion gate は evaluation manifest 整合性、evaluation の `stability_assessment=representative`、matching な walk-forward feasibility summary の `stability_assessment=representative`、そして feasible fold 数をまとめて見ます。fold の valid/test は短窓になりやすいため `probe_only` でも即 fail にはせず warning として扱います
+    - gate report には `wf_diagnostics` も入り、dominant な failure reason、fold ごとの `min_bets_required`、`best_fallback` / `closest_infeasible` の要約を見られます。`hold` の根因が `min_bets` なのか他条件なのかを report 単体で追えるようにしています
     - gate report はデフォルトで `artifacts/reports/promotion_gate_report.json` に保存されます。長期運用の昇格判断は短い probe ROI ではなく、この report を起点に確認する想定です
 9. ベースライン vs Ranker 比較（同一データでA/B）
     - stable alias で比較する場合は `python scripts/run_ab_compare.py --base-profile current_best_eval --challenger-profile current_recommended_serving --max-rows 30000` を使えます

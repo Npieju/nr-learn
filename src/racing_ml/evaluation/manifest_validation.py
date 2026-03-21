@@ -86,6 +86,8 @@ def validate_evaluation_manifest(manifest_path: Path, *, root: Path) -> dict[str
 
     checks: list[dict[str, Any]] = []
     errors: list[str] = []
+    validating_latest_manifest = manifest_path == latest_manifest_path if latest_manifest_path is not None else False
+    validating_versioned_manifest = manifest_path == versioned_manifest_path if versioned_manifest_path is not None else False
 
     for key, path in [
         ("latest_summary", latest_summary_path),
@@ -130,10 +132,12 @@ def validate_evaluation_manifest(manifest_path: Path, *, root: Path) -> dict[str
         )
 
     summary_sha256 = manifest.get("checksums", {}).get("summary_sha256") if isinstance(manifest.get("checksums"), dict) else None
-    for key, path in [
-        ("latest_summary", latest_summary_path),
-        ("versioned_summary", versioned_summary_path),
-    ]:
+    summary_targets: list[tuple[str, Path | None]] = []
+    if validating_latest_manifest:
+        summary_targets.append(("latest_summary", latest_summary_path))
+    if validating_latest_manifest or validating_versioned_manifest:
+        summary_targets.append(("versioned_summary", versioned_summary_path))
+    for key, path in summary_targets:
         if path is not None and path.exists() and summary_sha256:
             actual_summary_sha256 = _sha256_file(path)
             _append_result(
@@ -151,11 +155,14 @@ def validate_evaluation_manifest(manifest_path: Path, *, root: Path) -> dict[str
             )
 
     by_date_sha256 = manifest.get("checksums", {}).get("by_date_sha256") if isinstance(manifest.get("checksums"), dict) else None
-    if by_date_present and latest_by_date_path is not None and latest_by_date_path.exists():
-        for key, path in [
-            ("latest_by_date", latest_by_date_path),
-            ("versioned_by_date", versioned_by_date_path),
-        ]:
+    current_by_date_path = latest_by_date_path if validating_latest_manifest else versioned_by_date_path
+    if by_date_present and current_by_date_path is not None and current_by_date_path.exists():
+        by_date_targets: list[tuple[str, Path | None]] = []
+        if validating_latest_manifest:
+            by_date_targets.append(("latest_by_date", latest_by_date_path))
+        if validating_latest_manifest or validating_versioned_manifest:
+            by_date_targets.append(("versioned_by_date", versioned_by_date_path))
+        for key, path in by_date_targets:
             if path is None or not path.exists():
                 continue
             actual_by_date_sha256 = _sha256_file(path)
@@ -173,7 +180,7 @@ def validate_evaluation_manifest(manifest_path: Path, *, root: Path) -> dict[str
                 f"Checksum mismatch for {key}",
             )
 
-        by_date_frame = pd.read_csv(latest_by_date_path)
+        by_date_frame = pd.read_csv(current_by_date_path)
         actual_by_date_rows = int(len(by_date_frame))
         expected_by_date_rows = manifest.get("by_date_rows")
         _append_result(
@@ -229,10 +236,12 @@ def validate_evaluation_manifest(manifest_path: Path, *, root: Path) -> dict[str
             "Manifest marks by_date absent but checksum is still populated",
         )
 
-    for key, path in [
-        ("latest_manifest", latest_manifest_path),
-        ("versioned_manifest", versioned_manifest_path),
-    ]:
+    manifest_targets: list[tuple[str, Path | None]] = []
+    if validating_latest_manifest:
+        manifest_targets.append(("latest_manifest", latest_manifest_path))
+    if validating_latest_manifest or validating_versioned_manifest:
+        manifest_targets.append(("versioned_manifest", versioned_manifest_path))
+    for key, path in manifest_targets:
         if path is None or not path.exists():
             continue
         other_manifest = read_json(path)
