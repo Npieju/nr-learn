@@ -50,6 +50,16 @@ def _slugify(value: str) -> str:
     return slug or "summary"
 
 
+def _summary_slug(summary: dict[str, Any], fallback_path: Path) -> str:
+    artifact_suffix = str(summary.get("artifact_suffix") or "").strip()
+    if artifact_suffix:
+        return _slugify(artifact_suffix)
+    profile = str(summary.get("profile") or "").strip()
+    if profile:
+        return _slugify(profile)
+    return _slugify(fallback_path.stem)
+
+
 def _case_map(summary: dict[str, Any], label: str) -> dict[str, dict[str, Any]]:
     cases = summary.get("cases") if isinstance(summary.get("cases"), list) else []
     mapping: dict[str, dict[str, Any]] = {}
@@ -214,8 +224,8 @@ def main() -> int:
 
         left_label = str(args.left_label or left_summary.get("profile") or left_summary_path.stem).strip()
         right_label = str(args.right_label or right_summary.get("profile") or right_summary_path.stem).strip()
-        left_slug = _slugify(left_label)
-        right_slug = _slugify(right_label)
+        left_slug = _summary_slug(left_summary, left_summary_path)
+        right_slug = _summary_slug(right_summary, right_summary_path)
 
         output_json = _resolve_path(args.output_json) if args.output_json else ROOT / "artifacts" / "reports" / f"serving_smoke_compare_{left_slug}_vs_{right_slug}.json"
         output_csv = _resolve_path(args.output_csv) if args.output_csv else ROOT / "artifacts" / "reports" / f"serving_smoke_compare_{left_slug}_vs_{right_slug}.csv"
