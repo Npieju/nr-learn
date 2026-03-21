@@ -137,6 +137,49 @@ def _serialize_candidate(row: dict[str, Any] | None) -> dict[str, Any] | None:
     return payload
 
 
+def _candidate_signature(row: dict[str, Any] | None) -> str | None:
+    if row is None:
+        return None
+    fields = [
+        "fold",
+        "strategy_kind",
+        "blend_weight",
+        "min_edge",
+        "min_prob",
+        "fractional_kelly",
+        "max_fraction",
+        "odds_min",
+        "odds_max",
+        "top_k",
+        "min_expected_value",
+    ]
+    parts: list[str] = []
+    for field in fields:
+        value = row.get(field)
+        if value is None:
+            parts.append(f"{field}=None")
+        else:
+            parts.append(f"{field}={value}")
+    return "|".join(parts)
+
+
+def _summarize_numeric(values: list[float]) -> dict[str, float | int | None]:
+    if not values:
+        return {
+            "count": 0,
+            "min": None,
+            "median": None,
+            "max": None,
+        }
+    series = pd.Series(values, dtype=float)
+    return {
+        "count": int(len(values)),
+        "min": float(series.min()),
+        "median": float(series.median()),
+        "max": float(series.max()),
+    }
+
+
 def _closest_key(row: dict[str, Any], *, min_bets_required: int, constraints: PolicyConstraints) -> tuple[float, float, float, float, float]:
     bets_gap = max(0, min_bets_required - int(row.get("bets") or 0))
     drawdown_gap = max(0.0, float(row.get("max_drawdown") or 0.0) - constraints.max_drawdown)
@@ -172,6 +215,12 @@ def _analyze_threshold(
     failure_reason_counts_total: Counter[str] = Counter()
     binding_source_counts: Counter[str] = Counter()
     feasible_folds: list[int] = []
+    best_feasible_bets_by_fold: dict[str, int] = {}
+    best_feasible_bet_ratio_by_fold: dict[str, float] = {}
+    best_feasible_signature_by_fold: dict[str, str] = {}
+    best_feasible_bets_values: list[float] = []
+    best_feasible_bet_ratio_values: list[float] = []
+    feasible_candidate_count_total = 0
 
     for fold_index in sorted(fold_meta):
         fold_rows_df = detail_df.loc[detail_df["fold"] == fold_index].copy()
@@ -238,8 +287,19 @@ def _analyze_threshold(
                 best_feasible = row
 
         feasible_candidates = [row for row in candidate_rows if bool(row.get("is_feasible"))]
+        feasible_candidate_count_total += int(len(feasible_candidates))
         if feasible_candidates:
             feasible_folds.append(int(fold_index))
+        if isinstance(best_feasible, dict):
+            best_bets = int(best_feasible.get("bets") or 0)
+            best_ratio = float(best_bets / valid_races) if valid_races > 0 else 0.0
+            best_feasible_bets_by_fold[str(fold_index)] = best_bets
+            best_feasible_bet_ratio_by_fold[str(fold_index)] = best_ratio
+            best_signature = _candidate_signature(best_feasible)
+            if best_signature is not None:
+                best_feasible_signature_by_fold[str(fold_index)] = best_signature
+            best_feasible_bets_values.append(float(best_bets))
+            best_feasible_bet_ratio_values.append(float(best_ratio))
 
         closest_infeasible = [
             _serialize_candidate(row)
@@ -274,6 +334,7 @@ def _analyze_threshold(
     return {
         "policy_constraints": constraints.to_dict(),
         "feasible_fold_count": int(len(feasible_folds)),
+        "feasible_candidate_count_total": int(feasible_candidate_count_total),
         "blocked_fold_count": int(max(len(fold_summaries) - len(feasible_folds), 0)),
         "feasible_folds": feasible_folds,
         "passes_min_feasible_folds_preview": bool(len(feasible_folds) >= min_feasible_folds),
@@ -281,6 +342,11 @@ def _analyze_threshold(
         "dominant_failure_count": int(dominant_failure_count),
         "failure_reason_counts_total": dict(failure_reason_counts_total),
         "binding_min_bets_source_counts": dict(binding_source_counts),
+        "best_feasible_bets_by_fold": best_feasible_bets_by_fold,
+        "best_feasible_bet_ratio_by_fold": best_feasible_bet_ratio_by_fold,
+        "best_feasible_bet_support_summary": _summarize_numeric(best_feasible_bets_values),
+        "best_feasible_bet_ratio_support_summary": _summarize_numeric(best_feasible_bet_ratio_values),
+        "best_feasible_signature_by_fold": best_feasible_signature_by_fold,
         "folds": fold_summaries,
     }
 
@@ -368,6 +434,29 @@ def main() -> int:
             preview_rows[-1][f"passes_{target_fold_count}_feasible_folds"] = bool(
                 int(analysis["feasible_fold_count"]) >= int(target_fold_count)
             )
+
+    previous_analysis: dict[str, Any] | None = None
+    for analysis in sorted(analyses, key=lambda item: int(item["policy_constraints"]["min_bets_abs"]), reverse=True):
+        if previous_analysis is None:
+            analysis["threshold_transition_from_previous"] = None
+        else:
+            prev_folds = set(int(fold) for fold in previous_analysis.get("feasible_folds") or [])
+            curr_folds = set(int(fold) for fold in analysis.get("feasible_folds") or [])
+            prev_signatures = previous_analysis.get("best_feasible_signature_by_fold") or {}
+            curr_signatures = analysis.get("best_feasible_signature_by_fold") or {}
+            changed_folds: list[int] = []
+            for fold in sorted(curr_folds & prev_folds):
+                if curr_signatures.get(str(fold)) != prev_signatures.get(str(fold)):
+                    changed_folds.append(int(fold))
+            analysis["threshold_transition_from_previous"] = {
+                "previous_min_bets_abs": int(previous_analysis["policy_constraints"]["min_bets_abs"]),
+                "newly_feasible_folds": sorted(int(fold) for fold in (curr_folds - prev_folds)),
+                "dropped_feasible_folds": sorted(int(fold) for fold in (prev_folds - curr_folds)),
+                "best_feasible_changed_folds": changed_folds,
+                "feasible_candidate_count_delta": int(analysis.get("feasible_candidate_count_total") or 0)
+                - int(previous_analysis.get("feasible_candidate_count_total") or 0),
+            }
+        previous_analysis = analysis
 
     threshold_to_feasible = {
         int(analysis["policy_constraints"]["min_bets_abs"]): int(analysis["feasible_fold_count"])
