@@ -347,6 +347,13 @@ bankroll sweep でもこの読みは崩れなかった。
 
 したがって、新 variant は「同じ late-September net 改善を保ったまま bankroll 崩壊だけを取り除いた」形で、旧 September candidate をそのまま支配している。
 
+この line に対して、September fallback の途中へ `portfolio_ev_only` を 1 段だけ戻す `..._serving_sep_selected_rows_ev_only_kelly_candidate.yaml` も replay した。意図は fold4 recovery の `min_expected_value=1.0` を serving 側で最小限に試すことだったが、結果は改善ではなかった。
+
+- late-September 5 日 window では baseline `31 bets / total net -25.6` に対して新 probe は `12 bets / total net -12.0` で、Kelly-only candidate の既知結果 `10 bets / -10.0` を上回れなかった
+- June-August `tail_weekends` 19 日では baseline と完全一致し、`55 bets / total net -0.9`, `differing_policy_dates=[]` だった
+
+したがって、September de-risk line の current best は依然として Kelly-only fallback であり、`portfolio_ev_only` をその前に挿すだけでは September exposure を少し戻すだけで、追加の価値は見えなかった。この probe は discard でよい。
+
 ## 7. bankroll sweep の見方
 
 bankroll 観点まで見たいときは `run_serving_stateful_bankroll_sweep.py` を使う。
