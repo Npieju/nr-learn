@@ -47,6 +47,7 @@ class StagedPolicySignalDiagnosticTest(unittest.TestCase):
             final_stage_name="kelly_fallback_1",
             final_stage_trace="portfolio_ev_only:fallback(max_expected_value_below) > kelly_fallback_1:selected",
             final_stage_fallback_reasons="portfolio_ev_only:max_expected_value_below",
+            stage_context={"date_selected_count": 4},
         )
 
         self.assertEqual(row["selected_count"], 1)
@@ -56,6 +57,43 @@ class StagedPolicySignalDiagnosticTest(unittest.TestCase):
         self.assertEqual(row["selected_net_units"], 2.5)
         self.assertTrue(row["selected_hit"])
         self.assertFalse(row["stage_is_final"])
+        self.assertEqual(row["date_selected_count"], 4.0)
+
+    def test_race_stage_row_records_date_selected_rows_guard(self) -> None:
+        stage_race = pd.DataFrame(
+            [
+                {
+                    "horse_id": "h1",
+                    "horse_name": "Horse 1",
+                    "rank": 2,
+                    "odds": 3.5,
+                    "policy_selected": True,
+                    "policy_weight": 1.0,
+                    "policy_expected_value": 1.04,
+                    "policy_prob": 0.30,
+                    "policy_edge": 0.04,
+                }
+            ]
+        )
+
+        row = _race_stage_row(
+            stage_race,
+            date_value="2024-09-21",
+            race_id="r1",
+            stage_index=1,
+            stage_name="portfolio_aug_baseline",
+            stage_cfg={"fallback_when": {"date_selected_rows_at_most": 5}},
+            odds_col="odds",
+            final_stage_name="kelly_fallback_1",
+            final_stage_trace="portfolio_aug_baseline:fallback(date_selected_rows_at_most) > kelly_fallback_1:selected",
+            final_stage_fallback_reasons="portfolio_aug_baseline:date_selected_rows_at_most",
+            stage_context={"date_selected_count": 3},
+        )
+
+        self.assertTrue(row["fallback"])
+        self.assertEqual(row["fallback_reasons"], ["date_selected_rows_at_most"])
+        self.assertEqual(row["date_selected_rows_guard"], 5.0)
+        self.assertEqual(row["date_selected_count"], 3.0)
 
     def test_aggregate_stage_rows_summarizes_reason_and_final_stage_counts(self) -> None:
         summary = _aggregate_stage_rows(

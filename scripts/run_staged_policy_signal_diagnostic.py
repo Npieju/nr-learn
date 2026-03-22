@@ -109,9 +109,10 @@ def _race_stage_row(
     final_stage_name: str | None,
     final_stage_trace: str | None,
     final_stage_fallback_reasons: str | None,
+    stage_context: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     selected = _selected_rows(stage_race)
-    fallback_state = _evaluate_stage_fallback(stage_race, stage_cfg)
+    fallback_state = _evaluate_stage_fallback(stage_race, stage_cfg, stage_context=stage_context)
     selected_count = int(fallback_state["selected_count"])
     selected_stake_units = float(pd.to_numeric(selected.get("policy_weight"), errors="coerce").fillna(0.0).sum()) if not selected.empty else 0.0
     selected_return_units = _weighted_selected_return(selected, odds_col=odds_col)
@@ -141,6 +142,8 @@ def _race_stage_row(
         "prob_guard": _float_or_none((stage_cfg.get("fallback_when") or {}).get("max_prob_below") if isinstance(stage_cfg.get("fallback_when"), dict) else None),
         "edge_guard": _float_or_none((stage_cfg.get("fallback_when") or {}).get("max_edge_below") if isinstance(stage_cfg.get("fallback_when"), dict) else None),
         "selected_rows_guard": _float_or_none((stage_cfg.get("fallback_when") or {}).get("selected_rows_at_most") if isinstance(stage_cfg.get("fallback_when"), dict) else None),
+        "date_selected_rows_guard": _float_or_none((stage_cfg.get("fallback_when") or {}).get("date_selected_rows_at_most") if isinstance(stage_cfg.get("fallback_when"), dict) else None),
+        "date_selected_count": _float_or_none((stage_context or {}).get("date_selected_count")),
     }
 
 
@@ -280,7 +283,11 @@ def main() -> int:
                     if not isinstance(stage_policy, dict):
                         continue
                     stage_result = _annotate_single_runtime_policy(frame, odds_col=odds_col, policy_name=stage_name, policy_config=stage_policy, score_col="score")
-                    stage_results.append((stage_index, stage_name, stage_cfg, stage_result))
+                    stage_selected_mask = stage_result["policy_selected"].fillna(False).astype(bool)
+                    stage_context = {
+                        "date_selected_count": int(stage_selected_mask.sum()),
+                    }
+                    stage_results.append((stage_index, stage_name, stage_cfg, stage_result, stage_context))
 
                 date_stage_rows: dict[str, list[dict[str, Any]]] = {str(stage_cfg.get("name", f"stage_{index}")): [] for index, stage_cfg in enumerate(stages, start=1)}
                 for race_id, race_group in frame.groupby("race_id", sort=False):
@@ -291,7 +298,7 @@ def main() -> int:
                     final_stage_trace = _string_or_none(race_annotated["policy_stage_trace"].dropna().astype(str).iloc[0] if "policy_stage_trace" in race_annotated.columns and race_annotated["policy_stage_trace"].dropna().any() else None)
                     final_stage_fallback_reasons = _string_or_none(race_annotated["policy_stage_fallback_reasons"].dropna().astype(str).iloc[0] if "policy_stage_fallback_reasons" in race_annotated.columns and race_annotated["policy_stage_fallback_reasons"].dropna().any() else None)
 
-                    for stage_index, stage_name, stage_cfg, stage_result in stage_results:
+                    for stage_index, stage_name, stage_cfg, stage_result, stage_context in stage_results:
                         row = _race_stage_row(
                             stage_result.loc[race_index],
                             date_value=date_value,
@@ -303,6 +310,7 @@ def main() -> int:
                             final_stage_name=final_stage_name,
                             final_stage_trace=final_stage_trace,
                             final_stage_fallback_reasons=final_stage_fallback_reasons,
+                            stage_context=stage_context,
                         )
                         raw_rows.append(row)
                         date_stage_rows[stage_name].append(row)

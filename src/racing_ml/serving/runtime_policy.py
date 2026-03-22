@@ -35,7 +35,12 @@ def _initialize_policy_columns(annotated: pd.DataFrame, *, policy_name: str, str
     return annotated
 
 
-def _evaluate_stage_fallback(stage_race: pd.DataFrame, stage_cfg: dict[str, Any]) -> dict[str, Any]:
+def _evaluate_stage_fallback(
+    stage_race: pd.DataFrame,
+    stage_cfg: dict[str, Any],
+    *,
+    stage_context: dict[str, Any] | None = None,
+) -> dict[str, Any]:
     selected = stage_race[stage_race["policy_selected"].fillna(False).astype(bool)]
     if selected.empty:
         return {
@@ -61,6 +66,15 @@ def _evaluate_stage_fallback(stage_race: pd.DataFrame, stage_cfg: dict[str, Any]
     selected_rows_at_most = fallback_when.get("selected_rows_at_most")
     if selected_rows_at_most is not None and selected_count <= int(selected_rows_at_most):
         reasons.append("selected_rows_at_most")
+
+    date_selected_rows_at_most = fallback_when.get("date_selected_rows_at_most")
+    date_selected_count = None
+    if isinstance(stage_context, dict):
+        raw_date_selected_count = stage_context.get("date_selected_count")
+        if raw_date_selected_count is not None:
+            date_selected_count = int(raw_date_selected_count)
+    if date_selected_rows_at_most is not None and date_selected_count is not None and date_selected_count <= int(date_selected_rows_at_most):
+        reasons.append("date_selected_rows_at_most")
 
     max_expected_value_below = fallback_when.get("max_expected_value_below")
     if max_expected_value_below is not None and pd.notna(max_expected_value) and float(max_expected_value) < float(max_expected_value_below):
@@ -197,7 +211,7 @@ def _annotate_staged_runtime_policy(
     if not isinstance(stages, list) or not stages:
         return annotated
 
-    stage_results: list[tuple[int, str, dict[str, Any], dict[str, Any], pd.DataFrame]] = []
+    stage_results: list[tuple[int, str, dict[str, Any], dict[str, Any], pd.DataFrame, dict[str, Any]]] = []
     for stage_index, stage_cfg in enumerate(stages, start=1):
         if not isinstance(stage_cfg, dict):
             continue
@@ -212,7 +226,11 @@ def _annotate_staged_runtime_policy(
             policy_config=stage_policy,
             score_col=score_col,
         )
-        stage_results.append((stage_index, stage_name, stage_cfg, stage_policy, stage_result))
+        selected_mask = stage_result["policy_selected"].fillna(False).astype(bool)
+        stage_context = {
+            "date_selected_count": int(selected_mask.sum()),
+        }
+        stage_results.append((stage_index, stage_name, stage_cfg, stage_policy, stage_result, stage_context))
 
     if not stage_results or odds_col is None or "race_id" not in annotated.columns:
         return annotated
@@ -239,12 +257,12 @@ def _annotate_staged_runtime_policy(
 
     for race_id, race_group in annotated.groupby("race_id", sort=False):
         race_index = race_group.index
-        selected_stage: tuple[int, str, dict[str, Any], dict[str, Any], pd.DataFrame] | None = None
+        selected_stage: tuple[int, str, dict[str, Any], dict[str, Any], pd.DataFrame, dict[str, Any]] | None = None
         stage_trace_parts: list[str] = []
         fallback_reason_parts: list[str] = []
-        for stage_index, stage_name, stage_cfg, stage_policy, stage_result in stage_results:
+        for stage_index, stage_name, stage_cfg, stage_policy, stage_result, stage_context in stage_results:
             stage_race = stage_result.loc[race_index]
-            fallback_state = _evaluate_stage_fallback(stage_race, stage_cfg)
+            fallback_state = _evaluate_stage_fallback(stage_race, stage_cfg, stage_context=stage_context)
             reason_text = ",".join(fallback_state["reasons"])
             if fallback_state["reasons"]:
                 fallback_reason_parts.extend(f"{stage_name}:{reason}" for reason in fallback_state["reasons"])
@@ -257,7 +275,7 @@ def _annotate_staged_runtime_policy(
 
             stage_trace_parts.append(f"{stage_name}:selected")
             if stage_race["policy_selected"].fillna(False).astype(bool).any():
-                selected_stage = (stage_index, stage_name, stage_cfg, stage_policy, stage_result)
+                selected_stage = (stage_index, stage_name, stage_cfg, stage_policy, stage_result, stage_context)
                 break
 
         trace_text = " > ".join(stage_trace_parts) if stage_trace_parts else pd.NA
@@ -268,7 +286,7 @@ def _annotate_staged_runtime_policy(
         if selected_stage is None:
             continue
 
-        stage_index, stage_name, _, stage_policy, stage_result = selected_stage
+        stage_index, stage_name, _, stage_policy, stage_result, _ = selected_stage
         stage_race = stage_result.loc[race_index]
         for column in policy_columns:
             annotated.loc[race_index, column] = stage_race[column]

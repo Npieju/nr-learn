@@ -354,6 +354,15 @@ bankroll sweep でもこの読みは崩れなかった。
 
 したがって、September de-risk line の current best は依然として Kelly-only fallback であり、`portfolio_ev_only` をその前に挿すだけでは September exposure を少し戻すだけで、追加の価値は見えなかった。この probe は discard でよい。
 
+ここで staged fallback 条件の粒度も整理した。runtime の既存 `selected_rows_at_most` は date-wide ではなく race-local に評価されるため、`top_k=1` の portfolio stage では「1 race でも選んだらほぼ発火する」guard になりやすい。September sparse day を日次件数で分けたいときに必要なのは別 key なので、runtime へ `date_selected_rows_at_most` も追加した。
+
+この新 key で 2 本の September-only probe を replay した結果は次のとおりである。
+
+- `..._serving_sep_date_selected_rows_kelly_candidate.yaml`: stage1 を August baseline family のままにして `date_selected_rows_at_most: 5` を掛けたが、late-September は `29 bets / total net -23.6` に留まり、tail は baseline と完全一致だった。non-fallback 日に August family がそのまま September over-exposure を戻すため、不採用。
+- `..._serving_sep_baseline_date_selected_rows_kelly_candidate.yaml`: stage1 を September baseline family (`min_prob=0.05`) に揃えると late-September は `24 bets / total net -18.6` まで改善し、tail はやはり baseline と完全一致だった。ただし current Kelly-only guard の `10 bets / -10.0` には届かない。
+
+したがって、date-wide sparse guard 自体は runtime capability として有効だが、threshold `5` の first probe ではまだ弱い。現時点の serving frontier は変わらず Kelly-only fallback であり、`date_selected_rows_at_most` は次段の threshold sweep / richer date-wide signal probe 用の土台として扱うのが妥当である。
+
 ## 7. bankroll sweep の見方
 
 bankroll 観点まで見たいときは `run_serving_stateful_bankroll_sweep.py` を使う。

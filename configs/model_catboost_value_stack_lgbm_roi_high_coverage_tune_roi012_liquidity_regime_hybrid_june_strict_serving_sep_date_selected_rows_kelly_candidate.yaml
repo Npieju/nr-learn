@@ -1,0 +1,157 @@
+task: "classification"
+label: "is_win"
+
+model:
+  name: "value_blend"
+  params:
+    alpha_weight: 0.0
+    alpha_scale: 1.5
+    roi_weight: 0.12
+    roi_scale: 3.0
+    market_blend_weight: 0.97
+    odds_column: "odds"
+    alpha_positive_only: false
+    roi_positive_only: false
+
+components:
+  win: "configs/model_catboost_win_high_coverage_diag.yaml"
+  roi: "configs/model_lightgbm_roi_high_coverage_diag.yaml"
+
+evaluation:
+  leakage_audit:
+    enabled: true
+  policy:
+    selection_mode: "gate_then_roi"
+    min_bet_ratio: 0.05
+    min_bets_abs: 100
+    max_drawdown: 0.40
+    min_final_bankroll: 0.90
+  policy_search:
+    full:
+      blend_weights: [0.6, 0.8]
+      min_edges: [0.0, 0.01]
+      min_probabilities: [0.03, 0.05]
+      fractional_kelly_values: [0.25]
+      max_fraction_values: [0.02]
+      odds_mins: [1.0]
+      odds_maxs: [25.0]
+      top_ks: [1]
+      min_expected_values: [0.95, 1.0]
+    regime_overrides:
+      - name: "early_kelly_bias"
+        when:
+          valid_end_before: "2024-07-31"
+        full:
+          blend_weights: [0.8]
+          min_edges: [0.0, 0.005]
+          min_probabilities: [0.03, 0.04]
+          fractional_kelly_values: [0.25]
+          max_fraction_values: [0.02]
+          odds_mins: [1.0]
+          odds_maxs: [25.0]
+          top_ks: [1]
+          min_expected_values: [999.0]
+
+serving:
+  policy:
+    name: "sep_runtime_portfolio"
+    strategy_kind: "portfolio"
+    blend_weight: 0.8
+    min_prob: 0.05
+    odds_min: 1.0
+    odds_max: 25.0
+    top_k: 1
+    min_expected_value: 0.95
+  policy_regime_overrides:
+    - name: "may_runtime_kelly"
+      when:
+        end_month_in: [5]
+      policy:
+        strategy_kind: "kelly"
+        blend_weight: 0.8
+        min_prob: 0.03
+        odds_min: 1.0
+        odds_max: 25.0
+        min_edge: 0.0
+        fractional_kelly: 0.25
+        max_fraction: 0.02
+    - name: "june_runtime_kelly"
+      when:
+        end_month_in: [6]
+      policy:
+        strategy_kind: "kelly"
+        blend_weight: 0.8
+        min_prob: 0.05
+        odds_min: 1.0
+        odds_max: 25.0
+        min_edge: 0.0
+        fractional_kelly: 0.25
+        max_fraction: 0.02
+    - name: "july_runtime_kelly"
+      when:
+        end_month_in: [7]
+      policy:
+        strategy_kind: "kelly"
+        blend_weight: 0.8
+        min_prob: 0.03
+        odds_min: 1.0
+        odds_max: 25.0
+        min_edge: 0.005
+        fractional_kelly: 0.25
+        max_fraction: 0.02
+    - name: "aug_runtime_portfolio"
+      when:
+        end_month_in: [8]
+      policy:
+        strategy_kind: "portfolio"
+        blend_weight: 0.8
+        min_prob: 0.03
+        odds_min: 1.0
+        odds_max: 25.0
+        top_k: 1
+        min_expected_value: 0.95
+    - name: "sep_runtime_date_selected_rows_kelly_only_guard"
+      when:
+        end_month_in: [9]
+      policy:
+        name: "runtime_staged_aug_baseline_date_selected_rows_kelly_only_guard_probe"
+        strategy_kind: "staged"
+        stages:
+          - name: "portfolio_aug_baseline"
+            fallback_when:
+              date_selected_rows_at_most: 5
+            policy:
+              strategy_kind: "portfolio"
+              blend_weight: 0.8
+              min_prob: 0.03
+              odds_min: 1.0
+              odds_max: 25.0
+              top_k: 1
+              min_expected_value: 0.95
+          - name: "kelly_fallback_1"
+            policy:
+              strategy_kind: "kelly"
+              blend_weight: 0.8
+              min_prob: 0.05
+              odds_min: 1.0
+              odds_max: 25.0
+              min_edge: 0.0
+              fractional_kelly: 0.25
+              max_fraction: 0.02
+          - name: "kelly_fallback_2"
+            policy:
+              strategy_kind: "kelly"
+              blend_weight: 0.6
+              min_prob: 0.03
+              odds_min: 1.0
+              odds_max: 25.0
+              min_edge: 0.0
+              fractional_kelly: 0.25
+              max_fraction: 0.02
+
+output:
+  model_dir: "artifacts/models"
+  report_dir: "artifacts/reports"
+  model_file: "catboost_value_stack_lgbm_roi_high_coverage_tune_roi012_liquidity_regime_hybrid_model.joblib"
+  report_file: "train_metrics_catboost_value_stack_lgbm_roi_high_coverage_tune_roi012_liquidity_regime_hybrid.json"
+  manifest_file: "catboost_value_stack_lgbm_roi_high_coverage_tune_roi012_liquidity_regime_hybrid_model.manifest.json"
