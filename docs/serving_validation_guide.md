@@ -371,6 +371,16 @@ bankroll sweep でもこの読みは崩れなかった。
 
 したがって、date-wide sparse guard の weakness は `5` という初期 threshold だけの問題ではない。少なくとも selected-row count 単独では、September loss-heavy day を十分に切り分けられていない。次に試すべきなのは threshold 追加調整より、date-wide EV / edge 集約などを含む richer guard である。
 
+この次段の判断材料として、`scripts/run_policy_date_signal_report.py` を追加し、canonical prediction CSV と runtime policy から per-date の selected-signal artifact を直接出せるようにした。初回は baseline September policy を late-September 5 日 (`2024-09-16`, `2024-09-21`, `2024-09-22`, `2024-09-28`, `2024-09-29`) で replay し、`artifacts/reports/policy_date_signal_report_late_sep_baseline_signal_20260322.{json,csv}` を生成した。
+
+結果は、count-only guard の弱さを補強する一方で、単純 aggregate guard 追加にも慎重であるべきことを示している。
+
+- `2024-09-28` は `selected_count=2` と sparse なのに、`ev_mean=1.0303`, `edge_mean=+0.0303`, `count_ev_ge_1_0=1`, `count_edge_pos=1` と aggregate が最も強く、それでも realized は `2 bets / -2.0` だった
+- `2024-09-22` は `selected_count=10`, `ev_mean=0.9845`, `edge_mean=-0.0155`, `count_ev_ge_1_0=3`, `count_edge_pos=3` と特に強い aggregate ではないが、late-September の中では比較的ましな realized 日だった
+- `2024-09-16` は `selected_count=11`, `ev_mean=0.9840`, `count_ev_ge_1_0=4` で `2024-09-22` にかなり近く、単純 threshold だけでは両者を素直に分離できない
+
+したがって、`ev_mean`, `edge_mean`, `count_ev_ge_1_0`, `share_edge_pos` のような単純な date-wide summary をそのまま runtime fallback key にするのは、今の evidence では支持されない。現時点の operational reading は「count-only よりは広い signal 診断が必要だが、次に足す guard は単純 aggregate threshold ではなく、race-level composition や fallback trace を含む richer regime descriptor であるべき」というものである。
+
 ## 7. bankroll sweep の見方
 
 bankroll 観点まで見たいときは `run_serving_stateful_bankroll_sweep.py` を使う。
