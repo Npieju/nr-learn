@@ -682,14 +682,7 @@ def _select_cases(profile_name: str, requested_dates: list[str] | None, model_co
         seen_dates.add(normalized_date)
         normalized_dates.append(normalized_date)
 
-    case_map = {str(case["date"]): case for case in cases}
-    selected: list[dict[str, Any]] = []
-    for normalized_date in normalized_dates:
-        if normalized_date in case_map:
-            selected.append(case_map[normalized_date])
-            continue
-        selected.append(_auto_case_for_date(model_config, normalized_date))
-    return selected
+    return [_auto_case_for_date(model_config, normalized_date) for normalized_date in normalized_dates]
 
 
 def main() -> int:
