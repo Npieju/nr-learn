@@ -391,6 +391,16 @@ bankroll sweep でもこの読みは崩れなかった。
 
 このため、次に検討すべき richer regime descriptor は `ev_mean` や `count_ev_ge_1_0` の閾値そのものではなく、per-date の `final_stage_counts`, `fallback depth`, `stage trace composition` をまとめたものになる。新しい runtime key を足す前に、まずその集計 artifact を安定化させるのが妥当である。
 
+この集計 artifact として、`scripts/run_staged_trace_date_report.py` も追加した。入力は `run_staged_policy_signal_diagnostic.py` の raw CSV で、per-date に `final_stage_counts`, `final_trace_counts`, `final_fallback_reason_counts`, `deepest_selected_stage_counts`, `stage2_plus_selected_race_count`, `stage3_plus_selected_race_count` を出す。ここで重要なのは、単純な `trace depth` では no-selection race まで全 stage を通るため signal が薄まることだ。実際の separator 候補は、`選択が立った最深 stage` を見る selection-aware depth にある。
+
+late-September の `current_sep_guard_candidate` では、この selection-aware depth がようやく差を作った。
+
+- `2024-09-28` だけが `max_selected_stage_index=3` かつ `stage3_plus_selected_race_count=1`
+- `2024-09-16`, `2024-09-21`, `2024-09-22`, `2024-09-29` はすべて `max_selected_stage_index=2`, `stage3_plus_selected_race_count=0`
+- したがって、`stage3 candidate present` は少なくとも今回の late-September 5 日では `2024-09-28` を一意に切り出す trace-aware signal になっている
+
+これは `2024-09-28` が daily EV/edge aggregate では最も強く見えていたことと対照的である。つまり、September guard の次段設計は「日次平均 EV が強いか」ではなく、「fallback の deeper stage にまで selection candidate が立ったか」を first-class に扱うべきである。現時点の次段は runtime key 追加ではなく、この signal を他 window に展開して再現性を確認することになる。
+
 ## 7. bankroll sweep の見方
 
 bankroll 観点まで見たいときは `run_serving_stateful_bankroll_sweep.py` を使う。
