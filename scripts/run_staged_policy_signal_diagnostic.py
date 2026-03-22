@@ -69,17 +69,17 @@ def _string_or_none(value: Any) -> str | None:
     return text or None
 
 
-def _stage_policy(config: dict[str, Any]) -> list[dict[str, Any]]:
-    policy_resolution = resolve_runtime_policy(config, frame=pd.DataFrame({"date": ["2024-01-01"]}))
+def _resolve_staged_policy(config: dict[str, Any], *, date_value: str) -> tuple[str, dict[str, Any], list[dict[str, Any]]]:
+    policy_resolution = resolve_runtime_policy(config, frame=pd.DataFrame({"date": [date_value]}))
     if policy_resolution is None:
         raise ValueError("serving runtime policy is missing")
-    _, policy_config = policy_resolution
+    policy_name, policy_config = policy_resolution
     if str(policy_config.get("strategy_kind", "")).strip().lower() != "staged":
         raise ValueError("serving runtime policy must be staged")
     stages = policy_config.get("stages")
     if not isinstance(stages, list) or not stages:
         raise ValueError("staged runtime policy must define stages")
-    return stages
+    return str(policy_name), policy_config, stages
 
 
 def _selected_rows(stage_race: pd.DataFrame) -> pd.DataFrame:
@@ -241,7 +241,6 @@ def main() -> int:
     try:
         config_path = _resolve_path(args.config)
         config = _load_yaml(config_path)
-        stages = _stage_policy(config)
         dates = [str(pd.Timestamp(date_value).date()) for date_value in (args.date or [])]
 
         output_json = _resolve_path(args.output_json) if args.output_json else ROOT / "artifacts" / "reports" / f"staged_policy_signal_diagnostic_{args.window_label}.json"
@@ -268,12 +267,7 @@ def main() -> int:
                 odds_col = resolve_odds_column(frame)
                 if odds_col is None:
                     raise ValueError(f"odds column not found: {prediction_path}")
-                policy_resolution = resolve_runtime_policy(config, frame=frame)
-                if policy_resolution is None:
-                    raise ValueError(f"runtime policy not found: {config_path}")
-                policy_name, policy_config = policy_resolution
-                if str(policy_config.get("strategy_kind", "")).strip().lower() != "staged":
-                    raise ValueError("runtime policy must resolve to staged")
+                policy_name, policy_config, stages = _resolve_staged_policy(config, date_value=date_value)
 
                 annotated = annotate_runtime_policy(frame, odds_col=odds_col, policy_name=policy_name, policy_config=policy_config, score_col="score")
                 stage_results: list[tuple[int, str, dict[str, Any], pd.DataFrame]] = []
@@ -340,7 +334,7 @@ def main() -> int:
             "summary_rows": summary_rows,
             "raw_row_count": int(len(raw_rows)),
             "summary_row_count": int(len(summary_rows)),
-            "stage_names": [str((stage_cfg.get("name") or f"stage_{index}")) for index, stage_cfg in enumerate(stages, start=1)],
+            "stage_names": sorted({str(row.get("stage_name") or "") for row in summary_rows if str(row.get("stage_name") or "").strip()}),
         }
 
         with Heartbeat("[staged-signal-diagnostic]", "writing outputs", logger=log_progress):

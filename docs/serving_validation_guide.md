@@ -381,6 +381,16 @@ bankroll sweep でもこの読みは崩れなかった。
 
 したがって、`ev_mean`, `edge_mean`, `count_ev_ge_1_0`, `share_edge_pos` のような単純な date-wide summary をそのまま runtime fallback key にするのは、今の evidence では支持されない。現時点の operational reading は「count-only よりは広い signal 診断が必要だが、次に足す guard は単純 aggregate threshold ではなく、race-level composition や fallback trace を含む richer regime descriptor であるべき」というものである。
 
+この trace 側の再確認の過程で、`scripts/run_staged_policy_signal_diagnostic.py` に seasonal staged config を読めないバグも見つかった。従来は staged policy を固定日付 `2024-01-01` で resolve していたため、September override の staged candidate を診断しようとすると default non-staged policy を拾って `serving runtime policy must be staged` で失敗していた。これを date-aware resolve に修正し、回帰テストも追加した。
+
+修正後に `current_sep_guard_candidate` を late-September 5 日で再診断すると、simple aggregate では見えなかった非対称性が trace に現れた。
+
+- `2024-09-28` は baseline aggregate が最も強い (`ev_mean=1.0303`, `edge_mean=+0.0303`) のに、September guard では唯一 `kelly_fallback_2` まで reach した日だった
+- `2024-09-22` は stage1 selected race が 11 本と多いが `kelly_fallback_2` には reach せず、final stage は `kelly_fallback_1` 3 本だけだった
+- つまり、崩れやすい日を単純 EV/edge summary だけで拾うより、`deeper fallback が必要になったか` という trace information の方が今は情報量が高い
+
+このため、次に検討すべき richer regime descriptor は `ev_mean` や `count_ev_ge_1_0` の閾値そのものではなく、per-date の `final_stage_counts`, `fallback depth`, `stage trace composition` をまとめたものになる。新しい runtime key を足す前に、まずその集計 artifact を安定化させるのが妥当である。
+
 ## 7. bankroll sweep の見方
 
 bankroll 観点まで見たいときは `run_serving_stateful_bankroll_sweep.py` を使う。

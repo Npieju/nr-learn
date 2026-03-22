@@ -4,10 +4,70 @@ import unittest
 
 import pandas as pd
 
-from scripts.run_staged_policy_signal_diagnostic import _aggregate_stage_rows, _race_stage_row
+from scripts.run_staged_policy_signal_diagnostic import _aggregate_stage_rows, _race_stage_row, _resolve_staged_policy
 
 
 class StagedPolicySignalDiagnosticTest(unittest.TestCase):
+    def test_resolve_staged_policy_uses_date_specific_override(self) -> None:
+        config = {
+            "serving": {
+                "policy": {
+                    "name": "default_portfolio",
+                    "strategy_kind": "portfolio",
+                    "blend_weight": 0.8,
+                    "min_prob": 0.05,
+                    "odds_min": 1.0,
+                    "odds_max": 25.0,
+                    "top_k": 1,
+                    "min_expected_value": 0.95,
+                },
+                "policy_regime_overrides": [
+                    {
+                        "name": "sep_staged",
+                        "when": {"end_month_in": [9]},
+                        "policy": {
+                            "name": "sep_runtime_selected_rows_kelly_only_guard",
+                            "strategy_kind": "staged",
+                            "stages": [
+                                {
+                                    "name": "portfolio_aug_baseline",
+                                    "fallback_when": {"selected_rows_at_most": 5},
+                                    "policy": {
+                                        "strategy_kind": "portfolio",
+                                        "blend_weight": 0.8,
+                                        "min_prob": 0.03,
+                                        "odds_min": 1.0,
+                                        "odds_max": 25.0,
+                                        "top_k": 1,
+                                        "min_expected_value": 0.95,
+                                    },
+                                },
+                                {
+                                    "name": "kelly_fallback_1",
+                                    "policy": {
+                                        "strategy_kind": "kelly",
+                                        "blend_weight": 0.8,
+                                        "min_prob": 0.05,
+                                        "odds_min": 1.0,
+                                        "odds_max": 25.0,
+                                        "min_edge": 0.0,
+                                        "fractional_kelly": 0.25,
+                                        "max_fraction": 0.02,
+                                    },
+                                },
+                            ],
+                        },
+                    }
+                ],
+            }
+        }
+
+        policy_name, policy_config, stages = _resolve_staged_policy(config, date_value="2024-09-22")
+
+        self.assertEqual(policy_name, "sep_staged")
+        self.assertEqual(policy_config["strategy_kind"], "staged")
+        self.assertEqual([stage["name"] for stage in stages], ["portfolio_aug_baseline", "kelly_fallback_1"])
+
     def test_race_stage_row_records_fallback_and_returns(self) -> None:
         stage_race = pd.DataFrame(
             [
