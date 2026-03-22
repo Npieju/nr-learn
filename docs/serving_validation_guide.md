@@ -326,6 +326,13 @@ bankroll sweep でもこの読みは崩れなかった。
 
 したがって、September-only guard の実務上の論点は `selected_rows_at_most` 自体ではなく、その fallback 先の選び方にある。少なくとも現在の replay evidence では、September の sparse fallback を portfolio に戻すより Kelly に直結した方が、late-September の `net 改善` を保ったまま `bankroll 崩壊` を避けやすい。
 
+旧 September candidate との direct compare でも、この読みはそのまま確認できた。
+
+- late-September 5 日 window で旧 `sep_selected_rows_guard_candidate` と新 `sep_selected_rows_kelly_only_candidate` はどちらも `10 bets / total net -10.0` だった
+- 一方で pure path final bankroll は旧 candidate `0.0` に対して、新 candidate は `0.9915` だった
+
+したがって、新 variant は「同じ late-September net 改善を保ったまま bankroll 崩壊だけを取り除いた」形で、旧 September candidate をそのまま支配している。
+
 ## 7. bankroll sweep の見方
 
 bankroll 観点まで見たいときは `run_serving_stateful_bankroll_sweep.py` を使う。
