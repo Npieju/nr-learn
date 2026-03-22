@@ -151,13 +151,34 @@ aggregate では、window ごとの net delta / pure bankroll delta / best sweep
 
 現時点の保守的候補の読み方は次のとおりである。
 
-- `current_bankroll_candidate`
   - strongest de-risk candidate
   - ベット数をかなり絞って bankroll を守る寄り
-- `current_ev_candidate`
   - intermediate candidate
   - `current_bankroll_candidate` よりはベットするが、baseline より損失を抑えやすい
 
+### 9.1 直近の runtime comparison
+
+2026-03-22 に、次の 5 日で `current_recommended_serving` と `current_best_eval` を `fresh` backend で比較した。
+
+- `2024-09-16`
+- `2024-09-21`
+- `2024-09-22`
+- `2024-09-28`
+- `2024-09-29`
+
+実行は [../scripts/run_serving_profile_compare.py](../scripts/run_serving_profile_compare.py) で行い、compare と bankroll sweep を保存した。
+
+観測結果は次のとおりである。
+
+- shared dates は 5/5 で全件 `ok`
+- `differing_score_source_dates=[]`
+- `differing_policy_dates=[]`
+- total policy bets は両者とも `31`
+- mean policy ROI は両者とも `0.108`
+- total policy net は両者とも `-25.6`
+- bankroll sweep でも pure path / threshold grid を含めて差は出なかった
+
+つまり、この window では `current_best_eval` の追加 score override source は runtime 上の差分を生まず、`current_recommended_serving` が simpler candidate として優先しやすい。
 つまり、比較の軸は単純な net だけではなく、次の 3 つで見る。
 
 1. bets
