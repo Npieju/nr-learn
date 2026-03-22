@@ -145,6 +145,33 @@ def _selection_depth_bucket(row: dict[str, Any]) -> str:
     return "no_final_selection"
 
 
+def _net_units_summary(frame: pd.DataFrame) -> dict[str, float | None]:
+    if frame.empty or "final_selected_net_units" not in frame.columns:
+        return {
+            "count": 0,
+            "mean": None,
+            "median": None,
+            "min": None,
+            "max": None,
+        }
+    series = pd.to_numeric(frame["final_selected_net_units"], errors="coerce").dropna()
+    if series.empty:
+        return {
+            "count": 0,
+            "mean": None,
+            "median": None,
+            "min": None,
+            "max": None,
+        }
+    return {
+        "count": int(series.shape[0]),
+        "mean": float(series.mean()),
+        "median": float(series.median()),
+        "min": float(series.min()),
+        "max": float(series.max()),
+    }
+
+
 def _build_support_summary(rows: list[dict[str, Any]]) -> dict[str, Any]:
     frame = pd.DataFrame(rows)
     if frame.empty:
@@ -187,6 +214,12 @@ def _build_support_summary(rows: list[dict[str, Any]]) -> dict[str, Any]:
         "deepest_stage_selected_net_sign_counts": stage3["net_sign"].value_counts().to_dict(),
         "intermediate_stage_selected_net_sign_counts": intermediate["net_sign"].value_counts().to_dict(),
         "selection_depth_bucket_counts": frame["selection_depth_bucket"].value_counts().to_dict(),
+        "bucket_net_units_summary": {
+            "deepest_stage_selected": _net_units_summary(stage3),
+            "intermediate_stage_selected": _net_units_summary(intermediate),
+            "no_final_selection": _net_units_summary(frame[frame["selection_depth_bucket"] == "no_final_selection"]),
+            "stage1_only_selected": _net_units_summary(frame[frame["selection_depth_bucket"] == "stage1_only_selected"]),
+        },
         "rows_by_report": {
             label: {
                 "date_count": int(len(group)),
@@ -201,6 +234,12 @@ def _build_support_summary(rows: list[dict[str, Any]]) -> dict[str, Any]:
                 "intermediate_stage_selected_positive_dates": sorted(group.loc[group["intermediate_stage_selected_present"] & (group["net_sign"] == "positive"), "date"].astype(str).tolist()),
                 "intermediate_stage_selected_non_positive_dates": sorted(group.loc[group["intermediate_stage_selected_present"] & (group["net_sign"].isin(["negative", "zero"])), "date"].astype(str).tolist()),
                 "selection_depth_bucket_counts": group["selection_depth_bucket"].value_counts().to_dict(),
+                "bucket_net_units_summary": {
+                    "deepest_stage_selected": _net_units_summary(group[group["selection_depth_bucket"] == "deepest_stage_selected"]),
+                    "intermediate_stage_selected": _net_units_summary(group[group["selection_depth_bucket"] == "intermediate_stage_selected"]),
+                    "no_final_selection": _net_units_summary(group[group["selection_depth_bucket"] == "no_final_selection"]),
+                    "stage1_only_selected": _net_units_summary(group[group["selection_depth_bucket"] == "stage1_only_selected"]),
+                },
             }
             for label, group in frame.groupby("report_label", sort=True)
         },

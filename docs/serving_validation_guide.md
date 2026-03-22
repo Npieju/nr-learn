@@ -428,6 +428,7 @@ late-September の `current_sep_guard_candidate` では、この selection-aware
 - `deepest_stage_selected` は 13 rows に増えても `negative=13`, `positive=0`
 - `intermediate_stage_selected` は 20 rows に増え、`negative=18`, `positive=2`
 - intermediate の positive は `tail_ev_guard` の `2024-09-07`, `2024-09-14` だった
+- net severity でも差があり、`deepest_stage_selected` は mean `-0.5399`, median `-1.0`、`intermediate_stage_selected` は mean `-0.0001`, median `-0.0008` だった
 
 report 別の bucket count は次のとおりである。
 
@@ -437,7 +438,7 @@ report 別の bucket count は次のとおりである。
 - `late_sep_ev_guard`: `deepest=1`, `intermediate=4`
 - `sep_guard`: `deepest=1`, `intermediate=4`
 
-この extended support により operational reading も更新される。`deepest_stage_selected_present` は window 拡張後も precision を崩しておらず、引き続き tail-risk subset flag として扱える。一方で `intermediate_stage_selected_present` は recall 補完としては有効だが、すでに positive day を含んでいるため、そのまま risk flag に昇格させるのは危険である。次段は deepest を主 signal に据えたまま、intermediate は説明用または後段の複合条件候補として扱うのが妥当である。
+この extended support により operational reading も更新される。`deepest_stage_selected_present` は window 拡張後も precision を崩しておらず、しかも final selected net の severity まで明確に悪いので、引き続き tail-risk subset flag として扱える。一方で `intermediate_stage_selected_present` は recall 補完としては有効だが、すでに positive day を含み、loss magnitude もほぼゼロ近傍に散っているため、そのまま risk flag に昇格させるのは危険である。次段は deepest を主 signal に据えたまま、intermediate は説明用または後段の複合条件候補として扱うのが妥当である。
 
 ## 7. bankroll sweep の見方
 

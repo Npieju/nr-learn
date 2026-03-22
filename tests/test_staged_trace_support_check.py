@@ -34,6 +34,7 @@ class StagedTraceSupportCheckTest(unittest.TestCase):
                 "net_sign": "negative",
                 "deepest_stage_selected_present": True,
                 "intermediate_stage_selected_present": False,
+                "final_selected_net_units": -1.0,
             },
             {
                 "report_label": "aug",
@@ -41,6 +42,7 @@ class StagedTraceSupportCheckTest(unittest.TestCase):
                 "net_sign": "zero",
                 "deepest_stage_selected_present": False,
                 "intermediate_stage_selected_present": False,
+                "final_selected_net_units": 0.0,
             },
             {
                 "report_label": "sep",
@@ -48,6 +50,7 @@ class StagedTraceSupportCheckTest(unittest.TestCase):
                 "net_sign": "zero",
                 "deepest_stage_selected_present": True,
                 "intermediate_stage_selected_present": False,
+                "final_selected_net_units": -0.5,
             },
             {
                 "report_label": "sep",
@@ -55,6 +58,7 @@ class StagedTraceSupportCheckTest(unittest.TestCase):
                 "net_sign": "negative",
                 "deepest_stage_selected_present": False,
                 "intermediate_stage_selected_present": True,
+                "final_selected_net_units": -0.25,
             },
         ]
 
@@ -74,6 +78,10 @@ class StagedTraceSupportCheckTest(unittest.TestCase):
         self.assertEqual(summary["intermediate_stage_selected_dates"], ["2024-09-29"])
         self.assertEqual(summary["intermediate_stage_selected_positive_dates"], [])
         self.assertEqual(summary["intermediate_stage_selected_non_positive_dates"], ["2024-09-29"])
+        self.assertEqual(summary["bucket_net_units_summary"]["deepest_stage_selected"]["count"], 2)
+        self.assertEqual(summary["bucket_net_units_summary"]["intermediate_stage_selected"]["count"], 1)
+        self.assertEqual(summary["bucket_net_units_summary"]["no_final_selection"]["count"], 1)
+        self.assertEqual(summary["bucket_net_units_summary"]["deepest_stage_selected"]["median"], -0.75)
 
     def test_load_report_rows_parses_dict_columns(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
