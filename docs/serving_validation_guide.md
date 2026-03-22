@@ -205,6 +205,31 @@ aggregate では、window ごとの net delta / pure bankroll delta / best sweep
 
 この window では、`current_bankroll_candidate` は期待値を取りに行くよりも、ほぼノーベットでドローダウンを抑える役割が明確だった。`current_recommended_serving` は同じ score source を使いながら、より積極的にベットして損失も大きくなった。
 
+### 9.3 EV 重視候補との比較
+
+2026-03-22 に、同じ 5 日で `current_recommended_serving` と `current_ev_candidate` を `fresh` backend で比較した。
+
+- `2024-09-16`
+- `2024-09-21`
+- `2024-09-22`
+- `2024-09-28`
+- `2024-09-29`
+
+実行は [../scripts/run_serving_profile_compare.py](../scripts/run_serving_profile_compare.py) で行い、compare / bankroll sweep / dashboard を保存した。
+
+観測結果は次のとおりである。
+
+- shared dates は 5/5 で全件 `ok`
+- `differing_score_source_dates=[]`
+- `differing_policy_dates` は 5/5 で、policy は全日で分岐した
+- total policy bets は `current_recommended_serving=31`、`current_ev_candidate=12`
+- mean policy ROI は `current_recommended_serving=0.108`、`current_ev_candidate=0.0`
+- total policy net は `current_recommended_serving=-25.6`、`current_ev_candidate=-12.0`
+- pure stage の bankroll path では `current_recommended_serving=0.2780` に対し、`current_ev_candidate=0.5832` だった
+- best sweep result も `selection_mode=pure_stage` かつ `selected_label=current_ev_candidate` で、threshold grid を含めてもこの window では `current_ev_candidate` を全日使う path が最良だった
+
+この window では、`current_ev_candidate` は `current_recommended_serving` よりベット数を `31 -> 12` まで減らして損失を半減させつつ、`current_bankroll_candidate` ほど極端には絞らない中間候補として機能した。late-September のこの 5 日では、役割の並びは `current_recommended_serving` が最も攻め、`current_ev_candidate` が中間、`current_bankroll_candidate` が最も防御的と読める。
+
 つまり、比較の軸は単純な net だけではなく、次の 3 つで見る。
 
 1. bets
