@@ -122,7 +122,7 @@ promotion gate は matching な `wf_feasibility_diag_*.json` を参照する。
 - fold の valid/test が短窓になりやすい場合、warning が出ても即 fail とは限らない
 - ただし全体として `representative` を満たさない run は昇格根拠にしない
 
-2026-03-22 の `current_bankroll_candidate` と `current_ev_candidate` は、この節の典型例になった。
+2026-03-22 の `current_bankroll_candidate`、`current_ev_candidate`、`current_sep_guard_candidate` は、この節の典型例になった。
 
 - evaluation summary 自体は `representative`
 - matching な `wf_feasibility_diag` も `representative`
@@ -130,10 +130,12 @@ promotion gate は matching な `wf_feasibility_diag_*.json` を参照する。
 
 このときは threshold sweep を併用すると、「どこまで gate を緩めれば fold support が立つか」を追加で読める。
 
-- `min_bets_abs=58` で初めて `1/5` folds が feasible
-- `min_bets_abs=40` で `4/5` folds が feasible になり、`3/5` 条件を超える
-- `min_bets_abs=30` で `5/5` folds が feasible
-- fold ごとの frontier は `3 -> 58`, `1 -> 45`, `2 -> 40`, `4 -> 40`, `5 -> 30`
+- `current_bankroll_candidate` と `current_ev_candidate` は `min_bets_abs=58` で初めて `1/5` folds が feasible
+- `current_bankroll_candidate` と `current_ev_candidate` は `min_bets_abs=40` で `4/5` folds が feasible になり、`3/5` 条件を超える
+- `current_bankroll_candidate` と `current_ev_candidate` は `min_bets_abs=30` で `5/5` folds が feasible
+- その 2 候補の fold ごとの frontier は `3 -> 58`, `1 -> 45`, `2 -> 40`, `4 -> 40`, `5 -> 30`
+- `current_sep_guard_candidate` も strictest threshold は `1 fold=58`, `3 folds=45`, `5 folds=34` で、support frontier は実質同じだった
+- ただし fold ごとの到達順は少し異なり、`1 -> 55`, `2 -> 45`, `3 -> 58`, `4 -> 35`, `5 -> 34` だった
 
 さらに compare -> mitigation probe まで進めると、「formal gate は通らないが runtime 側で試す価値がある policy」を抽出できる。
 
@@ -144,7 +146,7 @@ promotion gate は matching な `wf_feasibility_diag_*.json` を参照する。
 
 したがって、promotion gate の `0/5` を見たら「完全にダメ」と読むのではなく、「support frontier がどこにあるか」を別 artifact で確認すると、次の改善余地を定量化できる。
 
-つまり、`evaluation_representative=true` だけでは足りず、matching WF の fold support まで満たして初めて昇格候補になる。特に `dominant_failure_reason=min_bets` で `binding_min_bets_source=absolute` が揃っている場合は、「方向性はあっても support が足りない」状態として読む。今回の 2 候補は serving 上の差はあるが、formal gate の blocking source は同じだった。
+つまり、`evaluation_representative=true` だけでは足りず、matching WF の fold support まで満たして初めて昇格候補になる。特に `dominant_failure_reason=min_bets` で `binding_min_bets_source=absolute` が揃っている場合は、「方向性はあっても support が足りない」状態として読む。今回の 3 候補は serving 上の差はあるが、formal gate の blocking source は同じだった。
 
 ## 9. `revision` 単位での正式判断
 

@@ -119,6 +119,7 @@ Benter 系の比較では、重要なのは単純な ROI よりも `ΔR² = R²_
 - `current_bankroll_candidate` と `current_ev_candidate` は `min_bets_abs=30` まで下げると feasible fold が `5/5` になった
 - fold 別の最初の到達 threshold は `current_bankroll_candidate` と `current_ev_candidate` で共通で、fold 3 が `58`、fold 1 が `45`、fold 2 と fold 4 が `40`、fold 5 が `30` だった
 - `current_sep_guard_candidate` も formal gate の blocking source 自体は同じで、`wf_feasible_fold_count=0/5`, dominant failure reason `min_bets`, `binding_min_bets_source=absolute`, `max_infeasible_bets_observed=58` だった
+- さらに `current_sep_guard_candidate` の threshold sweep でも support frontier は同型で、strictest threshold は `1 fold=58`, `3 folds=45`, `5 folds=34`、fold 別の最初の到達 threshold は `fold1=55`, `fold2=45`, `fold3=58`, `fold4=35`, `fold5=34` だった
 
 さらに threshold compare から mitigation probe を組み立てると、runtime 候補としては次の 2 本に収束した。
 
