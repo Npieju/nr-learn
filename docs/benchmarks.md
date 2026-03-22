@@ -109,6 +109,30 @@ actual calendar の比較では、次を確認する。
 - 主力候補と observed behavior が一致する単純候補があるなら、rollback ではそちらを優先する。
 - representative date だけでなく、複数日 window で再確認する。
 
+### 6.1 直近の複数 window aggregate
+
+2026-03-22 時点で、`current_recommended_serving` を基準に次の 2 系統を複数 window aggregate で比較した。
+
+- `current_bankroll_candidate`
+- `current_ev_candidate`
+
+入力 window は次の 2 本である。
+
+- `tail_weekends`
+- late-September 5 日 window
+
+aggregate の要点は次のとおりである。
+
+- `current_bankroll_candidate` は pure bankroll delta が `2/2` windows で正、2-window mean は `net +5.75`, `bankroll +0.4264`
+- `current_ev_candidate` も pure bankroll delta が `2/2` windows で正、2-window mean は `net +3.25`, `bankroll +0.2849`
+- 両候補とも net delta が正だったのは late-September 側だけで、`tail_weekends` では `current_recommended_serving` が total net で優位だった
+
+したがって、現時点の運用上の位置づけは次のとおりである。
+
+1. rollback / de-risk の第一候補は `current_bankroll_candidate`
+2. `current_ev_candidate` は net と bankroll の中間候補
+3. `current_recommended_serving` は window によって net で勝つため、一律置換はせず baseline として保持する
+
 ## 7. 現在の評価方針
 
 ### 7.1 nested evaluation
