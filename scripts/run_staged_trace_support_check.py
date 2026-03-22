@@ -127,11 +127,22 @@ def _load_report_rows(label: str, path: Path) -> list[dict[str, Any]]:
                 "stage3_plus_selected_race_count": stage3_selected_count,
                 "deepest_stage_selected_race_count": deepest_stage_selected_count,
                 "deepest_stage_selected_present": bool(deepest_stage_selected_count > 0),
+                "intermediate_stage_selected_present": bool(stage2_selected_count > 0 and deepest_stage_selected_count == 0),
                 "deepest_selected_stage_counts": deepest_selected_stage_counts,
                 "deepest_stage3_selected_count": deepest_stage3_selected_count,
             }
         )
     return rows
+
+
+def _selection_depth_bucket(row: dict[str, Any]) -> str:
+    if bool(row.get("deepest_stage_selected_present")):
+        return "deepest_stage_selected"
+    if bool(row.get("intermediate_stage_selected_present")):
+        return "intermediate_stage_selected"
+    if int(row.get("races_with_final_selection") or 0) > 0:
+        return "stage1_only_selected"
+    return "no_final_selection"
 
 
 def _build_support_summary(rows: list[dict[str, Any]]) -> dict[str, Any]:
@@ -148,6 +159,9 @@ def _build_support_summary(rows: list[dict[str, Any]]) -> dict[str, Any]:
         }
 
     stage3 = frame[frame["deepest_stage_selected_present"]].copy()
+    intermediate = frame[frame["intermediate_stage_selected_present"]].copy()
+    frame = frame.copy()
+    frame["selection_depth_bucket"] = frame.apply(lambda row: _selection_depth_bucket(row.to_dict()), axis=1)
     return {
         "window_count": int(frame["report_label"].nunique()),
         "date_count": int(len(frame)),
@@ -156,14 +170,24 @@ def _build_support_summary(rows: list[dict[str, Any]]) -> dict[str, Any]:
         "deepest_stage_selected_non_positive_net_date_count": int((stage3["net_sign"].isin(["negative", "zero"])).sum()),
         "deepest_stage_selected_windows": sorted(stage3["report_label"].dropna().astype(str).unique().tolist()),
         "deepest_stage_selected_dates": sorted(stage3["date"].dropna().astype(str).unique().tolist()),
+        "intermediate_stage_selected_date_count": int(len(intermediate)),
+        "intermediate_stage_selected_positive_net_date_count": int((intermediate["net_sign"] == "positive").sum()),
+        "intermediate_stage_selected_non_positive_net_date_count": int((intermediate["net_sign"].isin(["negative", "zero"])).sum()),
+        "intermediate_stage_selected_dates": sorted(intermediate["date"].dropna().astype(str).unique().tolist()),
         "net_sign_counts": frame["net_sign"].value_counts().to_dict(),
         "deepest_stage_selected_net_sign_counts": stage3["net_sign"].value_counts().to_dict(),
+        "intermediate_stage_selected_net_sign_counts": intermediate["net_sign"].value_counts().to_dict(),
+        "selection_depth_bucket_counts": frame["selection_depth_bucket"].value_counts().to_dict(),
         "rows_by_report": {
             label: {
                 "date_count": int(len(group)),
                 "deepest_stage_selected_date_count": int(group["deepest_stage_selected_present"].sum()),
                 "deepest_stage_selected_dates": sorted(group.loc[group["deepest_stage_selected_present"], "date"].astype(str).tolist()),
                 "deepest_stage_selected_net_sign_counts": group.loc[group["deepest_stage_selected_present"], "net_sign"].value_counts().to_dict(),
+                "intermediate_stage_selected_date_count": int(group["intermediate_stage_selected_present"].sum()),
+                "intermediate_stage_selected_dates": sorted(group.loc[group["intermediate_stage_selected_present"], "date"].astype(str).tolist()),
+                "intermediate_stage_selected_net_sign_counts": group.loc[group["intermediate_stage_selected_present"], "net_sign"].value_counts().to_dict(),
+                "selection_depth_bucket_counts": group["selection_depth_bucket"].value_counts().to_dict(),
             }
             for label, group in frame.groupby("report_label", sort=True)
         },
@@ -194,6 +218,8 @@ def main() -> int:
         progress.update(message=f"rows loaded count={len(rows)}")
 
         frame = pd.DataFrame(rows).sort_values(["report_label", "date"], ascending=[True, True]).reset_index(drop=True)
+        if not frame.empty:
+            frame["selection_depth_bucket"] = frame.apply(lambda row: _selection_depth_bucket(row.to_dict()), axis=1)
         summary = _build_support_summary(rows)
         payload = {
             "window_label": args.window_label,

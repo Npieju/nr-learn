@@ -415,6 +415,14 @@ late-September の `current_sep_guard_candidate` では、この selection-aware
 - しかし単独で全ての bad day を捉える guard ではない
 - よって、いまやるべきことは runtime key 化ではなく、より多い window で support を積み、必要なら stage2/3 の組み合わせ signal へ拡張すること
 
+この recall 側の拡張も同じ artifact で数えられるようにした。`run_staged_trace_support_check.py` は row を `deepest_stage_selected` / `intermediate_stage_selected` / `stage1_only_selected` / `no_final_selection` に bucket 化して出せる。現行の 3 report / 16 rows では `intermediate_stage_selected` が 10 rows あり、これも `positive=0`, `non-positive=10` だった。日付ユニークでは `2024-08-11`, `2024-08-18`, `2024-09-16`, `2024-09-21`, `2024-09-22`, `2024-09-29` の 6 日で、deepest-stage signal が拾わない bad day をかなり補完している。
+
+- `aug_ev_guard`: `intermediate_stage_selected=2`, `deepest_stage_selected=2`, `no_final_selection=2`
+- `late_sep_ev_guard`: `intermediate_stage_selected=4`, `deepest_stage_selected=1`
+- `sep_guard`: `intermediate_stage_selected=4`, `deepest_stage_selected=1`
+
+したがって、現在の読みは 2 層に分けるのが妥当だ。`deepest_stage_selected_present` は precision 寄りの tail-risk flag、`intermediate_stage_selected_present` は recall を埋める broader-risk bucket である。どちらもまだ small-sample なので runtime key 化は早いが、少なくとも現行 support では `positive` day に一度も出ていないため、selection-aware trace bucket を次段の検証軸として昇格させる根拠はできた。
+
 ## 7. bankroll sweep の見方
 
 bankroll 観点まで見たいときは `run_serving_stateful_bankroll_sweep.py` を使う。
