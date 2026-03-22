@@ -122,13 +122,13 @@ promotion gate は matching な `wf_feasibility_diag_*.json` を参照する。
 - fold の valid/test が短窓になりやすい場合、warning が出ても即 fail とは限らない
 - ただし全体として `representative` を満たさない run は昇格根拠にしない
 
-2026-03-22 の `current_bankroll_candidate` は、この節の典型例になった。
+2026-03-22 の `current_bankroll_candidate` と `current_ev_candidate` は、この節の典型例になった。
 
 - evaluation summary 自体は `representative`
 - matching な `wf_feasibility_diag` も `representative`
 - それでも promotion gate は `wf_feasible_fold_count=0` で `block/hold`
 
-つまり、`evaluation_representative=true` だけでは足りず、matching WF の fold support まで満たして初めて昇格候補になる。特に `dominant_failure_reason=min_bets` で `binding_min_bets_source=absolute` が揃っている場合は、「方向性はあっても support が足りない」状態として読む。
+つまり、`evaluation_representative=true` だけでは足りず、matching WF の fold support まで満たして初めて昇格候補になる。特に `dominant_failure_reason=min_bets` で `binding_min_bets_source=absolute` が揃っている場合は、「方向性はあっても support が足りない」状態として読む。今回の 2 候補は serving 上の差はあるが、formal gate の blocking source は同じだった。
 
 ## 9. `revision` 単位での正式判断
 

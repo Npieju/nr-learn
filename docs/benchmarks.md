@@ -96,13 +96,14 @@ Benter 系の比較では、重要なのは単純な ROI よりも `ΔR² = R²_
 
 ### 5.2 de-risk candidate の formal gate
 
-2026-03-22 に、`current_bankroll_candidate` も formal な revision gate に載せた。
+2026-03-22 に、de-risk 候補 2 本も formal な revision gate に載せた。
 
 | revision | profile | status | decision | 備考 |
 | --- | --- | --- | --- | --- |
 | `r20260322c` | `current_bankroll_candidate` | `block` | `hold` | representative evaluate は通るが、matching WF で feasible fold `0/5` |
+| `r20260322d` | `current_ev_candidate` | `block` | `hold` | representative evaluate は通るが、matching WF で feasible fold `0/5` |
 
-この候補では次が確認できた。
+この 2 候補では共通して次が確認できた。
 
 - `evaluate` 側の `stability_assessment` は `representative`
 - matching な `wf_feasibility_diag` を付けると promotion gate は `wf_feasible_fold_count=0` で block
@@ -110,7 +111,7 @@ Benter 系の比較では、重要なのは単純な ROI よりも `ΔR² = R²_
 - fold ごとの binding source は全て `min_bets_abs=100` で、ratio 側ではなかった
 - `max_infeasible_bets_observed=58` に留まり、threshold 未達が明確だった
 
-したがって、`current_bankroll_candidate` は serving 上の de-risk 候補としては有力でも、現時点では benchmark 更新や正式昇格の候補とは扱わない。運用上は rollback / defensive override の候補に留め、昇格判断は support を増やす別の改善が入ってから再評価する。
+したがって、`current_bankroll_candidate` と `current_ev_candidate` は serving 上の de-risk 候補としては有力でも、現時点では benchmark 更新や正式昇格の候補とは扱わない。運用上は rollback / defensive override の候補に留め、昇格判断は support を増やす別の改善が入ってから再評価する。
 
 ## 6. serving 比較の判断基準
 
