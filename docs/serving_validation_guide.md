@@ -102,6 +102,8 @@ staged config の場合、2026-03-22 時点の smoke summary / backtest JSON に
 
 この reading はさらに May-Sep full recent 45 日でも維持された。window `2024-05-04..2024-09-29` の base prediction 全日で manifest `serving_smoke_profile_compare_current_recommended_serving_full_recent_sep_override_202409_profile_vs_current_sep_guard_candidate_full_recent_sep_override_202409_profile.json` を作ると、shared compare は baseline `136 bets / total net -42.2080` に対して candidate `103 bets / total net -7.9014`、pure path final bankroll も baseline `0.1886` に対して candidate `0.7290` だった。つまり `current_sep_guard_candidate` は September local fix で終わらず、full recent aggregate でも baseline damage を大きく縮める seasonal override として読むことができる。
 
+しかもこの aggregate improvement は policy change の局所性と両立している。same manifest の `differing_policy_dates` は September 10 日だけで、May-August の 35 日は policy path が一致した。したがって、この seasonal candidate の読みは「広く policy を変えて偶然 recent aggregate が良くなった」ではなく、「non-September path を固定したまま September override だけで recent aggregate damage を大きく削った」である。stable seasonal override としての妥当性はこの局所性まで含めて支持される。
+
 ただし、同日の formal revision gate `r20260322e` では位置づけが変わらない。evaluation と matching な `wf_feasibility_diag` はともに `representative` だったが、promotion gate は `wf_feasible_fold_count=0/5` で `block/hold` になった。dominant failure reason は `min_bets`、binding source は全 fold `min_bets_abs=100` で、short-window serving compare の良さをそのまま benchmark 昇格根拠には使えない。
 
 ### 5.1 stage path の横比較
