@@ -302,9 +302,19 @@ early stage の policy family 自体が強すぎるかを切るときは `run_po
 - May weekends 6 日 window は baseline と完全一致し、`6 bets / total net -6.0` だった
 - August weekends 6 日 window も baseline と完全一致し、`34 bets / total net +20.1` を維持した
 - late-September 5 日 window では baseline `31 bets / total net -25.6` に対して `10 bets / total net -10.0` まで改善した
+- June-August の `tail_weekends` 19 日 window でも baseline と完全一致し、`55 bets / total net -0.9`、`differing_policy_dates=[]` だった
 - late-September の 5/5 日すべてで September override が選ばれ、`portfolio_aug_baseline:selected_rows_at_most` を起点に `portfolio_lower_blend` か `kelly_fallback_1` へ流れた
 
 つまり、date-context を明示した regime-aware split にすると、`selected_rows` guard の defensive 効果だけを September に閉じ込められる。これは blunt guard 単体とは違い、May/August の既存 profitable or neutral behavior を壊さず、late-September だけを de-risk できる candidate として読むのが妥当である。
+
+bankroll sweep でもこの読みは崩れなかった。
+
+- late-September では pure path の final bankroll が baseline `0.2780` に対して candidate `1.0000` となり、pure stage でも candidate 優位だった
+- May weekends は baseline / candidate ともに final bankroll `0.9906` で完全一致した
+- August weekends は baseline / candidate ともに final bankroll `1.1765` で完全一致した
+- `tail_weekends` も baseline / candidate ともに final bankroll `0.7432` で完全一致した
+
+したがって、この candidate の current evidence は「September だけ defensive に効き、それ以外の確認済み window では realized policy も bankroll path も baseline からずれない」である。次に広げるべきなのは guard の再調整ではなく、より広い aggregate / dashboard でこの isolation が保たれるかの確認である。
 
 ## 7. bankroll sweep の見方
 
