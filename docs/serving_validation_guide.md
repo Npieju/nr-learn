@@ -381,6 +381,10 @@ bankroll sweep でもこの読みは崩れなかった。
 
 したがって、`ev_mean`, `edge_mean`, `count_ev_ge_1_0`, `share_edge_pos` のような単純な date-wide summary をそのまま runtime fallback key にするのは、今の evidence では支持されない。現時点の operational reading は「count-only よりは広い signal 診断が必要だが、次に足す guard は単純 aggregate threshold ではなく、race-level composition や fallback trace を含む richer regime descriptor であるべき」というものである。
 
+この count-only family 自体の上限も、broad September replay で再確認した。`scripts/run_staged_date_selected_rows_sweep.py` を `2024-09-01`, `2024-09-07`, `2024-09-08`, `2024-09-14`, `2024-09-15`, `2024-09-16`, `2024-09-21`, `2024-09-22`, `2024-09-28`, `2024-09-29` の 10 race-day に対して回すと、artifact `staged_date_selected_rows_sweep_sep_full_month_202409_probe.{json,csv}` では `date_selected_rows_at_most=8` が family 内最良で、`39 bets / total net +4.1067` だった。`threshold=5` は同じ 10 日で `49 bets / -5.8933` なので、broader September では count guard の改善余地そのものは確かにある。
+
+しかし、この broad-month best をそのまま frontier 候補にはできない。probe profile として `current_sep_guard_candidate` と標準 compare wrapper で直接並べると、10 日共通 replay の shared outcome は現行 candidate `25 bets / total net +12.7067` に対して probe `39 bets / +4.1067` で、pure-path でも現行 line を更新しなかった。したがって、date-selected-rows guard は useful capability ではあっても standalone の count-only seasonal override は still secondary であり、September の stable override は引き続き `current_sep_guard_candidate` を採るべきである。
+
 この trace 側の再確認の過程で、`scripts/run_staged_policy_signal_diagnostic.py` に seasonal staged config を読めないバグも見つかった。従来は staged policy を固定日付 `2024-01-01` で resolve していたため、September override の staged candidate を診断しようとすると default non-staged policy を拾って `serving runtime policy must be staged` で失敗していた。これを date-aware resolve に修正し、回帰テストも追加した。
 
 修正後に `current_sep_guard_candidate` を late-September 5 日で再診断すると、simple aggregate では見えなかった非対称性が trace に現れた。
