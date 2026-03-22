@@ -129,6 +129,7 @@ Benter 系の比較では、重要なのは単純な ROI よりも `ΔR² = R²_
 - したがって Sep guard の serving 改善は「baseline より重い formal frontier を受け入れている」わけではなく、baseline がもともと持っている support frontier の内側で生じている
 - この direct compare から signature report / family compare / drilldown / mitigation shortlist も切り直した。blocked occurrence は `34` 件で、内訳は `min_bets=24`, `min_final_bankroll=10`、dominant family はやはり `portfolio blend=0.8 / min_prob=0.03 / top_k=1 / min_ev=0.95` だった
 - 次の mitigation ranking も従来の読みを補強しており、rank 1 は `portfolio blend=0.6 / min_prob=0.03 / min_ev=1.0`、rank 3 は `portfolio blend=0.8 / min_prob=0.03 / min_ev=1.0` だった。direct compare 上では前者が 34/34 occurrence で bankroll 改善かつ lower bets、後者も 32/34 occurrence で bankroll 改善を示した
+- `min_final_bankroll` の 10 件はさらに単純で、すべて baseline / Sep guard 共通の fold4 occurrence だった。threshold `60/58/55/45/40` の各点で target は同じ `63 bets / final_bankroll≈0.8533 / gap≈0.0467` の `portfolio blend=0.8 / min_ev=0.95` で止まり、recovery も毎回同じ `portfolio blend=0.8 / min_ev=1.0 / 35 bets / final_bankroll≈0.9527` だった
 - したがって formal 改善の次手も Sep guard 固有の seasonal logic ではなく、shared blocked family に対する `min_ev=1.0` と lower blend の portfolio-family mitigation を baseline 共通課題として評価するのが筋である
 
 さらに threshold compare から mitigation probe を組み立てると、runtime 候補としては次の 2 本に収束した。
@@ -141,6 +142,10 @@ Benter 系の比較では、重要なのは単純な ROI よりも `ΔR² = R²_
 つまり、この 3 候補の formal block は serving 上の見え方の違いよりも、同じ `min_bets` 系 support frontier に乗っている問題として読むのが正しい。特に `current_sep_guard_candidate` は他の 2 候補より multi-fold frontier が少し厳しい一方で、baseline `current_recommended_serving` と直接比べると frontier は悪化していない。残っている promotion block は Sep override 固有の追加コストではなく、baseline から共有している support gap である。
 
 したがって、`current_bankroll_candidate` と `current_ev_candidate` は serving 上の de-risk 候補としては有力でも、現時点では benchmark 更新や正式昇格の候補とは扱わない。`current_sep_guard_candidate` も September seasonal override としては有望だが、formal には同様に hold である。運用上はいずれも rollback / seasonal override / defensive candidate に留め、昇格判断は support を増やす別の改善が入ってから再評価する。
+
+2026-03-22 に long-horizon default-month の書き換え仮説も明示的に棄却した。May-Sep representative replay 5 日 (`2024-05-11`, `2024-06-15`, `2024-07-27`, `2024-08-17`, `2024-09-28`) では September guard を含む month override 群が同じなので、新しい `long_horizon_default_portfolio` probe と `current_sep_guard_candidate` は完全一致した。一方で April representative 4 日 (`2024-04-06`, `2024-04-07`, `2024-04-13`, `2024-04-14`) に default-month の `portfolio blend=0.6 / min_prob=0.03 / min_ev=0.95` を当てると、baseline `current_recommended_serving` の `19 bets / total net +6.1` に対して `4 bets / +3.9` まで縮退した。これは current EV-style candidate と同じ top line であり、default-month を lower-blend / EV-style family へ寄せても long-horizon 改善にはならないことを示す。
+
+反対に、同じ April 4 日で `current_sep_guard_candidate` は baseline と完全一致した。つまり現時点の long-horizon operational reading は「non-September は baseline のまま固定し、September だけ validated Kelly-only guard を載せる」が最も defensible である。これを stable profile として再利用しやすくするため、`current_long_horizon_serving` alias を `current_sep_guard_candidate` と同じ config に追加した。formal gate 上の status は依然 hold だが、serving 運用上の conservative default としてはこの seasonal override が現在の最善候補である。
 
 ## 6. serving 比較の判断基準
 

@@ -29,6 +29,8 @@
   - `current_bankroll_candidate` よりは攻める intermediate candidate
 - `current_sep_guard_candidate`
   - September だけ sparse selection guard を Kelly fallback に直結する seasonal de-risk candidate
+- `current_long_horizon_serving`
+  - non-September は baseline を維持しつつ、September だけ validated Kelly-only guard を適用する long-horizon operational alias
 
 ## 4. 代表日の smoke
 
@@ -111,6 +113,12 @@ staged config の場合、2026-03-22 時点の smoke summary / backtest JSON に
 さらに shared threshold (`60/58/55/45/40/35/34`) の fold compare CSV を label/report 列を外して突き合わせると、行内容は完全一致した。つまり recent WF では frontier が同じだけでなく、best feasible candidate と blocked signature の並び自体も baseline と Sep guard で変わっていない。dominant blocked signature は両者とも `portfolio blend=0.8 / min_prob=0.03 / top_k=1 / min_ev=0.95` で、fold4 の recovery が `min_ev=1.0` に切り替わる点まで共通している。formal 側の読みとしては「Sep override は serving outcome を改善したが、recent WF の candidate-ranking / bottleneck structure 自体は baseline のまま」という整理になる。
 
 この direct compare を元に mitigation artifacts も baseline-vs-Sep-guard 専用に作り直した。blocked occurrence は `34` 件で `min_bets=24`, `min_final_bankroll=10`。shortlist の上位は従来と同じく `portfolio_lower_blend (blend=0.6, min_ev=1.0)` と `portfolio_ev_only (blend=0.8, min_ev=1.0)` だが、direct compare では両者とも same-threshold family variant として bankroll 改善が一貫しており、特に前者は `34/34` occurrences で higher-bankroll-and-lower-bets を満たした。したがって次の formal improvement は Sep-only trigger の再調整ではなく、この shared portfolio family を baseline 共通課題として de-risk する方向で進めるのが自然である。
+
+このうち `min_final_bankroll` 側は完全に局所化できた。direct drilldown で見ると、10 件すべてが baseline / Sep guard 共通の fold4 occurrence であり、threshold `60/58/55/45/40` の各点で target は同じ `portfolio blend=0.8 / min_ev=0.95 / 63 bets / final_bankroll≈0.8533`、recovery は毎回同じ `portfolio blend=0.8 / min_ev=1.0 / 35 bets / final_bankroll≈0.9527` だった。つまり bankroll block は broad な seasonal side effect ではなく、recent WF 上の単一 fold4 family problem として扱える。
+
+同日に long-horizon default-month rewrite の sanity check も入れた。May-Sep representative 5 日では、month override 群が同じなので experimental `long_horizon_default_portfolio` probe は `current_sep_guard_candidate` と完全一致した。しかし default-month が効く April 4 日 (`2024-04-06`, `2024-04-07`, `2024-04-13`, `2024-04-14`) で baseline と比較すると、`portfolio blend=0.6 / min_prob=0.03 / min_ev=0.95` への書き換えは `19 bets / total net +6.1` を `4 bets / +3.9` まで縮退させた。さらに同じ April 4 日で `current_sep_guard_candidate` 自体は baseline と完全一致した。したがって、現時点の long-horizon serving で defensible なのは default-month family の入れ替えではなく、「baseline path を保持したまま September だけ validated guard を差し込む」構成である。
+
+この operational reading を stable profile として使いやすくするため、`current_long_horizon_serving` alias を `current_sep_guard_candidate` と同じ config に追加した。これは benchmark promotion を意味しないが、current evidence に限れば broad default-month rewrite よりもはるかに安全で、recent aggregate 改善もすでに確認済みである。
 
 ### 5.1 stage path の横比較
 
