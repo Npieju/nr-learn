@@ -151,6 +151,8 @@ Benter 系の比較では、重要なのは単純な ROI よりも `ΔR² = R²_
 
 さらに available な実日付を `2024-03-31..2024-09-29` の 50 日まで広げて baseline と `current_long_horizon_serving` を replay compare しても、この読みは崩れなかった。shared compare は baseline `156 bets / total net -37.1080` に対して long-horizon `123 bets / total net -2.8014` で、`right_minus_left_total_policy_net=+34.3067`。pure-stage bankroll も baseline-only `0.1948` に対して long-horizon `0.7530` だった。`differing_policy_dates` は依然 September 10 日 (`2024-09-01`, `2024-09-07`, `2024-09-08`, `2024-09-14`, `2024-09-15`, `2024-09-16`, `2024-09-21`, `2024-09-22`, `2024-09-28`, `2024-09-29`) に限られ、March-August の 40 日は完全一致した。したがって現時点の stable long-horizon candidate は実質的に `current_long_horizon_serving` であり、追加の broad rewrite ではなく shared September bottleneck のみに exposure を絞る構成が正しい。
 
+この September 10 日をさらに date-level signal / staged trace で点検しても、guard を局所的に緩める根拠は出なかった。まず realized net は 10/10 日すべてで baseline 以上であり、`2024-09-07` は `+12.0 -> +19.7067`、`2024-09-14` は `+13.0 -> +14.0`、`2024-09-22` も `-4.6 -> -3.0` だった。次に baseline signal 側では `2024-09-28` が `ev_mean≈1.0303`, `edge_mean≈+0.0303` と最も強いのに realized は `-2.0` で、単純な EV/edge threshold が separator にならないことを再確認した。staged trace 側でも deepest-stage selected は `2024-09-15` と `2024-09-28` にしか出ず、両日とも net-negative なので「deepest-stage を許した日だけ戻す」方向にもならない。したがって、現在の September guard は already-good day を net で傷つけず、simple date-level signal でも安全に緩められない。次の改善軸は September override の微調整ではなく shared blocked portfolio family の formal support 改善である。
+
 ## 6. serving 比較の判断基準
 
 actual calendar の比較では、次を確認する。

@@ -126,6 +126,8 @@ staged config の場合、2026-03-22 時点の smoke summary / backtest JSON に
 
 September 10 日の差分も一貫して defensive で、`2024-09-07` だけは `3 bets / +19.7067` と uplift が強く、他の日も `2024-09-01 -7.0 -> -2.0`, `2024-09-08 -8.0 -> -5.0`, `2024-09-16 -11.0 -> -4.0`, `2024-09-29 -5.0 -> -1.0` のように損失圧縮が主だった。例外的に `2024-09-22` は baseline `-4.6` に対して long-horizon `-3.0` で net は改善したが ROI は `0.54 -> 0.0` に下がる。運用上は「September に profitable day を少し取り逃してでも、月全体 exposure を大きく削る」守備的 override と読むのが妥当である。
 
+この 10 日に対して baseline の `policy_date_signal_report` と current Sep guard の `staged_trace_date_report` も full-month で切り直したが、guard を局所的に緩める simple signal は見つからなかった。`2024-09-28` は baseline 側で `ev_mean≈1.0303`, `edge_mean≈+0.0303` と最も強い aggregate signal を持つのに realized net は `-2.0` のままで、以前の late-September reading と同様に EV/edge threshold は separator にならない。trace 側では deepest-stage selected が `2024-09-15` と `2024-09-28` にしか現れず、どちらも net-negative なので、deep trace presence も「guard を外すべき良い日」のマーカーではなく高リスク subset flag に留まる。さらに重要なのは、September 10 日の realized net が current guard で 10/10 日すべて baseline 以上だった点である。したがって current long-horizon alias は、現時点では緩和より維持が正しい。
+
 ### 5.1 stage path の横比較
 
 single-policy probe と staged probe を actual-date ごとに横並びで見たいときは `run_serving_stage_path_compare.py` を使う。
