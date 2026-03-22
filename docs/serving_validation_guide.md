@@ -316,6 +316,16 @@ bankroll sweep でもこの読みは崩れなかった。
 
 したがって、この candidate の current evidence は「September だけ net を軽くできるが、pure bankroll まで良化するわけではなく、それ以外の確認済み window では realized policy も bankroll path も baseline と一致する」である。次に広げるべきなのは guard の再調整ではなく、aggregate / dashboard でこの `net 改善 vs bankroll 悪化` の trade-off がどこまで安定して再現されるかの確認である。
 
+この trade-off の原因を late-September の stage path まで戻して確認すると、実質的な崩壊点は `2024-09-28` の 1 日に絞られた。September candidate は 5 日中 4 日で `kelly_fallback_1` を使っていたが、`2024-09-28` だけが `portfolio_lower_blend:selected` になり、その 1 bet で pure path bankroll を `0.0` まで落としていた。
+
+そこで次段として `..._serving_sep_selected_rows_kelly_only_candidate.yaml` も追加した。これは September override から `portfolio_lower_blend` stage を外し、`selected_rows_at_most: 5` 発火後は Kelly fallback へ直落としする variant である。
+
+- late-September 5 日 window では bets / net がそのまま `10 bets / total net -10.0` に保たれた
+- その一方で pure path final bankroll は baseline `0.2780` に対して `0.9915` まで回復し、bankroll sweep の best path も new candidate 側に移った
+- May weekends 6 日、August weekends 6 日、`tail_weekends` 19 日の 3 window はすべて baseline と完全一致し、policy / net / pure bankroll の差分は 0 だった
+
+したがって、September-only guard の実務上の論点は `selected_rows_at_most` 自体ではなく、その fallback 先の選び方にある。少なくとも現在の replay evidence では、September の sparse fallback を portfolio に戻すより Kelly に直結した方が、late-September の `net 改善` を保ったまま `bankroll 崩壊` を避けやすい。
+
 ## 7. bankroll sweep の見方
 
 bankroll 観点まで見たいときは `run_serving_stateful_bankroll_sweep.py` を使う。
