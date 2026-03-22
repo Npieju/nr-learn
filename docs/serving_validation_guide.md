@@ -79,6 +79,37 @@ built-in case を持たない profile では `--date` が必須である。
 
 明示的に output path を渡す場合は、summary / compare / bankroll / dashboard の各出力とも directory ではなく file path を渡す。
 
+### 5.1 stage path の横比較
+
+single-policy probe と staged probe を actual-date ごとに横並びで見たいときは `run_serving_stage_path_compare.py` を使う。
+
+例:
+
+```bash
+/workspaces/nr-learn/.venv/bin/python scripts/run_serving_stage_path_compare.py \
+  --summary baseline=artifacts/reports/serving_smoke_runtime_baseline_late_sep_20260322.json \
+  --summary portfolio_ev_only=artifacts/reports/serving_smoke_runtime_portfolio_ev_only_late_sep_20260322.json \
+  --summary staged=artifacts/reports/serving_smoke_runtime_staged_mitigation_late_sep_20260322_v2.json \
+  --summary staged_ev_guard=artifacts/reports/serving_smoke_runtime_staged_mitigation_ev_guard_late_sep_20260322.json \
+  --output-json artifacts/reports/serving_stage_path_compare_late_sep_20260322.json \
+  --output-csv artifacts/reports/serving_stage_path_compare_late_sep_20260322.csv
+```
+
+この report では次をまとめて確認できる。
+
+- `shared_dates_all`
+- `shared_ok_dates_all`
+- `differing_policy_dates`
+- `differing_stage_dates`
+- label ごとの `policy_stage_names` 集計
+
+2026-03-22 の実行結果では、次が観測された。
+
+- late-September 5 日 window は `shared_ok=5/5` で、`differing_stage_dates` は全 5 日だった
+- August weekends 6 日 window は `shared_ok=6/6` で、`differing_stage_dates` は `2024-08-03`, `2024-08-10`, `2024-08-11`, `2024-08-18` だった
+
+つまり、staged probe は「runtime で読める」だけでなく、actual calendar 上でも日付単位の stage path 分岐を起こしている。ただし、その分岐自体は baseline 優位を覆す根拠にはまだなっていない。
+
 ## 6. replay ベースの軽量検証
 
 shared feature build が重い window では、既存 prediction CSV を再利用する replay モードを使う。
