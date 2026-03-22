@@ -127,6 +127,9 @@ Benter 系の比較では、重要なのは単純な ROI よりも `ΔR² = R²_
 - shared threshold (`60/58/55/45/40/35/34`) に限ると fold compare CSV の行内容も完全一致し、best feasible / blocked signature の並び自体が recent WF 上で変わっていないことも確認できた
 - 具体的には dominant blocked signature は両者とも `portfolio / blend_weight=0.8 / min_prob=0.03 / top_k=1 / min_ev=0.95` で共通し、fold4 の recovery だけが `min_expected_value=1.0` に切り替わる点まで一致した
 - したがって Sep guard の serving 改善は「baseline より重い formal frontier を受け入れている」わけではなく、baseline がもともと持っている support frontier の内側で生じている
+- この direct compare から signature report / family compare / drilldown / mitigation shortlist も切り直した。blocked occurrence は `34` 件で、内訳は `min_bets=24`, `min_final_bankroll=10`、dominant family はやはり `portfolio blend=0.8 / min_prob=0.03 / top_k=1 / min_ev=0.95` だった
+- 次の mitigation ranking も従来の読みを補強しており、rank 1 は `portfolio blend=0.6 / min_prob=0.03 / min_ev=1.0`、rank 3 は `portfolio blend=0.8 / min_prob=0.03 / min_ev=1.0` だった。direct compare 上では前者が 34/34 occurrence で bankroll 改善かつ lower bets、後者も 32/34 occurrence で bankroll 改善を示した
+- したがって formal 改善の次手も Sep guard 固有の seasonal logic ではなく、shared blocked family に対する `min_ev=1.0` と lower blend の portfolio-family mitigation を baseline 共通課題として評価するのが筋である
 
 さらに threshold compare から mitigation probe を組み立てると、runtime 候補としては次の 2 本に収束した。
 

@@ -110,6 +110,8 @@ staged config の場合、2026-03-22 時点の smoke summary / backtest JSON に
 
 さらに shared threshold (`60/58/55/45/40/35/34`) の fold compare CSV を label/report 列を外して突き合わせると、行内容は完全一致した。つまり recent WF では frontier が同じだけでなく、best feasible candidate と blocked signature の並び自体も baseline と Sep guard で変わっていない。dominant blocked signature は両者とも `portfolio blend=0.8 / min_prob=0.03 / top_k=1 / min_ev=0.95` で、fold4 の recovery が `min_ev=1.0` に切り替わる点まで共通している。formal 側の読みとしては「Sep override は serving outcome を改善したが、recent WF の candidate-ranking / bottleneck structure 自体は baseline のまま」という整理になる。
 
+この direct compare を元に mitigation artifacts も baseline-vs-Sep-guard 専用に作り直した。blocked occurrence は `34` 件で `min_bets=24`, `min_final_bankroll=10`。shortlist の上位は従来と同じく `portfolio_lower_blend (blend=0.6, min_ev=1.0)` と `portfolio_ev_only (blend=0.8, min_ev=1.0)` だが、direct compare では両者とも same-threshold family variant として bankroll 改善が一貫しており、特に前者は `34/34` occurrences で higher-bankroll-and-lower-bets を満たした。したがって次の formal improvement は Sep-only trigger の再調整ではなく、この shared portfolio family を baseline 共通課題として de-risk する方向で進めるのが自然である。
+
 ### 5.1 stage path の横比較
 
 single-policy probe と staged probe を actual-date ごとに横並びで見たいときは `run_serving_stage_path_compare.py` を使う。
