@@ -151,10 +151,10 @@ aggregate では、window ごとの net delta / pure bankroll delta / best sweep
 
 現時点の保守的候補の読み方は次のとおりである。
 
-  - strongest de-risk candidate
-  - ベット数をかなり絞って bankroll を守る寄り
-  - intermediate candidate
-  - `current_bankroll_candidate` よりはベットするが、baseline より損失を抑えやすい
+- `current_bankroll_candidate`
+  strongest de-risk candidate。ベット数をかなり絞って bankroll を守る寄り。
+- `current_ev_candidate`
+  intermediate candidate。`current_bankroll_candidate` よりはベットするが、baseline より損失を抑えやすい。
 
 ### 9.1 直近の runtime comparison
 
@@ -179,6 +179,32 @@ aggregate では、window ごとの net delta / pure bankroll delta / best sweep
 - bankroll sweep でも pure path / threshold grid を含めて差は出なかった
 
 つまり、この window では `current_best_eval` の追加 score override source は runtime 上の差分を生まず、`current_recommended_serving` が simpler candidate として優先しやすい。
+
+### 9.2 bankroll 重視候補との比較
+
+2026-03-22 に、同じ 5 日で `current_recommended_serving` と `current_bankroll_candidate` を `fresh` backend で比較した。
+
+- `2024-09-16`
+- `2024-09-21`
+- `2024-09-22`
+- `2024-09-28`
+- `2024-09-29`
+
+実行は [../scripts/run_serving_profile_compare.py](../scripts/run_serving_profile_compare.py) で行い、compare と bankroll sweep を保存した。
+
+観測結果は次のとおりである。
+
+- shared dates は 5/5 で全件 `ok`
+- `differing_score_source_dates=[]`
+- `differing_policy_dates` は 5/5 で、policy は全日で分岐した
+- total policy bets は `current_recommended_serving=31`、`current_bankroll_candidate=1`
+- mean policy ROI は comparable な日で `current_recommended_serving=0.108`、`current_bankroll_candidate=0.0`
+- total policy net は `current_recommended_serving=-25.6`、`current_bankroll_candidate=-1.0`
+- pure stage の bankroll path では `current_recommended_serving=0.2780` に対し、`current_bankroll_candidate=0.9583` だった
+- best sweep result も `selection_mode=pure_stage` かつ `selected_label=current_bankroll_candidate` で、threshold grid を含めても bankroll 重視では `current_bankroll_candidate` が優位だった
+
+この window では、`current_bankroll_candidate` は期待値を取りに行くよりも、ほぼノーベットでドローダウンを抑える役割が明確だった。`current_recommended_serving` は同じ score source を使いながら、より積極的にベットして損失も大きくなった。
+
 つまり、比較の軸は単純な net だけではなく、次の 3 つで見る。
 
 1. bets
