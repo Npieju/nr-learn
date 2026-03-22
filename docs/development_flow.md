@@ -19,6 +19,7 @@
 - 改善判断は、一定区切りごとの full train / evaluate / promotion gate を通した結果で行う。
 - 実験の速さと、採用判断の厳しさは分けて運用する。
 - 長時間ジョブは、途中経過が見えることを標準とする。
+- この workspace / container では full train や full evaluate の並列実行で OOM kill が起きうるため、正式 checkpoint は直列実行を基本とする。
 - operator-facing CLI は、設定ミス・入力不足・output path の取り違えを fail-fast で検出し、想定内の失敗では traceback を出さない。
 - まとまった変更を終えたら `git status` と diff を確認し、意味のある単位で commit する。共有 remote が使える作業では push までを完了条件に含め、push できない場合は理由を明示して残す。
 
@@ -82,6 +83,8 @@ serving 側の具体的な導線は [serving_validation_guide.md](serving_valida
 2. representative な条件で evaluate を実行する。
 3. promotion gate を実行する。
 4. pass したものだけを revision として扱う。
+
+上の 1〜3 は、少なくともこの dev container では並列に投げず直列で回す。`run_revision_gate.py` を使う場合も、別の full train / evaluate を同時に走らせないことを前提にする。
 
 evaluation と promotion gate の具体的な読み方は [evaluation_guide.md](evaluation_guide.md) にまとめてある。
 
