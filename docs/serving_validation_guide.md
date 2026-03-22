@@ -98,6 +98,8 @@ staged config の場合、2026-03-22 時点の smoke summary / backtest JSON に
 
 つまり `current_sep_guard_candidate` は ad hoc config compare だけでなく、stable profile として通常の smoke -> compare -> bankroll -> dashboard 導線でも再現可能である。
 
+この profile-level reading も broad September 10 日で補強した。window を `2024-09-01`, `2024-09-07`, `2024-09-08`, `2024-09-14`, `2024-09-15`, `2024-09-16`, `2024-09-21`, `2024-09-22`, `2024-09-28`, `2024-09-29` に広げて同じ wrapper を再実行すると、manifest `serving_smoke_profile_compare_current_recommended_serving_sep_full_month_202409_profile_vs_current_sep_guard_candidate_sep_full_month_202409_profile.json` も `status=completed`, `decision=ready` で通った。shared compare は baseline `58 bets / total net -21.6` に対して candidate `25 bets / total net +12.7067`、pure path final bankroll も baseline `0.2590` に対して candidate `1.0008` だった。したがって `current_sep_guard_candidate` は late-September 5 日だけでなく broader September window でも stable seasonal override として再現する。
+
 ただし、同日の formal revision gate `r20260322e` では位置づけが変わらない。evaluation と matching な `wf_feasibility_diag` はともに `representative` だったが、promotion gate は `wf_feasible_fold_count=0/5` で `block/hold` になった。dominant failure reason は `min_bets`、binding source は全 fold `min_bets_abs=100` で、short-window serving compare の良さをそのまま benchmark 昇格根拠には使えない。
 
 ### 5.1 stage path の横比較
