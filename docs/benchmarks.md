@@ -149,6 +149,8 @@ Benter 系の比較では、重要なのは単純な ROI よりも `ΔR² = R²_
 
 同日の fresh actual-date headroom check で、より複雑な `current_best_eval` も long-horizon serving を上回らないことを確認した。代表 4 日 (`2024-04-07`, `2024-05-11`, `2024-08-17`, `2024-09-28`) の compare では April / May / August が実質同一、差が出たのは September `2024-09-28` だけで、`current_long_horizon_serving` は `1 bet / -1.0`、`current_best_eval` は `2 bets / -2.0` だった。つまり現時点では score model complexity を戻しても long-horizon serving の実利は増えず、改善余地は依然として shared portfolio bottleneck 側にある。
 
+さらに available な実日付を `2024-03-31..2024-09-29` の 50 日まで広げて baseline と `current_long_horizon_serving` を replay compare しても、この読みは崩れなかった。shared compare は baseline `156 bets / total net -37.1080` に対して long-horizon `123 bets / total net -2.8014` で、`right_minus_left_total_policy_net=+34.3067`。pure-stage bankroll も baseline-only `0.1948` に対して long-horizon `0.7530` だった。`differing_policy_dates` は依然 September 10 日 (`2024-09-01`, `2024-09-07`, `2024-09-08`, `2024-09-14`, `2024-09-15`, `2024-09-16`, `2024-09-21`, `2024-09-22`, `2024-09-28`, `2024-09-29`) に限られ、March-August の 40 日は完全一致した。したがって現時点の stable long-horizon candidate は実質的に `current_long_horizon_serving` であり、追加の broad rewrite ではなく shared September bottleneck のみに exposure を絞る構成が正しい。
+
 ## 6. serving 比較の判断基準
 
 actual calendar の比較では、次を確認する。

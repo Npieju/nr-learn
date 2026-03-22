@@ -122,6 +122,10 @@ staged config の場合、2026-03-22 時点の smoke summary / backtest JSON に
 
 さらに `current_best_eval` を相手にした fresh representative compare (`2024-04-07`, `2024-05-11`, `2024-08-17`, `2024-09-28`) も切ったが、long-horizon 側の読みは変わらなかった。April / May / August は policy と realized net が同一で、May だけ `current_best_eval` が `may_runtime_liquidity` score source を使ったものの top line は変わらない。差が出たのは `2024-09-28` だけで、`current_long_horizon_serving` は September guard により `1 bet / -1.0`、`current_best_eval` は `sep_runtime_portfolio` のままで `2 bets / -2.0` だった。したがって、現時点の long-horizon serving 改善は score model の複雑化ではなく、September guard のような validated policy-side override を積む方向で考えるのが妥当である。
 
+この reading は available actual-date 全域でも確認した。canonical prediction がある `2024-03-31..2024-09-29` の 50 日で baseline `current_recommended_serving` と `current_long_horizon_serving` を replay compare すると、shared compare は baseline `156 bets / total net -37.1080` に対して long-horizon `123 bets / total net -2.8014`、pure-stage bankroll は baseline-only `0.1948` に対して long-horizon `0.7530` だった。しかも `differing_policy_dates` は September 10 日だけで、March-August の 40 日は policy path が一致した。したがって current long-horizon alias の利点は「広く別の runtime を採る」ことではなく、「non-September baseline を保ったまま September exposure だけを削る」点にある。
+
+September 10 日の差分も一貫して defensive で、`2024-09-07` だけは `3 bets / +19.7067` と uplift が強く、他の日も `2024-09-01 -7.0 -> -2.0`, `2024-09-08 -8.0 -> -5.0`, `2024-09-16 -11.0 -> -4.0`, `2024-09-29 -5.0 -> -1.0` のように損失圧縮が主だった。例外的に `2024-09-22` は baseline `-4.6` に対して long-horizon `-3.0` で net は改善したが ROI は `0.54 -> 0.0` に下がる。運用上は「September に profitable day を少し取り逃してでも、月全体 exposure を大きく削る」守備的 override と読むのが妥当である。
+
 ### 5.1 stage path の横比較
 
 single-policy probe と staged probe を actual-date ごとに横並びで見たいときは `run_serving_stage_path_compare.py` を使う。
