@@ -76,6 +76,24 @@ Benter 系の比較では、重要なのは単純な ROI よりも `ΔR² = R²_
 
 この数値だけを見ると最後の候補が最良だが、構成の複雑さも同時に増しているため、運用判断では simpler rollback 候補との比較を必ず行う。
 
+### 5.1 直近の revision comparison
+
+2026-03-22 時点の full revision gate では、次の 2 候補を同条件で通した。
+
+| revision | profile | status | decision | 備考 |
+| --- | --- | --- | --- | --- |
+| `r20260322a` | `current_best_eval` | `pass` | `promote` | `score_source_count=2`。`may_runtime_liquidity` override を読む |
+| `r20260322b` | `current_recommended_serving` | `pass` | `promote` | `score_source_count=1`。単一 source で通過 |
+
+この 2 run では、`evaluate --max-rows 120000 --wf-mode fast --wf-scheme nested` のトップライン指標は実質同一だった。
+
+- `top1_roi`: `0.796298...`
+- `ev_top1_roi`: `0.660712...`
+- `auc`: `0.834390...`
+
+したがって、現時点の運用判断では `current_recommended_serving` を simpler candidate として優先的に扱ってよい。
+ただし、両者とも promotion gate warning として `probe_only` な walk-forward slice が残るため、将来の benchmark 更新では引き続き stricter full evaluation を優先する。
+
 ## 6. serving 比較の判断基準
 
 actual calendar の比較では、次を確認する。
