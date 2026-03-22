@@ -6,7 +6,7 @@ from pathlib import Path
 import sys
 import time
 import traceback
-from typing import Any
+from typing import Any, Callable
 
 import pandas as pd
 
@@ -188,6 +188,20 @@ def _summarize_numeric(values: list[float]) -> dict[str, float | int | None]:
         "median": float(series.median()),
         "max": float(series.max()),
     }
+
+
+def _strictest_threshold_matching(
+    analyses: list[dict[str, Any]],
+    predicate: Callable[[dict[str, Any]], bool],
+) -> int | None:
+    for analysis in sorted(
+        analyses,
+        key=lambda item: int(item["policy_constraints"]["min_bets_abs"]),
+        reverse=True,
+    ):
+        if predicate(analysis):
+            return int(analysis["policy_constraints"]["min_bets_abs"])
+    return None
 
 
 def _closest_key(row: dict[str, Any], *, min_bets_required: int, constraints: PolicyConstraints) -> tuple[float, float, float, float, float]:
@@ -486,28 +500,24 @@ def main() -> int:
         fold_first_feasible_threshold: dict[str, int | None] = {}
         for fold_index in sorted(fold_meta):
             first_threshold: int | None = None
-            for analysis in sorted(analyses, key=lambda item: int(item["policy_constraints"]["min_bets_abs"])):
+            for analysis in sorted(
+                analyses,
+                key=lambda item: int(item["policy_constraints"]["min_bets_abs"]),
+                reverse=True,
+            ):
                 fold_summary = next((fold for fold in analysis.get("folds", []) if int(fold.get("fold") or 0) == fold_index), None)
                 if isinstance(fold_summary, dict) and int(fold_summary.get("feasible_candidates") or 0) > 0:
                     first_threshold = int(analysis["policy_constraints"]["min_bets_abs"])
                     break
             fold_first_feasible_threshold[str(fold_index)] = first_threshold
 
-        first_threshold_with_any_feasible_fold = next(
-            (
-                int(analysis["policy_constraints"]["min_bets_abs"])
-                for analysis in sorted(analyses, key=lambda item: int(item["policy_constraints"]["min_bets_abs"]))
-                if int(analysis.get("feasible_fold_count") or 0) > 0
-            ),
-            None,
+        first_threshold_with_any_feasible_fold = _strictest_threshold_matching(
+            analyses,
+            lambda analysis: int(analysis.get("feasible_fold_count") or 0) > 0,
         )
-        first_threshold_passing_preview = next(
-            (
-                int(analysis["policy_constraints"]["min_bets_abs"])
-                for analysis in sorted(analyses, key=lambda item: int(item["policy_constraints"]["min_bets_abs"]))
-                if bool(analysis.get("passes_min_feasible_folds_preview"))
-            ),
-            None,
+        first_threshold_passing_preview = _strictest_threshold_matching(
+            analyses,
+            lambda analysis: bool(analysis.get("passes_min_feasible_folds_preview")),
         )
         strictest_threshold_passing_feasible_fold_targets: dict[str, int | None] = {}
         for target_fold_count in target_feasible_fold_counts:

@@ -111,6 +111,15 @@ Benter 系の比較では、重要なのは単純な ROI よりも `ΔR² = R²_
 - fold ごとの binding source は全て `min_bets_abs=100` で、ratio 側ではなかった
 - `max_infeasible_bets_observed=58` に留まり、threshold 未達が明確だった
 
+同日付の threshold sweep で、support gap も数値化した。
+
+- 両候補とも `min_bets_abs=58` で初めて feasible fold が `1/5` に到達した
+- 両候補とも `min_bets_abs=40` で feasible fold が `4/5` になり、`3/5` 条件はここで満たす
+- 両候補とも `min_bets_abs=30` まで下げると feasible fold が `5/5` になった
+- fold 別の最初の到達 threshold は共通で、fold 3 が `58`、fold 1 が `45`、fold 2 と fold 4 が `40`、fold 5 が `30` だった
+
+つまり、この 2 候補の formal block は「bankroll 側か EV 側か」の違いではなく、同じ support frontier に乗っている問題として読むのが正しい。
+
 したがって、`current_bankroll_candidate` と `current_ev_candidate` は serving 上の de-risk 候補としては有力でも、現時点では benchmark 更新や正式昇格の候補とは扱わない。運用上は rollback / defensive override の候補に留め、昇格判断は support を増やす別の改善が入ってから再評価する。
 
 ## 6. serving 比較の判断基準
