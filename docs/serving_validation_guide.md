@@ -247,6 +247,38 @@ threshold 調整だけでは判断しきれないときは `run_staged_policy_si
 
 つまり、August の差は「EV guard が少し厳しすぎる」だけではない。少なくとも profitable day の一部では、early portfolio policy family 自体が baseline の利益局面を再現できていない。次の改善候補は threshold lowering 単体ではなく、stage policy 本体か regime-aware selector 条件である。
 
+### 6.5 portfolio policy family sweep
+
+early stage の policy family 自体が強すぎるかを切るときは `run_portfolio_policy_family_sweep.py` を使う。これは指定日の canonical prediction CSV を replay し、single-policy portfolio を次の grid で比較する。
+
+- `blend_weight`
+- `min_prob`
+- `min_expected_value`
+
+例:
+
+```bash
+/workspaces/nr-learn/.venv/bin/python scripts/run_portfolio_policy_family_sweep.py \
+  --window-label aug_portfolio_family_20260322 \
+  --reference-date 2024-08-03 \
+  --date 2024-08-03 \
+  --date 2024-08-04 \
+  --date 2024-08-10 \
+  --date 2024-08-11 \
+  --date 2024-08-17 \
+  --date 2024-08-18
+```
+
+2026-03-22 の August weekends sweep では、結論はかなり明快だった。
+
+- baseline family そのものの `blend=0.8 / min_prob=0.03 / min_ev=0.95` が最良で、`34 bets / total net +20.1` を出した
+- `min_ev` を `1.0` に上げた `blend=0.8 / min_prob=0.03 / min_ev=1.0` は `9 bets / total net -9.0` まで崩れた
+- `2024-08-17` は `min_ev=0.95` なら `7 bets / net +32.6` だが、`min_ev=1.0` では `0 bets / net 0.0` になった
+- `2024-08-18` も `min_ev=0.95` なら `8 bets / net +2.7` だが、`min_ev=1.0` では `4 bets / net -4.0` になった
+- `blend=0.6` の variants は `min_ev=0.95` でも `-9.0`、`min_ev=1.0` では `-2.0` か `-1.0` に留まり、baseline family を再現できなかった
+
+したがって、August profitable regime の primary gap は EV guard より upstream にある。具体的には、stage1 の `portfolio_ev_only` が使っている `min_expected_value=1.0` と stage2 の `blend=0.6` が、baseline August policy の利益局面を大きく削っている。
+
 ## 7. bankroll sweep の見方
 
 bankroll 観点まで見たいときは `run_serving_stateful_bankroll_sweep.py` を使う。
