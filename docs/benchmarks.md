@@ -116,22 +116,25 @@ actual calendar の比較では、次を確認する。
 - `current_bankroll_candidate`
 - `current_ev_candidate`
 
-入力 window は次の 2 本である。
+入力 window は次の 3 本である。
 
 - `tail_weekends`
 - late-September 5 日 window
+- `aug_weekends_20260322`
 
 aggregate の要点は次のとおりである。
 
-- `current_bankroll_candidate` は pure bankroll delta が `2/2` windows で正、2-window mean は `net +5.75`, `bankroll +0.4264`
-- `current_ev_candidate` も pure bankroll delta が `2/2` windows で正、2-window mean は `net +3.25`, `bankroll +0.2849`
-- 両候補とも net delta が正だったのは late-September 側だけで、`tail_weekends` では `current_recommended_serving` が total net で優位だった
+- `current_bankroll_candidate` は pure bankroll delta が `2/3` windows で正だが、3-window mean は `net -3.5333`, `bankroll +0.2026`
+- `current_ev_candidate` も pure bankroll delta が `2/3` windows で正だが、3-window mean は `net -7.5333`, `bankroll +0.0472`
+- 両候補とも net delta が正だったのは late-September 側だけだった
+- `tail_weekends` では `current_recommended_serving` が total net で優位で、候補側は pure final bankroll のみ改善した
+- `aug_weekends_20260322` では `current_recommended_serving` が net と bankroll の両面で両候補を上回った
 
 したがって、現時点の運用上の位置づけは次のとおりである。
 
-1. rollback / de-risk の第一候補は `current_bankroll_candidate`
-2. `current_ev_candidate` は net と bankroll の中間候補
-3. `current_recommended_serving` は window によって net で勝つため、一律置換はせず baseline として保持する
+1. `current_bankroll_candidate` は rollback / de-risk の有力候補だが、全 regime で優位とは言えない
+2. `current_ev_candidate` は中間候補だが、現時点では `current_recommended_serving` を安定して上回る根拠は弱い
+3. `current_recommended_serving` は baseline として維持し、候補置換は regime ごとの裏付けが増えるまで慎重に扱う
 
 ## 7. 現在の評価方針
 

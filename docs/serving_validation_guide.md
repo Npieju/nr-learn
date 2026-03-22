@@ -237,31 +237,51 @@ aggregate では、window ごとの net delta / pure bankroll delta / best sweep
 - `current_recommended_serving` vs `current_bankroll_candidate`
 - `current_recommended_serving` vs `current_ev_candidate`
 
-入力 window はどちらも次の 2 本である。
+入力 window は最初に次の 2 本で始め、その後 August weekend を足して 3 本に拡張した。
 
 - `tail_weekends`
 - late-September 5 日 window
+- `aug_weekends_20260322`
 
 aggregate artifact は次に保存した。
 
-- `artifacts/reports/dashboard/serving_compare_aggregate_recommended_vs_bankroll_20260322.json`
-- `artifacts/reports/dashboard/serving_compare_aggregate_recommended_vs_ev_20260322.json`
+- `artifacts/reports/dashboard/serving_compare_aggregate_recommended_vs_bankroll_3windows_20260322.json`
+- `artifacts/reports/dashboard/serving_compare_aggregate_recommended_vs_ev_3windows_20260322.json`
 
 観測結果は次のとおりである。
 
-- `current_bankroll_candidate` は 2/2 window で pure bankroll delta が正だった
-- `current_ev_candidate` も 2/2 window で pure bankroll delta が正だった
+- 3-window では、`current_bankroll_candidate` の pure bankroll delta は `2/3` windows で正、mean は `net -3.5333`, `bankroll +0.2026`
+- 3-window では、`current_ev_candidate` の pure bankroll delta も `2/3` windows で正、mean は `net -7.5333`, `bankroll +0.0472`
 - net delta が正だったのは両候補とも late-September 側だけだった
-- 2 window mean では、`current_bankroll_candidate` の `mean_net_delta_right_minus_left=5.75`、`mean_pure_bankroll_delta_right_minus_left=0.4264`
-- 2 window mean では、`current_ev_candidate` の `mean_net_delta_right_minus_left=3.25`、`mean_pure_bankroll_delta_right_minus_left=0.2849`
 - `tail_weekends` では `current_recommended_serving` が total net で優位だったが、両候補とも pure final bankroll は改善した
 - late-September では `current_bankroll_candidate` と `current_ev_candidate` の両方が、net と bankroll の両面で `current_recommended_serving` を上回った
+- August weekends では逆に `current_recommended_serving` が net と bankroll の両面で両候補を上回った
 
 したがって、現時点の実務的な読みは次のとおりである。
 
-1. bankroll 保全を最優先にするなら `current_bankroll_candidate` が最も強い
-2. `current_ev_candidate` は net と bankroll の中間候補として扱える
-3. `current_recommended_serving` は window によっては net で勝つため、短い serving compare だけで一律に置き換えるべきではない
+1. `current_bankroll_candidate` は drawdown の強い局面では最も defensive だが、常に優位ではない
+2. `current_ev_candidate` は依然として中間候補だが、August のような好調 window では baseline を下回る
+3. `current_recommended_serving` は単なる baseline ではなく、特定 window では net と bankroll の両面で最良になる
+4. したがって、短い serving compare の結論をそのまま一般化せず、複数 regime の window を跨いで読む必要がある
+
+### 9.5 August weekend の反証 window
+
+2026-03-22 に、次の 6 日で `current_recommended_serving` を `replay-existing` で再比較した。
+
+- `2024-08-03`
+- `2024-08-04`
+- `2024-08-10`
+- `2024-08-11`
+- `2024-08-17`
+- `2024-08-18`
+
+結果は late-September と逆で、`current_recommended_serving` が両候補を上回った。
+
+- vs `current_bankroll_candidate`: total policy net `20.1` vs `-2.0`、pure final bankroll `1.1765` vs `0.9317`
+- vs `current_ev_candidate`: total policy net `20.1` vs `-9.0`、pure final bankroll `1.1765` vs `0.7482`
+- 両 compare とも best sweep result は `selected_label=current_recommended_serving` だった
+
+この window は、de-risk 候補が常に有利とは限らないことを示す反証になっている。Aug のように baseline 側が十分に利益を出せている局面では、ベット抑制そのものが機会損失になる。
 
 つまり、比較の軸は単純な net だけではなく、次の 3 つで見る。
 
