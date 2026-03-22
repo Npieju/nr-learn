@@ -288,6 +288,15 @@ early stage の policy family 自体が強すぎるかを切るときは `run_po
 
 つまり、stage1 を baseline August family に寄せれば August profit regime 自体は回復するが、その時点で staged wrapper は実質的に single-policy baseline の複製になる。したがって、次の論点は「stage1 を baseline に寄せるかどうか」ではなく、「baseline 相当の August capture を保ったまま late-September だけを別条件で抑える guard / regime split をどう追加するか」である。
 
+その guard 候補として、続けて `..._staged_aug_baseline_stage1_selected_rows_guard_probe.yaml` も試した。これは stage1 に `fallback_when.selected_rows_at_most: 5` を足し、選択 race が少ない日は lower-blend / Kelly fallback へ送る構成である。
+
+- late-September 5 日 window では `31 bets / total net -25.6` から `10 bets / total net -10.0` まで強く defensive になった
+- 5/5 日すべてで stage1 が `selected_rows_at_most` に引っかかり、`portfolio_lower_blend` か `kelly_fallback_1` に落ちた
+- ただし August weekends 6 日 window も同時に崩れ、baseline `34 bets / total net +20.1` に対して `6 bets / total net -6.0` だった
+- 特に `2024-08-17` は baseline の `7 bets / +32.6` が `0 bets / 0.0` になり、`2024-08-11` と `2024-08-18` も Kelly fallback に落ちて利益を再現できなかった
+
+したがって、`selected_rows_at_most` は late-September の de-risk には効くが、August profitable regime を守るには blunt すぎる。次の guard は selected count 単独ではなく、date-context か別 signal と組み合わせて設計する必要がある。
+
 ## 7. bankroll sweep の見方
 
 bankroll 観点まで見たいときは `run_serving_stateful_bankroll_sweep.py` を使う。
