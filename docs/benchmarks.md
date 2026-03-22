@@ -118,6 +118,13 @@ Benter 系の比較では、重要なのは単純な ROI よりも `ΔR² = R²_
 - 両候補とも `min_bets_abs=30` まで下げると feasible fold が `5/5` になった
 - fold 別の最初の到達 threshold は共通で、fold 3 が `58`、fold 1 が `45`、fold 2 と fold 4 が `40`、fold 5 が `30` だった
 
+さらに threshold compare から mitigation probe を組み立てると、runtime 候補としては次の 2 本に収束した。
+
+- dominant blocked signature は `portfolio / blend_weight=0.8 / min_prob=0.03 / top_k=1 / min_ev=0.95` で、84 blocked occurrence を占めた
+- そのうち `74/84` occurrence では `portfolio / blend_weight=0.6 / min_prob=0.03 / top_k=1 / min_ev=1.0` がより高い final bankroll を示した
+- 残り `10/84` occurrence では `portfolio / blend_weight=0.8 / min_prob=0.03 / top_k=1 / min_ev=1.0` が pure bankroll で上回った
+- mitigation probe からは runtime-ready candidate として `portfolio_lower_blend` と `portfolio_ev_only` の 2 本を書き出せたが、`74/10` の staged hybrid は現行 runtime の単一 policy/date override では直接表現できなかった
+
 つまり、この 2 候補の formal block は「bankroll 側か EV 側か」の違いではなく、同じ support frontier に乗っている問題として読むのが正しい。
 
 したがって、`current_bankroll_candidate` と `current_ev_candidate` は serving 上の de-risk 候補としては有力でも、現時点では benchmark 更新や正式昇格の候補とは扱わない。運用上は rollback / defensive override の候補に留め、昇格判断は support を増やす別の改善が入ってから再評価する。

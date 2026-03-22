@@ -135,6 +135,13 @@ promotion gate は matching な `wf_feasibility_diag_*.json` を参照する。
 - `min_bets_abs=30` で `5/5` folds が feasible
 - fold ごとの frontier は `3 -> 58`, `1 -> 45`, `2 -> 40`, `4 -> 40`, `5 -> 30`
 
+さらに compare -> mitigation probe まで進めると、「formal gate は通らないが runtime 側で試す価値がある policy」を抽出できる。
+
+- dominant blocked signature は `portfolio / blend_weight=0.8 / min_ev=0.95`
+- mitigation probe の主力は `portfolio / blend_weight=0.6 / min_ev=1.0`
+- 少数例では `portfolio / blend_weight=0.8 / min_ev=1.0` が pure bankroll 優位だった
+- ただし、ここで得られる staged hybrid は evidence-backed でも、現行 runtime の date override だけでは直接 load できない
+
 したがって、promotion gate の `0/5` を見たら「完全にダメ」と読むのではなく、「support frontier がどこにあるか」を別 artifact で確認すると、次の改善余地を定量化できる。
 
 つまり、`evaluation_representative=true` だけでは足りず、matching WF の fold support まで満たして初めて昇格候補になる。特に `dominant_failure_reason=min_bets` で `binding_min_bets_source=absolute` が揃っている場合は、「方向性はあっても support が足りない」状態として読む。今回の 2 候補は serving 上の差はあるが、formal gate の blocking source は同じだった。
