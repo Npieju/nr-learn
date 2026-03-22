@@ -279,6 +279,15 @@ early stage の policy family 自体が強すぎるかを切るときは `run_po
 
 したがって、August profitable regime の primary gap は EV guard より upstream にある。具体的には、stage1 の `portfolio_ev_only` が使っている `min_expected_value=1.0` と stage2 の `blend=0.6` が、baseline August policy の利益局面を大きく削っている。
 
+この仮説を staged runtime に戻して確かめるため、`..._staged_aug_baseline_stage1_probe.yaml` も actual-date replay で確認した。これは stage1 を baseline August family の `blend=0.8 / min_prob=0.03 / min_ev=0.95` に合わせ、fallback は no-selection 時だけ後段へ渡す構成である。
+
+- August weekends 6 日 window では baseline と完全一致し、`34 bets / total net +20.1` だった
+- 6/6 日すべてで `policy_stage_traces=["portfolio_aug_baseline:selected"]` となり、fallback reason は空だった
+- late-September 5 日 window では baseline `31 bets / total net -25.6` に対して、この probe は `38 bets / total net -32.6` まで悪化した
+- late-September でも 5/5 日すべてが `portfolio_aug_baseline:selected` で、`portfolio_lower_blend` や Kelly fallback は一度も使われなかった
+
+つまり、stage1 を baseline August family に寄せれば August profit regime 自体は回復するが、その時点で staged wrapper は実質的に single-policy baseline の複製になる。したがって、次の論点は「stage1 を baseline に寄せるかどうか」ではなく、「baseline 相当の August capture を保ったまま late-September だけを別条件で抑える guard / regime split をどう追加するか」である。
+
 ## 7. bankroll sweep の見方
 
 bankroll 観点まで見たいときは `run_serving_stateful_bankroll_sweep.py` を使う。
