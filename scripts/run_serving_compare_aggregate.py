@@ -194,6 +194,35 @@ def _extract_row_from_compare_manifest(path: Path, payload: dict[str, Any]) -> d
     }
 
 
+def _delta_direction(value: Any) -> str:
+    numeric_value = _safe_float(value)
+    if numeric_value is None:
+        return "unknown"
+    if numeric_value > 0.0:
+        return "positive"
+    if numeric_value < 0.0:
+        return "negative"
+    return "zero"
+
+
+def _classify_window_tradeoff(row: dict[str, Any]) -> str:
+    net_direction = _delta_direction(row.get("net_delta_right_minus_left"))
+    bankroll_direction = _delta_direction(row.get("pure_bankroll_delta_right_minus_left"))
+    if net_direction == "positive" and bankroll_direction == "positive":
+        return "positive_net_positive_bankroll"
+    if net_direction == "positive" and bankroll_direction == "negative":
+        return "positive_net_negative_bankroll"
+    if net_direction == "negative" and bankroll_direction == "positive":
+        return "negative_net_positive_bankroll"
+    if net_direction == "negative" and bankroll_direction == "negative":
+        return "negative_net_negative_bankroll"
+    if net_direction == "zero" and bankroll_direction == "zero":
+        return "zero_net_zero_bankroll"
+    if net_direction == "unknown" or bankroll_direction == "unknown":
+        return "unknown"
+    return f"{net_direction}_net_{bankroll_direction}_bankroll"
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     input_group = parser.add_mutually_exclusive_group(required=True)
@@ -227,23 +256,40 @@ def main() -> int:
         rows: list[dict[str, Any]] = []
         for path, payload in zip(input_paths, payloads):
             row = _extract_row_from_dashboard_summary(path, payload) if args.dashboard_summaries else _extract_row_from_compare_manifest(path, payload)
+            row["net_delta_direction"] = _delta_direction(row.get("net_delta_right_minus_left"))
+            row["pure_bankroll_delta_direction"] = _delta_direction(row.get("pure_bankroll_delta_right_minus_left"))
+            row["tradeoff_classification"] = _classify_window_tradeoff(row)
             rows.append(row)
 
         frame = pd.DataFrame(rows).sort_values(["window_label", "date_count"], ascending=[True, True]).reset_index(drop=True)
+        row_records = frame.to_dict(orient="records")
         aggregate_payload = {
             "input_files": [artifact_display_path(path if path.is_absolute() else (Path.cwd() / path).resolve(), workspace_root=ROOT) for path in input_paths],
             "input_kind": "dashboard_summaries" if args.dashboard_summaries else "compare_manifests",
             "window_count": int(len(frame)),
-            "rows": frame.to_dict(orient="records"),
+            "rows": row_records,
             "summary": {
                 "manifest_status_counts": frame["manifest_status"].fillna("unknown").value_counts().to_dict() if "manifest_status" in frame.columns else {},
                 "manifest_decision_counts": frame["manifest_decision"].fillna("unknown").value_counts().to_dict() if "manifest_decision" in frame.columns else {},
                 "windows_with_positive_net_delta": [
-                    str(row["window_label"]) for row in frame.to_dict(orient="records") if _safe_float(row.get("net_delta_right_minus_left")) is not None and float(row["net_delta_right_minus_left"]) > 0.0
+                    str(row["window_label"]) for row in row_records if row.get("net_delta_direction") == "positive"
+                ],
+                "windows_with_negative_net_delta": [
+                    str(row["window_label"]) for row in row_records if row.get("net_delta_direction") == "negative"
                 ],
                 "windows_with_positive_bankroll_delta": [
-                    str(row["window_label"]) for row in frame.to_dict(orient="records") if _safe_float(row.get("pure_bankroll_delta_right_minus_left")) is not None and float(row["pure_bankroll_delta_right_minus_left"]) > 0.0
+                    str(row["window_label"]) for row in row_records if row.get("pure_bankroll_delta_direction") == "positive"
                 ],
+                "windows_with_negative_bankroll_delta": [
+                    str(row["window_label"]) for row in row_records if row.get("pure_bankroll_delta_direction") == "negative"
+                ],
+                "tradeoff_classification_counts": frame["tradeoff_classification"].fillna("unknown").value_counts().to_dict(),
+                "windows_by_tradeoff_classification": {
+                    classification: [
+                        str(row["window_label"]) for row in row_records if row.get("tradeoff_classification") == classification
+                    ]
+                    for classification in sorted({str(value) for value in frame["tradeoff_classification"].fillna("unknown").tolist()})
+                },
                 "mean_net_delta_right_minus_left": float(frame["net_delta_right_minus_left"].dropna().mean()) if "net_delta_right_minus_left" in frame.columns and not frame["net_delta_right_minus_left"].dropna().empty else None,
                 "mean_pure_bankroll_delta_right_minus_left": float(frame["pure_bankroll_delta_right_minus_left"].dropna().mean()) if "pure_bankroll_delta_right_minus_left" in frame.columns and not frame["pure_bankroll_delta_right_minus_left"].dropna().empty else None,
             },
