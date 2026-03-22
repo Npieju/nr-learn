@@ -363,6 +363,14 @@ bankroll sweep でもこの読みは崩れなかった。
 
 したがって、date-wide sparse guard 自体は runtime capability として有効だが、threshold `5` の first probe ではまだ弱い。現時点の serving frontier は変わらず Kelly-only fallback であり、`date_selected_rows_at_most` は次段の threshold sweep / richer date-wide signal probe 用の土台として扱うのが妥当である。
 
+この次段として `scripts/run_staged_date_selected_rows_sweep.py` も追加し、`..._serving_sep_baseline_date_selected_rows_kelly_candidate.yaml` の `date_selected_rows_at_most` を late-September 5 日で `1..10` まで replay sweep した。frontier は単調ではあるが、current best を更新するほどではない。
+
+- `1` は実質 baseline と同じで `31 bets / total net -25.6`
+- `5` は初回 probe と同じ `24 bets / total net -18.6`
+- 最良だった `10` でも `17 bets / total net -17.0` に留まり、current Kelly-only guard の `10 bets / -10.0` には届かなかった
+
+したがって、date-wide sparse guard の weakness は `5` という初期 threshold だけの問題ではない。少なくとも selected-row count 単独では、September loss-heavy day を十分に切り分けられていない。次に試すべきなのは threshold 追加調整より、date-wide EV / edge 集約などを含む richer guard である。
+
 ## 7. bankroll sweep の見方
 
 bankroll 観点まで見たいときは `run_serving_stateful_bankroll_sweep.py` を使う。
