@@ -124,6 +124,8 @@ Benter 系の比較では、重要なのは単純な ROI よりも `ΔR² = R²_
 - baseline 用 threshold sweep に `58` checkpoint を補ったうえで `current_recommended_serving` と `current_sep_guard_candidate` を直接 compare すると、strictest threshold は両者とも `1 fold=58`, `3 folds=45`, `5 folds=34` で一致した
 - fold 別の最初の到達 threshold も baseline と Sep guard で一致し、`fold1=55`, `fold2=45`, `fold3=58`, `fold4=35`, `fold5=34` だった
 - threshold `60` の block pattern も同一で、両者とも `4` folds が `min_bets`, `1` fold が `min_final_bankroll` で止まり、fold4 の bankroll shortfall も同じ `0.04670658682634732` だった
+- shared threshold (`60/58/55/45/40/35/34`) に限ると fold compare CSV の行内容も完全一致し、best feasible / blocked signature の並び自体が recent WF 上で変わっていないことも確認できた
+- 具体的には dominant blocked signature は両者とも `portfolio / blend_weight=0.8 / min_prob=0.03 / top_k=1 / min_ev=0.95` で共通し、fold4 の recovery だけが `min_expected_value=1.0` に切り替わる点まで一致した
 - したがって Sep guard の serving 改善は「baseline より重い formal frontier を受け入れている」わけではなく、baseline がもともと持っている support frontier の内側で生じている
 
 さらに threshold compare から mitigation probe を組み立てると、runtime 候補としては次の 2 本に収束した。

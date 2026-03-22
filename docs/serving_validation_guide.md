@@ -108,6 +108,8 @@ staged config の場合、2026-03-22 時点の smoke summary / backtest JSON に
 
 この formal reading は baseline との直接比較でも確認した。baseline `current_recommended_serving` 側の threshold sweep に不足していた `58` checkpoint を補って `current_sep_guard_candidate` と compare すると、strictest threshold は両者とも `1 fold=58`, `3 folds=45`, `5 folds=34` で一致した。fold 別の first-feasible threshold も `fold1=55`, `fold2=45`, `fold3=58`, `fold4=35`, `fold5=34` で同じであり、threshold `60` では両者とも `4` folds が `min_bets`, `1` fold が `min_final_bankroll` で止まる。したがって Sep guard の serving-side 改善は baseline より重い formal support cost を払って得ているわけではなく、baseline から共有している support frontier のまま September override が recent damage を削っている、と解釈するのが正しい。
 
+さらに shared threshold (`60/58/55/45/40/35/34`) の fold compare CSV を label/report 列を外して突き合わせると、行内容は完全一致した。つまり recent WF では frontier が同じだけでなく、best feasible candidate と blocked signature の並び自体も baseline と Sep guard で変わっていない。dominant blocked signature は両者とも `portfolio blend=0.8 / min_prob=0.03 / top_k=1 / min_ev=0.95` で、fold4 の recovery が `min_ev=1.0` に切り替わる点まで共通している。formal 側の読みとしては「Sep override は serving outcome を改善したが、recent WF の candidate-ranking / bottleneck structure 自体は baseline のまま」という整理になる。
+
 ### 5.1 stage path の横比較
 
 single-policy probe と staged probe を actual-date ごとに横並びで見たいときは `run_serving_stage_path_compare.py` を使う。
