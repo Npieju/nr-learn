@@ -27,6 +27,8 @@
   - 強い de-risk を狙う conservative candidate
 - `current_ev_candidate`
   - `current_bankroll_candidate` よりは攻める intermediate candidate
+- `current_sep_guard_candidate`
+  - September だけ sparse selection guard を Kelly fallback に直結する seasonal de-risk candidate
 
 ## 4. 代表日の smoke
 
@@ -85,6 +87,16 @@ staged config の場合、2026-03-22 時点の smoke summary / backtest JSON に
 この provenance manifest は `serving_smoke_profile_compare_*.json` に保存され、途中 step が失敗した場合も可能な限り実行済み step と失敗位置を残す。
 
 明示的に output path を渡す場合は、summary / compare / bankroll / dashboard の各出力とも directory ではなく file path を渡す。
+
+2026-03-22 に `current_sep_guard_candidate` でもこの wrapper を end-to-end で確認した。
+
+- window は `2024-09-16`, `2024-09-21`, `2024-09-22`, `2024-09-28`, `2024-09-29`
+- manifest `serving_smoke_profile_compare_current_recommended_serving_late_sep_20260322_profile_vs_current_sep_guard_candidate_late_sep_20260322_profile.json` は `status=completed`, `decision=ready`
+- compare は baseline `31 bets / total net -25.6` に対して candidate `10 bets / total net -10.0`
+- bankroll sweep は pure path で baseline `0.2780` に対して candidate `0.9915`
+- dashboard summary / PNG / CSV まで同 run で生成できることを確認した
+
+つまり `current_sep_guard_candidate` は ad hoc config compare だけでなく、stable profile として通常の smoke -> compare -> bankroll -> dashboard 導線でも再現可能である。
 
 ### 5.1 stage path の横比較
 

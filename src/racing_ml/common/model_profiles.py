@@ -36,6 +36,12 @@ MODEL_RUN_PROFILES: dict[str, ModelRunProfile] = {
         data_config="configs/data.yaml",
         feature_config="configs/features_catboost_rich_high_coverage_diag.yaml",
     ),
+    "current_sep_guard_candidate": ModelRunProfile(
+        description="September-only de-risk candidate that falls straight from sparse September portfolio selection into Kelly fallback.",
+        model_config="configs/model_catboost_value_stack_lgbm_roi_high_coverage_tune_roi012_liquidity_regime_hybrid_june_strict_serving_sep_selected_rows_kelly_only_candidate.yaml",
+        data_config="configs/data.yaml",
+        feature_config="configs/features_catboost_rich_high_coverage_diag.yaml",
+    ),
 }
 
 
