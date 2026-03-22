@@ -458,6 +458,15 @@ report 別には次の分布だった。
 
 したがって、読みはさらに精密になった。`deepest_stage_selected_present` は window を広げても still precision を崩しておらず、しかも net severity まで明確に悪いので、tail-risk subset flag としての支持はむしろ増えた。一方で `intermediate_stage_selected_present` は recall bucket としては有用だが、extended support ではすでに positive day (`2024-09-07`, `2024-09-14`) を含み、loss magnitude もごく薄い。つまり intermediate bucket は「bad-day を広く拾う descriptor」ではあっても、「precision-safe な risk flag」でも「tail-loss subset flag」でもない。runtime key を考えるなら deepest を主 signal に保ち、intermediate は補助説明変数として扱うのが妥当である。
 
+さらに overlap を避けるため、window の足し合わせではなく `2024-05-04..2024-09-29` の base prediction 45 race-day を 1 本の `full_recent_ev_guard` report として再集計した。`sep_guard` を添えた 2-report support artifact `staged_trace_support_check_full_recent_sep_guard_depth_bucket_support_20260322.{json,csv}` でも結論は同じだった。
+
+- `full_recent_ev_guard` 単体では `deepest_stage_selected=12`, `intermediate_stage_selected=20`, `no_final_selection=13`
+- `sep_guard` を加えた合計 50 rows でも `deepest_stage_selected` は `13 negative / 0 positive`
+- `intermediate_stage_selected` は `21 negative / 3 positive` で、positive は `2024-06-16`, `2024-09-07`, `2024-09-14`
+- severity も `deepest_stage_selected mean=-0.7709, median=-1.0`、`intermediate_stage_selected mean=-0.00007, median=-0.00069` と大きく分かれた
+
+この broad-window check によって、deepest-stage signal は「複数小 window で偶然 clean だった」ではなく、より広い recent calendar でも precision と severity を保つ tail-loss subset flag と読めるようになった。一方で intermediate-stage signal は broad window ほど positive contamination が増えるため、runtime guard 候補としてはむしろ後退した。
+
 したがって、`stage3 candidate present` は「全ての loss day を捉える complete separator」ではないが、「deeper fallback を実際に必要とした high-risk subset」を切り出す risk flag としては支持が増えた。実務上の次段は、この signal を runtime key に即座に変換することではなく、まず他 window も含めて `stage3 present -> loss-heavy subset` の support を増やすことである。
 
 ## 7. 現在の評価方針

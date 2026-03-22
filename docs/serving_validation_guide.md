@@ -440,6 +440,15 @@ report 別の bucket count は次のとおりである。
 
 この extended support により operational reading も更新される。`deepest_stage_selected_present` は window 拡張後も precision を崩しておらず、しかも final selected net の severity まで明確に悪いので、引き続き tail-risk subset flag として扱える。一方で `intermediate_stage_selected_present` は recall 補完としては有効だが、すでに positive day を含み、loss magnitude もほぼゼロ近傍に散っているため、そのまま risk flag に昇格させるのは危険である。次段は deepest を主 signal に据えたまま、intermediate は説明用または後段の複合条件候補として扱うのが妥当である。
 
+この reading はさらに broad-window でも再確認した。重複 window を足し合わせる代わりに、`2024-05-04..2024-09-29` の base prediction 45 race-day 全体を `full_recent_ev_guard` として replay し、`sep_guard` と並べた support artifact `staged_trace_support_check_full_recent_sep_guard_depth_bucket_support_20260322.{json,csv}` を追加した。
+
+- `full_recent_ev_guard` 単体: `deepest_stage_selected=12`, `intermediate_stage_selected=20`, `no_final_selection=13`
+- `sep_guard` を合わせた 50 rows でも `deepest_stage_selected` は `13 negative / 0 positive`
+- `intermediate_stage_selected` は `21 negative / 3 positive` で、positive は `2024-06-16`, `2024-09-07`, `2024-09-14`
+- severity は `deepest mean=-0.7709, median=-1.0` に対し `intermediate mean=-0.00007, median=-0.00069`
+
+したがって、deepest-stage signal は recent calendar 全体でも precision と severity を保つ tail-loss subset flag と読める。一方で intermediate-stage signal は broad window にすると positive contamination が増えるため、説明変数としては残せても standalone guard 候補にはしない方がよい。
+
 ## 7. bankroll sweep の見方
 
 bankroll 観点まで見たいときは `run_serving_stateful_bankroll_sweep.py` を使う。
