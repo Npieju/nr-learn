@@ -130,6 +130,14 @@ aggregate の要点は次のとおりである。
 - `tail_weekends` では `current_recommended_serving` が total net で優位で、候補側は pure final bankroll のみ改善した
 - `aug_weekends_20260322` では `current_recommended_serving` が net と bankroll の両面で両候補を上回った
 
+aggregate JSON の `tradeoff_classification` で言い換えると、window 構成は `++`, `-+`, `--` が 1 本ずつである。
+
+- late-September は `positive_net_positive_bankroll`
+- `tail_weekends` は `negative_net_positive_bankroll`
+- `aug_weekends_20260322` は `negative_net_negative_bankroll`
+
+このため、候補側を「bankroll 改善候補」とだけ要約するのは粗すぎる。現状の evidence は、「一部 regime では効くが、別 regime では baseline より悪化する」である。
+
 したがって、現時点の運用上の位置づけは次のとおりである。
 
 1. `current_bankroll_candidate` は rollback / de-risk の有力候補だが、全 regime で優位とは言えない

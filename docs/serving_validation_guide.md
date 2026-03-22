@@ -147,6 +147,28 @@ compare manifest から window 単位の可視化を作るときは `run_serving
 
 aggregate では、window ごとの net delta / pure bankroll delta / best sweep bankroll を横断比較する。
 
+2026-03-22 時点の aggregate JSON には、mean だけでなく window ごとの方向と分類も含める。
+
+- `net_delta_direction`
+  `right_minus_left` の net 差分の符号。`positive` / `negative` / `zero` / `unknown` を取る。
+- `pure_bankroll_delta_direction`
+  `right_minus_left` の pure final bankroll 差分の符号。`positive` / `negative` / `zero` / `unknown` を取る。
+- `tradeoff_classification`
+  net と bankroll の符号をまとめた window 単位の regime label。
+
+実務上の解釈は次のとおりである。
+
+- `positive_net_positive_bankroll`
+  候補側が net と bankroll の両面で baseline を上回った。候補を押し上げる strongest evidence。
+- `negative_net_positive_bankroll`
+  候補側は bankroll 改善と引き換えに net を落としている。de-risk 候補としては有効だが、無条件の置換根拠にはならない。
+- `negative_net_negative_bankroll`
+  候補側が net と bankroll の両面で不利。baseline 維持を支持する counterexample として扱う。
+- `positive_net_negative_bankroll`
+  候補側が net は伸ばすが bankroll を悪化させる。攻め寄り候補としては意味があるが、drawdown 制御目的では注意が必要。
+
+summary 側では `tradeoff_classification_counts` と `windows_by_tradeoff_classification` で、どの regime が何本あったかを確認する。
+
 ## 9. 候補の読み方
 
 現時点の保守的候補の読み方は次のとおりである。
@@ -256,6 +278,14 @@ aggregate artifact は次に保存した。
 - `tail_weekends` では `current_recommended_serving` が total net で優位だったが、両候補とも pure final bankroll は改善した
 - late-September では `current_bankroll_candidate` と `current_ev_candidate` の両方が、net と bankroll の両面で `current_recommended_serving` を上回った
 - August weekends では逆に `current_recommended_serving` が net と bankroll の両面で両候補を上回った
+
+classification で見ると、両 aggregate とも 3 本の window は次の 3 分割になった。
+
+- late-September は `positive_net_positive_bankroll`
+- `tail_weekends` は `negative_net_positive_bankroll`
+- `aug_weekends_20260322` は `negative_net_negative_bankroll`
+
+この 3 分割が示すのは、候補側の効き方が regime 依存だということである。したがって、3-window mean を単独で読むのではなく、どの class が何本あるかを先に確認する。
 
 したがって、現時点の実務的な読みは次のとおりである。
 
