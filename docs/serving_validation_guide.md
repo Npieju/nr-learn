@@ -309,12 +309,12 @@ early stage の policy family 自体が強すぎるかを切るときは `run_po
 
 bankroll sweep でもこの読みは崩れなかった。
 
-- late-September では pure path の final bankroll が baseline `0.2780` に対して candidate `1.0000` となり、pure stage でも candidate 優位だった
+- late-September では total net は baseline `-25.6` に対して candidate `-10.0` まで改善したが、pure path の final bankroll は baseline `0.2780` に対して candidate `0.0` で、bankroll sweep の best path は baseline 側に残った
 - May weekends は baseline / candidate ともに final bankroll `0.9906` で完全一致した
 - August weekends は baseline / candidate ともに final bankroll `1.1765` で完全一致した
 - `tail_weekends` も baseline / candidate ともに final bankroll `0.7432` で完全一致した
 
-したがって、この candidate の current evidence は「September だけ defensive に効き、それ以外の確認済み window では realized policy も bankroll path も baseline からずれない」である。次に広げるべきなのは guard の再調整ではなく、より広い aggregate / dashboard でこの isolation が保たれるかの確認である。
+したがって、この candidate の current evidence は「September だけ net を軽くできるが、pure bankroll まで良化するわけではなく、それ以外の確認済み window では realized policy も bankroll path も baseline と一致する」である。次に広げるべきなのは guard の再調整ではなく、aggregate / dashboard でこの `net 改善 vs bankroll 悪化` の trade-off がどこまで安定して再現されるかの確認である。
 
 ## 7. bankroll sweep の見方
 
