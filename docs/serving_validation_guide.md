@@ -204,6 +204,49 @@ staged EV guard の `max_expected_value_below` が aggressive すぎるかを ac
 - August では moderate な緩和は unnecessary fallback を減らすが、利益回復までは届かなかった
 - したがって、次の論点は「EV guard を少し緩めるか」よりも、「August profitable regime を拾える selector 条件をどう設計するか」である
 
+### 6.4 staged policy signal diagnostic
+
+threshold 調整だけでは判断しきれないときは `run_staged_policy_signal_diagnostic.py` を使う。これは staged config を race 単位で replay し、各 stage について次を出す。
+
+- `selected_count`
+- `max_expected_value`
+- `max_prob`
+- `max_edge`
+- `fallback`
+- `fallback_reasons`
+- `selected_return_units`
+- `selected_net_units`
+- final の `policy_stage_trace` / `policy_stage_fallback_reasons`
+
+例:
+
+```bash
+/workspaces/nr-learn/.venv/bin/python scripts/run_staged_policy_signal_diagnostic.py \
+  --window-label aug_weekends_signal_20260322 \
+  --date 2024-08-03 \
+  --date 2024-08-04 \
+  --date 2024-08-10 \
+  --date 2024-08-11 \
+  --date 2024-08-17 \
+  --date 2024-08-18
+```
+
+既定の出力は次である。
+
+- `artifacts/reports/staged_policy_signal_diagnostic_<window>.json`
+- `artifacts/reports/staged_policy_signal_diagnostic_<window>.csv`
+- `artifacts/reports/staged_policy_signal_diagnostic_<window>_summary.csv`
+
+2026-03-22 の August weekends 診断では、threshold sweep より踏み込んだことが分かった。
+
+- `2024-08-03` は `portfolio_ev_only` が 2 race、`portfolio_lower_blend` が 1 race を選んでいたが、どちらも hit せず、そのまま net は負だった
+- `2024-08-11` も `portfolio_ev_only` は 2 race を選んでいたが、median `max_expected_value` は約 `1.048` で 0 hit だった
+- `2024-08-18` は `portfolio_ev_only` が 4 race を選んでいたが、median `max_expected_value` は約 `1.023` で 0 hit だった
+- 一方で baseline `current_recommended_serving` は同じ August window で `2024-08-17` に `7 bets / net +32.6`、`2024-08-18` に `8 bets / net +2.7` を出していた
+- それにもかかわらず staged probe は `2024-08-17` で全 stage `no_selection`、`2024-08-18` でも early portfolio stages が profitable day を再現できていなかった
+
+つまり、August の差は「EV guard が少し厳しすぎる」だけではない。少なくとも profitable day の一部では、early portfolio policy family 自体が baseline の利益局面を再現できていない。次の改善候補は threshold lowering 単体ではなく、stage policy 本体か regime-aware selector 条件である。
+
 ## 7. bankroll sweep の見方
 
 bankroll 観点まで見たいときは `run_serving_stateful_bankroll_sweep.py` を使う。
