@@ -120,6 +120,8 @@ staged config の場合、2026-03-22 時点の smoke summary / backtest JSON に
 
 この operational reading を stable profile として使いやすくするため、`current_long_horizon_serving` alias を `current_sep_guard_candidate` と同じ config に追加した。これは benchmark promotion を意味しないが、current evidence に限れば broad default-month rewrite よりもはるかに安全で、recent aggregate 改善もすでに確認済みである。
 
+さらに `current_best_eval` を相手にした fresh representative compare (`2024-04-07`, `2024-05-11`, `2024-08-17`, `2024-09-28`) も切ったが、long-horizon 側の読みは変わらなかった。April / May / August は policy と realized net が同一で、May だけ `current_best_eval` が `may_runtime_liquidity` score source を使ったものの top line は変わらない。差が出たのは `2024-09-28` だけで、`current_long_horizon_serving` は September guard により `1 bet / -1.0`、`current_best_eval` は `sep_runtime_portfolio` のままで `2 bets / -2.0` だった。したがって、現時点の long-horizon serving 改善は score model の複雑化ではなく、September guard のような validated policy-side override を積む方向で考えるのが妥当である。
+
 ### 5.1 stage path の横比較
 
 single-policy probe と staged probe を actual-date ごとに横並びで見たいときは `run_serving_stage_path_compare.py` を使う。

@@ -147,6 +147,8 @@ Benter 系の比較では、重要なのは単純な ROI よりも `ΔR² = R²_
 
 反対に、同じ April 4 日で `current_sep_guard_candidate` は baseline と完全一致した。つまり現時点の long-horizon operational reading は「non-September は baseline のまま固定し、September だけ validated Kelly-only guard を載せる」が最も defensible である。これを stable profile として再利用しやすくするため、`current_long_horizon_serving` alias を `current_sep_guard_candidate` と同じ config に追加した。formal gate 上の status は依然 hold だが、serving 運用上の conservative default としてはこの seasonal override が現在の最善候補である。
 
+同日の fresh actual-date headroom check で、より複雑な `current_best_eval` も long-horizon serving を上回らないことを確認した。代表 4 日 (`2024-04-07`, `2024-05-11`, `2024-08-17`, `2024-09-28`) の compare では April / May / August が実質同一、差が出たのは September `2024-09-28` だけで、`current_long_horizon_serving` は `1 bet / -1.0`、`current_best_eval` は `2 bets / -2.0` だった。つまり現時点では score model complexity を戻しても long-horizon serving の実利は増えず、改善余地は依然として shared portfolio bottleneck 側にある。
+
 ## 6. serving 比較の判断基準
 
 actual calendar の比較では、次を確認する。
