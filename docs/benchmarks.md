@@ -119,12 +119,12 @@ Benter 系の比較では、重要なのは単純な ROI よりも `ΔR² = R²_
 - `current_bankroll_candidate` と `current_ev_candidate` は `min_bets_abs=30` まで下げると feasible fold が `5/5` になった
 - fold 別の最初の到達 threshold は `current_bankroll_candidate` と `current_ev_candidate` で共通で、fold 3 が `58`、fold 1 が `45`、fold 2 と fold 4 が `40`、fold 5 が `30` だった
 - `current_sep_guard_candidate` も formal gate の blocking source 自体は同じで、`wf_feasible_fold_count=0/5`, dominant failure reason `min_bets`, `binding_min_bets_source=absolute`, `max_infeasible_bets_observed=58` だった
-- さらに 3 候補を横並びにした threshold compare では、shared `1 fold` frontier は同じ `58` だった一方、`current_sep_guard_candidate` の strictest threshold は `3 folds=45`, `5 folds=34` で、`current_bankroll_candidate` / `current_ev_candidate` の `40/30` より少し厳しかった
-- `current_sep_guard_candidate` の fold 別の最初の到達 threshold は `fold1=55`, `fold2=45`, `fold3=58`, `fold4=35`, `fold5=34` だった
-- signature report / drilldown まで進めると、この差は別 family の混入ではなく同じ dominant blocked signature `portfolio / blend_weight=0.8 / min_prob=0.03 / top_k=1 / min_ev=0.95` の recovery threshold 差として説明できた
-- `current_bankroll_candidate` / `current_ev_candidate` ではこの signature の recovery は `fold1=45`, `fold2=40`, `fold3=58`, `fold4=40`, `fold5=30` だった
-- `current_sep_guard_candidate` では recovery が `fold1=55`, `fold2=45`, `fold3=58`, `fold4=35`, `fold5=34` で、特に fold1 と fold5 の必要 support が高い
-- さらに Sep guard の fold4 だけは recovery signature が `min_expected_value=1.0` に切り替わり、他 2 候補の `min_expected_value=0.95` recovery と異なっていた
+- 3 候補を横並びにした threshold compare では、shared `1 fold` frontier は同じ `58` だった一方、`current_sep_guard_candidate` の strictest threshold は `3 folds=45`, `5 folds=34` で、`current_bankroll_candidate` / `current_ev_candidate` の `40/30` より少し厳しかった
+- ただしこれは「他の de-risk 候補との比較」であり、baseline `current_recommended_serving` との直接比較とは別である
+- baseline 用 threshold sweep に `58` checkpoint を補ったうえで `current_recommended_serving` と `current_sep_guard_candidate` を直接 compare すると、strictest threshold は両者とも `1 fold=58`, `3 folds=45`, `5 folds=34` で一致した
+- fold 別の最初の到達 threshold も baseline と Sep guard で一致し、`fold1=55`, `fold2=45`, `fold3=58`, `fold4=35`, `fold5=34` だった
+- threshold `60` の block pattern も同一で、両者とも `4` folds が `min_bets`, `1` fold が `min_final_bankroll` で止まり、fold4 の bankroll shortfall も同じ `0.04670658682634732` だった
+- したがって Sep guard の serving 改善は「baseline より重い formal frontier を受け入れている」わけではなく、baseline がもともと持っている support frontier の内側で生じている
 
 さらに threshold compare から mitigation probe を組み立てると、runtime 候補としては次の 2 本に収束した。
 
@@ -133,7 +133,7 @@ Benter 系の比較では、重要なのは単純な ROI よりも `ΔR² = R²_
 - 残り `10/84` occurrence では `portfolio / blend_weight=0.8 / min_prob=0.03 / top_k=1 / min_ev=1.0` が pure bankroll で上回った
 - mitigation probe からは runtime-ready candidate として `portfolio_lower_blend` と `portfolio_ev_only` の 2 本を書き出せたが、`74/10` の staged hybrid は現行 runtime の単一 policy/date override では直接表現できなかった
 
-つまり、この 3 候補の formal block は serving 上の見え方の違いよりも、同じ `min_bets` 系 support frontier に乗っている問題として読むのが正しい。ただし frontier の厳しさは完全一致ではなく、`current_sep_guard_candidate` は dominant signature の recovery threshold が一部 fold で重く、multi-fold で見ると他 2 候補よりやや support を要する。
+つまり、この 3 候補の formal block は serving 上の見え方の違いよりも、同じ `min_bets` 系 support frontier に乗っている問題として読むのが正しい。特に `current_sep_guard_candidate` は他の 2 候補より multi-fold frontier が少し厳しい一方で、baseline `current_recommended_serving` と直接比べると frontier は悪化していない。残っている promotion block は Sep override 固有の追加コストではなく、baseline から共有している support gap である。
 
 したがって、`current_bankroll_candidate` と `current_ev_candidate` は serving 上の de-risk 候補としては有力でも、現時点では benchmark 更新や正式昇格の候補とは扱わない。`current_sep_guard_candidate` も September seasonal override としては有望だが、formal には同様に hold である。運用上はいずれも rollback / seasonal override / defensive candidate に留め、昇格判断は support を増やす別の改善が入ってから再評価する。
 

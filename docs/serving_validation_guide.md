@@ -106,6 +106,8 @@ staged config の場合、2026-03-22 時点の smoke summary / backtest JSON に
 
 ただし、同日の formal revision gate `r20260322e` では位置づけが変わらない。evaluation と matching な `wf_feasibility_diag` はともに `representative` だったが、promotion gate は `wf_feasible_fold_count=0/5` で `block/hold` になった。dominant failure reason は `min_bets`、binding source は全 fold `min_bets_abs=100` で、short-window serving compare の良さをそのまま benchmark 昇格根拠には使えない。
 
+この formal reading は baseline との直接比較でも確認した。baseline `current_recommended_serving` 側の threshold sweep に不足していた `58` checkpoint を補って `current_sep_guard_candidate` と compare すると、strictest threshold は両者とも `1 fold=58`, `3 folds=45`, `5 folds=34` で一致した。fold 別の first-feasible threshold も `fold1=55`, `fold2=45`, `fold3=58`, `fold4=35`, `fold5=34` で同じであり、threshold `60` では両者とも `4` folds が `min_bets`, `1` fold が `min_final_bankroll` で止まる。したがって Sep guard の serving-side 改善は baseline より重い formal support cost を払って得ているわけではなく、baseline から共有している support frontier のまま September override が recent damage を削っている、と解釈するのが正しい。
+
 ### 5.1 stage path の横比較
 
 single-policy probe と staged probe を actual-date ごとに横並びで見たいときは `run_serving_stage_path_compare.py` を使う。
