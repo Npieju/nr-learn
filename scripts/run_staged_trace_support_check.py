@@ -162,6 +162,11 @@ def _build_support_summary(rows: list[dict[str, Any]]) -> dict[str, Any]:
     intermediate = frame[frame["intermediate_stage_selected_present"]].copy()
     frame = frame.copy()
     frame["selection_depth_bucket"] = frame.apply(lambda row: _selection_depth_bucket(row.to_dict()), axis=1)
+
+    deepest_positive = stage3[stage3["net_sign"] == "positive"].copy()
+    deepest_non_positive = stage3[stage3["net_sign"].isin(["negative", "zero"])].copy()
+    intermediate_positive = intermediate[intermediate["net_sign"] == "positive"].copy()
+    intermediate_non_positive = intermediate[intermediate["net_sign"].isin(["negative", "zero"])].copy()
     return {
         "window_count": int(frame["report_label"].nunique()),
         "date_count": int(len(frame)),
@@ -170,10 +175,14 @@ def _build_support_summary(rows: list[dict[str, Any]]) -> dict[str, Any]:
         "deepest_stage_selected_non_positive_net_date_count": int((stage3["net_sign"].isin(["negative", "zero"])).sum()),
         "deepest_stage_selected_windows": sorted(stage3["report_label"].dropna().astype(str).unique().tolist()),
         "deepest_stage_selected_dates": sorted(stage3["date"].dropna().astype(str).unique().tolist()),
+        "deepest_stage_selected_positive_dates": sorted(deepest_positive["date"].dropna().astype(str).unique().tolist()),
+        "deepest_stage_selected_non_positive_dates": sorted(deepest_non_positive["date"].dropna().astype(str).unique().tolist()),
         "intermediate_stage_selected_date_count": int(len(intermediate)),
         "intermediate_stage_selected_positive_net_date_count": int((intermediate["net_sign"] == "positive").sum()),
         "intermediate_stage_selected_non_positive_net_date_count": int((intermediate["net_sign"].isin(["negative", "zero"])).sum()),
         "intermediate_stage_selected_dates": sorted(intermediate["date"].dropna().astype(str).unique().tolist()),
+        "intermediate_stage_selected_positive_dates": sorted(intermediate_positive["date"].dropna().astype(str).unique().tolist()),
+        "intermediate_stage_selected_non_positive_dates": sorted(intermediate_non_positive["date"].dropna().astype(str).unique().tolist()),
         "net_sign_counts": frame["net_sign"].value_counts().to_dict(),
         "deepest_stage_selected_net_sign_counts": stage3["net_sign"].value_counts().to_dict(),
         "intermediate_stage_selected_net_sign_counts": intermediate["net_sign"].value_counts().to_dict(),
@@ -184,9 +193,13 @@ def _build_support_summary(rows: list[dict[str, Any]]) -> dict[str, Any]:
                 "deepest_stage_selected_date_count": int(group["deepest_stage_selected_present"].sum()),
                 "deepest_stage_selected_dates": sorted(group.loc[group["deepest_stage_selected_present"], "date"].astype(str).tolist()),
                 "deepest_stage_selected_net_sign_counts": group.loc[group["deepest_stage_selected_present"], "net_sign"].value_counts().to_dict(),
+                "deepest_stage_selected_positive_dates": sorted(group.loc[group["deepest_stage_selected_present"] & (group["net_sign"] == "positive"), "date"].astype(str).tolist()),
+                "deepest_stage_selected_non_positive_dates": sorted(group.loc[group["deepest_stage_selected_present"] & (group["net_sign"].isin(["negative", "zero"])), "date"].astype(str).tolist()),
                 "intermediate_stage_selected_date_count": int(group["intermediate_stage_selected_present"].sum()),
                 "intermediate_stage_selected_dates": sorted(group.loc[group["intermediate_stage_selected_present"], "date"].astype(str).tolist()),
                 "intermediate_stage_selected_net_sign_counts": group.loc[group["intermediate_stage_selected_present"], "net_sign"].value_counts().to_dict(),
+                "intermediate_stage_selected_positive_dates": sorted(group.loc[group["intermediate_stage_selected_present"] & (group["net_sign"] == "positive"), "date"].astype(str).tolist()),
+                "intermediate_stage_selected_non_positive_dates": sorted(group.loc[group["intermediate_stage_selected_present"] & (group["net_sign"].isin(["negative", "zero"])), "date"].astype(str).tolist()),
                 "selection_depth_bucket_counts": group["selection_depth_bucket"].value_counts().to_dict(),
             }
             for label, group in frame.groupby("report_label", sort=True)

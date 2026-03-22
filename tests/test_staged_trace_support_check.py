@@ -66,9 +66,14 @@ class StagedTraceSupportCheckTest(unittest.TestCase):
         self.assertEqual(summary["deepest_stage_selected_positive_net_date_count"], 0)
         self.assertEqual(summary["deepest_stage_selected_non_positive_net_date_count"], 2)
         self.assertEqual(summary["deepest_stage_selected_dates"], ["2024-08-03", "2024-09-28"])
+        self.assertEqual(summary["deepest_stage_selected_positive_dates"], [])
+        self.assertEqual(summary["deepest_stage_selected_non_positive_dates"], ["2024-08-03", "2024-09-28"])
         self.assertEqual(summary["intermediate_stage_selected_date_count"], 1)
+        self.assertEqual(summary["intermediate_stage_selected_positive_net_date_count"], 0)
         self.assertEqual(summary["intermediate_stage_selected_non_positive_net_date_count"], 1)
         self.assertEqual(summary["intermediate_stage_selected_dates"], ["2024-09-29"])
+        self.assertEqual(summary["intermediate_stage_selected_positive_dates"], [])
+        self.assertEqual(summary["intermediate_stage_selected_non_positive_dates"], ["2024-09-29"])
 
     def test_load_report_rows_parses_dict_columns(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:

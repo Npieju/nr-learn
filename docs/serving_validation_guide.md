@@ -423,6 +423,22 @@ late-September の `current_sep_guard_candidate` では、この selection-aware
 
 したがって、現在の読みは 2 層に分けるのが妥当だ。`deepest_stage_selected_present` は precision 寄りの tail-risk flag、`intermediate_stage_selected_present` は recall を埋める broader-risk bucket である。どちらもまだ small-sample なので runtime key 化は早いが、少なくとも現行 support では `positive` day に一度も出ていないため、selection-aware trace bucket を次段の検証軸として昇格させる根拠はできた。
 
+この仮説はその後すぐに拡張 support で再検証した。`staged_mitigation_ev_guard_probe` の staged trace を May weekends 6 日と `tail_weekends` 24 日へ追加し、5 report / 46 rows (`may_ev_guard`, `aug_ev_guard`, `tail_ev_guard`, `late_sep_ev_guard`, `sep_guard`) を `staged_trace_support_check_may_aug_tail_late_sep_depth_bucket_support_20260322.{json,csv}` にまとめ直した。
+
+- `deepest_stage_selected` は 13 rows に増えても `negative=13`, `positive=0`
+- `intermediate_stage_selected` は 20 rows に増え、`negative=18`, `positive=2`
+- intermediate の positive は `tail_ev_guard` の `2024-09-07`, `2024-09-14` だった
+
+report 別の bucket count は次のとおりである。
+
+- `may_ev_guard`: `deepest=2`, `intermediate=2`, `no_final_selection=2`
+- `aug_ev_guard`: `deepest=2`, `intermediate=2`, `no_final_selection=2`
+- `tail_ev_guard`: `deepest=7`, `intermediate=8`, `no_final_selection=9`
+- `late_sep_ev_guard`: `deepest=1`, `intermediate=4`
+- `sep_guard`: `deepest=1`, `intermediate=4`
+
+この extended support により operational reading も更新される。`deepest_stage_selected_present` は window 拡張後も precision を崩しておらず、引き続き tail-risk subset flag として扱える。一方で `intermediate_stage_selected_present` は recall 補完としては有効だが、すでに positive day を含んでいるため、そのまま risk flag に昇格させるのは危険である。次段は deepest を主 signal に据えたまま、intermediate は説明用または後段の複合条件候補として扱うのが妥当である。
+
 ## 7. bankroll sweep の見方
 
 bankroll 観点まで見たいときは `run_serving_stateful_bankroll_sweep.py` を使う。
