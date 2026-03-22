@@ -297,6 +297,15 @@ early stage の policy family 自体が強すぎるかを切るときは `run_po
 
 したがって、`selected_rows_at_most` は late-September の de-risk には効くが、August profitable regime を守るには blunt すぎる。次の guard は selected count 単独ではなく、date-context か別 signal と組み合わせて設計する必要がある。
 
+この bluntness を避けるため、続けて `..._serving_sep_selected_rows_guard_candidate.yaml` も追加した。これは serving の month-aware regime split をそのまま使い、September だけ `selected_rows_at_most: 5` 付き staged policy に切り替える candidate である。
+
+- May weekends 6 日 window は baseline と完全一致し、`6 bets / total net -6.0` だった
+- August weekends 6 日 window も baseline と完全一致し、`34 bets / total net +20.1` を維持した
+- late-September 5 日 window では baseline `31 bets / total net -25.6` に対して `10 bets / total net -10.0` まで改善した
+- late-September の 5/5 日すべてで September override が選ばれ、`portfolio_aug_baseline:selected_rows_at_most` を起点に `portfolio_lower_blend` か `kelly_fallback_1` へ流れた
+
+つまり、date-context を明示した regime-aware split にすると、`selected_rows` guard の defensive 効果だけを September に閉じ込められる。これは blunt guard 単体とは違い、May/August の既存 profitable or neutral behavior を壊さず、late-September だけを de-risk できる candidate として読むのが妥当である。
+
 ## 7. bankroll sweep の見方
 
 bankroll 観点まで見たいときは `run_serving_stateful_bankroll_sweep.py` を使う。
