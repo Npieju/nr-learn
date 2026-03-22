@@ -108,12 +108,24 @@ single-policy probe と staged probe を actual-date ごとに横並びで見た
 - `shared_ok_dates_all`
 - `differing_policy_dates`
 - `differing_stage_dates`
+- `differing_stage_fallback_reason_dates`
+- `differing_stage_trace_dates`
 - label ごとの `policy_stage_names` 集計
+
+staged summary に `policy_stage_traces` / `policy_stage_fallback_reasons` が入っていれば、compare 側でも label ごとの trace / reason count を集計する。
 
 2026-03-22 の実行結果では、次が観測された。
 
 - late-September 5 日 window は `shared_ok=5/5` で、`differing_stage_dates` は全 5 日だった
 - August weekends 6 日 window は `shared_ok=6/6` で、`differing_stage_dates` は `2024-08-03`, `2024-08-10`, `2024-08-11`, `2024-08-18` だった
+- fallback reason まで見ると、late-September は `differing_stage_fallback_reason_dates` も全 5 日だった
+- August weekends は `differing_stage_fallback_reason_dates` が `2024-08-03`, `2024-08-11`, `2024-08-18` に絞られた
+
+特に `staged_mitigation_ev_guard_probe` は次の形で読める。
+
+- late-September では 5/5 日すべてで fallback reason が出ており、`kelly_fallback_1` に流れていた
+- その内訳は `portfolio_ev_only:max_expected_value_below|portfolio_lower_blend:no_selection` が 4 日、`portfolio_ev_only:max_expected_value_below|portfolio_lower_blend:max_expected_value_below` が 1 日だった
+- August weekends では reason を伴う fallback は 3 日で、`2024-08-03` だけが `kelly_fallback_2` まで落ち、`2024-08-11` と `2024-08-18` は `kelly_fallback_1` だった
 
 つまり、staged probe は「runtime で読める」だけでなく、actual calendar 上でも日付単位の stage path 分岐を起こしている。ただし、その分岐自体は baseline 優位を覆す根拠にはまだなっていない。
 

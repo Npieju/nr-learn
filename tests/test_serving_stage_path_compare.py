@@ -30,6 +30,8 @@ class ServingStagePathCompareTest(unittest.TestCase):
       "status": "ok",
       "policy_name": "runtime_staged_probe",
       "policy_stage_names": ["portfolio_ev_only"],
+      "policy_stage_traces": ["portfolio_ev_only:selected"],
+      "policy_stage_fallback_reasons": [],
       "policy_bets": 3,
       "policy_roi": 0.0
     },
@@ -38,6 +40,8 @@ class ServingStagePathCompareTest(unittest.TestCase):
       "status": "ok",
       "policy_name": "runtime_staged_probe",
       "policy_stage_names": ["portfolio_ev_only"],
+      "policy_stage_traces": ["portfolio_ev_only:selected"],
+      "policy_stage_fallback_reasons": [],
       "policy_bets": 1,
       "policy_roi": 0.0
     }
@@ -58,6 +62,8 @@ class ServingStagePathCompareTest(unittest.TestCase):
       "status": "ok",
       "policy_name": "runtime_staged_probe",
       "policy_stage_names": ["kelly_fallback_1"],
+      "policy_stage_traces": ["portfolio_ev_only:fallback(max_expected_value_below) > kelly_fallback_1:selected"],
+      "policy_stage_fallback_reasons": ["portfolio_ev_only:max_expected_value_below"],
       "policy_bets": 2,
       "policy_roi": 0.0
     },
@@ -66,6 +72,8 @@ class ServingStagePathCompareTest(unittest.TestCase):
       "status": "ok",
       "policy_name": "runtime_staged_probe",
       "policy_stage_names": ["portfolio_ev_only"],
+      "policy_stage_traces": ["portfolio_ev_only:selected"],
+      "policy_stage_fallback_reasons": [],
       "policy_bets": 1,
       "policy_roi": 0.0
     }
@@ -84,6 +92,12 @@ class ServingStagePathCompareTest(unittest.TestCase):
             self.assertEqual(payload["comparison"]["shared_ok_dates_all"], ["2024-09-22", "2024-09-29"])
             self.assertEqual(payload["comparison"]["differing_policy_dates"], [])
             self.assertEqual(payload["comparison"]["differing_stage_dates"], ["2024-09-22"])
+            self.assertEqual(payload["comparison"]["differing_stage_fallback_reason_dates"], ["2024-09-22"])
+            self.assertEqual(payload["comparison"]["differing_stage_trace_dates"], ["2024-09-22"])
+            self.assertEqual(
+              payload["comparison"]["label_summaries"][1]["stage_fallback_reason_counts"],
+              {"portfolio_ev_only:max_expected_value_below": 1},
+            )
             self.assertEqual(len(row_df), 2)
 
 

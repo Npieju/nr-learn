@@ -88,11 +88,24 @@ def _normalize_stage_names(value: Any) -> list[str]:
     return sorted({str(item).strip() for item in value if str(item).strip()})
 
 
+def _normalize_string_list(value: Any) -> list[str]:
+    if not isinstance(value, list):
+        return []
+    return sorted({str(item).strip() for item in value if str(item).strip()})
+
+
 def _stage_signature(value: Any) -> str:
     stage_names = _normalize_stage_names(value)
     if not stage_names:
         return "(none)"
     return "|".join(stage_names)
+
+
+def _list_signature(value: Any) -> str:
+    normalized = _normalize_string_list(value)
+    if not normalized:
+        return "(none)"
+    return "|".join(normalized)
 
 
 def _int_or_none(value: Any) -> int | None:
@@ -144,6 +157,8 @@ def _build_row(date_value: str, labels: list[str], case_maps: dict[str, dict[str
     row: dict[str, Any] = {"date": date_value}
     ok_policy_names: list[str] = []
     ok_stage_signatures: list[str] = []
+    ok_fallback_reason_signatures: list[str] = []
+    ok_stage_trace_signatures: list[str] = []
     shared_all = True
     shared_ok_all = True
 
@@ -156,12 +171,18 @@ def _build_row(date_value: str, labels: list[str], case_maps: dict[str, dict[str
         roi = _float_or_none(case.get("policy_roi")) if case else None
         policy_name = str(case.get("policy_name") or "") if case else ""
         stage_signature = _stage_signature(case.get("policy_stage_names") if case else None)
+        fallback_reason_signature = _list_signature(case.get("policy_stage_fallback_reasons") if case else None)
+        stage_trace_signature = _list_signature(case.get("policy_stage_traces") if case else None)
 
         row[f"{slug}_present"] = present
         row[f"{slug}_status"] = status if present else None
         row[f"{slug}_policy_name"] = policy_name if present else None
         row[f"{slug}_policy_stage_signature"] = stage_signature if present else None
         row[f"{slug}_policy_stage_names"] = _normalize_stage_names(case.get("policy_stage_names") if case else None)
+        row[f"{slug}_policy_stage_trace_signature"] = stage_trace_signature if present else None
+        row[f"{slug}_policy_stage_traces"] = _normalize_string_list(case.get("policy_stage_traces") if case else None)
+        row[f"{slug}_policy_stage_fallback_reason_signature"] = fallback_reason_signature if present else None
+        row[f"{slug}_policy_stage_fallback_reasons"] = _normalize_string_list(case.get("policy_stage_fallback_reasons") if case else None)
         row[f"{slug}_policy_bets"] = bets
         row[f"{slug}_policy_roi"] = roi
         row[f"{slug}_policy_net"] = _policy_net_or_none(bets, roi)
@@ -176,19 +197,27 @@ def _build_row(date_value: str, labels: list[str], case_maps: dict[str, dict[str
 
         ok_policy_names.append(policy_name)
         ok_stage_signatures.append(stage_signature)
+        ok_fallback_reason_signatures.append(fallback_reason_signature)
+        ok_stage_trace_signatures.append(stage_trace_signature)
 
     row["shared_all"] = shared_all
     row["shared_ok_all"] = shared_ok_all
     row["policy_name_unique_count"] = len(set(ok_policy_names)) if shared_ok_all else None
     row["stage_signature_unique_count"] = len(set(ok_stage_signatures)) if shared_ok_all else None
+    row["fallback_reason_signature_unique_count"] = len(set(ok_fallback_reason_signatures)) if shared_ok_all else None
+    row["stage_trace_signature_unique_count"] = len(set(ok_stage_trace_signatures)) if shared_ok_all else None
     row["policy_name_same_all"] = shared_ok_all and len(set(ok_policy_names)) <= 1
     row["stage_signature_same_all"] = shared_ok_all and len(set(ok_stage_signatures)) <= 1
+    row["fallback_reason_signature_same_all"] = shared_ok_all and len(set(ok_fallback_reason_signatures)) <= 1
+    row["stage_trace_signature_same_all"] = shared_ok_all and len(set(ok_stage_trace_signatures)) <= 1
     return row
 
 
 def _label_summary(label: str, case_map: dict[str, dict[str, Any]]) -> dict[str, Any]:
     ok_cases = [case for case in case_map.values() if str(case.get("status") or "") == "ok"]
     stage_counts: Counter[str] = Counter()
+    stage_trace_counts: Counter[str] = Counter()
+    stage_fallback_reason_counts: Counter[str] = Counter()
     total_bets = 0
     total_net = 0.0
 
@@ -197,6 +226,10 @@ def _label_summary(label: str, case_map: dict[str, dict[str, Any]]) -> dict[str,
         total_net += float(_policy_net_or_none(_int_or_none(case.get("policy_bets")), _float_or_none(case.get("policy_roi"))) or 0.0)
         for stage_name in _normalize_stage_names(case.get("policy_stage_names")):
             stage_counts[stage_name] += 1
+        for stage_trace in _normalize_string_list(case.get("policy_stage_traces")):
+            stage_trace_counts[stage_trace] += 1
+        for reason in _normalize_string_list(case.get("policy_stage_fallback_reasons")):
+            stage_fallback_reason_counts[reason] += 1
 
     return {
         "label": label,
@@ -205,6 +238,8 @@ def _label_summary(label: str, case_map: dict[str, dict[str, Any]]) -> dict[str,
         "total_policy_bets": int(total_bets),
         "total_policy_net": float(total_net),
         "stage_name_counts": dict(stage_counts),
+        "stage_trace_counts": dict(stage_trace_counts),
+        "stage_fallback_reason_counts": dict(stage_fallback_reason_counts),
     }
 
 
@@ -225,6 +260,12 @@ def _build_comparison(summary_specs: list[tuple[str, Path]]) -> tuple[dict[str, 
     shared_ok_dates_all = [row["date"] for row in rows if row["shared_ok_all"]]
     differing_policy_dates = [row["date"] for row in rows if row["shared_ok_all"] and not row["policy_name_same_all"]]
     differing_stage_dates = [row["date"] for row in rows if row["shared_ok_all"] and not row["stage_signature_same_all"]]
+    differing_stage_fallback_reason_dates = [
+        row["date"] for row in rows if row["shared_ok_all"] and not row["fallback_reason_signature_same_all"]
+    ]
+    differing_stage_trace_dates = [
+        row["date"] for row in rows if row["shared_ok_all"] and not row["stage_trace_signature_same_all"]
+    ]
 
     payload = {
         "summaries": [
@@ -246,6 +287,8 @@ def _build_comparison(summary_specs: list[tuple[str, Path]]) -> tuple[dict[str, 
             "shared_ok_dates_all": shared_ok_dates_all,
             "differing_policy_dates": differing_policy_dates,
             "differing_stage_dates": differing_stage_dates,
+            "differing_stage_fallback_reason_dates": differing_stage_fallback_reason_dates,
+            "differing_stage_trace_dates": differing_stage_trace_dates,
             "label_summaries": [_label_summary(label, case_maps[label]) for label in labels],
         },
         "rows": rows,
@@ -289,6 +332,7 @@ def main() -> int:
         print(f"saved serving stage comparison to {output_json.relative_to(ROOT)}")
         print(f"saved serving stage comparison table to {output_csv.relative_to(ROOT)}")
         print(f"differing_stage_dates={payload['comparison']['differing_stage_dates']}")
+        print(f"differing_stage_fallback_reason_dates={payload['comparison']['differing_stage_fallback_reason_dates']}")
         progress.complete(message="serving stage comparison completed")
         return 0
     except KeyboardInterrupt:
