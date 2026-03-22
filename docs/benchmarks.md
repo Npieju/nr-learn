@@ -102,8 +102,9 @@ Benter 系の比較では、重要なのは単純な ROI よりも `ΔR² = R²_
 | --- | --- | --- | --- | --- |
 | `r20260322c` | `current_bankroll_candidate` | `block` | `hold` | representative evaluate は通るが、matching WF で feasible fold `0/5` |
 | `r20260322d` | `current_ev_candidate` | `block` | `hold` | representative evaluate は通るが、matching WF で feasible fold `0/5` |
+| `r20260322e` | `current_sep_guard_candidate` | `block` | `hold` | representative evaluate と matching WF は通るが、feasible fold `0/5` |
 
-この 2 候補では共通して次が確認できた。
+この 3 候補では共通して次が確認できた。
 
 - `evaluate` 側の `stability_assessment` は `representative`
 - matching な `wf_feasibility_diag` を付けると promotion gate は `wf_feasible_fold_count=0` で block
@@ -113,10 +114,11 @@ Benter 系の比較では、重要なのは単純な ROI よりも `ΔR² = R²_
 
 同日付の threshold sweep で、support gap も数値化した。
 
-- 両候補とも `min_bets_abs=58` で初めて feasible fold が `1/5` に到達した
-- 両候補とも `min_bets_abs=40` で feasible fold が `4/5` になり、`3/5` 条件はここで満たす
-- 両候補とも `min_bets_abs=30` まで下げると feasible fold が `5/5` になった
-- fold 別の最初の到達 threshold は共通で、fold 3 が `58`、fold 1 が `45`、fold 2 と fold 4 が `40`、fold 5 が `30` だった
+- `current_bankroll_candidate` と `current_ev_candidate` は `min_bets_abs=58` で初めて feasible fold が `1/5` に到達した
+- `current_bankroll_candidate` と `current_ev_candidate` は `min_bets_abs=40` で feasible fold が `4/5` になり、`3/5` 条件はここで満たす
+- `current_bankroll_candidate` と `current_ev_candidate` は `min_bets_abs=30` まで下げると feasible fold が `5/5` になった
+- fold 別の最初の到達 threshold は `current_bankroll_candidate` と `current_ev_candidate` で共通で、fold 3 が `58`、fold 1 が `45`、fold 2 と fold 4 が `40`、fold 5 が `30` だった
+- `current_sep_guard_candidate` も formal gate の blocking source 自体は同じで、`wf_feasible_fold_count=0/5`, dominant failure reason `min_bets`, `binding_min_bets_source=absolute`, `max_infeasible_bets_observed=58` だった
 
 さらに threshold compare から mitigation probe を組み立てると、runtime 候補としては次の 2 本に収束した。
 
@@ -125,9 +127,9 @@ Benter 系の比較では、重要なのは単純な ROI よりも `ΔR² = R²_
 - 残り `10/84` occurrence では `portfolio / blend_weight=0.8 / min_prob=0.03 / top_k=1 / min_ev=1.0` が pure bankroll で上回った
 - mitigation probe からは runtime-ready candidate として `portfolio_lower_blend` と `portfolio_ev_only` の 2 本を書き出せたが、`74/10` の staged hybrid は現行 runtime の単一 policy/date override では直接表現できなかった
 
-つまり、この 2 候補の formal block は「bankroll 側か EV 側か」の違いではなく、同じ support frontier に乗っている問題として読むのが正しい。
+つまり、この 3 候補の formal block は serving 上の見え方の違いよりも、同じ support frontier に乗っている問題として読むのが正しい。
 
-したがって、`current_bankroll_candidate` と `current_ev_candidate` は serving 上の de-risk 候補としては有力でも、現時点では benchmark 更新や正式昇格の候補とは扱わない。運用上は rollback / defensive override の候補に留め、昇格判断は support を増やす別の改善が入ってから再評価する。
+したがって、`current_bankroll_candidate` と `current_ev_candidate` は serving 上の de-risk 候補としては有力でも、現時点では benchmark 更新や正式昇格の候補とは扱わない。`current_sep_guard_candidate` も September seasonal override としては有望だが、formal には同様に hold である。運用上はいずれも rollback / seasonal override / defensive candidate に留め、昇格判断は support を増やす別の改善が入ってから再評価する。
 
 ## 6. serving 比較の判断基準
 

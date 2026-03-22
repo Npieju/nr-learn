@@ -98,6 +98,8 @@ staged config の場合、2026-03-22 時点の smoke summary / backtest JSON に
 
 つまり `current_sep_guard_candidate` は ad hoc config compare だけでなく、stable profile として通常の smoke -> compare -> bankroll -> dashboard 導線でも再現可能である。
 
+ただし、同日の formal revision gate `r20260322e` では位置づけが変わらない。evaluation と matching な `wf_feasibility_diag` はともに `representative` だったが、promotion gate は `wf_feasible_fold_count=0/5` で `block/hold` になった。dominant failure reason は `min_bets`、binding source は全 fold `min_bets_abs=100` で、short-window serving compare の良さをそのまま benchmark 昇格根拠には使えない。
+
 ### 5.1 stage path の横比較
 
 single-policy probe と staged probe を actual-date ごとに横並びで見たいときは `run_serving_stage_path_compare.py` を使う。
