@@ -20,6 +20,7 @@ if str(SRC) not in sys.path:
 
 from racing_ml.common.config import load_yaml
 from racing_ml.common.artifacts import display_path as artifact_display_path
+from racing_ml.common.artifacts import append_suffix_to_file_name
 from racing_ml.common.artifacts import ensure_output_file_path as artifact_ensure_output_file_path
 from racing_ml.common.artifacts import resolve_output_artifacts, utc_now_iso, write_json, write_text_file
 from racing_ml.common.model_profiles import MODEL_RUN_PROFILES, format_model_run_profiles, resolve_model_run_profile
@@ -524,6 +525,7 @@ def main() -> int:
     parser.add_argument("--config", default=None)
     parser.add_argument("--data-config", default=None)
     parser.add_argument("--feature-config", default=None)
+    parser.add_argument("--artifact-suffix", default=None)
     parser.add_argument("--max-rows", type=int, default=120000)
     parser.add_argument("--pre-feature-max-rows", type=int, default=None)
     parser.add_argument("--start-date", default=None)
@@ -554,7 +556,8 @@ def main() -> int:
         progress.start(
             message=(
                 f"configs loaded profile={resolved_profile or 'custom'} config={model_config_path} "
-                f"data_config={data_config_path} feature_config={feature_config_path}"
+                f"data_config={data_config_path} feature_config={feature_config_path} "
+                f"artifact_suffix={args.artifact_suffix or 'none'}"
             )
         )
 
@@ -562,7 +565,20 @@ def main() -> int:
         evaluation_cfg = model_cfg.get("evaluation", {})
         policy_search_cfg = evaluation_cfg.get("policy_search", {})
         score_regime_overrides_cfg = evaluation_cfg.get("score_regime_overrides", [])
-        output_cfg = model_cfg.get("output", {})
+        output_cfg = dict(model_cfg.get("output", {}))
+        if args.artifact_suffix:
+            output_cfg["model_file"] = append_suffix_to_file_name(
+                str(output_cfg.get("model_file", "baseline_model.joblib")),
+                args.artifact_suffix,
+            )
+            output_cfg["report_file"] = append_suffix_to_file_name(
+                str(output_cfg.get("report_file", "train_metrics.json")),
+                args.artifact_suffix,
+            )
+            output_cfg["manifest_file"] = append_suffix_to_file_name(
+                str(output_cfg.get("manifest_file", output_cfg.get("model_file", "baseline_model.joblib"))),
+                args.artifact_suffix,
+            )
         output_artifacts = resolve_output_artifacts(output_cfg)
         policy_constraints = PolicyConstraints.from_config(evaluation_cfg)
         leakage_cfg = evaluation_cfg.get("leakage_audit", {})
@@ -729,6 +745,7 @@ def main() -> int:
             "config": str(model_config_path),
             "data_config": str(data_config_path),
             "feature_config": str(feature_config_path),
+            "artifact_suffix": str(args.artifact_suffix or ""),
             "task": task,
             "label_column": label_col,
             "max_rows": int(args.max_rows),

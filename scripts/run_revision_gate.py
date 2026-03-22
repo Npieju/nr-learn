@@ -240,6 +240,7 @@ def main() -> int:
             data_config_path=data_config_path,
             feature_config_path=feature_config_path,
         )
+        evaluate_command.extend(["--artifact-suffix", train_artifact_suffix])
         if args.evaluate_pre_feature_max_rows is not None:
             evaluate_command.extend(["--pre-feature-max-rows", str(args.evaluate_pre_feature_max_rows)])
         if args.evaluate_start_date:
