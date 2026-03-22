@@ -64,6 +64,7 @@ def _selected_race_rows(raw_rows: pd.DataFrame) -> pd.DataFrame:
 
 def _aggregate_date_rows(raw_rows: pd.DataFrame) -> dict[str, Any]:
     race_rows = _selected_race_rows(raw_rows)
+    highest_stage_index = int(pd.to_numeric(raw_rows.get("stage_index"), errors="coerce").max()) if not raw_rows.empty else 0
     final_stage_counts: Counter[str] = Counter()
     final_trace_counts: Counter[str] = Counter()
     final_reason_counts: Counter[str] = Counter()
@@ -76,6 +77,7 @@ def _aggregate_date_rows(raw_rows: pd.DataFrame) -> dict[str, Any]:
     stage3_plus_trace_race_count = 0
     stage2_plus_selected_race_count = 0
     stage3_plus_selected_race_count = 0
+    deepest_stage_selected_race_count = 0
 
     per_race_depths: list[tuple[str, int]] = []
     per_race_selected_depths: list[tuple[str, int]] = []
@@ -113,6 +115,8 @@ def _aggregate_date_rows(raw_rows: pd.DataFrame) -> dict[str, Any]:
             stage2_plus_selected_race_count += 1
         if deepest_index >= 3:
             stage3_plus_selected_race_count += 1
+        if highest_stage_index > 0 and deepest_index >= highest_stage_index:
+            deepest_stage_selected_race_count += 1
 
     if not race_rows.empty:
         max_depth = max(depth for _, depth in per_race_depths)
@@ -134,6 +138,7 @@ def _aggregate_date_rows(raw_rows: pd.DataFrame) -> dict[str, Any]:
         "no_final_selection_race_count": int(len(race_rows) - sum(final_stage_counts.values())),
         "final_selected_hit_count": int(final_selected_hit_count),
         "final_selected_net_units": float(final_selected_net_units),
+        "highest_stage_index": int(highest_stage_index),
         "max_trace_depth": int(max_depth),
         "mean_trace_depth": float(pd.Series([depth for _, depth in per_race_depths], dtype=float).mean()) if per_race_depths else 0.0,
         "stage2_plus_trace_race_count": int(stage2_plus_trace_race_count),
@@ -141,6 +146,7 @@ def _aggregate_date_rows(raw_rows: pd.DataFrame) -> dict[str, Any]:
         "max_selected_stage_index": int(max_selected_stage_index),
         "stage2_plus_selected_race_count": int(stage2_plus_selected_race_count),
         "stage3_plus_selected_race_count": int(stage3_plus_selected_race_count),
+        "deepest_stage_selected_race_count": int(deepest_stage_selected_race_count),
         "max_trace_depth_races": max_depth_races,
         "final_stage_counts": dict(final_stage_counts),
         "final_trace_counts": dict(final_trace_counts),
@@ -150,6 +156,7 @@ def _aggregate_date_rows(raw_rows: pd.DataFrame) -> dict[str, Any]:
         "final_stage_names": final_stage_names,
         "reaches_stage2": bool(stage2_plus_selected_race_count > 0),
         "reaches_stage3": bool(stage3_plus_selected_race_count > 0),
+        "reaches_deepest_stage": bool(deepest_stage_selected_race_count > 0),
     }
 
 

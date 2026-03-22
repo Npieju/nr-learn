@@ -401,11 +401,17 @@ late-September の `current_sep_guard_candidate` では、この selection-aware
 
 これは `2024-09-28` が daily EV/edge aggregate では最も強く見えていたことと対照的である。つまり、September guard の次段設計は「日次平均 EV が強いか」ではなく、「fallback の deeper stage にまで selection candidate が立ったか」を first-class に扱うべきである。現時点の次段は runtime key 追加ではなく、この signal を他 window に展開して再現性を確認することになる。
 
-この再現性も、まずは既存の常時 staged probe で小さく確認した。`..._staged_mitigation_ev_guard_probe.yaml` の August weekends (`2024-08-03/04/10/11/17/18`) と late-September (`2024-09-16/21/22/28/29`) に対して同じ `run_staged_trace_date_report.py` を適用すると、selection-aware stage3 signal は `2024-08-03`, `2024-08-10`, `2024-09-28` にだけ立った。これらはすべて realized `final_selected_net_units <= 0` で、`2024-08-10` は `-1.0`、`2024-09-28` は `-0.00557` だった。
+この再現性も、artifact を人力比較せず数えられるよう `scripts/run_staged_trace_support_check.py` にまとめた。3 本の staged trace date report (`aug_ev_guard`, `late_sep_ev_guard`, `sep_guard`) を横断すると、config の最終 stage に実際の選択が立った `deepest_stage_selected_present` は 16 rows 中 4 rows、日付ユニークでは `2024-08-03`, `2024-08-10`, `2024-09-28` の 3 日だけだった。しかもその 4 rows はすべて realized `final_selected_net_units < 0` で、positive は 0 件だった。
+
+- `aug_ev_guard` の deepest-stage selected day は `2024-08-03`, `2024-08-10`
+- `late_sep_ev_guard` では `2024-09-28` だけ
+- `sep_guard` でも `2024-09-28` だけ
+
+ここで重要なのは、signal を `stage3_plus_selected` のような stage index ベースで雑に数えないことだ。3-stage config と 4-stage config を同じ意味で比べるには、「その config の deepest stage に selection が立ったか」を first-class に扱う必要がある。今回の support check はその semantics に揃えてあり、この定義なら `deepest_stage_selected_present` は small-sample ながら precision の高い high-risk subset flag と読める。
 
 ただし、この signal は complete separator ではない。`2024-08-11`, `2024-08-18`, `2024-09-16`, `2024-09-22`, `2024-09-29` のように stage2 止まりでも non-positive な日は残る。したがって、現時点の operational reading は次のとおりである。
 
-- `stage3 candidate present` は loss-heavy subset を切り出す risk flag としては promising
+- `deepest_stage_selected_present` は loss-heavy subset を切り出す risk flag としては promising
 - しかし単独で全ての bad day を捉える guard ではない
 - よって、いまやるべきことは runtime key 化ではなく、より多い window で support を積み、必要なら stage2/3 の組み合わせ signal へ拡張すること
 

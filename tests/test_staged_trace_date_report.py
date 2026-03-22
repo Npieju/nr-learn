@@ -92,15 +92,18 @@ class StagedTraceDateReportTest(unittest.TestCase):
         self.assertEqual(summary["no_final_selection_race_count"], 1)
         self.assertEqual(summary["final_selected_hit_count"], 1)
         self.assertAlmostEqual(summary["final_selected_net_units"], 0.49)
+        self.assertEqual(summary["highest_stage_index"], 3)
         self.assertEqual(summary["max_trace_depth"], 3)
         self.assertEqual(summary["stage2_plus_trace_race_count"], 3)
         self.assertEqual(summary["stage3_plus_trace_race_count"], 2)
         self.assertEqual(summary["max_selected_stage_index"], 3)
         self.assertEqual(summary["stage2_plus_selected_race_count"], 2)
         self.assertEqual(summary["stage3_plus_selected_race_count"], 1)
+        self.assertEqual(summary["deepest_stage_selected_race_count"], 1)
         self.assertEqual(summary["final_stage_counts"], {"kelly_fallback_1": 1, "kelly_fallback_2": 1})
         self.assertEqual(summary["deepest_selected_stage_counts"], {"kelly_fallback_1": 1, "kelly_fallback_2": 1})
         self.assertTrue(summary["reaches_stage3"])
+        self.assertTrue(summary["reaches_deepest_stage"])
 
 
 if __name__ == "__main__":
