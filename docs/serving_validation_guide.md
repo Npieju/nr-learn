@@ -432,6 +432,14 @@ August weekends 6 日 window では次の結果だった。
 
 この結果から、staged probe は runtime としては問題なく load できるが、actual-date の realized path は single-policy probe の延長に留まる。`staged_mitigation_probe` はほぼ `portfolio_ev_only` 相当の経路になり、`ev_guard` はさらに sparse にして late-September の loss を少し削る一方、August の機会損失は依然として大きい。
 
+stage path まで見ると差はさらに明確である。
+
+- `staged_mitigation_probe` は late-September 5 日 window の全日で `policy_stage_names=["portfolio_ev_only"]` だった
+- August 側でも `staged_mitigation_probe` は `portfolio_ev_only` から実質的に離れず、stage 切替の evidence は観測されなかった
+- `staged_mitigation_ev_guard_probe` は late-September では sparse なままでも stage 名は単純化しやすい一方、August weekends では `2024-08-03` に `kelly_fallback_2`、`2024-08-11` と `2024-08-18` に `kelly_fallback_1` へ落ちた
+
+つまり、ev_guard 付き staged probe だけが実 calendar 上で fallback を発火させている。ただし、その fallback は August の profit regime を救うほど strong ではなく、結果は baseline を下回ったままだった。
+
 実務上の読みは次のとおりである。
 
 1. staged probe は selector/runtime の feasibility 確認としては成功している

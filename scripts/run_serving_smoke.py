@@ -827,6 +827,7 @@ def main() -> int:
                         "backtest_file": artifact_display_path(backtest_json, workspace_root=ROOT),
                         "score_source": prediction_summary["score_source"],
                         "policy_name": str(backtest_summary.get("policy_name", "")),
+                        "policy_stage_names": list(backtest_summary.get("policy_stage_names") or []),
                         "policy_selected_rows": int(backtest_summary.get("policy_selected_rows", 0) or 0),
                         "policy_bets": int(backtest_summary.get("policy_bets", 0) or 0),
                         "policy_roi": backtest_summary.get("policy_roi"),
