@@ -828,6 +828,8 @@ def main() -> int:
                         "score_source": prediction_summary["score_source"],
                         "policy_name": str(backtest_summary.get("policy_name", "")),
                         "policy_stage_names": list(backtest_summary.get("policy_stage_names") or []),
+                        "policy_stage_traces": list(backtest_summary.get("policy_stage_traces") or []),
+                        "policy_stage_fallback_reasons": list(backtest_summary.get("policy_stage_fallback_reasons") or []),
                         "policy_selected_rows": int(backtest_summary.get("policy_selected_rows", 0) or 0),
                         "policy_bets": int(backtest_summary.get("policy_bets", 0) or 0),
                         "policy_roi": backtest_summary.get("policy_roi"),

@@ -211,6 +211,10 @@ def run_backtest(config_path: str, predictions_file: str | None = None, profile_
                 metrics["policy_avg_synthetic_odds"] = policy_metrics.get("policy_avg_synthetic_odds")
                 selected_stage_values = policy_frame.loc[selected_mask, "policy_stage_name"].dropna().astype(str).tolist() if "policy_stage_name" in policy_frame.columns else []
                 metrics["policy_stage_names"] = sorted(set(selected_stage_values))
+                selected_stage_trace_values = policy_frame.loc[selected_mask, "policy_stage_trace"].dropna().astype(str).tolist() if "policy_stage_trace" in policy_frame.columns else []
+                metrics["policy_stage_traces"] = sorted(set(value for value in selected_stage_trace_values if value.strip()))
+                selected_stage_fallback_values = policy_frame.loc[selected_mask, "policy_stage_fallback_reasons"].dropna().astype(str).tolist() if "policy_stage_fallback_reasons" in policy_frame.columns else []
+                metrics["policy_stage_fallback_reasons"] = sorted(set(value for value in selected_stage_fallback_values if value.strip()))
             else:
                 metrics["policy_roi"] = policy_metrics.get("kelly_roi")
                 metrics["policy_bets"] = int(policy_metrics.get("kelly_bets") or 0)

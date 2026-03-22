@@ -47,6 +47,13 @@ built-in case を持たない profile では `--date` が必須である。
 - `artifacts/reports/serving_smoke_<suffix>.json`
 - suffix 付き prediction / backtest artifact
 
+staged config の場合、2026-03-22 時点の smoke summary / backtest JSON には stage 名だけでなく次も入る。
+
+- `policy_stage_traces`
+- `policy_stage_fallback_reasons`
+
+たとえば `runtime_staged_mitigation_ev_guard_probe` の `2024-08-11` replay smoke では、`kelly_fallback_1` が選ばれた理由として `portfolio_ev_only:max_expected_value_below|portfolio_lower_blend:no_selection` が保存される。これで「fallback したか」だけでなく、「どの段で何が足りず次段へ送られたか」まで artifact から追える。
+
 ## 5. 複数日 window の比較
 
 2 候補をまとめて比較するときは `run_serving_profile_compare.py` を使う。

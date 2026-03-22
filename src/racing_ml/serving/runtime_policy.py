@@ -29,8 +29,56 @@ def _initialize_policy_columns(annotated: pd.DataFrame, *, policy_name: str, str
     annotated["policy_weight"] = 0.0
     annotated["policy_stage_name"] = pd.NA
     annotated["policy_stage_index"] = pd.Series(pd.NA, index=annotated.index, dtype="Int64")
+    annotated["policy_stage_trace"] = pd.NA
+    annotated["policy_stage_fallback_reasons"] = pd.NA
     annotated["policy_selected_strategy_kind"] = pd.NA
     return annotated
+
+
+def _evaluate_stage_fallback(stage_race: pd.DataFrame, stage_cfg: dict[str, Any]) -> dict[str, Any]:
+    selected = stage_race[stage_race["policy_selected"].fillna(False).astype(bool)]
+    if selected.empty:
+        return {
+            "selected_count": 0,
+            "fallback": True,
+            "reasons": ["no_selection"],
+        }
+
+    fallback_when = stage_cfg.get("fallback_when")
+    if not isinstance(fallback_when, dict) or not fallback_when:
+        return {
+            "selected_count": int(len(selected)),
+            "fallback": False,
+            "reasons": [],
+        }
+
+    selected_count = int(len(selected))
+    max_expected_value = pd.to_numeric(selected["policy_expected_value"], errors="coerce").max()
+    max_prob = pd.to_numeric(selected["policy_prob"], errors="coerce").max()
+    max_edge = pd.to_numeric(selected["policy_edge"], errors="coerce").max()
+
+    reasons: list[str] = []
+    selected_rows_at_most = fallback_when.get("selected_rows_at_most")
+    if selected_rows_at_most is not None and selected_count <= int(selected_rows_at_most):
+        reasons.append("selected_rows_at_most")
+
+    max_expected_value_below = fallback_when.get("max_expected_value_below")
+    if max_expected_value_below is not None and pd.notna(max_expected_value) and float(max_expected_value) < float(max_expected_value_below):
+        reasons.append("max_expected_value_below")
+
+    max_prob_below = fallback_when.get("max_prob_below")
+    if max_prob_below is not None and pd.notna(max_prob) and float(max_prob) < float(max_prob_below):
+        reasons.append("max_prob_below")
+
+    max_edge_below = fallback_when.get("max_edge_below")
+    if max_edge_below is not None and pd.notna(max_edge) and float(max_edge) < float(max_edge_below):
+        reasons.append("max_edge_below")
+
+    return {
+        "selected_count": selected_count,
+        "fallback": bool(reasons),
+        "reasons": reasons,
+    }
 
 
 def _annotate_single_runtime_policy(
@@ -189,46 +237,33 @@ def _annotate_staged_runtime_policy(
         "policy_selected_strategy_kind",
     ]
 
-    def should_fallback(stage_race: pd.DataFrame, stage_cfg: dict[str, Any]) -> bool:
-        fallback_when = stage_cfg.get("fallback_when")
-        if not isinstance(fallback_when, dict) or not fallback_when:
-            return False
-
-        selected = stage_race[stage_race["policy_selected"].fillna(False).astype(bool)]
-        if selected.empty:
-            return False
-
-        selected_count = int(len(selected))
-        max_expected_value = pd.to_numeric(selected["policy_expected_value"], errors="coerce").max()
-        max_prob = pd.to_numeric(selected["policy_prob"], errors="coerce").max()
-        max_edge = pd.to_numeric(selected["policy_edge"], errors="coerce").max()
-
-        selected_rows_at_most = fallback_when.get("selected_rows_at_most")
-        if selected_rows_at_most is not None and selected_count <= int(selected_rows_at_most):
-            return True
-
-        max_expected_value_below = fallback_when.get("max_expected_value_below")
-        if max_expected_value_below is not None and pd.notna(max_expected_value) and float(max_expected_value) < float(max_expected_value_below):
-            return True
-
-        max_prob_below = fallback_when.get("max_prob_below")
-        if max_prob_below is not None and pd.notna(max_prob) and float(max_prob) < float(max_prob_below):
-            return True
-
-        max_edge_below = fallback_when.get("max_edge_below")
-        if max_edge_below is not None and pd.notna(max_edge) and float(max_edge) < float(max_edge_below):
-            return True
-
-        return False
-
     for race_id, race_group in annotated.groupby("race_id", sort=False):
         race_index = race_group.index
         selected_stage: tuple[int, str, dict[str, Any], dict[str, Any], pd.DataFrame] | None = None
+        stage_trace_parts: list[str] = []
+        fallback_reason_parts: list[str] = []
         for stage_index, stage_name, stage_cfg, stage_policy, stage_result in stage_results:
             stage_race = stage_result.loc[race_index]
-            if stage_race["policy_selected"].fillna(False).astype(bool).any() and not should_fallback(stage_race, stage_cfg):
+            fallback_state = _evaluate_stage_fallback(stage_race, stage_cfg)
+            reason_text = ",".join(fallback_state["reasons"])
+            if fallback_state["reasons"]:
+                fallback_reason_parts.extend(f"{stage_name}:{reason}" for reason in fallback_state["reasons"])
+            if fallback_state["selected_count"] <= 0:
+                stage_trace_parts.append(f"{stage_name}:no_selection")
+                continue
+            if fallback_state["fallback"]:
+                stage_trace_parts.append(f"{stage_name}:fallback({reason_text})")
+                continue
+
+            stage_trace_parts.append(f"{stage_name}:selected")
+            if stage_race["policy_selected"].fillna(False).astype(bool).any():
                 selected_stage = (stage_index, stage_name, stage_cfg, stage_policy, stage_result)
                 break
+
+        trace_text = " > ".join(stage_trace_parts) if stage_trace_parts else pd.NA
+        fallback_reason_text = "|".join(fallback_reason_parts) if fallback_reason_parts else pd.NA
+        annotated.loc[race_index, "policy_stage_trace"] = trace_text
+        annotated.loc[race_index, "policy_stage_fallback_reasons"] = fallback_reason_text
 
         if selected_stage is None:
             continue

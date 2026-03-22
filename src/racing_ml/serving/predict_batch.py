@@ -244,6 +244,8 @@ def run_predict_from_frame(
         "policy_strategy_kind",
         "policy_stage_name",
         "policy_stage_index",
+        "policy_stage_trace",
+        "policy_stage_fallback_reasons",
         "policy_selected_strategy_kind",
         "policy_selected",
         "policy_selection_rank",
