@@ -230,6 +230,39 @@ aggregate では、window ごとの net delta / pure bankroll delta / best sweep
 
 この window では、`current_ev_candidate` は `current_recommended_serving` よりベット数を `31 -> 12` まで減らして損失を半減させつつ、`current_bankroll_candidate` ほど極端には絞らない中間候補として機能した。late-September のこの 5 日では、役割の並びは `current_recommended_serving` が最も攻め、`current_ev_candidate` が中間、`current_bankroll_candidate` が最も防御的と読める。
 
+### 9.4 複数 window aggregate の読み方
+
+2026-03-22 に、`run_serving_compare_aggregate.py` で次の 2 種類の aggregate を作った。
+
+- `current_recommended_serving` vs `current_bankroll_candidate`
+- `current_recommended_serving` vs `current_ev_candidate`
+
+入力 window はどちらも次の 2 本である。
+
+- `tail_weekends`
+- late-September 5 日 window
+
+aggregate artifact は次に保存した。
+
+- `artifacts/reports/dashboard/serving_compare_aggregate_recommended_vs_bankroll_20260322.json`
+- `artifacts/reports/dashboard/serving_compare_aggregate_recommended_vs_ev_20260322.json`
+
+観測結果は次のとおりである。
+
+- `current_bankroll_candidate` は 2/2 window で pure bankroll delta が正だった
+- `current_ev_candidate` も 2/2 window で pure bankroll delta が正だった
+- net delta が正だったのは両候補とも late-September 側だけだった
+- 2 window mean では、`current_bankroll_candidate` の `mean_net_delta_right_minus_left=5.75`、`mean_pure_bankroll_delta_right_minus_left=0.4264`
+- 2 window mean では、`current_ev_candidate` の `mean_net_delta_right_minus_left=3.25`、`mean_pure_bankroll_delta_right_minus_left=0.2849`
+- `tail_weekends` では `current_recommended_serving` が total net で優位だったが、両候補とも pure final bankroll は改善した
+- late-September では `current_bankroll_candidate` と `current_ev_candidate` の両方が、net と bankroll の両面で `current_recommended_serving` を上回った
+
+したがって、現時点の実務的な読みは次のとおりである。
+
+1. bankroll 保全を最優先にするなら `current_bankroll_candidate` が最も強い
+2. `current_ev_candidate` は net と bankroll の中間候補として扱える
+3. `current_recommended_serving` は window によっては net で勝つため、短い serving compare だけで一律に置き換えるべきではない
+
 つまり、比較の軸は単純な net だけではなく、次の 3 つで見る。
 
 1. bets
