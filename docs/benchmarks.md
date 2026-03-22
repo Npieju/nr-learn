@@ -116,27 +116,30 @@ actual calendar の比較では、次を確認する。
 - `current_bankroll_candidate`
 - `current_ev_candidate`
 
-入力 window は次の 3 本である。
+入力 window は次の 4 本である。
 
 - `tail_weekends`
 - late-September 5 日 window
 - `aug_weekends_20260322`
+- `may_weekends_20260322`
 
 aggregate の要点は次のとおりである。
 
-- `current_bankroll_candidate` は pure bankroll delta が `2/3` windows で正だが、3-window mean は `net -3.5333`, `bankroll +0.2026`
-- `current_ev_candidate` も pure bankroll delta が `2/3` windows で正だが、3-window mean は `net -7.5333`, `bankroll +0.0472`
+- `current_bankroll_candidate` は pure bankroll delta が `2/4` windows で正、`1/4` は zero、4-window mean は `net -2.6500`, `bankroll +0.1520`
+- `current_ev_candidate` も pure bankroll delta が `2/4` windows で正、`1/4` は zero、4-window mean は `net -5.6500`, `bankroll +0.0354`
 - 両候補とも net delta が正だったのは late-September 側だけだった
 - `tail_weekends` では `current_recommended_serving` が total net で優位で、候補側は pure final bankroll のみ改善した
 - `aug_weekends_20260322` では `current_recommended_serving` が net と bankroll の両面で両候補を上回った
+- `may_weekends_20260322` では両候補とも `current_recommended_serving` と完全一致した
 
-aggregate JSON の `tradeoff_classification` で言い換えると、window 構成は `++`, `-+`, `--` が 1 本ずつである。
+aggregate JSON の `tradeoff_classification` で言い換えると、window 構成は `++`, `-+`, `--`, `00` が 1 本ずつである。
 
 - late-September は `positive_net_positive_bankroll`
 - `tail_weekends` は `negative_net_positive_bankroll`
 - `aug_weekends_20260322` は `negative_net_negative_bankroll`
+- `may_weekends_20260322` は `zero_net_zero_bankroll`
 
-このため、候補側を「bankroll 改善候補」とだけ要約するのは粗すぎる。現状の evidence は、「一部 regime では効くが、別 regime では baseline より悪化する」である。
+このため、候補側を「bankroll 改善候補」とだけ要約するのは粗すぎる。現状の evidence は、「一部 regime では効き、別 regime では baseline より悪化し、さらに差分が消える regime もある」である。
 
 したがって、現時点の運用上の位置づけは次のとおりである。
 
