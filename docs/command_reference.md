@@ -97,6 +97,13 @@ git push origin <branch>
 /workspaces/nr-learn/.venv/bin/python scripts/run_train.py --profile current_best_eval_2025_latest
 ```
 
+recent-heavy な学習 window を試すときは、`_2025_recent_2018` または `_2025_recent_2020` を使う。
+
+```bash
+/workspaces/nr-learn/.venv/bin/python scripts/run_train.py --profile current_recommended_serving_2025_recent_2018
+/workspaces/nr-learn/.venv/bin/python scripts/run_train.py --profile current_recommended_serving_2025_recent_2020
+```
+
 profile 一覧:
 
 ```bash

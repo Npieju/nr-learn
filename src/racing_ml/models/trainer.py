@@ -228,15 +228,25 @@ def _build_model_with_optional_fallback(model_name: str, params: dict[str, Any],
 
 def _time_split(
     frame: pd.DataFrame,
+    train_start: str | None,
     train_end: str,
     valid_start: str,
     valid_end: str,
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
+    train_start_ts = pd.to_datetime(train_start) if train_start else None
     train_end_ts = pd.to_datetime(train_end)
     valid_start_ts = pd.to_datetime(valid_start)
     valid_end_ts = pd.to_datetime(valid_end)
 
-    train = frame[frame["date"] <= train_end_ts]
+    if train_start_ts is not None and train_start_ts > train_end_ts:
+        raise ValueError(f"train_start must be <= train_end: {train_start} .. {train_end}")
+    if valid_start_ts > valid_end_ts:
+        raise ValueError(f"valid_start must be <= valid_end: {valid_start} .. {valid_end}")
+
+    train_mask = frame["date"] <= train_end_ts
+    if train_start_ts is not None:
+        train_mask &= frame["date"] >= train_start_ts
+    train = frame[train_mask]
     valid = frame[(frame["date"] >= valid_start_ts) & (frame["date"] <= valid_end_ts)]
 
     if train.empty or valid.empty:
@@ -475,6 +485,7 @@ def train_and_evaluate(
     task: str,
     model_name: str,
     model_params: dict[str, Any],
+    train_start: str | None,
     train_end: str,
     valid_start: str,
     valid_end: str,
@@ -509,7 +520,7 @@ def train_and_evaluate(
             gpu_task = "classification" if task == "multi_position" else task
             _validate_catboost_gpu_runtime(model_params, task=gpu_task)
 
-    train, valid = _time_split(frame, train_end, valid_start, valid_end)
+    train, valid = _time_split(frame, train_start, train_end, valid_start, valid_end)
     if max_train_rows and len(train) > max_train_rows:
         train = train.tail(max_train_rows).copy()
     if max_valid_rows and len(valid) > max_valid_rows:

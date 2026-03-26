@@ -205,6 +205,7 @@
 - `2025 latest` holdout を維持したまま、train 側に date-based な下限を入れた split を比較する。
 - 候補は少なくとも `2018-01-01..2024-12-31` と `2020-01-01..2024-12-31` を用意し、古い年帯を減らしたときの support / ROI / actual-date 挙動を確認する。
 - rows ベースの tail 制限ではなく、date ベースの train window 制限を優先して比較する。
+- まずは `configs/data_2025_recent_2018.yaml` と `configs/data_2025_recent_2020.yaml`、および対応 profile を使って train split を比較できる状態まで整えた。
 
 ### N5. 地方競馬データ拡張の feasibility 整理
 

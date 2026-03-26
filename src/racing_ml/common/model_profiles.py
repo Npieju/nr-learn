@@ -65,30 +65,63 @@ MODEL_RUN_PROFILES: dict[str, ModelRunProfile] = {
 
 LATEST_DATA_CONFIG = "configs/data_2025_latest.yaml"
 LATEST_PROFILE_SUFFIX = "_2025_latest"
+RECENT_DATA_CONFIGS: tuple[tuple[str, str, str], ...] = (
+    (
+        "configs/data_2025_recent_2018.yaml",
+        "_2025_recent_2018",
+        "with the 2025 holdout split and a recent-heavy training window starting at 2018-01-01",
+    ),
+    (
+        "configs/data_2025_recent_2020.yaml",
+        "_2025_recent_2020",
+        "with the 2025 holdout split and a recent-heavy training window starting at 2020-01-01",
+    ),
+)
 
 
-def _build_latest_profile_variants(base_profiles: dict[str, ModelRunProfile]) -> dict[str, ModelRunProfile]:
-    latest_profiles: dict[str, ModelRunProfile] = {}
+def _build_data_config_profile_variants(
+    base_profiles: dict[str, ModelRunProfile],
+    *,
+    data_config: str,
+    profile_suffix: str,
+    description_suffix: str,
+) -> dict[str, ModelRunProfile]:
+    variant_profiles: dict[str, ModelRunProfile] = {}
     for profile_name, profile in base_profiles.items():
         if profile.data_config != "configs/data.yaml":
             continue
 
-        latest_profile_name = f"{profile_name}{LATEST_PROFILE_SUFFIX}"
-        if latest_profile_name in base_profiles:
+        variant_profile_name = f"{profile_name}{profile_suffix}"
+        if variant_profile_name in base_profiles:
             continue
 
-        latest_profiles[latest_profile_name] = ModelRunProfile(
-            description=(
-                f"{profile.description.rstrip('.')} with the 2025 latest holdout split and netkeiba backfill data."
-            ),
+        variant_profiles[variant_profile_name] = ModelRunProfile(
+            description=f"{profile.description.rstrip('.')} {description_suffix}.",
             model_config=profile.model_config,
-            data_config=LATEST_DATA_CONFIG,
+            data_config=data_config,
             feature_config=profile.feature_config,
         )
-    return latest_profiles
+    return variant_profiles
 
 
-MODEL_RUN_PROFILES.update(_build_latest_profile_variants(MODEL_RUN_PROFILES))
+MODEL_RUN_PROFILES.update(
+    _build_data_config_profile_variants(
+        MODEL_RUN_PROFILES,
+        data_config=LATEST_DATA_CONFIG,
+        profile_suffix=LATEST_PROFILE_SUFFIX,
+        description_suffix="with the 2025 latest holdout split and netkeiba backfill data",
+    )
+)
+
+for data_config, profile_suffix, description_suffix in RECENT_DATA_CONFIGS:
+    MODEL_RUN_PROFILES.update(
+        _build_data_config_profile_variants(
+            MODEL_RUN_PROFILES,
+            data_config=data_config,
+            profile_suffix=profile_suffix,
+            description_suffix=description_suffix,
+        )
+    )
 
 
 def format_model_run_profiles() -> str:

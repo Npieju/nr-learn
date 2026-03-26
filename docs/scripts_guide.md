@@ -36,6 +36,7 @@
 - [../scripts/run_train.py](../scripts/run_train.py)
   - 単体モデルの標準学習入口。
   - 2025 backfill 済みデータを使うときは、既存 profile 名に `_2025_latest` を付ければ同じ family を最新 split で呼べる。
+  - recent-heavy split を試すときは `_2025_recent_2018` / `_2025_recent_2020` を使う。
 - [../scripts/run_build_value_stack.py](../scripts/run_build_value_stack.py)
   - 学習済み component artifact から value blend bundle を構築する。
 - [../scripts/run_bundle_models.py](../scripts/run_bundle_models.py)
@@ -69,7 +70,7 @@
 - [../scripts/run_dashboard.py](../scripts/run_dashboard.py)
   - 既存 report から dashboard 向け出力を作る。
 
-これらの profile 対応 CLI では、`current_best_eval` や `current_recommended_serving` のような既存 family に `_2025_latest` を付けるだけで、`configs/data_2025_latest.yaml` を使う variant を選べる。
+これらの profile 対応 CLI では、`current_best_eval` や `current_recommended_serving` のような既存 family に `_2025_latest`、`_2025_recent_2018`、`_2025_recent_2020` を付けるだけで、対応する data split variant を選べる。
 
 ## 6. serving 検証
 
