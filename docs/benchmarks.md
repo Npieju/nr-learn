@@ -49,94 +49,54 @@ formal な evaluation 導線は、[evaluation_guide.md](evaluation_guide.md) を
 予測の並び順品質と、市場オッズに対する追加情報の有無を見る。
 
 - AUC は予測順位の良さを見る。
-- pseudo-R² は市場に対する独自情報の強さを見る。
+## 5. 現在の benchmark の読み方
 
-## 4. 外部比較の目安
+引き継ぎ時は、まず「何が current baseline で、何が候補か」をここで確認する。
 
-Benter 系の比較では、重要なのは単純な ROI よりも `ΔR² = R²_combined - R²_public` である。
+### 5.1 現在の採用位置づけ
 
-当面の目安は次のとおりとする。
+2026-03-26 時点の current position は次のとおりである。
 
-- 最低到達ライン:
-  - `ΔR² > 0.009`
-- 強いライン:
-  - `ΔR² ≈ 0.018`
+| 区分 | profile | formal status | 実務上の扱い |
+| --- | --- | --- | --- |
+| operational baseline | `current_recommended_serving_2025_latest` | `pass / promote` | 既定運用 profile |
+| seasonal de-risk variant | `current_long_horizon_serving_2025_latest` | actual-date compare で有効 | September 系の保守候補 |
+| formal improvement candidate | `current_tighter_policy_search_candidate_2025_latest` | `pass / promote` | analysis-first 候補 |
 
-また、短期サンプルで `ROI > 1.0` が出ても、それだけで長期運用の目標達成とはみなさない。
+この表の意味は次のとおりである。
 
-## 5. 現在の内部 benchmark ladder
+- `pass / promote` は「formal gate を通過した」ことを意味する。
+- それだけでは baseline 置換を意味しない。
+- operational 採用は actual-date compare と role の単純さも含めて別途判断する。
 
-2024 年データの nested walk-forward における主要候補は次のとおりである。
+### 5.2 latest 2025 の formal snapshot
+
+latest 2025 split で直近に formal に通過した run は次の 2 本である。
+
+| revision | profile | decision | 主要値 |
+| --- | --- | --- | --- |
+| `r20260325_current_recommended_serving_2025_latest_benchmark_refresh` | `current_recommended_serving_2025_latest` | `pass / promote` | AUC `0.8401`, nested WF weighted test ROI `0.7628`, bets `544` |
+| `r20260326_tighter_policy_ratio003` | `current_tighter_policy_search_candidate_2025_latest` | `pass / promote` | AUC `0.8401`, nested WF weighted test ROI `0.9092`, formal benchmark weighted ROI `1.1728`, feasible folds `4/5`, bets `424` |
+
+読み方としては、baseline は latest 2025 の既定運用 profile として formal gate を通過済みであり、tighter policy candidate は support 改善の証拠を持つ追加候補である。
+
+### 5.3 長期 benchmark ladder
+
+2024 年データの nested walk-forward における代表的な ladder は次のとおりである。
 
 | 候補 | Weighted ROI | Bets | 位置づけ |
 | --- | ---: | ---: | --- |
 | no-lineage public-free baseline | `0.5788` | `603` | 市場情報を切った基準線 |
 | liquidity high-coverage | `0.9346` | `700` | 流動性改善の転換点 |
 | regime hybrid | `0.9915` | `731` | 単純な運用候補 |
-| regime modelswitch f1 policy may | `1.0073` | `713` | 現在の主力候補 |
+| regime modelswitch f1 policy may | `1.0073` | `713` | 2024 benchmark 上の主力候補 |
 
-この数値だけを見ると最後の候補が最良だが、構成の複雑さも同時に増しているため、運用判断では simpler rollback 候補との比較を必ず行う。
+この ladder は長期の改善幅を見るための基準線である。現在の operational baseline の決定は、この ladder だけではなく latest 2025 の formal gate と actual-date compare を合わせて行う。
 
-### 5.1 直近の revision comparison
+### 5.4 補足
 
-2026-03-22 時点の full revision gate では、次の 2 候補を同条件で通した。
-
-| revision | profile | status | decision | 備考 |
-| --- | --- | --- | --- | --- |
-| `r20260322a` | `current_best_eval` | `pass` | `promote` | `score_source_count=2`。`may_runtime_liquidity` override を読む |
-| `r20260322b` | `current_recommended_serving` | `pass` | `promote` | `score_source_count=1`。単一 source で通過 |
-
-この 2 run では、`evaluate --max-rows 120000 --wf-mode fast --wf-scheme nested` のトップライン指標は実質同一だった。
-
-- `top1_roi`: `0.796298...`
-- `ev_top1_roi`: `0.660712...`
-- `auc`: `0.834390...`
-
-したがって、現時点の運用判断では `current_recommended_serving` を simpler candidate として優先的に扱ってよい。
-ただし、両者とも promotion gate warning として `probe_only` な walk-forward slice が残るため、将来の benchmark 更新では引き続き stricter full evaluation を優先する。
-
-### 5.2 de-risk candidate の formal gate
-
-2026-03-22 に、de-risk 候補 2 本も formal な revision gate に載せた。
-
-| revision | profile | status | decision | 備考 |
-| --- | --- | --- | --- | --- |
-| `r20260322c` | `current_bankroll_candidate` | `block` | `hold` | representative evaluate は通るが、matching WF で feasible fold `0/5` |
-| `r20260322d` | `current_ev_candidate` | `block` | `hold` | representative evaluate は通るが、matching WF で feasible fold `0/5` |
-| `r20260322e` | `current_sep_guard_candidate` | `block` | `hold` | representative evaluate と matching WF は通るが、feasible fold `0/5` |
-
-この 3 候補では共通して次が確認できた。
-
-- `evaluate` 側の `stability_assessment` は `representative`
-- matching な `wf_feasibility_diag` を付けると promotion gate は `wf_feasible_fold_count=0` で block
-- dominant failure reason は `min_bets`
-- fold ごとの binding source は全て `min_bets_abs=100` で、ratio 側ではなかった
-- `max_infeasible_bets_observed=58` に留まり、threshold 未達が明確だった
-
-同日付の threshold sweep で、support gap も数値化した。
-
-- `current_bankroll_candidate` と `current_ev_candidate` は `min_bets_abs=58` で初めて feasible fold が `1/5` に到達した
-- `current_bankroll_candidate` と `current_ev_candidate` は `min_bets_abs=40` で feasible fold が `4/5` になり、`3/5` 条件はここで満たす
-- `current_bankroll_candidate` と `current_ev_candidate` は `min_bets_abs=30` まで下げると feasible fold が `5/5` になった
-- fold 別の最初の到達 threshold は `current_bankroll_candidate` と `current_ev_candidate` で共通で、fold 3 が `58`、fold 1 が `45`、fold 2 と fold 4 が `40`、fold 5 が `30` だった
-- `current_sep_guard_candidate` も formal gate の blocking source 自体は同じで、`wf_feasible_fold_count=0/5`, dominant failure reason `min_bets`, `binding_min_bets_source=absolute`, `max_infeasible_bets_observed=58` だった
-- 3 候補を横並びにした threshold compare では、shared `1 fold` frontier は同じ `58` だった一方、`current_sep_guard_candidate` の strictest threshold は `3 folds=45`, `5 folds=34` で、`current_bankroll_candidate` / `current_ev_candidate` の `40/30` より少し厳しかった
-- ただしこれは「他の de-risk 候補との比較」であり、baseline `current_recommended_serving` との直接比較とは別である
-- baseline 用 threshold sweep に `58` checkpoint を補ったうえで `current_recommended_serving` と `current_sep_guard_candidate` を直接 compare すると、strictest threshold は両者とも `1 fold=58`, `3 folds=45`, `5 folds=34` で一致した
-- fold 別の最初の到達 threshold も baseline と Sep guard で一致し、`fold1=55`, `fold2=45`, `fold3=58`, `fold4=35`, `fold5=34` だった
-- threshold `60` の block pattern も同一で、両者とも `4` folds が `min_bets`, `1` fold が `min_final_bankroll` で止まり、fold4 の bankroll shortfall も同じ `0.04670658682634732` だった
-- shared threshold (`60/58/55/45/40/35/34`) に限ると fold compare CSV の行内容も完全一致し、best feasible / blocked signature の並び自体が recent WF 上で変わっていないことも確認できた
-- 具体的には dominant blocked signature は両者とも `portfolio / blend_weight=0.8 / min_prob=0.03 / top_k=1 / min_ev=0.95` で共通し、fold4 の recovery だけが `min_expected_value=1.0` に切り替わる点まで一致した
-- したがって Sep guard の serving 改善は「baseline より重い formal frontier を受け入れている」わけではなく、baseline がもともと持っている support frontier の内側で生じている
-- この direct compare から signature report / family compare / drilldown / mitigation shortlist も切り直した。blocked occurrence は `34` 件で、内訳は `min_bets=24`, `min_final_bankroll=10`、dominant family はやはり `portfolio blend=0.8 / min_prob=0.03 / top_k=1 / min_ev=0.95` だった
-- 次の mitigation ranking も従来の読みを補強しており、rank 1 は `portfolio blend=0.6 / min_prob=0.03 / min_ev=1.0`、rank 3 は `portfolio blend=0.8 / min_prob=0.03 / min_ev=1.0` だった。direct compare 上では前者が 34/34 occurrence で bankroll 改善かつ lower bets、後者も 32/34 occurrence で bankroll 改善を示した
-- `min_final_bankroll` の 10 件はさらに単純で、すべて baseline / Sep guard 共通の fold4 occurrence だった。threshold `60/58/55/45/40` の各点で target は同じ `63 bets / final_bankroll≈0.8533 / gap≈0.0467` の `portfolio blend=0.8 / min_ev=0.95` で止まり、recovery も毎回同じ `portfolio blend=0.8 / min_ev=1.0 / 35 bets / final_bankroll≈0.9527` だった
-- したがって formal 改善の次手も Sep guard 固有の seasonal logic ではなく、shared blocked family に対する `min_ev=1.0` と lower blend の portfolio-family mitigation を baseline 共通課題として評価するのが筋である
-
-さらに threshold compare から mitigation probe を組み立てると、runtime 候補としては次の 2 本に収束した。
-
-- dominant blocked signature は `portfolio / blend_weight=0.8 / min_prob=0.03 / top_k=1 / min_ev=0.95` で、84 blocked occurrence を占めた
-- そのうち `74/84` occurrence では `portfolio / blend_weight=0.6 / min_prob=0.03 / top_k=1 / min_ev=1.0` がより高い final bankroll を示した
+- 過去の de-risk / mitigation probe の詳細比較は、現在の採用位置づけを理解するための補助 evidence である。
+- 現在の判断を再開する際は、まずこの節と [roadmap.md](roadmap.md) を見てから、必要な artifact へ降りる。
 - 残り `10/84` occurrence では `portfolio / blend_weight=0.8 / min_prob=0.03 / top_k=1 / min_ev=1.0` が pure bankroll で上回った
 - mitigation probe からは runtime-ready candidate として `portfolio_lower_blend` と `portfolio_ev_only` の 2 本を書き出せたが、`74/10` の staged hybrid は現行 runtime の単一 policy/date override では直接表現できなかった
 

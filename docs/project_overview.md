@@ -35,47 +35,43 @@
 - 評価と運用確認
   - nested walk-forward と serving smoke を使い、検証上の成績と実運用に近い挙動を両方見る。
 
-## 4. 現在の主要スコア
+## 4. 現在の運用上の位置づけ
 
-2024 年データを対象にした主要候補の時系列検証結果は、概ね次の段階に整理できる。
+2026-03-26 時点で、現在の位置づけは次の 3 本に整理している。
+
+| 区分 | profile | 位置づけ | 状態 |
+| --- | --- | --- | --- |
+| operational baseline | `current_recommended_serving_2025_latest` | 現在の既定運用 profile | formal gate `pass / promote` |
+| seasonal de-risk | `current_long_horizon_serving_2025_latest` | September 系の損失圧縮を狙う保守候補 | actual-date compare で有効 |
+| formal improvement candidate | `current_tighter_policy_search_candidate_2025_latest` | support 改善を確認した analysis-first 候補 | formal gate `pass / promote` |
+
+ここで重要なのは、`pass / promote` した候補が 1 本増えたことと、だからといって自動で baseline を差し替えていないことである。`nr-learn` では formal 通過と operational 採用を分けて扱う。
+
+## 5. 現在の主要スコア
+
+現時点で引き継ぎ時に押さえるべき数値は次の 2 系統である。
+
+### 5.1 長期 benchmark の基準線
+
+2024 年データを対象にした nested walk-forward の benchmark ladder は次のとおりである。
 
 | 位置づけ | Weighted ROI | Bets | 意味 |
 | --- | ---: | ---: | --- |
 | 基準モデル | `0.5788` | `603` | 市場情報を切った基準線 |
 | 改善後の高流動性候補 | `0.9346` | `700` | no-bet を大きく減らした転換点 |
 | 単純な運用候補 | `0.9915` | `731` | 構成が比較的単純で、ほぼ ROI 1.0 |
-| 現在の主力候補 | `1.0073` | `713` | 現時点の最良候補 |
+| 主力候補 | `1.0073` | `713` | 2024 benchmark 上の上位候補 |
 
-ここで重要なのは、改善の多くが単純なモデル強化だけでなく、時期に応じたスコア切替や購入条件の設計から生まれている点である。
+### 5.2 latest 2025 の current snapshot
 
-## 5. 現在の主な候補
+2025 backfill 済み latest split では、現在の baseline と直近 candidate の formal 結果は次のとおりである。
 
-### 5.1 主力候補
+| profile | 主要 revision | 判断 | weighted ROI / benchmark | bets |
+| --- | --- | --- | ---: | ---: |
+| `current_recommended_serving_2025_latest` | `r20260325_current_recommended_serving_2025_latest_benchmark_refresh` | `pass / promote` | nested WF `0.7628` | `544` |
+| `current_tighter_policy_search_candidate_2025_latest` | `r20260326_tighter_policy_ratio003` | `pass / promote` | formal benchmark `1.1728` | `424` |
 
-- config:
-  - `configs/model_catboost_value_stack_lgbm_roi_high_coverage_tune_roi012_liquidity_regime_modelswitch_f1_policy_may.yaml`
-- 位置づけ:
-  - 現在の nested evaluation では最良。
-- 特徴:
-  - 5 月相当の regime で追加スコア系と Kelly 寄りの購入ルールを使う。
-
-### 5.2 単純な運用候補
-
-- config:
-  - `configs/model_catboost_value_stack_lgbm_roi_high_coverage_tune_roi012_liquidity_regime_hybrid.yaml`
-- 位置づけ:
-  - シングルスタック寄りで、構成が比較的単純。
-
-### 5.3 現在の簡易 rollback 候補
-
-- config:
-  - `configs/model_catboost_value_stack_lgbm_roi_high_coverage_tune_roi012_liquidity_regime_hybrid_june_strict_serving.yaml`
-- 位置づけ:
-  - serving 側だけを簡素にしつつ、主力候補の observed behavior にかなり近い候補。
-- 現状の判断:
-  - 直近の actual calendar 検証では、主力候補と同等の挙動を再現している。
-  - 具体的には 2024-05 の実週末 8 日では、主力候補だけ `may_runtime_liquidity` へ切り替わった一方で、`policy_name` は両者とも `may_runtime_kelly` で一致し、`policy_bets=9`、平均 `policy_roi=0.0`、`policy_net=-9.0` も差分なしだった。
-  - 代表日 5 点、5月末から6月の 10 日 window、6月末から9月中旬の 24 実週末、さらに 9 月後半 5 日（`2024-09-16/21/22/28/29`）でも差分は確認されておらず、日々の運用確認では簡易候補を優先してよい段階にある。
+補足すると、tighter policy candidate は support 改善の evidence として重要だが、serving default を即時に置き換える決定まではしていない。現時点の baseline は引き続き `current_recommended_serving_2025_latest` である。
 
 ## 6. どこまで進んでいるか
 
@@ -85,31 +81,25 @@
 - nested walk-forward で、期間分離を守った採用判定ができる。
 - evaluation summary から serving ルールを再生成できる。
 - representative date だけでなく、実日付の複数日 window でも serving 挙動を比較できる。
+- 2025 backfill 済み latest split を使って、formal gate まで一続きで再実行できる。
 
 つまりこのリポジトリは、単なるモデル実験置き場ではなく、研究から運用判断まで一続きで扱える段階に入っている。
 
-## 7. 今の課題
+## 7. いま未決定のこと
 
-いまの主な課題は 3 つである。
+いま残っている主な論点は次の 3 つである。
 
-1. 最良候補が 5 月専用の追加スコア系に一部依存しており、構成がまだ複雑である。
-2. 市場オッズに対する独自情報の増分は、まだ十分大きいとは言えない。
-3. 良い成績を出したルールを、より単純で再現しやすい形へ落とし切れていない。
-
-## 8. 今後の方針
-
-次の改善は、次の順番で進めるのが妥当である。
-
-1. 5 月専用の追加スコア依存を減らす。
-2. 簡易 rollback 候補を正式な予備運用ルールとして固める。
-3. actual calendar での検証範囲を広げ、短期の偶然を減らす。
+1. `current_tighter_policy_search_candidate_2025_latest` を analysis-first のまま維持するか、追加比較を経て次の昇格候補にするか。
+2. `current_long_horizon_serving_2025_latest` を September de-risk 用としてどこまで明示運用するか。
+3. latest 2025 の formal-support 改善を、より単純な policy で再現できるか。
 
 進行中の優先順位と最新の実行順は、書き捨ての会話ログではなく [roadmap.md](roadmap.md) を正本として更新する。
 
-## 9. 読み進め方
+## 8. 引き継ぎ時の読み方
 
-- システムの中身を知りたい場合は [system_architecture.md](system_architecture.md) を読む。
-- 何を良い成績とみなすかを知りたい場合は [benchmarks.md](benchmarks.md) を読む。
+- 現在地と次の作業順を知りたい場合は [roadmap.md](roadmap.md) を読む。
+- 何を良い結果とみなすかを知りたい場合は [benchmarks.md](benchmarks.md) を読む。
 - 日々の進め方や revision の切り方を知りたい場合は [development_flow.md](development_flow.md) を読む。
 - 実際にどの CLI をどう叩くかを知りたい場合は [command_reference.md](command_reference.md) を読む。
-- 外部データの扱いを知りたい場合は [data_extension.md](data_extension.md) を読む。
+- 対外向け説明だけが必要な場合は [public_benchmark_snapshot.md](public_benchmark_snapshot.md) を読む。
+- システムの中身やモジュール構成を知りたい場合は [system_architecture.md](system_architecture.md) を読む。
