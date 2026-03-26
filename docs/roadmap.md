@@ -21,6 +21,13 @@
 - 一時的な調査メモや試行錯誤の詳細は artifact と個別ガイドに残し、この文書には結論だけを残す。
 - この文書の更新を伴わない大きな方向転換はしない。
 
+## 2.1 データ方針の前提
+
+- 本番 2026 に近い判断を優先するため、学習・検証では直近年帯を重く見る。
+- ただしデータは有限なので、直近寄せは date-based な学習 window 制限として設計し、単純に履歴を捨てるかどうかだけで決めない。
+- 古いデータは無条件に残すのではなく、recent regime を悪化させない範囲で support と特徴量安定化に寄与するかで判断する。
+- 新しいデータ源を増やすときも、まず JRA latest の formal benchmark と actual-date compare を壊さないことを優先する。
+
 ## 3. 現在地
 
 2026-03-26 時点の到達点は次のとおりである。
@@ -193,6 +200,18 @@
 
 - September window では long-horizon latest を de-risk 候補として扱い、それ以外は baseline を使う運用境界を docs に残す。
 
+### N4. recent-heavy learning window の検証
+
+- `2025 latest` holdout を維持したまま、train 側に date-based な下限を入れた split を比較する。
+- 候補は少なくとも `2018-01-01..2024-12-31` と `2020-01-01..2024-12-31` を用意し、古い年帯を減らしたときの support / ROI / actual-date 挙動を確認する。
+- rows ベースの tail 制限ではなく、date ベースの train window 制限を優先して比較する。
+
+### N5. 地方競馬データ拡張の feasibility 整理
+
+- 地方競馬データの大規模収集は将来候補として検討してよい。
+- ただし JRA と地方ではレース場、頭数分布、開催 cadence、市場傾向が異なるため、まずは「JRA 学習へ直接混ぜる」のではなく、別 universe として ingestion / key / benchmark の切り分けが必要かを設計レベルで整理する。
+- この検討は recent-heavy JRA split の評価が一段落してから着手する。
+
 ## 8. 当面やらないこと
 
 - crawler の追加修正
@@ -200,6 +219,8 @@
 - latest formal result を見ないままの broad policy rewrite
 
 これらは現状のボトルネックではない。まずは latest baseline を運用導線へ落とし切る。
+
+地方競馬データのような大規模拡張は選択肢としては残すが、直近の優先課題は JRA latest の学習 window と operational 判断を詰めることである。
 
 ## 9. 関連文書
 
