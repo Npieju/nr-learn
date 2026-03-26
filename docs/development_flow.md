@@ -6,6 +6,8 @@
 
 `project_overview.md` が「このプロジェクトは何か」を説明する資料だとすると、この文書は「このプロジェクトをどう進めるか」を説明する資料である。
 
+進行中の優先順位、直近の判断済み事項、次の作業順は [roadmap.md](roadmap.md) を正本として別管理する。
+
 ここで決めるのは次の 4 点である。
 
 1. 短い smoke / probe を何のために使うか。
@@ -103,6 +105,28 @@ evaluation と promotion gate の具体的な読み方は [evaluation_guide.md](
 重い run に入る前に command 解決と manifest 出力だけ確認したいときは `--dry-run` を付ける。
 
 実際に 1 本通す smoke では、`--train-max-train-rows` / `--train-max-valid-rows` と evaluate 側の row 制限を併用して負荷を下げてよい。
+
+2025 まで backfill した最新データを正式判断へ載せるときは、通常の `run_revision_gate.py` を手で組み立てる代わりに、readiness 確認込みの wrapper を使ってよい。
+
+例:
+
+```bash
+/workspaces/nr-learn/.venv/bin/python scripts/run_netkeiba_latest_revision_gate.py \
+  --revision r20260323_2025latest \
+  --evaluate-pre-feature-max-rows 300000 \
+  --evaluate-max-rows 200000 \
+  --evaluate-wf-mode full
+```
+
+この wrapper は次を直列で行う。
+
+- 2025 backfill 用 manifest を明示指定した coverage snapshot を実行する。
+- `benchmark_rerun_ready=true` を確認する。
+- `current_best_eval_2025_latest` を使って revision gate を起動する。
+
+まず command 解決だけ確認したいときは `--dry-run` を付ける。pedigree crawl の完了待ちも同じ入口で行いたいときは `--wait-timeout-seconds` を付ける。
+
+2025 latest の evaluate は full table feature build だと OOM になりやすいため、この wrapper は `--evaluate-pre-feature-max-rows` を既定で `300000` にしている。必要なら明示的に上書きする。
 
 主な出力:
 

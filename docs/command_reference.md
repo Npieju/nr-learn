@@ -14,9 +14,66 @@ CLI の基本挙動:
 - 想定内の失敗は concise な `failed: ...` で返し、unexpected exception のときだけ traceback を出す。
 - `output file` を受ける引数には file path を渡し、`output dir` を受ける引数には directory path を渡す。
 
-## 2. まず使うコマンド
+## 2. Git 管理
 
-### 2.1 データ取り込み
+Git の運用方針そのものは [development_flow.md](development_flow.md) を正本とし、ここでは日常作業で実際に使う入口だけをまとめる。
+
+### 2.1 状態確認
+
+変更に入る前と、まとまった変更を終えた直後は次を確認する。
+
+```bash
+git status
+git diff --stat
+```
+
+特定ファイルだけ差分を見たいときの例:
+
+```bash
+git diff -- docs/roadmap.md docs/command_reference.md
+```
+
+### 2.2 履歴確認
+
+直近の判断や revision の流れを追いたいときは、artifact と合わせて次を使う。
+
+```bash
+git log --oneline --decorate -20
+```
+
+特定ファイルの変更履歴を見るときの例:
+
+```bash
+git log --oneline -- docs/roadmap.md
+```
+
+### 2.3 commit
+
+この repo では、smoke の途中状態ではなく、意味のあるまとまりで commit する。
+
+```bash
+git add docs/roadmap.md docs/command_reference.md
+git commit -m "docs: sync roadmap after tighter policy revision gate"
+```
+
+補足:
+
+- commit message は revision 名、profile 名、または変更の意図が追える形にする。
+- 正式判断に紐づく変更なら、`r20260326_tighter_policy_ratio003` のような revision slug を含めてもよい。
+
+### 2.4 push
+
+shared remote が使える作業では、push までを完了条件に含める。
+
+```bash
+git push origin <branch>
+```
+
+権限や認証で push できない場合は、その場で止めずに理由を記録して共有する。
+
+## 3. まず使うコマンド
+
+### 3.1 データ取り込み
 
 ```bash
 /workspaces/nr-learn/.venv/bin/python scripts/run_ingest.py --config configs/data.yaml
@@ -28,10 +85,16 @@ CLI の基本挙動:
 - [../scripts/run_feature_gap_report.py](../scripts/run_feature_gap_report.py)
 - [../scripts/run_netkeiba_coverage_snapshot.py](../scripts/run_netkeiba_coverage_snapshot.py)
 
-### 2.2 学習
+### 3.2 学習
 
 ```bash
 /workspaces/nr-learn/.venv/bin/python scripts/run_train.py --profile current_best_eval
+```
+
+2025 backfill 済みデータで回すときは、同じ profile family に `_2025_latest` を付ける。
+
+```bash
+/workspaces/nr-learn/.venv/bin/python scripts/run_train.py --profile current_best_eval_2025_latest
 ```
 
 profile 一覧:
@@ -40,7 +103,7 @@ profile 一覧:
 /workspaces/nr-learn/.venv/bin/python scripts/run_train.py --list-profiles
 ```
 
-### 2.3 評価
+### 3.3 評価
 
 正式判断の読み筋は [evaluation_guide.md](evaluation_guide.md) を参照する。
 
@@ -48,21 +111,44 @@ profile 一覧:
 /workspaces/nr-learn/.venv/bin/python scripts/run_evaluate.py --profile current_best_eval --max-rows 120000
 ```
 
+最新 backfill を反映した holdout で評価するときの代表例:
+
+```bash
+/workspaces/nr-learn/.venv/bin/python scripts/run_evaluate.py --profile current_best_eval_2025_latest --max-rows 120000
+```
+
 昇格判断の基本は、短窓の単発結果ではなく `stability_assessment=representative` を満たす評価である。
 
-### 2.4 予測
+### 3.4 予測
 
 ```bash
 /workspaces/nr-learn/.venv/bin/python scripts/run_predict.py --profile current_best_eval --race-date 2021-07-31
 ```
 
-### 2.5 バックテスト
+最新データ側の race day を使うときの例:
+
+```bash
+/workspaces/nr-learn/.venv/bin/python scripts/run_predict.py --profile current_recommended_serving_2025_latest --race-date 2025-12-28
+```
+
+補足:
+
+- `run_predict.py` 自体には `--artifact-suffix` はなく、prediction artifact は date 基準の canonical 名で出る。
+- window 単位の provenance を残したいときは、predict 単体ではなく `run_serving_smoke.py` 側で `--artifact-suffix` と `--output-file` を明示する。
+
+### 3.5 バックテスト
 
 ```bash
 /workspaces/nr-learn/.venv/bin/python scripts/run_backtest.py --profile current_best_eval
 ```
 
-## 3. 正式な revision 評価
+2025 latest split に合わせた prediction artifact を使う場合も、同じ `_2025_latest` profile を指定してよい。
+
+```bash
+/workspaces/nr-learn/.venv/bin/python scripts/run_backtest.py --profile current_best_eval_2025_latest
+```
+
+## 4. 正式な revision 評価
 
 短い smoke / probe と、正式な改善判断は分けて扱う。
 
@@ -113,17 +199,43 @@ profile 一覧:
 - `--dry-run` を付けると、重い train / evaluate を実行せずに planned command と revision manifest だけを確認できる。
 - `--train-max-train-rows` と `--train-max-valid-rows` を使うと、real run でも lightweight smoke を組める。
 
-## 4. serving 検証
+## 5. serving 検証
 
 基本の流れと各 artifact の読み方は [serving_validation_guide.md](serving_validation_guide.md) を参照する。
 
-### 4.1 smoke
+### 5.1 smoke
 
 ```bash
 /workspaces/nr-learn/.venv/bin/python scripts/run_serving_smoke.py --profile current_recommended_serving --date 2024-09-14
 ```
 
-### 4.2 2 候補比較
+latest data の末尾 window をまとめて見る例:
+
+```bash
+/workspaces/nr-learn/.venv/bin/python scripts/run_serving_smoke.py \
+  --profile current_recommended_serving_2025_latest \
+  --artifact-suffix current_recommended_serving_2025_latest_tail_dec_window \
+  --output-file artifacts/reports/serving_smoke_current_recommended_serving_2025_latest_tail_dec_window.json \
+  --date 2025-12-06 \
+  --date 2025-12-07 \
+  --date 2025-12-13 \
+  --date 2025-12-14 \
+  --date 2025-12-20 \
+  --date 2025-12-21 \
+  --date 2025-12-27 \
+  --date 2025-12-28
+```
+
+この latest tail window では `2025-12-06`、`2025-12-20`、`2025-12-27` で `policy_bets=1` を確認した。
+
+artifact 命名の実務ルール:
+
+- latest baseline の window artifact は `current_recommended_serving_2025_latest_<window_or_purpose>` の形で suffix を切る。
+- `run_serving_smoke.py` の summary 既定ファイル名は `serving_smoke_<profile>.json` で、`--artifact-suffix` だけでは変わらない。
+- そのため window ごとに summary を分けたいときは、`--artifact-suffix` と同じ slug を `--output-file artifacts/reports/serving_smoke_<slug>.json` にも入れる。
+- `--prediction-backend replay-existing` を使うと canonical prediction CSV を再利用しつつ、suffix 付き replay backtest artifact だけを増やせる。
+
+### 5.2 2 候補比較
 
 ```bash
 /workspaces/nr-learn/.venv/bin/python scripts/run_serving_profile_compare.py \
@@ -160,7 +272,7 @@ profile 一覧:
 - `--output`, `--output-file`, `--summary-path`, `--summary-csv`, `--manifest-output` のような引数に directory を渡すと fail-fast する。
 - 逆に `--output-dir` のような directory 前提の引数には file path を渡さない。
 
-## 5. netkeiba 系の代表コマンド
+## 6. netkeiba 系の代表コマンド
 
 ID 準備:
 
@@ -197,10 +309,11 @@ backfill:
 補足:
 
 - netkeiba 系の `run_prepare_netkeiba_ids.py`、`run_collect_netkeiba.py`、`run_backfill_netkeiba.py`、`run_netkeiba_benchmark_gate.py` は、いずれも進捗または heartbeat を出す。
+- 重い latest / backfill 系 evaluate では `run_netkeiba_latest_revision_gate.py --evaluate-pre-feature-max-rows 300000`、または `run_netkeiba_benchmark_gate.py --pre-feature-max-rows 300000` を使うと、feature build 前に row 数を抑えられる。
 
-## 6. 補助コマンド
+## 7. 補助コマンド
 
-### 6.1 A/B 比較
+### 7.1 A/B 比較
 
 ```bash
 /workspaces/nr-learn/.venv/bin/python scripts/run_ab_compare.py \
@@ -209,20 +322,20 @@ backfill:
   --max-rows 30000
 ```
 
-### 6.2 ダッシュボード生成
+### 7.2 ダッシュボード生成
 
 ```bash
 /workspaces/nr-learn/.venv/bin/python scripts/run_dashboard.py
 ```
 
-### 6.3 value stack tuning
+### 7.3 value stack tuning
 
 ```bash
 /workspaces/nr-learn/.venv/bin/python scripts/run_tune_value_stack.py \
   --summary-path artifacts/reports/tune_value_stack_summary.json
 ```
 
-### 6.4 進捗表示の軽量 smoke
+### 7.4 進捗表示の軽量 smoke
 
 progress の退行確認だけをしたいときは、再学習や再推論を伴わない既存 artifact ベースのコマンドを優先する。
 
@@ -280,7 +393,7 @@ WF 後段チェーン:
 - この節のコマンドは、progress が出るかを見るための軽量確認であり、評価改善の根拠には使わない。
 - `run_wf_threshold_compare.py` だけは fold 集計を再生成するため、他より少し重いが再学習や推論は伴わない。
 
-## 7. artifact の見方
+## 8. artifact の見方
 
 主要な出力先:
 
@@ -295,7 +408,7 @@ WF 後段チェーン:
 - `artifacts/reports/evaluation_manifest.json`
 - `artifacts/reports/promotion_gate_report.json` または `promotion_gate_<revision>.json`
 
-## 8. 補足
+## 9. 補足
 
 - 高頻度で使う script 以外は [../scripts](../scripts) を起点に探す。
 - 用途別の script 一覧は [scripts_guide.md](scripts_guide.md) を参照する。

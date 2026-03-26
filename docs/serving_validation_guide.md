@@ -44,6 +44,32 @@
   --date 2024-09-14
 ```
 
+2025 latest baseline の tail window をまとめて確認するときは、複数日をそのまま並べてよい。
+
+```bash
+/workspaces/nr-learn/.venv/bin/python scripts/run_serving_smoke.py \
+  --profile current_recommended_serving_2025_latest \
+  --artifact-suffix current_recommended_serving_2025_latest_tail_dec_window \
+  --output-file artifacts/reports/serving_smoke_current_recommended_serving_2025_latest_tail_dec_window.json \
+  --date 2025-12-06 \
+  --date 2025-12-07 \
+  --date 2025-12-13 \
+  --date 2025-12-14 \
+  --date 2025-12-20 \
+  --date 2025-12-21 \
+  --date 2025-12-27 \
+  --date 2025-12-28
+```
+
+2026-03-25 時点では、この 8 日 window のうち `2025-12-06`、`2025-12-20`、`2025-12-27` で `policy_bets=1` を確認している。したがって latest tail の zero-bet は常時ではなく、date により selection が出る。
+
+latest baseline を日常運用で回すときの artifact 命名ルールは次で固定すると分かりやすい。
+
+- suffix は `current_recommended_serving_2025_latest_<window_or_purpose>` を基本形にする。
+- summary JSON は `--output-file artifacts/reports/serving_smoke_<same_slug>.json` まで明示する。
+- 理由は、`run_serving_smoke.py` の summary 既定名が suffix ではなく profile 名基準の `serving_smoke_<profile>.json` だからである。
+- 既存 prediction を再利用した軽量 replay では、同じ suffix を付けて backtest 側だけ window 別 artifact を増やせる。
+
 built-in case を持たない profile では `--date` が必須である。
 
 主な出力:
@@ -127,6 +153,12 @@ staged config の場合、2026-03-22 時点の smoke summary / backtest JSON に
 September 10 日の差分も一貫して defensive で、`2024-09-07` だけは `3 bets / +19.7067` と uplift が強く、他の日も `2024-09-01 -7.0 -> -2.0`, `2024-09-08 -8.0 -> -5.0`, `2024-09-16 -11.0 -> -4.0`, `2024-09-29 -5.0 -> -1.0` のように損失圧縮が主だった。例外的に `2024-09-22` は baseline `-4.6` に対して long-horizon `-3.0` で net は改善したが ROI は `0.54 -> 0.0` に下がる。運用上は「September に profitable day を少し取り逃してでも、月全体 exposure を大きく削る」守備的 override と読むのが妥当である。
 
 この 10 日に対して baseline の `policy_date_signal_report` と current Sep guard の `staged_trace_date_report` も full-month で切り直したが、guard を局所的に緩める simple signal は見つからなかった。`2024-09-28` は baseline 側で `ev_mean≈1.0303`, `edge_mean≈+0.0303` と最も強い aggregate signal を持つのに realized net は `-2.0` のままで、以前の late-September reading と同様に EV/edge threshold は separator にならない。trace 側では deepest-stage selected が `2024-09-15` と `2024-09-28` にしか現れず、どちらも net-negative なので、deep trace presence も「guard を外すべき良い日」のマーカーではなく高リスク subset flag に留まる。さらに重要なのは、September 10 日の realized net が current guard で 10/10 日すべて baseline 以上だった点である。したがって current long-horizon alias は、現時点では緩和より維持が正しい。
+
+同日の次フェーズでは、Sep guard をこれ以上いじる代わりに、shared formal bottleneck そのものを minimum-change で救えるかを再点検した。対象は baseline と Sep guard が共通して抱える blocked family `portfolio blend=0.8 / min_prob=0.03 / top_k=1 / min_ev=0.95` である。`current_derisk_plus_sep_guard` 系の fold compare / drilldown / mitigation shortlist を見直すと、runtime で表現できる既存の portfolio-family variant は結局 3 種類しかなく、読みも変わらなかった。fold1/2/3/5 は主に `min_bets`、fold4 は `min_final_bankroll` に止まり、fold4 の bankroll recovery は毎回 `min_ev=1.0` に上げて `63 -> 35` bets まで落とす以外に見つからない。
+
+重要なのは、この formal mitigation 候補が actual-date では broad operational fix になっていない点である。既存 artifact を replay compare で突き合わせると、August weekends では baseline `34 bets / +20.1 net` に対して `portfolio_ev_only` が `9 bets / -9.0`、`portfolio_lower_blend` が `2 bets / -2.0`、`staged_mitigation_ev_guard` でも `6 bets / -6.0` まで崩れる。一方で August baseline family を stage1 に戻した `staged_aug_baseline_stage1` は 6 日すべて baseline と完全一致し、actual-date headroom をまったく作らない。つまり current runtime override の表現力では、broad な August/global portfolio rewrite は「August を壊す」か「baseline と同一」かのどちらかに収束しており、formal bottleneck の最小変更 rescue にはなっていない。
+
+したがって 2026-03-22 時点の運用上の整理は次の通りである。`current_long_horizon_serving` は引き続き current operational answer として保持する。一方、formal 改善の次候補を作るときは `portfolio_ev_only` / `portfolio_lower_blend` / その broad staged variant をそのまま serving に昇格させない。次の探索軸は、current date-override-only runtime では表現できていない narrower regime split か、serving 昇格前提ではない analysis-only formal-support candidate として切り分けるのが妥当である。
 
 ### 5.1 stage path の横比較
 

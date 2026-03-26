@@ -104,6 +104,8 @@
 2. 簡易 rollback 候補を正式な予備運用ルールとして固める。
 3. actual calendar での検証範囲を広げ、短期の偶然を減らす。
 
+進行中の優先順位と最新の実行順は、書き捨ての会話ログではなく [roadmap.md](roadmap.md) を正本として更新する。
+
 ## 9. 読み進め方
 
 - システムの中身を知りたい場合は [system_architecture.md](system_architecture.md) を読む。

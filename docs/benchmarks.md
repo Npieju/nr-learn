@@ -6,6 +6,7 @@
 
 日常運用の区切り方や `revision` の切り方は、[development_flow.md](development_flow.md) を参照する。
 formal な evaluation 導線は、[evaluation_guide.md](evaluation_guide.md) を参照する。
+対外向けに現状の数値だけを説明したい場合は、[public_benchmark_snapshot.md](public_benchmark_snapshot.md) を参照する。
 
 ここで決めるのは次の 3 点である。
 

@@ -10,7 +10,7 @@
 
 ## 正本
 
-このプロジェクトの理解に必要な中核文書は次の 6 本である。
+このプロジェクトの理解に必要な中核文書は次の 7 本である。
 
 1. [project_overview.md](project_overview.md)
 2. [system_architecture.md](system_architecture.md)
@@ -18,6 +18,9 @@
 4. [development_flow.md](development_flow.md)
 5. [evaluation_guide.md](evaluation_guide.md)
 6. [command_reference.md](command_reference.md)
+7. [public_benchmark_snapshot.md](public_benchmark_snapshot.md)
+
+進行中の優先順位と最新の計画は [roadmap.md](roadmap.md) を参照する。
 
 ## 補助資料
 
@@ -45,6 +48,10 @@
   - `run_evaluate.py`、`stability_assessment`、`run_promotion_gate.py`、`revision` 単位の正式判断をまとめた評価ガイド。
 - [command_reference.md](command_reference.md)
   - 日常で使う主要 CLI の入口を用途別にまとめた実行リファレンス。
+- [public_benchmark_snapshot.md](public_benchmark_snapshot.md)
+  - 対外説明で使う current benchmark の要約と、現在の採用位置づけをまとめた公開向け snapshot。
+- [roadmap.md](roadmap.md)
+  - 進行中の優先順位、判断済み事項、次に進める順番を管理する開発ロードマップ。
 
 ### 補助資料
 
