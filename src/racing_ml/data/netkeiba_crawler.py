@@ -32,6 +32,25 @@ RACECARD_GROUND_PATTERN = re.compile(r"馬場\s*:\s*(?P<ground>[^\s/|]+)")
 BRACKET_PREFIX_PATTERN = re.compile(r"^\[[^\]]+\]\s*")
 BRACKET_PREFIX_CAPTURE_PATTERN = re.compile(r"^\[(?P<prefix>[^\]]+)\]\s*")
 SAFE_FILENAME_PATTERN = re.compile(r"[^0-9A-Za-z._-]+")
+MOBILE_DATE_PATTERN = re.compile(r"(?P<month>\d{1,2})/(?P<day>\d{1,2})\([^)]+\)")
+MOBILE_TRACK_PATTERN = re.compile(r"今週へ\s+(?P<track>札幌|函館|福島|新潟|東京|中山|中京|京都|阪神|小倉)")
+MOBILE_RACE_INFO_PATTERN = re.compile(
+    r"(?P<race_no>\d{1,2})R\s+(?P<condition>.*?)\s+\d{1,2}:\d{2}\s+"
+    r"(?P<surface>芝|ダート|ダ|障害)\s*(?P<distance>\d{3,4})m\s*(?:\((?P<direction>右|左|直線)\))?\s+"
+    r"\d+頭\s+(?P<weather>晴|曇|雨|雪)\s+(?P<ground>良|稍重|重|不良)"
+)
+MOBILE_RESULT_WEIGHT_PATTERN = re.compile(r"(?P<weight>\d+kg\s*\([^)]+\))")
+MOBILE_RESULT_CARRY_PATTERN = re.compile(
+    r"(?P<sex>[牡牝セ])(?P<age>\d+)(?:\S+)?\s+(?P<weight>\d+kg\s*\([^)]+\))\s+"
+    r"(?P<jockey>.+?)\s+(?P<carried>\d+(?:\.\d+)?)\s+(?P<trainer_region>栗東|美浦|地方|海外)･(?P<trainer>.+)$"
+)
+MOBILE_CARD_JOCKEY_PATTERN = re.compile(
+    r"(?P<sex>[牡牝セ])(?P<age>\d+)(?:\S+)?\s+(?P<jockey>.+?)\s+(?P<carried>\d+(?:\.\d+)?)$"
+)
+MOBILE_ODDS_PATTERN = re.compile(r"(?P<odds>\d+(?:\.\d+)?)倍\s+(?P<popularity>\d+)人気")
+MOBILE_CARD_ODDS_PATTERN = re.compile(r"(?P<odds>\d+(?:\.\d+)?|---\.--)\s*\(\s*(?P<popularity>\d+|\*\*)人気\s*\)")
+MOBILE_TIME_PATTERN = re.compile(r"(?P<time>\d+:\d+\.\d+)")
+MOBILE_CLOSING_PATTERN = re.compile(r"\((?P<closing>\d+\.\d+)\)")
 FULLWIDTH_DIGIT_TRANSLATION = str.maketrans("０１２３４５６７８９", "0123456789")
 CLASS_TOKEN_REGEX = (
     r"未出走|新馬|未勝利|300万下|400万下|500万下|600万下|700万下|"
@@ -68,6 +87,7 @@ class RequestSettings:
     retry_backoff_sec: float
     overwrite: bool
     parse_only: bool
+    pedigree_prefer_mobile: bool = False
 
 
 def _normalize_text(value: object) -> str:
@@ -98,6 +118,11 @@ def _decode_html_bytes(content: bytes) -> str:
     for encoding in ("euc-jp", "cp932", "utf-8"):
         try:
             return content.decode(encoding)
+        except UnicodeDecodeError:
+            continue
+    for encoding in ("euc-jp", "cp932", "utf-8"):
+        try:
+            return content.decode(encoding, errors="ignore")
         except UnicodeDecodeError:
             continue
     return content.decode("utf-8", errors="ignore")
@@ -319,6 +344,234 @@ def _extract_race_metadata(soup: BeautifulSoup) -> dict[str, Any]:
     }
 
 
+def _find_table_with_classes(soup: BeautifulSoup, required_classes: list[str]) -> Tag | None:
+    required = set(required_classes)
+    for table in soup.find_all("table"):
+        classes = set(table.get("class") or [])
+        if required.issubset(classes):
+            return table
+    return None
+
+
+def _extract_mobile_race_metadata(soup: BeautifulSoup, race_id: str) -> dict[str, Any]:
+    page_text = _normalize_text(soup.get_text(" ", strip=True))
+    year = race_id[:4]
+
+    date_value = None
+    track = None
+    date_match = MOBILE_DATE_PATTERN.search(page_text)
+    if date_match is not None:
+        month = int(date_match.group("month"))
+        day = int(date_match.group("day"))
+        date_value = f"{year}-{month:02d}-{day:02d}"
+    track_match = MOBILE_TRACK_PATTERN.search(page_text)
+    if track_match is not None:
+        track = track_match.group("track")
+
+    info_match = MOBILE_RACE_INFO_PATTERN.search(page_text)
+    condition = None
+    surface = None
+    distance = None
+    weather = None
+    ground = None
+    direction = None
+    if info_match is not None:
+        surface = info_match.group("surface")
+        if surface == "ダ":
+            surface = "ダート"
+        distance = info_match.group("distance")
+        weather = info_match.group("weather")
+        ground = info_match.group("ground")
+        direction = info_match.group("direction")
+
+    for heading in soup.find_all("h1"):
+        heading_text = _normalize_text(heading.get_text(" ", strip=True))
+        if heading_text and heading_text != "netkeiba":
+            condition = heading_text
+            break
+
+    return {
+        "date": date_value,
+        "track": track,
+        "distance": distance,
+        "weather": weather,
+        "ground_condition": ground,
+        "競争条件": condition,
+        "リステッド・重賞競走": _extract_stakes_grade(page_text),
+        "芝・ダート区分": surface,
+        "芝・ダート区分2": None,
+        "右左回り・直線区分": direction,
+        "内・外・襷区分": None,
+    }
+
+
+def _parse_mobile_result_runner_text(text: str) -> dict[str, Any]:
+    normalized = _normalize_text(text)
+    match = MOBILE_RESULT_CARRY_PATTERN.search(normalized)
+    if match is None:
+        return {}
+    return {
+        "sex": match.group("sex"),
+        "age": int(match.group("age")),
+        "weight": match.group("weight").replace(" ", ""),
+        "jockey_id": _normalize_text(match.group("jockey")),
+        "斤量": match.group("carried"),
+        "東西・外国・地方区分": match.group("trainer_region"),
+        "trainer_id": _normalize_text(match.group("trainer")),
+    }
+
+
+def _parse_mobile_result_time_cell(text: str) -> dict[str, Any]:
+    normalized = _normalize_text(text)
+    output: dict[str, Any] = {}
+    time_match = MOBILE_TIME_PATTERN.search(normalized)
+    closing_match = MOBILE_CLOSING_PATTERN.search(normalized)
+    if time_match is not None:
+        output["finish_time"] = time_match.group("time")
+    if closing_match is not None:
+        output["closing_time_3f"] = closing_match.group("closing")
+    return output
+
+
+def _parse_mobile_odds_cell(text: str) -> dict[str, Any]:
+    normalized = _normalize_text(text)
+    match = MOBILE_ODDS_PATTERN.search(normalized)
+    if match is None:
+        return {}
+    return {
+        "odds": match.group("odds"),
+        "popularity": match.group("popularity"),
+    }
+
+
+def _parse_mobile_odds_tag(cell: Tag | None) -> dict[str, Any]:
+    if cell is None:
+        return {}
+
+    odds_tag = cell.find("dt", class_="Odds_Ninki")
+    if odds_tag is None:
+        odds_tag = cell.find("dt")
+    popularity_tag = cell.find("dd")
+    odds = _normalize_text(odds_tag.get_text(" ", strip=True) if odds_tag is not None else "")
+    popularity_text = _normalize_text(popularity_tag.get_text(" ", strip=True) if popularity_tag is not None else "")
+
+    output: dict[str, Any] = {}
+    if odds:
+        odds_match = re.search(r"\d+(?:\.\d+)?", odds)
+        if odds_match is not None:
+            output["odds"] = odds_match.group(0)
+    if popularity_text:
+        popularity_match = re.search(r"(\d+)", popularity_text)
+        if popularity_match is not None:
+            output["popularity"] = popularity_match.group(1)
+
+    if output:
+        return output
+    return _parse_mobile_odds_cell(cell.get_text(" ", strip=True))
+
+
+def parse_netkeiba_race_result_mobile_html(html: str, race_id: str) -> pd.DataFrame:
+    soup = BeautifulSoup(html, "html.parser")
+    table = _find_table_with_classes(soup, ["RaceCommon_Table", "ResultRefund"])
+    if table is None:
+        raise ValueError(f"Mobile race result table not found for race_id={race_id}")
+
+    metadata = _extract_mobile_race_metadata(soup, race_id)
+    rows: list[dict[str, Any]] = []
+    for row_tag in table.find_all("tr")[1:]:
+        cells = row_tag.find_all("td", recursive=False)
+        if len(cells) < 5:
+            continue
+
+        rank_text = _normalize_text(cells[0].get_text(" ", strip=True)).replace(" 着", "")
+        frame_no = _normalize_text(cells[1].get_text(" ", strip=True))
+        gate_no = _normalize_text(cells[2].get_text(" ", strip=True))
+        horse_text = _normalize_text(cells[3].get_text(" ", strip=True))
+        horse_name = _extract_anchor_text(cells[3], HORSE_LINK_PATTERN)
+        horse_key = _extract_anchor_id(cells[3], HORSE_LINK_PATTERN)
+
+        row: dict[str, Any] = {
+            **metadata,
+            "race_id": race_id,
+            "horse_id": _build_race_horse_id(race_id, gate_no),
+            "horse_key": horse_key,
+            "horse_name": horse_name,
+            "rank": rank_text,
+            "frame_no": frame_no,
+            "gate_no": gate_no,
+        }
+        row.update(_parse_mobile_result_runner_text(horse_text))
+        row.update(_parse_mobile_result_time_cell(cells[4].get_text(" ", strip=True)))
+        if len(cells) >= 6:
+            row.update(_parse_mobile_odds_tag(cells[5]))
+        rows.append(row)
+
+    if not rows:
+        raise ValueError(f"No mobile race result rows parsed for race_id={race_id}")
+    return pd.DataFrame(rows)
+
+
+def parse_netkeiba_race_card_mobile_past_html(html: str, race_id: str) -> pd.DataFrame:
+    soup = BeautifulSoup(html, "html.parser")
+    table = _find_table_with_classes(soup, ["Shutuba_Table", "Shutuba_Past5_Table"])
+    if table is None:
+        raise ValueError(f"Mobile past race card table not found for race_id={race_id}")
+
+    metadata = _extract_mobile_race_metadata(soup, race_id)
+    rows: list[dict[str, Any]] = []
+    for row_tag in table.find_all("tr")[1:]:
+        cells = row_tag.find_all("td", recursive=False)
+        if len(cells) < 4:
+            continue
+
+        gate_no = _normalize_text(cells[0].get_text(" ", strip=True))
+        info_text = _normalize_text(cells[2].get_text(" ", strip=True))
+        jockey_text = _normalize_text(cells[3].get_text(" ", strip=True))
+        horse_name = _extract_anchor_text(cells[2], HORSE_LINK_PATTERN)
+        horse_key = _extract_anchor_id(cells[2], HORSE_LINK_PATTERN)
+        trainer_text = _extract_anchor_text(cells[2], TRAINER_LINK_PATTERN)
+        trainer_region = None
+        trainer_name = None
+        if trainer_text and "・" in trainer_text:
+            trainer_region, trainer_name = trainer_text.split("・", 1)
+
+        jockey_name = _extract_anchor_text(cells[3], JOCKEY_LINK_PATTERN)
+        sex_age_match = MOBILE_CARD_JOCKEY_PATTERN.search(jockey_text)
+        odds_match = MOBILE_CARD_ODDS_PATTERN.search(info_text)
+        weight_match = MOBILE_RESULT_WEIGHT_PATTERN.search(info_text)
+
+        row: dict[str, Any] = {
+            **metadata,
+            "race_id": race_id,
+            "horse_id": _build_race_horse_id(race_id, gate_no),
+            "horse_key": horse_key,
+            "horse_name": horse_name,
+            "frame_no": None,
+            "gate_no": gate_no,
+            "weight": weight_match.group("weight").replace(" ", "") if weight_match is not None else None,
+            "jockey_id": jockey_name,
+            "jockey_key": _extract_anchor_id(cells[3], JOCKEY_LINK_PATTERN),
+            "東西・外国・地方区分": trainer_region,
+            "trainer_id": trainer_name,
+            "trainer_key": _extract_anchor_id(cells[2], TRAINER_LINK_PATTERN),
+        }
+        if sex_age_match is not None:
+            row["sex"] = sex_age_match.group("sex")
+            row["age"] = int(sex_age_match.group("age"))
+            row["斤量"] = sex_age_match.group("carried")
+            if not row.get("jockey_id"):
+                row["jockey_id"] = _normalize_text(sex_age_match.group("jockey"))
+        if odds_match is not None and odds_match.group("odds") != "---.--":
+            row["odds"] = odds_match.group("odds")
+        if odds_match is not None and odds_match.group("popularity") != "**":
+            row["popularity"] = odds_match.group("popularity")
+        rows.append(row)
+
+    if not rows:
+        raise ValueError(f"No mobile past race card rows parsed for race_id={race_id}")
+    return pd.DataFrame(rows)
+
+
 def _build_race_horse_id(race_id: str, gate_no: str | None) -> str | None:
     if gate_no is None:
         return None
@@ -534,26 +787,69 @@ def _extract_horse_name(profile_soup: BeautifulSoup, horse_key: str) -> str | No
 
     header_link = profile_soup.find("a", href=re.compile(rf"/horse/{re.escape(horse_key)}/"))
     if header_link is None:
-        return None
+        heading = profile_soup.find("h1")
+        heading_text = _normalize_text(heading.get_text(" ", strip=True) if heading is not None else "")
+        return heading_text or None
     return _normalize_text(header_link.get_text(" ", strip=True))
+
+
+def _extract_profile_label_map(profile_soup: BeautifulSoup) -> dict[str, str]:
+    for table in profile_soup.find_all("table"):
+        label_to_value: dict[str, str] = {}
+        for row in table.find_all("tr"):
+            label = row.find("th")
+            value = row.find("td")
+            if label is None or value is None:
+                continue
+            label_to_value[_normalize_header(label.get_text(" ", strip=True))] = _normalize_text(value.get_text(" ", strip=True))
+        if {"馬主", "生産者(産地)", "父", "母"} & set(label_to_value):
+            return label_to_value
+    return {}
+
+
+def _parse_profile_pedigree_fields(profile_html: str) -> dict[str, Any]:
+    soup = BeautifulSoup(profile_html, "html.parser")
+    label_to_value = _extract_profile_label_map(soup)
+    sire_name = label_to_value.get("父")
+    dam_raw = label_to_value.get("母")
+    if sire_name is None or dam_raw is None:
+        raise ValueError("Profile page does not contain fallback pedigree fields")
+
+    damsire_name = None
+    dam_name = dam_raw
+    if "母父:" in dam_raw:
+        dam_name, damsire_name = dam_raw.split("母父:", maxsplit=1)
+
+    return {
+        "sire_name": _normalize_text(sire_name) or None,
+        "dam_name": _normalize_text(dam_name) or None,
+        "damsire_name": _normalize_text(damsire_name) or None,
+    }
 
 
 def _parse_profile_fields(profile_html: str, horse_key: str) -> dict[str, Any]:
     soup = BeautifulSoup(profile_html, "html.parser")
-    table = _find_required_table(soup, class_name="db_prof_table")
-    label_to_value: dict[str, str] = {}
-    for row in table.find_all("tr"):
-        label = row.find("th")
-        value = row.find("td")
-        if label is None or value is None:
-            continue
-        label_to_value[_normalize_header(label.get_text(" ", strip=True))] = _normalize_text(value.get_text(" ", strip=True))
+    try:
+        table = _find_required_table(soup, class_name="db_prof_table")
+        label_to_value: dict[str, str] = {}
+        for row in table.find_all("tr"):
+            label = row.find("th")
+            value = row.find("td")
+            if label is None or value is None:
+                continue
+            label_to_value[_normalize_header(label.get_text(" ", strip=True))] = _normalize_text(value.get_text(" ", strip=True))
+    except ValueError:
+        label_to_value = _extract_profile_label_map(soup)
+
+    breeder_name = label_to_value.get("生産者") or label_to_value.get("生産者(産地)")
+    if breeder_name is not None:
+        breeder_name = breeder_name.split("(", maxsplit=1)[0].strip()
 
     return {
         "horse_key": horse_key,
         "horse_name": _extract_horse_name(soup, horse_key),
         "owner_name": label_to_value.get("馬主"),
-        "breeder_name": label_to_value.get("生産者"),
+        "breeder_name": breeder_name,
     }
 
 
@@ -578,7 +874,10 @@ def _parse_pedigree_fields(pedigree_html: str) -> dict[str, Any]:
 
 def parse_netkeiba_pedigree_html(profile_html: str, pedigree_html: str, horse_key: str) -> pd.DataFrame:
     row = _parse_profile_fields(profile_html, horse_key)
-    row.update(_parse_pedigree_fields(pedigree_html))
+    try:
+        row.update(_parse_pedigree_fields(pedigree_html))
+    except ValueError:
+        row.update(_parse_profile_pedigree_fields(profile_html))
     return pd.DataFrame([row])
 
 
@@ -663,7 +962,16 @@ def _dedupe_frame(frame: pd.DataFrame, dedupe_on: list[str]) -> pd.DataFrame:
     columns = [column for column in dedupe_on if column in frame.columns]
     if not columns:
         return frame.reset_index(drop=True)
-    return frame.drop_duplicates(subset=columns, keep="first").reset_index(drop=True)
+    work = frame.copy()
+    dedupe_keys: list[str] = []
+    for column in columns:
+        key_column = f"__dedupe_key__{column}"
+        normalized = work[column].where(work[column].notna(), "").astype(str).str.strip()
+        normalized = normalized.replace({"nan": "", "None": "", "NaT": ""})
+        work[key_column] = normalized
+        dedupe_keys.append(key_column)
+    work = work.drop_duplicates(subset=dedupe_keys, keep="first")
+    return work.drop(columns=dedupe_keys).reset_index(drop=True)
 
 
 def _load_existing_output_frame(output_file: Path) -> pd.DataFrame:
@@ -686,7 +994,15 @@ def _write_cumulative_output(output_file: Path, batch_frame: pd.DataFrame, dedup
         combined = pd.concat([existing, batch_frame], ignore_index=True, sort=False)
         columns = [column for column in dedupe_on if column in combined.columns]
         if columns:
-            combined = combined.drop_duplicates(subset=columns, keep="last")
+            dedupe_keys: list[str] = []
+            for column in columns:
+                key_column = f"__dedupe_key__{column}"
+                normalized = combined[column].where(combined[column].notna(), "").astype(str).str.strip()
+                normalized = normalized.replace({"nan": "", "None": "", "NaT": ""})
+                combined[key_column] = normalized
+                dedupe_keys.append(key_column)
+            combined = combined.drop_duplicates(subset=dedupe_keys, keep="last")
+            combined = combined.drop(columns=dedupe_keys)
         combined = combined.reset_index(drop=True)
 
     write_csv_file(output_file, combined, index=False, label="crawl output")
@@ -883,16 +1199,30 @@ def _crawl_race_result_target(
         raw_html_path = raw_html_dir / "race_result" / f"{_safe_filename(race_id)}.html"
         url = urljoin(base_url, f"/race/{race_id}/")
         try:
-            html, fetched, last_fetch_at = _load_or_fetch_html(
-                session=session,
-                url=url,
-                output_path=raw_html_path,
-                settings=settings,
-                last_fetch_at=last_fetch_at,
-            )
-            if fetched:
-                fetched_count += 1
-            frames.append(parse_netkeiba_race_result_html(html, race_id))
+            try:
+                html, fetched, last_fetch_at = _load_or_fetch_html(
+                    session=session,
+                    url=url,
+                    output_path=raw_html_path,
+                    settings=settings,
+                    last_fetch_at=last_fetch_at,
+                )
+                if fetched:
+                    fetched_count += 1
+                frames.append(parse_netkeiba_race_result_html(html, race_id))
+            except Exception:
+                mobile_path = raw_html_dir / "race_result_mobile" / f"{_safe_filename(race_id)}.html"
+                mobile_url = f"https://race.sp.netkeiba.com/?pid=race_result&race_id={race_id}"
+                mobile_html, mobile_fetched, last_fetch_at = _load_or_fetch_html(
+                    session=session,
+                    url=mobile_url,
+                    output_path=mobile_path,
+                    settings=settings,
+                    last_fetch_at=last_fetch_at,
+                )
+                if mobile_fetched:
+                    fetched_count += 1
+                frames.append(parse_netkeiba_race_result_mobile_html(mobile_html, race_id))
         except Exception as error:
             failures.append({"id": race_id, "stage": "race_result", "error": str(error)})
 
@@ -980,16 +1310,44 @@ def _crawl_race_card_target(
         raw_html_path = raw_html_dir / "race_card" / f"{_safe_filename(race_id)}.html"
         url = urljoin(base_url, f"/race/shutuba.html?race_id={race_id}")
         try:
+            mobile_past_path = raw_html_dir / "race_card_mobile_past" / f"{_safe_filename(race_id)}.html"
+            mobile_past_url = f"https://race.sp.netkeiba.com/?pid=shutuba_past&race_id={race_id}"
             html, fetched, last_fetch_at = _load_or_fetch_html(
                 session=session,
-                url=url,
-                output_path=raw_html_path,
+                url=mobile_past_url,
+                output_path=mobile_past_path,
                 settings=settings,
                 last_fetch_at=last_fetch_at,
             )
             if fetched:
                 fetched_count += 1
-            frames.append(parse_netkeiba_race_card_html(html, race_id))
+            try:
+                frames.append(parse_netkeiba_race_card_mobile_past_html(html, race_id))
+            except Exception:
+                html, fetched, last_fetch_at = _load_or_fetch_html(
+                    session=session,
+                    url=url,
+                    output_path=raw_html_path,
+                    settings=settings,
+                    last_fetch_at=last_fetch_at,
+                )
+                if fetched:
+                    fetched_count += 1
+                try:
+                    frames.append(parse_netkeiba_race_card_html(html, race_id))
+                except Exception:
+                    mobile_path = raw_html_dir / "race_card_mobile" / f"{_safe_filename(race_id)}.html"
+                    mobile_url = f"https://race.sp.netkeiba.com/race/shutuba.html?race_id={race_id}"
+                    mobile_html, mobile_fetched, last_fetch_at = _load_or_fetch_html(
+                        session=session,
+                        url=mobile_url,
+                        output_path=mobile_path,
+                        settings=settings,
+                        last_fetch_at=last_fetch_at,
+                    )
+                    if mobile_fetched:
+                        fetched_count += 1
+                    frames.append(parse_netkeiba_race_card_mobile_past_html(mobile_html, race_id))
         except Exception as error:
             failures.append({"id": race_id, "stage": "race_card", "error": str(error)})
 
@@ -1074,32 +1432,82 @@ def _crawl_pedigree_target(
     current_batch_rows = 0
 
     for index, horse_key in enumerate(ids, start=1):
+        # Pedigree runs can span many hours; use a fresh session per horse to avoid
+        # carrying cookies or connection state across thousands of profile fetches.
+        horse_session = _build_session(settings)
         profile_path = raw_html_dir / "pedigree" / f"{_safe_filename(horse_key)}.profile.html"
         pedigree_path = raw_html_dir / "pedigree" / f"{_safe_filename(horse_key)}.pedigree.html"
+        mobile_profile_path = raw_html_dir / "pedigree" / f"{_safe_filename(horse_key)}.profile.mobile.html"
+        mobile_pedigree_path = raw_html_dir / "pedigree" / f"{_safe_filename(horse_key)}.pedigree.mobile.html"
         profile_url = urljoin(base_url, f"/horse/{horse_key}/")
         pedigree_url = urljoin(base_url, f"/horse/ajax_horse_pedigree.html?id={horse_key}")
+        mobile_profile_url = f"https://db.sp.netkeiba.com/horse/{horse_key}/"
+        mobile_pedigree_url = f"https://db.sp.netkeiba.com/horse/ped/{horse_key}/"
         try:
-            profile_html, fetched_profile, last_fetch_at = _load_or_fetch_html(
-                session=session,
-                url=profile_url,
-                output_path=profile_path,
-                settings=settings,
-                last_fetch_at=last_fetch_at,
-            )
-            if fetched_profile:
-                fetched_count += 1
-            pedigree_html, fetched_pedigree, last_fetch_at = _load_or_fetch_html(
-                session=session,
-                url=pedigree_url,
-                output_path=pedigree_path,
-                settings=settings,
-                last_fetch_at=last_fetch_at,
-            )
-            if fetched_pedigree:
-                fetched_count += 1
-            frames.append(parse_netkeiba_pedigree_html(profile_html, pedigree_html, horse_key))
+            def _fetch_and_parse_desktop() -> None:
+                nonlocal last_fetch_at, fetched_count
+                profile_html, fetched_profile, last_fetch_at = _load_or_fetch_html(
+                    session=horse_session,
+                    url=profile_url,
+                    output_path=profile_path,
+                    settings=settings,
+                    last_fetch_at=last_fetch_at,
+                )
+                if fetched_profile:
+                    fetched_count += 1
+                pedigree_html, fetched_pedigree, last_fetch_at = _load_or_fetch_html(
+                    session=horse_session,
+                    url=pedigree_url,
+                    output_path=pedigree_path,
+                    settings=settings,
+                    last_fetch_at=last_fetch_at,
+                )
+                if fetched_pedigree:
+                    fetched_count += 1
+                frames.append(parse_netkeiba_pedigree_html(profile_html, pedigree_html, horse_key))
+
+            def _fetch_and_parse_mobile() -> None:
+                nonlocal last_fetch_at, fetched_count
+                profile_html, fetched_profile, last_fetch_at = _load_or_fetch_html(
+                    session=horse_session,
+                    url=mobile_profile_url,
+                    output_path=mobile_profile_path,
+                    settings=settings,
+                    last_fetch_at=last_fetch_at,
+                )
+                if fetched_profile:
+                    fetched_count += 1
+                pedigree_html, fetched_pedigree, last_fetch_at = _load_or_fetch_html(
+                    session=horse_session,
+                    url=mobile_pedigree_url,
+                    output_path=mobile_pedigree_path,
+                    settings=settings,
+                    last_fetch_at=last_fetch_at,
+                )
+                if fetched_pedigree:
+                    fetched_count += 1
+                frames.append(parse_netkeiba_pedigree_html(profile_html, pedigree_html, horse_key))
+
+            if settings.pedigree_prefer_mobile:
+                try:
+                    _fetch_and_parse_mobile()
+                except Exception as mobile_error:
+                    try:
+                        _fetch_and_parse_desktop()
+                    except Exception as desktop_error:
+                        raise RuntimeError(f"mobile={mobile_error}; desktop={desktop_error}") from desktop_error
+            else:
+                try:
+                    _fetch_and_parse_desktop()
+                except Exception as desktop_error:
+                    try:
+                        _fetch_and_parse_mobile()
+                    except Exception as mobile_error:
+                        raise RuntimeError(f"desktop={desktop_error}; mobile={mobile_error}") from mobile_error
         except Exception as error:
             failures.append({"id": horse_key, "stage": "pedigree", "error": str(error)})
+        finally:
+            horse_session.close()
 
         if checkpoint_interval > 0 and (index % checkpoint_interval) == 0:
             checkpoint_frame = _build_checkpoint_batch_frame(frames, dedupe_on)
@@ -1192,6 +1600,7 @@ def crawl_netkeiba_from_config(
         retry_backoff_sec=float(crawl_cfg.get("retry_backoff_sec", 2.0)),
         overwrite=bool(crawl_cfg.get("overwrite", False) or refresh),
         parse_only=bool(parse_only),
+        pedigree_prefer_mobile=bool(crawl_cfg.get("pedigree_prefer_mobile", False)),
     )
 
     raw_html_dir = _resolve_path(crawl_cfg.get("raw_html_dir", "data/external/netkeiba/raw_html"), base_dir)

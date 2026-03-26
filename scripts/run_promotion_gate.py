@@ -190,6 +190,49 @@ def _summarize_wf_feasibility_diagnostics(
     }
 
 
+def _summarize_formal_benchmark(folds: list[dict[str, Any]]) -> dict[str, Any]:
+    feasible_entries: list[dict[str, Any]] = []
+    weighted_roi_numerator = 0.0
+    total_bets = 0
+
+    for fold in folds:
+        best_feasible = (fold or {}).get("best_feasible")
+        if not isinstance(best_feasible, dict):
+            continue
+
+        bets_raw = best_feasible.get("bets")
+        roi_raw = best_feasible.get("roi")
+        try:
+            bets = int(bets_raw or 0)
+            roi = float(roi_raw)
+        except (TypeError, ValueError):
+            continue
+        if bets <= 0:
+            continue
+
+        weighted_roi_numerator += roi * bets
+        total_bets += bets
+        feasible_entries.append(
+            {
+                "fold": int((fold or {}).get("fold") or 0),
+                "strategy_kind": best_feasible.get("strategy_kind"),
+                "bets": bets,
+                "roi": roi,
+                "final_bankroll": best_feasible.get("final_bankroll"),
+                "max_drawdown": best_feasible.get("max_drawdown"),
+                "params": best_feasible.get("params"),
+            }
+        )
+
+    weighted_roi = (weighted_roi_numerator / total_bets) if total_bets > 0 else None
+    return {
+        "feasible_fold_count": int(len(feasible_entries)),
+        "weighted_roi": weighted_roi,
+        "bets_total": int(total_bets),
+        "folds": feasible_entries,
+    }
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--evaluation-manifest", default=DEFAULT_EVALUATION_MANIFEST)
@@ -350,6 +393,7 @@ def main() -> int:
             folds,
             policy_constraints=(wf_summary_payload or {}).get("policy_constraints") if isinstance((wf_summary_payload or {}).get("policy_constraints"), dict) else None,
         )
+        formal_benchmark = _summarize_formal_benchmark(folds)
         if folds and valid_probe_only_count == len(folds) and test_probe_only_count == len(folds):
             warnings.append("All walk-forward valid/test slices are probe_only; use fold-level ROI only as directional evidence.")
         if feasible_fold_count == 0 and wf_diagnostics.get("dominant_failure_reason") is not None:
@@ -369,6 +413,7 @@ def main() -> int:
             "blocking_reasons": blocking_reasons,
             "warnings": warnings,
             "wf_diagnostics": wf_diagnostics,
+            "formal_benchmark": formal_benchmark,
             "summary": {
                 "profile": manifest_payload.get("profile"),
                 "config": manifest_payload.get("config"),
@@ -384,6 +429,9 @@ def main() -> int:
                 "wf_dominant_failure_reason": wf_diagnostics.get("dominant_failure_reason"),
                 "wf_binding_min_bets_source_counts": wf_diagnostics.get("binding_min_bets_source_counts"),
                 "wf_max_infeasible_bets_observed": wf_diagnostics.get("max_infeasible_bets_observed"),
+                "formal_benchmark_weighted_roi": formal_benchmark.get("weighted_roi"),
+                "formal_benchmark_bets_total": formal_benchmark.get("bets_total"),
+                "formal_benchmark_feasible_fold_count": formal_benchmark.get("feasible_fold_count"),
                 "auto_resolved_wf_summary": bool(auto_resolved_wf_path),
             },
         }

@@ -1,0 +1,19 @@
+crawl:
+  base_url: "https://db.netkeiba.com"
+  user_agent: "nr-learn-netkeiba-crawler/0.1"
+  timeout_sec: 20
+  delay_sec: 0.05
+  pedigree_prefer_mobile: true
+  retry_count: 3
+  retry_backoff_sec: 2.0
+  overwrite: false
+  raw_html_dir: "data/external/netkeiba/raw_html"
+  manifest_file: "artifacts/reports/netkeiba_crawl_manifest_2025_pedigree.json"
+  targets:
+    pedigree:
+      enabled: true
+      id_file: "data/external/netkeiba/ids/horse_keys_missing_2025.csv"
+      id_column: "horse_key"
+      output_file: "data/external/netkeiba/pedigree/netkeiba_pedigree_crawled.csv"
+      dedupe_on:
+        - "horse_key"

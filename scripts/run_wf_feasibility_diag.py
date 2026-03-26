@@ -34,7 +34,12 @@ from racing_ml.evaluation.policy import (
 )
 from racing_ml.evaluation.scoring import generate_prediction_outputs, prepare_scored_frame, resolve_odds_column
 from racing_ml.evaluation.stability import build_stability_guardrail
-from racing_ml.evaluation.walk_forward import build_nested_wf_slices, fit_isotonic, _resolve_search_candidate_values
+from racing_ml.evaluation.walk_forward import (
+    _resolve_regime_search_config,
+    _resolve_search_candidate_values,
+    build_nested_wf_slices,
+    fit_isotonic,
+)
 from racing_ml.features.builder import build_features
 from racing_ml.features.selection import prepare_model_input_frame, resolve_feature_selection, resolve_model_feature_selection
 
@@ -154,64 +159,66 @@ def _summarize_fold_candidates(
     search_config: dict[str, object] | None,
     mode: str,
 ) -> tuple[dict[str, object], list[dict[str, object]]]:
+    resolved_search_config = _resolve_regime_search_config(search_config, frame=valid_df)
+
     blend_candidates = _resolve_search_candidate_values(
-        search_config,
+        resolved_search_config,
         mode=mode,
         key="blend_weights",
         default=[0.2, 0.4, 0.6, 0.8],
         cast=float,
     )
     edge_candidates = _resolve_search_candidate_values(
-        search_config,
+        resolved_search_config,
         mode=mode,
         key="min_edges",
         default=[0.01, 0.03, 0.05],
         cast=float,
     )
     min_prob_candidates = _resolve_search_candidate_values(
-        search_config,
+        resolved_search_config,
         mode=mode,
         key="min_probabilities",
         default=[0.03, 0.05],
         cast=float,
     )
     kelly_frac_candidates = _resolve_search_candidate_values(
-        search_config,
+        resolved_search_config,
         mode=mode,
         key="fractional_kelly_values",
         default=[0.25, 0.5],
         cast=float,
     )
     max_frac_candidates = _resolve_search_candidate_values(
-        search_config,
+        resolved_search_config,
         mode=mode,
         key="max_fraction_values",
         default=[0.02, 0.05],
         cast=float,
     )
     odds_min_candidates = _resolve_search_candidate_values(
-        search_config,
+        resolved_search_config,
         mode=mode,
         key="odds_mins",
         default=[1.0],
         cast=float,
     )
     odds_max_candidates = _resolve_search_candidate_values(
-        search_config,
+        resolved_search_config,
         mode=mode,
         key="odds_maxs",
         default=[25.0, 40.0, 80.0],
         cast=float,
     )
     top_k_candidates = _resolve_search_candidate_values(
-        search_config,
+        resolved_search_config,
         mode=mode,
         key="top_ks",
         default=[1, 2],
         cast=int,
     )
     min_ev_candidates = _resolve_search_candidate_values(
-        search_config,
+        resolved_search_config,
         mode=mode,
         key="min_expected_values",
         default=[1.0, 1.05, 1.10],

@@ -43,6 +43,10 @@ def _resolve_search_candidate_values(
     mode_value = search_config.get(str(mode).strip().lower())
     if isinstance(mode_value, dict):
         merged.update(mode_value)
+    elif str(mode).strip().lower() != "full":
+        full_value = search_config.get("full")
+        if isinstance(full_value, dict):
+            merged.update(full_value)
 
     raw_values = merged.get(key)
     if not isinstance(raw_values, (list, tuple)):

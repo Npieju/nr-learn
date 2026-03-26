@@ -18,6 +18,12 @@ MODEL_RUN_PROFILES: dict[str, ModelRunProfile] = {
         data_config="configs/data.yaml",
         feature_config="configs/features_catboost_rich_high_coverage_diag.yaml",
     ),
+    "current_best_eval_2025_latest": ModelRunProfile(
+        description="Best nested evaluation mainline with a 2025 full-year holdout split for post-backfill latest checks.",
+        model_config="configs/model_catboost_value_stack_lgbm_roi_high_coverage_tune_roi012_liquidity_regime_modelswitch_f1_policy_may.yaml",
+        data_config="configs/data_2025_latest.yaml",
+        feature_config="configs/features_catboost_rich_high_coverage_diag.yaml",
+    ),
     "current_recommended_serving": ModelRunProfile(
         description="Simplified serving default that matches mainline behavior across validated actual-date checks.",
         model_config="configs/model_catboost_value_stack_lgbm_roi_high_coverage_tune_roi012_liquidity_regime_hybrid_june_strict_serving.yaml",
@@ -48,7 +54,41 @@ MODEL_RUN_PROFILES: dict[str, ModelRunProfile] = {
         data_config="configs/data.yaml",
         feature_config="configs/features_catboost_rich_high_coverage_diag.yaml",
     ),
+    "current_tighter_policy_search_candidate": ModelRunProfile(
+        description="Candidate that tightens policy search thresholds so 2025 high-support broad betting falls back to stricter Kelly selection.",
+        model_config="configs/model_catboost_value_stack_lgbm_roi_high_coverage_tune_roi012_liquidity_regime_hybrid_june_strict_serving_tighter_policy_search_probe.yaml",
+        data_config="configs/data.yaml",
+        feature_config="configs/features_catboost_rich_high_coverage_diag.yaml",
+    ),
 }
+
+
+LATEST_DATA_CONFIG = "configs/data_2025_latest.yaml"
+LATEST_PROFILE_SUFFIX = "_2025_latest"
+
+
+def _build_latest_profile_variants(base_profiles: dict[str, ModelRunProfile]) -> dict[str, ModelRunProfile]:
+    latest_profiles: dict[str, ModelRunProfile] = {}
+    for profile_name, profile in base_profiles.items():
+        if profile.data_config != "configs/data.yaml":
+            continue
+
+        latest_profile_name = f"{profile_name}{LATEST_PROFILE_SUFFIX}"
+        if latest_profile_name in base_profiles:
+            continue
+
+        latest_profiles[latest_profile_name] = ModelRunProfile(
+            description=(
+                f"{profile.description.rstrip('.')} with the 2025 latest holdout split and netkeiba backfill data."
+            ),
+            model_config=profile.model_config,
+            data_config=LATEST_DATA_CONFIG,
+            feature_config=profile.feature_config,
+        )
+    return latest_profiles
+
+
+MODEL_RUN_PROFILES.update(_build_latest_profile_variants(MODEL_RUN_PROFILES))
 
 
 def format_model_run_profiles() -> str:

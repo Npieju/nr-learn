@@ -59,6 +59,7 @@ def main() -> int:
     parser.add_argument("--snapshot-output", default="artifacts/reports/netkeiba_coverage_snapshot.json")
     parser.add_argument("--manifest-output", default="artifacts/reports/netkeiba_benchmark_gate_manifest.json")
     parser.add_argument("--max-rows", type=int, default=200000)
+    parser.add_argument("--pre-feature-max-rows", type=int, default=None)
     parser.add_argument("--wf-mode", choices=["off", "fast", "full"], default="off")
     parser.add_argument("--wf-scheme", choices=["single", "nested"], default="nested")
     parser.add_argument("--skip-train", action="store_true")
@@ -77,6 +78,7 @@ def main() -> int:
             "feature_config": args.feature_config,
             "tail_rows": int(args.tail_rows),
             "max_rows": int(args.max_rows),
+            "pre_feature_max_rows": int(args.pre_feature_max_rows) if args.pre_feature_max_rows is not None else None,
             "wf_mode": args.wf_mode,
             "wf_scheme": args.wf_scheme,
             "skip_train": bool(args.skip_train),
@@ -172,6 +174,8 @@ def main() -> int:
                 "--wf-scheme",
                 args.wf_scheme,
             ]
+            if args.pre_feature_max_rows is not None:
+                evaluate_command.extend(["--pre-feature-max-rows", str(args.pre_feature_max_rows)])
             with Heartbeat("[netkeiba-benchmark-gate]", "running evaluate", logger=log_progress):
                 evaluate_result = _run_command(evaluate_command, cwd=ROOT, label="evaluate")
             payload["evaluate"] = evaluate_result

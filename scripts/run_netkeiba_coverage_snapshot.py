@@ -70,6 +70,54 @@ def _build_coverage(frame: pd.DataFrame, columns: list[str]) -> dict[str, dict[s
     return coverage
 
 
+def _build_result_integrity_summary(frame: pd.DataFrame) -> dict[str, object]:
+    if frame.empty or "race_id" not in frame.columns:
+        return {
+            "rows": int(len(frame)),
+            "races": 0,
+            "odds_present": False,
+            "rank_present": False,
+            "all_odds_missing_races": 0,
+            "all_rank_missing_races": 0,
+        }
+
+    race_count = int(frame["race_id"].nunique(dropna=True))
+    summary: dict[str, object] = {
+        "rows": int(len(frame)),
+        "races": race_count,
+        "odds_present": "odds" in frame.columns,
+        "rank_present": "rank" in frame.columns,
+    }
+
+    if "odds" in frame.columns:
+        odds_series = frame["odds"]
+        odds_missing = odds_series.isna()
+        if odds_series.dtype == object:
+            normalized_odds = odds_series.astype(str).str.strip()
+            odds_missing = odds_missing | normalized_odds.isin(["", "nan", "None", "---", "---.--"])
+        all_odds_missing_races = int(odds_missing.groupby(frame["race_id"]).all().sum())
+        summary["all_odds_missing_races"] = all_odds_missing_races
+        summary["all_odds_missing_ratio"] = round(all_odds_missing_races / race_count, 6) if race_count else None
+    else:
+        summary["all_odds_missing_races"] = None
+        summary["all_odds_missing_ratio"] = None
+
+    if "rank" in frame.columns:
+        rank_series = frame["rank"]
+        rank_missing = rank_series.isna()
+        if rank_series.dtype == object:
+            normalized_rank = rank_series.astype(str).str.strip()
+            rank_missing = rank_missing | normalized_rank.isin(["", "nan", "None"])
+        all_rank_missing_races = int(rank_missing.groupby(frame["race_id"]).all().sum())
+        summary["all_rank_missing_races"] = all_rank_missing_races
+        summary["all_rank_missing_ratio"] = round(all_rank_missing_races / race_count, 6) if race_count else None
+    else:
+        summary["all_rank_missing_races"] = None
+        summary["all_rank_missing_ratio"] = None
+
+    return summary
+
+
 def _read_external(path: Path) -> pd.DataFrame:
     if not path.exists():
         return pd.DataFrame()
@@ -257,7 +305,11 @@ def _build_alignment_summary(race_result: pd.DataFrame, race_card: pd.DataFrame)
     }
 
 
-def _build_readiness(target_states: dict[str, dict[str, object]], alignment: dict[str, object]) -> dict[str, object]:
+def _build_readiness(
+    target_states: dict[str, dict[str, object]],
+    alignment: dict[str, object],
+    result_integrity: dict[str, object],
+) -> dict[str, object]:
     stale_targets = [
         target_name
         for target_name, target_state in target_states.items()
@@ -271,10 +323,11 @@ def _build_readiness(target_states: dict[str, dict[str, object]], alignment: dic
         int(alignment.get("race_result_only_races", 0)) == 0
         and int(alignment.get("race_card_only_races", 0)) == 0
     )
-    paired_alignment_ok = int(alignment.get("paired_mismatch_races", 0)) == 0
+    paired_result_coverage_ok = int(alignment.get("paired_negative_diff_races", 0)) == 0
+    paired_result_odds_ok = int(result_integrity.get("all_odds_missing_races") or 0) == 0
     pedigree_stable = target_states.get("pedigree", {}).get("status") not in {"running", "stale"}
 
-    snapshot_consistent = race_targets_complete and paired_alignment_ok and no_unpaired_races
+    snapshot_consistent = race_targets_complete and paired_result_coverage_ok and no_unpaired_races and paired_result_odds_ok
     benchmark_rerun_ready = snapshot_consistent and pedigree_stable
 
     reasons: list[str] = []
@@ -284,8 +337,10 @@ def _build_readiness(target_states: dict[str, dict[str, object]], alignment: dic
         reasons.append("race_result and race_card must both be completed")
     if not no_unpaired_races:
         reasons.append("race_result and race_card still have unpaired races")
-    if not paired_alignment_ok:
-        reasons.append("paired races still have row-count mismatches")
+    if not paired_result_coverage_ok:
+        reasons.append("paired races still have race_result coverage gaps against race_card")
+    if not paired_result_odds_ok:
+        reasons.append("paired races still include all-odds-missing race results")
     if not pedigree_stable:
         pedigree_status = target_states.get("pedigree", {}).get("status")
         if pedigree_status == "stale":
@@ -299,7 +354,7 @@ def _build_readiness(target_states: dict[str, dict[str, object]], alignment: dic
         recommended_action = "inspect_manifests"
     elif not race_targets_complete:
         recommended_action = "wait_for_race_targets"
-    elif not no_unpaired_races or not paired_alignment_ok:
+    elif not no_unpaired_races or not paired_result_coverage_ok or not paired_result_odds_ok:
         recommended_action = "inspect_race_alignment"
     elif not pedigree_stable:
         recommended_action = "wait_for_pedigree"
@@ -311,6 +366,7 @@ def _build_readiness(target_states: dict[str, dict[str, object]], alignment: dic
         "benchmark_rerun_ready": benchmark_rerun_ready,
         "recommended_action": recommended_action,
         "reasons": reasons,
+        "paired_result_odds_ok": paired_result_odds_ok,
     }
 
 
@@ -319,6 +375,10 @@ def main() -> int:
     parser.add_argument("--config", default="configs/data.yaml")
     parser.add_argument("--tail-rows", type=int, default=5000)
     parser.add_argument("--output", default="artifacts/reports/netkeiba_coverage_snapshot.json")
+    parser.add_argument("--race-result-manifest", default=None)
+    parser.add_argument("--race-card-manifest", default=None)
+    parser.add_argument("--pedigree-manifest", default=None)
+    parser.add_argument("--crawl-lock-path", default=None)
     parser.add_argument(
         "--columns",
         nargs="*",
@@ -333,6 +393,18 @@ def main() -> int:
         data_cfg = load_yaml(ROOT / args.config)
         dataset_cfg = data_cfg.get("dataset", {})
         raw_dir = dataset_cfg.get("raw_dir", "data/raw")
+        target_manifest_paths = {
+            "race_result": Path(args.race_result_manifest) if args.race_result_manifest else TARGET_MANIFEST_PATHS["race_result"],
+            "race_card": Path(args.race_card_manifest) if args.race_card_manifest else TARGET_MANIFEST_PATHS["race_card"],
+            "pedigree": Path(args.pedigree_manifest) if args.pedigree_manifest else TARGET_MANIFEST_PATHS["pedigree"],
+        }
+        target_manifest_paths = {
+            name: path if path.is_absolute() else (ROOT / path)
+            for name, path in target_manifest_paths.items()
+        }
+        crawl_lock_path = Path(args.crawl_lock_path) if args.crawl_lock_path else DEFAULT_CRAWL_LOCK_PATH
+        if not crawl_lock_path.is_absolute():
+            crawl_lock_path = ROOT / crawl_lock_path
         tail_rows = max(int(args.tail_rows), 0)
         progress.start(message=f"config loaded tail_rows={tail_rows}")
         if tail_rows > 0:
@@ -361,7 +433,7 @@ def main() -> int:
             pedigree = _read_external(pedigree_path)
         target_states = {
             target_name: _build_target_state(path)
-            for target_name, path in TARGET_MANIFEST_PATHS.items()
+            for target_name, path in target_manifest_paths.items()
         }
         progress.update(message="external outputs loaded")
 
@@ -376,14 +448,24 @@ def main() -> int:
         )
 
         alignment = _build_alignment_summary(race_result, race_card)
+        result_integrity = {
+            "latest_tail": _build_result_integrity_summary(tail_frame),
+            "paired_race_subset": _build_result_integrity_summary(collected_subset),
+            "external_race_result": _build_result_integrity_summary(race_result),
+        }
         payload = {
             "run_context": {
                 "config": args.config,
                 "tail_rows": int(args.tail_rows),
                 "primary_source_rows_total": int(primary_source_rows_total),
                 "rows_tail": int(len(tail_frame)),
+                "target_manifests": {
+                    name: artifact_display_path(path, workspace_root=ROOT)
+                    for name, path in target_manifest_paths.items()
+                },
+                "crawl_lock_path": artifact_display_path(crawl_lock_path, workspace_root=ROOT),
             },
-            "crawl_lock": _build_crawl_lock_state(DEFAULT_CRAWL_LOCK_PATH),
+            "crawl_lock": _build_crawl_lock_state(crawl_lock_path),
             "external_outputs": {
                 "race_result": _summarize_external(race_result, "race_id"),
                 "race_card": _summarize_external(race_card, "race_id"),
@@ -391,6 +473,7 @@ def main() -> int:
             },
             "target_states": target_states,
             "alignment": alignment,
+            "result_integrity": result_integrity,
             "coverage": {
                 "latest_tail": _build_coverage(tail_frame, list(args.columns)),
                 "paired_race_subset": _build_coverage(collected_subset, list(args.columns)),
@@ -399,7 +482,7 @@ def main() -> int:
                 "rows": int(len(collected_subset)),
                 "races": int(len(paired_race_ids)),
             },
-            "readiness": _build_readiness(target_states, alignment),
+            "readiness": _build_readiness(target_states, alignment, result_integrity["external_race_result"]),
         }
         with Heartbeat("[netkeiba-snapshot]", "writing snapshot output", logger=log_progress):
             write_json(output_path, payload)

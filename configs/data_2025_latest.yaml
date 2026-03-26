@@ -1,0 +1,142 @@
+dataset:
+  source_dataset: "takamotoki/jra-horse-racing-dataset"
+  raw_dir: "data/raw"
+  interim_dir: "data/interim"
+  processed_dir: "data/processed"
+  external_raw_dirs:
+    - "data/external/netkeiba/results"
+    - "data/external/netkeiba/racecard"
+    - "data/external/netkeiba/pedigree"
+  append_tables:
+    - name: "netkeiba_race_result"
+      optional: true
+      search_dirs:
+        - "data/external/netkeiba/results"
+      pattern: "**/*race_result*.csv"
+      required_columns:
+        - "date"
+        - "race_id"
+      dedupe_on:
+        - "race_id"
+        - "horse_id"
+  supplemental_tables:
+    - name: "laptime"
+      pattern: "**/*laptime*.csv"
+      join_on:
+        - "race_id"
+      required_columns:
+        - "race_id"
+      keep_columns:
+        - "race_id"
+        - "race_pace_front3f"
+        - "race_pace_back3f"
+      dedupe_on:
+        - "race_id"
+      merge_mode: "fill_missing"
+    - name: "corner_passing_order"
+      pattern: "**/*corner_passing_order*.csv"
+      join_on:
+        - "race_id"
+        - "gate_no"
+      required_columns:
+        - "race_id"
+        - "gate_no"
+      keep_columns:
+        - "race_id"
+        - "gate_no"
+        - "corner_1_position"
+        - "corner_2_position"
+        - "corner_3_position"
+        - "corner_4_position"
+      dedupe_on:
+        - "race_id"
+        - "gate_no"
+      merge_mode: "fill_missing"
+      table_loader: "corner_passing_order"
+    - name: "netkeiba_race_result_keys"
+      optional: true
+      search_dirs:
+        - "data/external/netkeiba/results"
+      pattern: "**/*race_result*.csv"
+      join_on:
+        - "race_id"
+        - "horse_id"
+      required_columns:
+        - "race_id"
+        - "horse_id"
+        - "horse_key"
+      keep_columns:
+        - "race_id"
+        - "horse_id"
+        - "horse_key"
+        - "owner_name"
+      dedupe_on:
+        - "race_id"
+        - "horse_id"
+      merge_mode: "prefer_supplemental"
+    - name: "netkeiba_race_card"
+      optional: true
+      search_dirs:
+        - "data/external/netkeiba/racecard"
+      pattern: "**/*racecard*.csv"
+      join_on:
+        - "race_id"
+        - "horse_id"
+      required_columns:
+        - "race_id"
+        - "horse_id"
+        - "horse_key"
+      keep_columns:
+        - "race_id"
+        - "horse_id"
+        - "date"
+        - "track"
+        - "distance"
+        - "weather"
+        - "ground_condition"
+        - "競争条件"
+        - "リステッド・重賞競走"
+        - "芝・ダート区分"
+        - "芝・ダート区分2"
+        - "右左回り・直線区分"
+        - "内・外・襷区分"
+        - "horse_key"
+        - "frame_no"
+        - "gate_no"
+        - "horse_name"
+        - "sex"
+        - "age"
+        - "斤量"
+        - "weight"
+        - "東西・外国・地方区分"
+        - "jockey_id"
+        - "trainer_id"
+      dedupe_on:
+        - "race_id"
+        - "horse_id"
+      merge_mode: "fill_missing"
+    - name: "netkeiba_pedigree"
+      optional: true
+      search_dirs:
+        - "data/external/netkeiba/pedigree"
+      pattern: "**/*pedigree*.csv"
+      join_on:
+        - "horse_key"
+      required_columns:
+        - "horse_key"
+      keep_columns:
+        - "horse_key"
+        - "sire_name"
+        - "dam_name"
+        - "damsire_name"
+        - "owner_name"
+        - "breeder_name"
+      dedupe_on:
+        - "horse_key"
+      merge_mode: "prefer_supplemental"
+
+split:
+  method: "time_series"
+  train_end: "2024-12-31"
+  valid_start: "2025-01-01"
+  valid_end: "2025-12-28"

@@ -41,6 +41,19 @@ def _parse_int_list(raw: str) -> list[int]:
     return deduped
 
 
+def _parse_float_list(raw: str) -> list[float]:
+    values: list[float] = []
+    for part in (raw or "").split(","):
+        token = part.strip()
+        if not token:
+            continue
+        values.append(float(token))
+    if not values:
+        raise ValueError("at least one min_bet_ratio value is required")
+    deduped = sorted(set(values), reverse=True)
+    return deduped
+
+
 def _parse_target_fold_counts(raw: str, *, max_fold_count: int) -> list[int]:
     values: list[int] = []
     for part in (raw or "").split(","):
@@ -193,14 +206,20 @@ def _summarize_numeric(values: list[float]) -> dict[str, float | int | None]:
 def _strictest_threshold_matching(
     analyses: list[dict[str, Any]],
     predicate: Callable[[dict[str, Any]], bool],
-) -> int | None:
+) -> tuple[float, int] | None:
     for analysis in sorted(
         analyses,
-        key=lambda item: int(item["policy_constraints"]["min_bets_abs"]),
+        key=lambda item: (
+            float(item["policy_constraints"]["min_bet_ratio"]),
+            int(item["policy_constraints"]["min_bets_abs"]),
+        ),
         reverse=True,
     ):
         if predicate(analysis):
-            return int(analysis["policy_constraints"]["min_bets_abs"])
+            return (
+                float(analysis["policy_constraints"]["min_bet_ratio"]),
+                int(analysis["policy_constraints"]["min_bets_abs"]),
+            )
     return None
 
 
@@ -379,6 +398,7 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--wf-summary", required=True)
     parser.add_argument("--wf-detail-csv", default=None)
+    parser.add_argument("--min-bet-ratio-values", default=None)
     parser.add_argument("--min-bets-abs-values", default="100,80,60,40")
     parser.add_argument("--min-feasible-folds", type=int, default=1)
     parser.add_argument("--target-feasible-fold-counts", default="1,3,5")
@@ -415,6 +435,11 @@ def main() -> int:
             min_final_bankroll=float(policy_constraints.get("min_final_bankroll") or 0.85),
             selection_mode=str(policy_constraints.get("selection_mode") or "gate_then_roi"),
         )
+        min_bet_ratio_values = (
+            _parse_float_list(args.min_bet_ratio_values)
+            if args.min_bet_ratio_values is not None
+            else [float(base_constraints.min_bet_ratio)]
+        )
         min_bets_abs_values = _parse_int_list(args.min_bets_abs_values)
 
         folds_payload = wf_summary.get("folds") if isinstance(wf_summary.get("folds"), list) else []
@@ -430,48 +455,68 @@ def main() -> int:
             args.target_feasible_fold_counts,
             max_fold_count=len(fold_meta),
         )
-        progress.update(message=f"inputs ready thresholds={len(min_bets_abs_values)} folds={len(fold_meta)}")
+        progress.update(
+            message=(
+                f"inputs ready ratios={len(min_bet_ratio_values)} thresholds={len(min_bets_abs_values)} "
+                f"folds={len(fold_meta)}"
+            )
+        )
 
         analyses: list[dict[str, Any]] = []
         preview_rows: list[dict[str, Any]] = []
-        analysis_progress = ProgressBar(total=max(len(min_bets_abs_values), 1), prefix="[wf-threshold-sweep runs]", logger=log_progress, min_interval_sec=0.0)
+        total_runs = max(len(min_bet_ratio_values) * len(min_bets_abs_values), 1)
+        analysis_progress = ProgressBar(total=total_runs, prefix="[wf-threshold-sweep runs]", logger=log_progress, min_interval_sec=0.0)
         analysis_progress.start(message="evaluating thresholds")
-        for min_bets_abs in min_bets_abs_values:
-            sweep_constraints = PolicyConstraints(
-                min_bet_ratio=base_constraints.min_bet_ratio,
-                min_bets_abs=int(min_bets_abs),
-                max_drawdown=base_constraints.max_drawdown,
-                min_final_bankroll=base_constraints.min_final_bankroll,
-                selection_mode=base_constraints.selection_mode,
-            )
-            analysis = _analyze_threshold(
-                detail_df,
-                fold_meta,
-                constraints=sweep_constraints,
-                min_feasible_folds=int(args.min_feasible_folds),
-            )
-            analyses.append(analysis)
-            preview_rows.append(
-                {
-                    "min_bets_abs": int(min_bets_abs),
-                    "feasible_fold_count": int(analysis["feasible_fold_count"]),
-                    "blocked_fold_count": int(analysis["blocked_fold_count"]),
-                    "passes_min_feasible_folds_preview": bool(analysis["passes_min_feasible_folds_preview"]),
-                    "dominant_failure_reason": analysis.get("dominant_failure_reason"),
-                    "dominant_failure_count": int(analysis.get("dominant_failure_count") or 0),
-                    "binding_min_bets_source_counts": str(analysis.get("binding_min_bets_source_counts") or {}),
-                    "feasible_folds": ",".join(str(fold) for fold in analysis.get("feasible_folds") or []),
-                }
-            )
-            for target_fold_count in target_feasible_fold_counts:
-                preview_rows[-1][f"passes_{target_fold_count}_feasible_folds"] = bool(
-                    int(analysis["feasible_fold_count"]) >= int(target_fold_count)
+        for min_bet_ratio in min_bet_ratio_values:
+            for min_bets_abs in min_bets_abs_values:
+                sweep_constraints = PolicyConstraints(
+                    min_bet_ratio=float(min_bet_ratio),
+                    min_bets_abs=int(min_bets_abs),
+                    max_drawdown=base_constraints.max_drawdown,
+                    min_final_bankroll=base_constraints.min_final_bankroll,
+                    selection_mode=base_constraints.selection_mode,
                 )
-            analysis_progress.update(message=f"min_bets_abs={min_bets_abs} feasible={analysis['feasible_fold_count']}")
+                analysis = _analyze_threshold(
+                    detail_df,
+                    fold_meta,
+                    constraints=sweep_constraints,
+                    min_feasible_folds=int(args.min_feasible_folds),
+                )
+                analyses.append(analysis)
+                preview_rows.append(
+                    {
+                        "min_bet_ratio": float(min_bet_ratio),
+                        "min_bets_abs": int(min_bets_abs),
+                        "feasible_fold_count": int(analysis["feasible_fold_count"]),
+                        "blocked_fold_count": int(analysis["blocked_fold_count"]),
+                        "passes_min_feasible_folds_preview": bool(analysis["passes_min_feasible_folds_preview"]),
+                        "dominant_failure_reason": analysis.get("dominant_failure_reason"),
+                        "dominant_failure_count": int(analysis.get("dominant_failure_count") or 0),
+                        "binding_min_bets_source_counts": str(analysis.get("binding_min_bets_source_counts") or {}),
+                        "feasible_folds": ",".join(str(fold) for fold in analysis.get("feasible_folds") or []),
+                    }
+                )
+                for target_fold_count in target_feasible_fold_counts:
+                    preview_rows[-1][f"passes_{target_fold_count}_feasible_folds"] = bool(
+                        int(analysis["feasible_fold_count"]) >= int(target_fold_count)
+                    )
+                analysis_progress.update(
+                    message=(
+                        f"min_bet_ratio={float(min_bet_ratio):.3f} min_bets_abs={min_bets_abs} "
+                        f"feasible={analysis['feasible_fold_count']}"
+                    )
+                )
         progress.update(message="threshold analyses completed")
 
         previous_analysis: dict[str, Any] | None = None
-        for analysis in sorted(analyses, key=lambda item: int(item["policy_constraints"]["min_bets_abs"]), reverse=True):
+        for analysis in sorted(
+            analyses,
+            key=lambda item: (
+                float(item["policy_constraints"]["min_bet_ratio"]),
+                int(item["policy_constraints"]["min_bets_abs"]),
+            ),
+            reverse=True,
+        ):
             if previous_analysis is None:
                 analysis["threshold_transition_from_previous"] = None
             else:
@@ -484,6 +529,7 @@ def main() -> int:
                     if curr_signatures.get(str(fold)) != prev_signatures.get(str(fold)):
                         changed_folds.append(int(fold))
                 analysis["threshold_transition_from_previous"] = {
+                    "previous_min_bet_ratio": float(previous_analysis["policy_constraints"]["min_bet_ratio"]),
                     "previous_min_bets_abs": int(previous_analysis["policy_constraints"]["min_bets_abs"]),
                     "newly_feasible_folds": sorted(int(fold) for fold in (curr_folds - prev_folds)),
                     "dropped_feasible_folds": sorted(int(fold) for fold in (prev_folds - curr_folds)),
@@ -494,7 +540,7 @@ def main() -> int:
             previous_analysis = analysis
 
         threshold_to_feasible = {
-            int(analysis["policy_constraints"]["min_bets_abs"]): int(analysis["feasible_fold_count"])
+            f"ratio={float(analysis['policy_constraints']['min_bet_ratio']):.3f}|abs={int(analysis['policy_constraints']['min_bets_abs'])}": int(analysis["feasible_fold_count"])
             for analysis in analyses
         }
         fold_first_feasible_threshold: dict[str, int | None] = {}
@@ -502,7 +548,10 @@ def main() -> int:
             first_threshold: int | None = None
             for analysis in sorted(
                 analyses,
-                key=lambda item: int(item["policy_constraints"]["min_bets_abs"]),
+                key=lambda item: (
+                    float(item["policy_constraints"]["min_bet_ratio"]),
+                    int(item["policy_constraints"]["min_bets_abs"]),
+                ),
                 reverse=True,
             ):
                 fold_summary = next((fold for fold in analysis.get("folds", []) if int(fold.get("fold") or 0) == fold_index), None)
@@ -523,10 +572,16 @@ def main() -> int:
         for target_fold_count in target_feasible_fold_counts:
             strictest_threshold_passing_feasible_fold_targets[str(target_fold_count)] = next(
                 (
-                    int(analysis["policy_constraints"]["min_bets_abs"])
+                    {
+                        "min_bet_ratio": float(analysis["policy_constraints"]["min_bet_ratio"]),
+                        "min_bets_abs": int(analysis["policy_constraints"]["min_bets_abs"]),
+                    }
                     for analysis in sorted(
                         analyses,
-                        key=lambda item: int(item["policy_constraints"]["min_bets_abs"]),
+                        key=lambda item: (
+                            float(item["policy_constraints"]["min_bet_ratio"]),
+                            int(item["policy_constraints"]["min_bets_abs"]),
+                        ),
                         reverse=True,
                     )
                     if int(analysis.get("feasible_fold_count") or 0) >= int(target_fold_count)
@@ -538,6 +593,7 @@ def main() -> int:
             "run_context": {
                 "wf_summary": str(summary_path.relative_to(ROOT)),
                 "wf_detail_csv": str(detail_csv_path.relative_to(ROOT)),
+                "min_bet_ratio_values": min_bet_ratio_values,
                 "min_bets_abs_values": min_bets_abs_values,
                 "min_feasible_folds_preview": int(args.min_feasible_folds),
                 "target_feasible_fold_counts": target_feasible_fold_counts,
@@ -563,8 +619,9 @@ def main() -> int:
             print(f"warning={warning}")
         for row in preview_rows:
             print(
-                "min_bets_abs={min_bets_abs} feasible_folds={feasible_fold_count} blocked_folds={blocked_fold_count} "
-                "passes_preview={passes_min_feasible_folds_preview} dominant_failure={dominant_failure_reason}".format(**row)
+                "min_bet_ratio={min_bet_ratio:.3f} min_bets_abs={min_bets_abs} feasible_folds={feasible_fold_count} "
+                "blocked_folds={blocked_fold_count} passes_preview={passes_min_feasible_folds_preview} "
+                "dominant_failure={dominant_failure_reason}".format(**row)
             )
         print(f"strictest_threshold_passing_feasible_fold_targets={strictest_threshold_passing_feasible_fold_targets}")
         progress.complete(message="threshold sweep completed")

@@ -15,6 +15,7 @@ if str(SRC) not in sys.path:
 
 from racing_ml.common.artifacts import display_path as artifact_display_path
 from racing_ml.common.artifacts import ensure_output_file_path as artifact_ensure_output_file_path
+from racing_ml.common.artifacts import read_json
 from racing_ml.common.artifacts import utc_now_iso, write_json
 from racing_ml.common.model_profiles import MODEL_RUN_PROFILES, format_model_run_profiles, resolve_model_run_profile
 from racing_ml.common.progress import Heartbeat, ProgressBar
@@ -79,6 +80,13 @@ def _planned_step(name: str, command: list[str]) -> dict[str, object]:
     return {"name": name, "command": command, "status": "planned"}
 
 
+def _read_json_dict(path: Path) -> dict[str, object] | None:
+    if not path.exists():
+        return None
+    payload = read_json(path)
+    return payload if isinstance(payload, dict) else None
+
+
 def _build_manifest_payload(
     *,
     revision_slug: str,
@@ -102,6 +110,7 @@ def _build_manifest_payload(
     promotion_output: Path,
     manifest_output: Path,
     executed_steps: list[dict[str, object]],
+    promotion_report: dict[str, object] | None = None,
     dry_run: bool = False,
 ) -> dict[str, object]:
     payload: dict[str, object] = {
@@ -130,6 +139,8 @@ def _build_manifest_payload(
         "promotion_gate": {
             "min_feasible_folds": int(promotion_min_feasible_folds),
             "output": artifact_display_path(promotion_output, workspace_root=ROOT),
+            "summary": (promotion_report or {}).get("summary") if isinstance(promotion_report, dict) else None,
+            "formal_benchmark": (promotion_report or {}).get("formal_benchmark") if isinstance(promotion_report, dict) else None,
         },
         "steps": executed_steps,
         "artifacts": {
@@ -297,6 +308,7 @@ def main() -> int:
                 promotion_output=promotion_output,
                 manifest_output=manifest_output,
                 executed_steps=executed_steps,
+                promotion_report=None,
                 dry_run=True,
             )
             _write_manifest(manifest_output, manifest_payload, label="writing dry-run manifest")
@@ -339,6 +351,7 @@ def main() -> int:
                 promotion_output=promotion_output,
                 manifest_output=manifest_output,
                 executed_steps=executed_steps,
+                promotion_report=None,
             )
             _write_manifest(manifest_output, manifest_payload, label="writing failed revision manifest")
             print(f"[revision-gate] manifest saved: {manifest_output}")
@@ -378,6 +391,7 @@ def main() -> int:
                 promotion_output=promotion_output,
                 manifest_output=manifest_output,
                 executed_steps=executed_steps,
+                promotion_report=None,
             )
             _write_manifest(manifest_output, manifest_payload, label="writing failed revision manifest")
             print(f"[revision-gate] manifest saved: {manifest_output}")
@@ -398,6 +412,8 @@ def main() -> int:
             status = "block"
             decision = "hold"
         progress.complete(message=f"promotion gate finished status={status}")
+
+        promotion_report = _read_json_dict(promotion_output)
 
         manifest_payload = _build_manifest_payload(
             revision_slug=revision_slug,
@@ -421,6 +437,7 @@ def main() -> int:
             promotion_output=promotion_output,
             manifest_output=manifest_output,
             executed_steps=executed_steps,
+            promotion_report=promotion_report,
         )
         _write_manifest(manifest_output, manifest_payload, label="writing revision manifest")
         print(f"[revision-gate] manifest saved: {manifest_output}")
