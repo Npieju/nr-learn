@@ -17,6 +17,8 @@
 - 正式な採用判断は `run_evaluate.py` と `run_promotion_gate.py` を通した revision 単位で行う。
 - 単発の高 ROI や短い比較結果を、そのまま benchmark の代表値や昇格根拠には使わない。
 
+latest 2025 の判断を再開するときも、formal artifact から先に読むのではなく、まず `serving_validation_guide.md` の dashboard summary JSON 一覧で actual-date role を確認し、必要なときだけこの文書の evaluate / promotion gate artifact に降りる。
+
 ## 3. `run_evaluate.py` の役割
 
 本命候補の判定は、`run_evaluate.py` による nested walk-forward を基準に行う。
@@ -225,7 +227,7 @@ evaluation だけでは決めないもの:
 - actual calendar 上の細かな policy change の見え方
 - rollback 候補の runtime 比較
 
-これらは [serving_validation_guide.md](serving_validation_guide.md) と合わせて見る。
+これらは [serving_validation_guide.md](serving_validation_guide.md) と合わせて見る。latest 2025 の current reading を再開するときは、`dashboard summary -> compare rerun -> formal artifact` の順を崩さない。
 
 ## 11. よくある解釈ミス
 

@@ -341,6 +341,12 @@
 - `public_benchmark_snapshot.md` には internal reader 向けの但し書きを足し、actual-date compare の再開入口は snapshot ではなく `serving_validation_guide.md` であることを明示した。
 - これにより latest compare の再開順は overview / docs index / benchmarks / serving validation / command reference / public snapshot で矛盾しない状態になった。
 
+### M29. formal guide と development flow の再開順同期完了
+
+- `evaluation_guide.md` に、latest 2025 の current reading を再開するときは formal artifact から入らず、まず actual-date role を確認してから evaluate / promotion gate へ降りる旨を追記した。
+- `development_flow.md` にも、latest compare 再開時は `serving_validation_guide.md` の quickstart を先に見る運用を明記した。
+- これにより actual-date role と formal support の読む順は、guide / flow / benchmark / command docs で同じになった。
+
 ## 6. 実行中の優先事項
 
 `current_tighter_policy_search_candidate_2025_latest` の `0.03/80` formalization は M17 で完了した。続いて seasonal / recent-heavy の運用境界整理、latest compare artifact map、地方競馬 feasibility の切り分け、actual-date compare 再開導線の 3-step quickstart まで完了した。

@@ -45,6 +45,8 @@
 
 serving 側の具体的な導線は [serving_validation_guide.md](serving_validation_guide.md) にまとめてある。
 
+latest 2025 の actual-date compare を再開するときは、まず `serving_validation_guide.md` の quickstart で dashboard summary を読む。CLI の再実行や formal artifact の確認は、その後に必要な範囲だけ行う。
+
 ただし、この段階の改善は正式採用とみなさない。
 
 ### 3.2 revision gate
@@ -89,6 +91,8 @@ serving 側の具体的な導線は [serving_validation_guide.md](serving_valida
 上の 1〜3 は、少なくともこの dev container では並列に投げず直列で回す。`run_revision_gate.py` を使う場合も、別の full train / evaluate を同時に走らせないことを前提にする。
 
 evaluation と promotion gate の具体的な読み方は [evaluation_guide.md](evaluation_guide.md) にまとめてある。
+
+つまり current latest reading の再開順は、`serving_validation_guide.md` で actual-date role を確認し、その後に `evaluation_guide.md` で formal support を確認する順で固定する。
 
 この流れは [../scripts/run_revision_gate.py](../scripts/run_revision_gate.py) で 1 コマンドにまとめられる。
 
