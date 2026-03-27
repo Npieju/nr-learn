@@ -52,7 +52,7 @@
 
 現時点の operational baseline は `current_recommended_serving_2025_latest` とする。
 
-一方、`current_tighter_policy_search_candidate_2025_latest` は latest 2025 regime の formal-support 改善を確認した analysis-first candidate として保持する。現時点では serving default へは昇格させず、次の比較軸を決めるための正式通過候補として扱う。
+一方、`current_tighter_policy_search_candidate_2025_latest` は latest 2025 regime の formal-support 改善を確認した analysis-first candidate として保持する。actual-date の fresh compare では、2025-09 の difficult window で baseline `32 bets / total net -27.3 / pure bankroll 0.2959` に対して `9 bets / -4.3 / 0.8395` と強い損失圧縮を示した一方、2025-12 tail では baseline `45 bets / +21.8 / 1.6712` に対して `9 bets / +21.4 / 1.6032` と profit window の top line では届かなかった。したがって現時点では serving default へは昇格させず、September difficult regime 向けの analysis-first defensive candidate として扱う。
 
 また、`r20260327_recent_2020_component_retrain` は recent-heavy learning window の真の再学習比較として formal に通過したが、weighted nested-WF ROI と bets total は直近の pseudo-retrain run を下回った。したがってこちらも、現時点では baseline 置換ではなく analysis-first candidate として扱う。
 
@@ -154,6 +154,13 @@
 - 一方で `2025-12-06/07/13/14/20/21/27/28` の fresh compare では、baseline が `45 bets / total net +21.8 / pure bankroll 1.6712`、recent-2018 true retrain が `1 bet / total net -1.0 / pure bankroll 0.9722` だった。
 - この December control により、recent-heavy true retrain は broad replacement ではなく regime-specific candidate と扱うべきことが確認できた。現時点では 2018 start を recent-heavy family の actual-date 上位候補としつつ、baseline 置換ではなく September difficult regime 向けの analysis-first de-risk 候補として維持する。
 
+### 4.14 tighter policy candidate の actual-date role 確定
+
+- `current_recommended_serving_2025_latest` と `current_tighter_policy_search_candidate_2025_latest` の fresh compare を、`2025-09-06/07/13/14/20/21/27/28` と `2025-12-06/07/13/14/20/21/27/28` の 2 window で実施した。
+- 2025-09 の difficult window では、baseline が `32 bets / total net -27.3 / pure bankroll 0.2959` に対して、tighter policy candidate は `9 bets / total net -4.3 / pure bankroll 0.8395` だった。
+- 2025-12 tail の control window では、baseline が `45 bets / total net +21.8 / pure bankroll 1.6712`、tighter policy candidate が `9 bets / total net +21.4 / pure bankroll 1.6032` だった。
+- したがって tighter policy candidate は September difficult regime では有効な defensive variant だが、broad baseline replacement の根拠はまだない。現時点の正しい位置づけは、formal-support 改善を持つ analysis-first defensive candidate である。
+
 ## 5. 完了済みマイルストーン
 
 ### M1. 2025 backfill 完了
@@ -230,50 +237,57 @@
 - 2025-09 の fresh compare を recent-2020 true retrain にも広げ、recent-heavy family 内の実測順位が `2018 > 2020` であることを確認した。
 - 2025-12 tail の fresh compare では recent-2018 true retrain が baseline に明確に劣後し、recent-heavy true retrain を broad baseline replacement と見なさないことも確認した。
 
+### M15. tighter policy candidate の actual-date role 確定
+
+- `current_tighter_policy_search_candidate_2025_latest` の fresh actual-date compare を September difficult window と December tail control window で完了した。
+- September では baseline `32 bets / total net -27.3 / pure bankroll 0.2959` に対して `9 bets / total net -4.3 / pure bankroll 0.8395` と強い損失圧縮を確認した。
+- 一方で December tail では baseline `45 bets / total net +21.8 / pure bankroll 1.6712` に対して `9 bets / total net +21.4 / pure bankroll 1.6032` で、baseline 優位を維持した。
+- これにより、tighter policy candidate は broad replacement ではなく September difficult regime 向けの analysis-first defensive candidate として位置づけを確定した。
+
 ## 6. 実行中の優先事項
 
-### P1. recent-heavy candidate family の位置づけ確定
+### P1. tighter policy の formal 境界確認
 
 目的:
 
-- formal 通過した recent-heavy true retrain candidate を、analysis-first 候補のまま維持するのか、追加比較を経て serving 候補へ進めるのかを判断できる状態にする。
+- `current_tighter_policy_search_candidate_2025_latest` の formal gate が、現行の `0.03/100` で十分に保守的か、それとも `0.03/80` まで広げても defensible かを判断できる状態にする。
 
 やること:
 
-1. recent-2020 true retrain と pseudo-retrain を区別して docs に残し、同一視しないようにする。
-2. recent-2018 true retrain と recent-2020 true retrain の役割差を整理し、window 長の優先候補を docs 上で確定する。
-3. recent-heavy true retrain を broad baseline replacement としてではなく regime-specific candidate としてどこまで使うかを整理する。
+1. `0.03/100` と `0.03/80` の threshold frontier を同じ artifact lineage で比較する。
+2. fold support が増えたときに、September defensive reading と December control reading がどう変わるかを切り分ける。
+3. formal support を広げても operational baseline を切り替えない条件を docs に残す。
 
 完了条件:
 
-- recent-heavy true retrain の中で優先窓を 1 本に絞り、baseline replacement ではなくどの regime 向け候補として扱うかが明確になっていること。
+- tighter policy candidate の formal 閾値をどこまで広げるか、また広げても role が analysis-first defensive candidate のままかどうかが明確になっていること。
 
-### P2. tighter policy candidate の位置づけ確定
+### P2. seasonal / recent-heavy の明示運用境界整理
 
 目的:
 
-- formal 通過した tighter policy candidate を、analysis-first 候補のまま維持するのか、追加比較を経て serving 候補へ進めるのかを判断できる状態にする。
+- broad baseline replacement ではない候補群を、どの regime でどう参照するかを docs 上で誤読なく再開できる状態にする。
 
 やること:
 
-1. `current_recommended_serving_2025_latest` と `current_tighter_policy_search_candidate_2025_latest` の役割差を docs 上で明文化する。
-2. `0.03/100` を保守的な正式閾値として維持するか、`0.03/80` まで広げて `5/5 feasible folds` を狙うかを比較する。
-3. serving default を切り替えずに済む条件と、切り替えるなら必要な actual-date 比較を明文化する。
+1. `current_long_horizon_serving_2025_latest`、`current_tighter_policy_search_candidate_2025_latest`、recent-2018 true retrain の 3 本を September difficult regime の候補群としてどう使い分けるか整理する。
+2. December tail の control reading を使って、baseline 維持条件を簡潔に表現する。
+3. public / internal docs の role 表現を揃え、formal 通過と operational 採用を再び混同しないようにする。
 
 完了条件:
 
-- tighter policy candidate を analysis-only に留めるか、次の昇格候補にするかの判断材料が roadmap 上で揃っていること。
+- regime-specific candidate 群の運用境界が docs 上で一貫して読めること。
 
 ## 7. 次の候補
 
 ### N1. latest baseline の docs 反映拡充
 
-- `benchmarks.md` に `r20260326_tighter_policy_ratio003` の formal result を追記する。
-- `project_overview.md` の現状説明に tighter policy candidate の位置づけを反映する。
+- latest 2025 の fresh actual-date compare 系 artifact を guide 類から辿りやすくする。
+- threshold 境界比較に入る前提条件を command / validation docs に補足する。
 
 ### N2. latest candidate family の棚卸し
 
-- `_2025_latest` が付く stable family を棚卸しし、operational baseline、seasonal de-risk、analysis-first formal candidate を分ける。
+- `_2025_latest` が付く stable family を棚卸しし、operational baseline、seasonal de-risk、analysis-first defensive candidate を分ける。
 
 ### N3. seasonal runtime policy の明文化
 
