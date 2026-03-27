@@ -6,6 +6,8 @@
 
 日常運用の代表コマンドは [command_reference.md](command_reference.md) に寄せ、この文書では「どの場面でどの script を見に行くか」を整理する。
 
+latest 2025 の actual-date compare を再開するときは、この索引から script を探し始めるのではなく、まず `serving_validation_guide.md` の quickstart と `command_reference.md` の latest compare 入口を使う。
+
 ## 2. 基本の見方
 
 - まずは [command_reference.md](command_reference.md) の代表コマンドを使う。
@@ -115,6 +117,8 @@
   - compare 結果を window 横断で集計する。
 
 serving 系の判断範囲は [serving_validation_guide.md](serving_validation_guide.md) を参照する。
+
+latest 2025 の current reading は、September を `long_horizon -> tighter policy -> recent-2018` の順で dashboard summary から見て、必要なときだけこの節の script に降りる。
 
 serving 系の重い script は、smoke 本体、replay、bankroll sweep、dashboard 生成のどこにいるかが分かるように進捗を出す。
 

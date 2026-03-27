@@ -347,6 +347,12 @@
 - `development_flow.md` にも、latest compare 再開時は `serving_validation_guide.md` の quickstart を先に見る運用を明記した。
 - これにより actual-date role と formal support の読む順は、guide / flow / benchmark / command docs で同じになった。
 
+### M30. artifact / script 補助資料の再開入口同期完了
+
+- `artifact_guide.md` に、latest 2025 actual-date compare は artifact 名一覧からではなく `serving_validation_guide.md` の quickstart から再開する旨を追記した。
+- `scripts_guide.md` にも、latest compare 再開時は索引から script を探し始めず、quickstart と command entrypoint を先に使う運用を明記した。
+- これにより latest compare の再開順は補助資料レベルでも揃い、docs 間の入口差はほぼ解消した。
+
 ## 6. 実行中の優先事項
 
 `current_tighter_policy_search_candidate_2025_latest` の `0.03/80` formalization は M17 で完了した。続いて seasonal / recent-heavy の運用境界整理、latest compare artifact map、地方競馬 feasibility の切り分け、actual-date compare 再開導線の 3-step quickstart まで完了した。
