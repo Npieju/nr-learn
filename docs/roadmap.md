@@ -48,12 +48,15 @@
 - recent-heavy split の比較では、`value_blend` profile を profile 単位で train するだけでは component 再学習にならず、真の比較にはならないことを確認した。
 - その root issue を解消した上で、`r20260327_recent_2020_component_retrain` として recent-2020 の win / roi component を実際に再学習し、matching な stack bundle、evaluation、WF feasibility、promotion gate まで完了した。
 - 同 run は `pass / promote` で整合し、`AUC=0.8449`、`ev_top1_roi=0.7496`、`nested WF weighted test ROI=0.9218`、`formal_benchmark_feasible_fold_count=4` を確認した。
+- さらに `r20260327_recent_2018_component_retrain` として recent-2018 の true retrain も完了し、`AUC=0.8432`、`ev_top1_roi=0.7400`、`nested WF weighted test ROI=0.9595`、`formal_benchmark_feasible_fold_count=5` を確認した。
 
 現時点の operational baseline は `current_recommended_serving_2025_latest` とする。
 
 一方、`current_tighter_policy_search_candidate_2025_latest` は latest 2025 regime の formal-support 改善を確認した analysis-first candidate として保持する。現時点では serving default へは昇格させず、次の比較軸を決めるための正式通過候補として扱う。
 
 また、`r20260327_recent_2020_component_retrain` は recent-heavy learning window の真の再学習比較として formal に通過したが、weighted nested-WF ROI と bets total は直近の pseudo-retrain run を下回った。したがってこちらも、現時点では baseline 置換ではなく analysis-first candidate として扱う。
+
+同様に、`r20260327_recent_2018_component_retrain` も formal に通過しており、recent-heavy family の中では 2020 start より support が強い。次の判断軸は、2018 start / 2020 start / latest baseline を actual-date compare でどう切り分けるかである。
 
 ## 4. 判断ログ
 
@@ -127,6 +130,14 @@
 - 一方で、直前の pseudo-retrain run `r20260327_current_recommended_serving_2025_recent_2020` と比べると、AUC / logloss / EV 系は改善したが、nested WF weighted test ROI は `0.9629 -> 0.9218`、bets total は `1092 -> 878` に低下した。
 - したがって recent-heavy true retrain は「formal に通過した比較候補」までは到達したが、serving baseline を直ちに置き換える根拠にはまだしない。
 
+### 4.11 recent-heavy 2018 true retrain の追加完了
+
+- 同じ true retrain 手順を `configs/data_2025_recent_2018.yaml` に対しても実施し、`r20260327_recent_2018_component_retrain` として win / roi component 再学習、stack 再 bundle、evaluation、matching WF feasibility、promotion gate を完了した。
+- formal evaluation は `representative`、promotion gate は `pass / promote` で整合し、`AUC=0.8431852285424601`、`logloss=0.201982990194456`、`top1_roi=0.8166245113819269`、`ev_top1_roi=0.7400091975166705`、`nested WF weighted test ROI=0.959452411994785`、`nested WF bets total=767` を確認した。
+- matching な WF feasibility では `feasible_fold_count=5`、formal benchmark 側も `5/5` の feasible folds を満たした。
+- 2020 start の true retrain と比べると、AUC / EV 系はわずかに劣る一方で、weighted nested-WF ROI は `0.9595 > 0.9218`、formal support は `5/5 > 4/5` となった。
+- したがって recent-heavy family 内では、現時点の formal support 上位は 2018 start である。ただし latest baseline を置き換えるには actual-date compare がまだ必要である。
+
 ## 5. 完了済みマイルストーン
 
 ### M1. 2025 backfill 完了
@@ -187,6 +198,11 @@
 - `r20260327_recent_2020_component_retrain` で evaluation、matching WF feasibility、promotion gate を完了し、`pass / promote` を確認した。
 - 主要値は `AUC=0.8449`、`ev_top1_roi=0.7496`、`nested WF weighted test ROI=0.9218`、`formal_benchmark_feasible_fold_count=4` である。
 
+### M12. recent-heavy 2018 true retrain の formal 評価完了
+
+- `r20260327_recent_2018_component_retrain` で recent-2018 の true retrain compare を完了し、evaluation、matching WF feasibility、promotion gate が `pass / promote` で整合した。
+- 主要値は `AUC=0.8432`、`ev_top1_roi=0.7400`、`nested WF weighted test ROI=0.9595`、`formal_benchmark_feasible_fold_count=5` である。
+
 ## 6. 実行中の優先事項
 
 ### P1. recent-heavy candidate family の位置づけ確定
@@ -198,12 +214,12 @@
 やること:
 
 1. recent-2020 true retrain と pseudo-retrain を区別して docs に残し、同一視しないようにする。
-2. recent-2020 true retrain と `current_recommended_serving_2025_latest` の役割差を整理し、baseline 置換判断に必要な actual-date compare を決める。
-3. recent-2018 でも同じ true retrain 手順を回し、recent-heavy の window 長そのものを比較できる状態にする。
+2. recent-2018 true retrain と recent-2020 true retrain の役割差を整理し、window 長の優先候補を決める。
+3. recent-heavy 上位候補と `current_recommended_serving_2025_latest` の役割差を整理し、baseline 置換判断に必要な actual-date compare を決める。
 
 完了条件:
 
-- recent-heavy true retrain を analysis-only に留めるか、次の昇格候補にするかの判断材料が roadmap 上で揃っていること。
+- recent-heavy true retrain の中で優先窓を 1 本に絞り、latest baseline と比較すべき候補が明確になっていること。
 
 ### P2. tighter policy candidate の位置づけ確定
 
@@ -242,7 +258,7 @@
 - 候補は少なくとも `2018-01-01..2024-12-31` と `2020-01-01..2024-12-31` を用意し、古い年帯を減らしたときの support / ROI / actual-date 挙動を確認する。
 - rows ベースの tail 制限ではなく、date ベースの train window 制限を優先して比較する。
 - まずは `configs/data_2025_recent_2018.yaml` と `configs/data_2025_recent_2020.yaml`、および対応 profile を使って train split を比較できる状態まで整えた。
-- さらに `2020` start については true retrain の formal compare を 1 本完了した。次は `2018` start でも同じ真の再学習 compare を揃える。
+- `2020` start と `2018` start の true retrain compare は両方完了した。次は `2018` start を暫定上位候補として latest baseline との actual-date compare を揃える。
 
 ### N5. 地方競馬データ拡張の feasibility 整理
 
