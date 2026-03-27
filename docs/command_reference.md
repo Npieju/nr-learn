@@ -73,6 +73,14 @@ git push origin <branch>
 
 ## 3. まず使うコマンド
 
+### 3.0 latest 2025 actual-date compare の再開順
+
+latest 2025 の compare を再開するときは、いきなりコマンドを打たず次の順で進める。
+
+1. まず [serving_validation_guide.md](serving_validation_guide.md) の dashboard summary JSON 一覧を見て、September difficult window を `long_horizon -> tighter policy -> recent-2018` の順で読む。
+2. 差分を回し直す必要があるときだけ、この文書の latest 2025 compare コマンド例を同じ順で使う。
+3. support の裏付けまで掘る必要があるときだけ [evaluation_guide.md](evaluation_guide.md) と promotion gate artifact に降りる。
+
 ### 3.1 データ取り込み
 
 ```bash

@@ -20,6 +20,12 @@
 
 対外説明が必要なら [public_benchmark_snapshot.md](public_benchmark_snapshot.md) を追加で読む。実装の中身まで入る必要がある場合だけ [system_architecture.md](system_architecture.md) を読む。
 
+latest 2025 の actual-date compare を再開したいだけなら、次の 3 段で足りる。
+
+1. [serving_validation_guide.md](serving_validation_guide.md) の dashboard summary JSON 一覧から、September は `long_horizon -> tighter policy -> recent-2018` の順で見て、次に December control を確認する。
+2. compare を回し直す必要があるときだけ [command_reference.md](command_reference.md) の latest 2025 compare 例を同じ順に使う。
+3. formal support まで根拠を掘る必要があるときだけ [benchmarks.md](benchmarks.md) と `artifacts/reports/` の promotion gate / evaluation summary に降りる。
+
 ## 正本
 
 このプロジェクトの理解と運用に必要な中核文書は次の 8 本である。
@@ -72,6 +78,7 @@
   - GPU / Docker / Notebook 周りの実務メモとトラブルシュートをまとめた補助資料。
 - [serving_validation_guide.md](serving_validation_guide.md)
   - serving smoke / replay / compare / bankroll sweep / dashboard の導線をまとめた検証ガイド。
+  - latest 2025 の actual-date compare を再開するときは、この文書の quickstart を最初に見る。
 - [data_extension.md](data_extension.md)
   - Kaggle/JRA 主表に対して、netkeiba などの外部データをどう追加し、どう検証するかを整理した資料。
 - [scripts_guide.md](scripts_guide.md)

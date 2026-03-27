@@ -329,6 +329,12 @@
 - 読み順は `dashboard summary -> compare rerun -> formal support artifact` に固定し、September difficult window の参照順も `long_horizon -> tighter policy -> recent-2018` で揃えた。
 - これにより latest compare の入口は overview / validation guide / command reference の 3 点で過不足なく一致した。
 
+### M27. docs index と command 入口の quickstart 同期完了
+
+- `docs/README.md` に latest 2025 actual-date compare 再開時の 3-step shortcut を追加し、docs index からでも同じ読み順へ入れるようにした。
+- `command_reference.md` の先頭にも同じ再開順を置き、いきなり CLI 実行へ入る前に dashboard summary を先に見る運用を明示した。
+- これにより overview / docs index / serving validation / command reference の 4 箇所で latest compare の再開順が一致した。
+
 ## 6. 実行中の優先事項
 
 `current_tighter_policy_search_candidate_2025_latest` の `0.03/80` formalization は M17 で完了した。続いて seasonal / recent-heavy の運用境界整理、latest compare artifact map、地方競馬 feasibility の切り分け、actual-date compare 再開導線の 3-step quickstart まで完了した。
