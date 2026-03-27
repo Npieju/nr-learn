@@ -93,7 +93,14 @@ date-based train window を短くした recent-heavy 比較では、2018 start /
 
 これらの run は recent-heavy split の学習効果を本当に見るため、win / roi component を同一 suffix で再学習してから stack を再 bundle している。
 
-解釈としては、2020 start は AUC / EV 系で優位だが、2018 start は weighted nested-WF ROI と feasible folds で優位である。したがって現時点では、recent-heavy true retrain は「formal に通過した比較候補」であって、baseline 置換の確定根拠ではない。ただし recent-heavy family 内の formal-support 上位候補は 2018 start と読む。
+actual-date の fresh compare も次のように確認済みである。
+
+| window | baseline | recent-2018 true retrain | recent-2020 true retrain | 読み方 |
+| --- | --- | --- | --- | --- |
+| `2025-09` 8 日 | `32 bets / -27.3 / 0.2959` | `4 bets / -4.0 / 0.8557` | `8 bets / -8.0 / 0.7408` | `2018 > 2020 > baseline` |
+| `2025-12` tail 8 日 | `45 bets / +21.8 / 1.6712` | `1 bet / -1.0 / 0.9722` | 未比較 | baseline 優位 |
+
+解釈としては、2020 start は AUC / EV 系で優位だが、2018 start は weighted nested-WF ROI と feasible folds で優位である。さらに actual-date の fresh compare でも、2025-09 の difficult window では recent-2018 が `4 bets / total net -4.0 / pure bankroll 0.8557`、recent-2020 が `8 bets / -8.0 / 0.7408` で、baseline `32 bets / -27.3 / 0.2959` をともに上回りつつ 2018 start が上位だった。一方で 2025-12 tail では recent-2018 が baseline `45 bets / +21.8 / 1.6712` に対して `1 bet / -1.0 / 0.9722` と大きく劣後した。したがって現時点では、recent-heavy true retrain は「formal に通過し、September difficult regime では有効だが、broad baseline replacement ではない analysis-first candidate」と読むのが正しい。recent-heavy family 内の優先窓は 2018 start である。
 
 ### 5.4 長期 benchmark ladder
 

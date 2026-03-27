@@ -83,7 +83,7 @@ recent-heavy split の比較では、`2018-01-01..2024-12-31` と `2020-01-01..2
 | `r20260327_recent_2018_component_retrain` | `pass / promote` | AUC `0.8432`, EV top1 ROI `0.7400`, nested WF `0.9595`, feasible folds `5/5`, bets `767` |
 | `r20260327_recent_2020_component_retrain` | `pass / promote` | AUC `0.8449`, EV top1 ROI `0.7496`, nested WF `0.9218`, feasible folds `4/5`, bets `878` |
 
-ただし、これらの run は baseline の代替として即採用するのではなく、recent-heavy learning window の効果を測る analysis-first candidate として扱う。現時点では 2018 start が formal support で優位で、さらに 2025-09 の fresh actual-date compare でも baseline `32 bets / total net -27.3 / pure bankroll 0.2959` に対して `4 bets / -4.0 / 0.8557` と strong de-risk を示した。ただし baseline 置換には、September 以外の actual-date compare もまだ必要である。
+ただし、これらの run は baseline の代替として即採用するのではなく、recent-heavy learning window の効果を測る analysis-first candidate として扱う。現時点では 2018 start が formal support で優位で、2025-09 の fresh actual-date compare でも baseline `32 bets / total net -27.3 / pure bankroll 0.2959` に対して `4 bets / -4.0 / 0.8557` と、recent-2020 の `8 bets / -8.0 / 0.7408` より強い de-risk を示した。一方で 2025-12 tail の fresh compare では baseline `45 bets / +21.8 / 1.6712` に対して recent-2018 が `1 bet / -1.0 / 0.9722` と明確に劣後した。したがって現時点の位置づけは broad replacement ではなく、September difficult regime 向けの recent-heavy candidate である。
 
 ## 6. どこまで進んでいるか
 
@@ -101,7 +101,7 @@ recent-heavy split の比較では、`2018-01-01..2024-12-31` と `2020-01-01..2
 
 いま残っている主な論点は次の 3 つである。
 
-1. recent-heavy true retrain の上位候補である `2018` start が、September 以外の actual-date compare でも latest baseline より有利か。
+1. recent-heavy true retrain の上位候補である `2018` start を、September difficult regime 向け candidate としてどこまで明示運用するか。
 2. `current_tighter_policy_search_candidate_2025_latest` を analysis-first のまま維持するか、追加比較を経て次の昇格候補にするか。
 3. `current_long_horizon_serving_2025_latest` を September de-risk 用としてどこまで明示運用するか。
 

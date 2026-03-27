@@ -58,7 +58,7 @@
 
 同様に、`r20260327_recent_2018_component_retrain` も formal に通過しており、recent-heavy family の中では 2020 start より support が強い。次の判断軸は、2018 start / 2020 start / latest baseline を actual-date compare でどう切り分けるかである。
 
-すでに 2025-09 の fresh actual-date compare では、recent-2018 true retrain が baseline `32 bets / total net -27.3 / pure bankroll 0.2959` に対して `4 bets / total net -4.0 / pure bankroll 0.8557` を示した。したがって recent-heavy family の次段は、2018 start を actual-date de-risk 候補としてどう位置づけるかの判断に進んでいる。
+すでに actual-date compare では、2025-09 の fresh compare で recent-2018 true retrain が baseline `32 bets / total net -27.3 / pure bankroll 0.2959` に対して `4 bets / total net -4.0 / pure bankroll 0.8557`、recent-2020 true retrain が `8 bets / -8.0 / 0.7408` を示した。したがって recent-heavy family 内の actual-date 優先窓も 2018 start と読める。一方で 2025-12 tail の fresh compare では recent-2018 true retrain が baseline `45 bets / +21.8 / 1.6712` に対して `1 bet / -1.0 / 0.9722` と明確に劣後したため、現時点の位置づけは broad baseline replacement ではなく September difficult regime 向けの analysis-first de-risk candidate である。
 
 ## 4. 判断ログ
 
@@ -147,6 +147,13 @@
 - `2025-09-06/07/13/14/20/21/27/28` の fresh compare では、baseline `current_recommended_serving_2025_latest` が `32 bets / total net -27.3 / pure bankroll 0.2959`、recent-2018 true retrain が `4 bets / total net -4.0 / pure bankroll 0.8557` だった。
 - つまり recent-2018 true retrain は September difficult regime で strong de-risk を示した。一方で `differing_policy_dates=[]` だった旧 replay compare は、canonical prediction 再利用の限界によるもので、判断根拠には使わない。
 
+### 4.13 recent-heavy actual-date compare の優先窓確定
+
+- 同じ `2025-09-06/07/13/14/20/21/27/28` の fresh compare を recent-2020 true retrain に対しても実施し、baseline `32 bets / total net -27.3 / pure bankroll 0.2959` に対して `8 bets / total net -8.0 / pure bankroll 0.7408` を確認した。
+- したがって September difficult regime における recent-heavy family の実測順位は `recent-2018 > recent-2020 > baseline` と読める。
+- 一方で `2025-12-06/07/13/14/20/21/27/28` の fresh compare では、baseline が `45 bets / total net +21.8 / pure bankroll 1.6712`、recent-2018 true retrain が `1 bet / total net -1.0 / pure bankroll 0.9722` だった。
+- この December control により、recent-heavy true retrain は broad replacement ではなく regime-specific candidate と扱うべきことが確認できた。現時点では 2018 start を recent-heavy family の actual-date 上位候補としつつ、baseline 置換ではなく September difficult regime 向けの analysis-first de-risk 候補として維持する。
+
 ## 5. 完了済みマイルストーン
 
 ### M1. 2025 backfill 完了
@@ -218,6 +225,11 @@
 - これにより suffix 付き retrain artifact を actual-date compare に直接載せられるようになった。
 - 同導線を使った 2025-09 の fresh compare では、recent-2018 true retrain が latest baseline に対して大きく de-risk することを確認した。
 
+### M14. recent-heavy actual-date の優先窓確認
+
+- 2025-09 の fresh compare を recent-2020 true retrain にも広げ、recent-heavy family 内の実測順位が `2018 > 2020` であることを確認した。
+- 2025-12 tail の fresh compare では recent-2018 true retrain が baseline に明確に劣後し、recent-heavy true retrain を broad baseline replacement と見なさないことも確認した。
+
 ## 6. 実行中の優先事項
 
 ### P1. recent-heavy candidate family の位置づけ確定
@@ -229,12 +241,12 @@
 やること:
 
 1. recent-2020 true retrain と pseudo-retrain を区別して docs に残し、同一視しないようにする。
-2. recent-2018 true retrain と recent-2020 true retrain の役割差を整理し、window 長の優先候補を決める。
-3. recent-2018 true retrain と `current_recommended_serving_2025_latest` の actual-date compare を September 以外にも広げ、baseline 置換判断に必要な evidence を揃える。
+2. recent-2018 true retrain と recent-2020 true retrain の役割差を整理し、window 長の優先候補を docs 上で確定する。
+3. recent-heavy true retrain を broad baseline replacement としてではなく regime-specific candidate としてどこまで使うかを整理する。
 
 完了条件:
 
-- recent-heavy true retrain の中で優先窓を 1 本に絞り、latest baseline と比較すべき候補が明確になっていること。
+- recent-heavy true retrain の中で優先窓を 1 本に絞り、baseline replacement ではなくどの regime 向け候補として扱うかが明確になっていること。
 
 ### P2. tighter policy candidate の位置づけ確定
 
