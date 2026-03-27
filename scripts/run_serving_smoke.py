@@ -694,6 +694,7 @@ def main() -> int:
     parser.add_argument("--data-config", default=None)
     parser.add_argument("--feature-config", default=None)
     parser.add_argument("--artifact-suffix", default=None)
+    parser.add_argument("--model-artifact-suffix", default=None)
     parser.add_argument("--output-file", default=None)
     parser.add_argument("--no-archive-artifacts", action="store_true")
     parser.add_argument("--print-traceback", action="store_true")
@@ -706,6 +707,7 @@ def main() -> int:
     feature_config_path = _resolve_path(args.feature_config or defaults["feature_config"])
     default_artifact_suffix = defaults["artifact_suffix"] if args.profile == resolved_profile else args.profile
     artifact_suffix = str(args.artifact_suffix or default_artifact_suffix).strip() or args.profile
+    model_artifact_suffix = str(args.model_artifact_suffix or "").strip() or None
     output_file = _resolve_path(args.output_file) if args.output_file else ROOT / "artifacts" / "reports" / f"serving_smoke_{args.profile}.json"
     lock_acquired = False
 
@@ -724,7 +726,12 @@ def main() -> int:
         model_config = load_yaml(config_path)
         cases = _select_cases(resolved_profile, args.date, model_config)
         os.chdir(ROOT)
-        progress.update(message=f"profile resolved cases={len(cases)} artifact_suffix={artifact_suffix} backend={args.prediction_backend}")
+        progress.update(
+            message=(
+                f"profile resolved cases={len(cases)} artifact_suffix={artifact_suffix} "
+                f"model_artifact_suffix={model_artifact_suffix or 'none'} backend={args.prediction_backend}"
+            )
+        )
 
         shared_frame = None
         if args.prediction_backend == "fresh":
@@ -767,6 +774,7 @@ def main() -> int:
                         feature_config_path=artifact_display_path(feature_config_path, workspace_root=ROOT),
                         frame=shared_frame,
                         race_date=case["date"],
+                        model_artifact_suffix=model_artifact_suffix,
                     )
                     if not prediction_csv.exists():
                         raise FileNotFoundError(f"Prediction artifact not found: {prediction_csv}")
@@ -860,6 +868,7 @@ def main() -> int:
             "data_config_file": artifact_display_path(data_config_path, workspace_root=ROOT),
             "feature_config_file": artifact_display_path(feature_config_path, workspace_root=ROOT),
             "artifact_suffix": artifact_suffix,
+            "model_artifact_suffix": model_artifact_suffix,
             "cases": results,
         }
         with Heartbeat("[serving-smoke]", "writing summary output", logger=log_progress):

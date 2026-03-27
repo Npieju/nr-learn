@@ -58,6 +58,8 @@
 
 同様に、`r20260327_recent_2018_component_retrain` も formal に通過しており、recent-heavy family の中では 2020 start より support が強い。次の判断軸は、2018 start / 2020 start / latest baseline を actual-date compare でどう切り分けるかである。
 
+すでに 2025-09 の fresh actual-date compare では、recent-2018 true retrain が baseline `32 bets / total net -27.3 / pure bankroll 0.2959` に対して `4 bets / total net -4.0 / pure bankroll 0.8557` を示した。したがって recent-heavy family の次段は、2018 start を actual-date de-risk 候補としてどう位置づけるかの判断に進んでいる。
+
 ## 4. 判断ログ
 
 ### 4.1 latest データの readiness
@@ -138,6 +140,13 @@
 - 2020 start の true retrain と比べると、AUC / EV 系はわずかに劣る一方で、weighted nested-WF ROI は `0.9595 > 0.9218`、formal support は `5/5 > 4/5` となった。
 - したがって recent-heavy family 内では、現時点の formal support 上位は 2018 start である。ただし latest baseline を置き換えるには actual-date compare がまだ必要である。
 
+### 4.12 recent-heavy 2018 の fresh actual-date compare
+
+- true retrain artifact を serving compare に直接載せるため、`run_serving_smoke.py` と `run_serving_profile_compare.py` に `--model-artifact-suffix` を追加した。
+- この compare は `prediction-backend fresh` で実行する必要があり、`replay-existing` では canonical prediction CSV を再利用するだけで true retrain の差は出ないことも確認した。
+- `2025-09-06/07/13/14/20/21/27/28` の fresh compare では、baseline `current_recommended_serving_2025_latest` が `32 bets / total net -27.3 / pure bankroll 0.2959`、recent-2018 true retrain が `4 bets / total net -4.0 / pure bankroll 0.8557` だった。
+- つまり recent-2018 true retrain は September difficult regime で strong de-risk を示した。一方で `differing_policy_dates=[]` だった旧 replay compare は、canonical prediction 再利用の限界によるもので、判断根拠には使わない。
+
 ## 5. 完了済みマイルストーン
 
 ### M1. 2025 backfill 完了
@@ -203,6 +212,12 @@
 - `r20260327_recent_2018_component_retrain` で recent-2018 の true retrain compare を完了し、evaluation、matching WF feasibility、promotion gate が `pass / promote` で整合した。
 - 主要値は `AUC=0.8432`、`ev_top1_roi=0.7400`、`nested WF weighted test ROI=0.9595`、`formal_benchmark_feasible_fold_count=5` である。
 
+### M13. true retrain artifact の serving compare 導線整備
+
+- `run_serving_smoke.py` / `run_serving_profile_compare.py` / `predict_batch.py` に model artifact suffix の override を追加した。
+- これにより suffix 付き retrain artifact を actual-date compare に直接載せられるようになった。
+- 同導線を使った 2025-09 の fresh compare では、recent-2018 true retrain が latest baseline に対して大きく de-risk することを確認した。
+
 ## 6. 実行中の優先事項
 
 ### P1. recent-heavy candidate family の位置づけ確定
@@ -215,7 +230,7 @@
 
 1. recent-2020 true retrain と pseudo-retrain を区別して docs に残し、同一視しないようにする。
 2. recent-2018 true retrain と recent-2020 true retrain の役割差を整理し、window 長の優先候補を決める。
-3. recent-heavy 上位候補と `current_recommended_serving_2025_latest` の役割差を整理し、baseline 置換判断に必要な actual-date compare を決める。
+3. recent-2018 true retrain と `current_recommended_serving_2025_latest` の actual-date compare を September 以外にも広げ、baseline 置換判断に必要な evidence を揃える。
 
 完了条件:
 

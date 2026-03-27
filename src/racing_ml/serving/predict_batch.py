@@ -12,7 +12,7 @@ import pandas as pd
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
-from racing_ml.common.artifacts import resolve_output_artifacts, save_figure, write_csv_file, write_json
+from racing_ml.common.artifacts import append_suffix_to_file_name, resolve_output_artifacts, save_figure, write_csv_file, write_json
 from racing_ml.common.config import load_yaml
 from racing_ml.common.progress import Heartbeat, ProgressBar
 from racing_ml.common.regime import resolve_regime_override
@@ -145,6 +145,7 @@ def run_predict_from_frame(
     frame: pd.DataFrame,
     race_date: str | None = None,
     profile_name: str | None = None,
+    model_artifact_suffix: str | None = None,
 ) -> None:
     workspace_root = Path.cwd()
     resolved_model_config_path = _resolve_workspace_path(model_config_path, workspace_root)
@@ -169,7 +170,17 @@ def run_predict_from_frame(
             pred_frame=pred_frame,
             workspace_root=workspace_root,
         )
-        output_artifacts = resolve_output_artifacts(active_model_config.get("output", {}))
+        output_cfg = dict(active_model_config.get("output", {}))
+        if model_artifact_suffix:
+            output_cfg["model_file"] = append_suffix_to_file_name(
+                str(output_cfg.get("model_file", "baseline_model.joblib")),
+                model_artifact_suffix,
+            )
+            output_cfg["manifest_file"] = append_suffix_to_file_name(
+                str(output_cfg.get("manifest_file", output_cfg.get("model_file", "baseline_model.joblib"))),
+                model_artifact_suffix,
+            )
+        output_artifacts = resolve_output_artifacts(output_cfg)
         model_path = output_artifacts.model_path if output_artifacts.model_path.is_absolute() else (workspace_root / output_artifacts.model_path)
         manifest_path = output_artifacts.manifest_path if output_artifacts.manifest_path.is_absolute() else (workspace_root / output_artifacts.manifest_path)
         if not model_path.exists():
@@ -327,6 +338,7 @@ def run_predict(
     feature_config_path: str,
     race_date: str | None = None,
     profile_name: str | None = None,
+    model_artifact_suffix: str | None = None,
 ) -> None:
     frame = prepare_prediction_frame(data_config_path)
     run_predict_from_frame(
@@ -335,4 +347,5 @@ def run_predict(
         frame=frame,
         race_date=race_date,
         profile_name=profile_name,
+        model_artifact_suffix=model_artifact_suffix,
     )

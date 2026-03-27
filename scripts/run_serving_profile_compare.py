@@ -68,6 +68,7 @@ def _smoke_command(
     dates: list[str],
     prediction_backend: str,
     artifact_suffix: str,
+    model_artifact_suffix: str | None,
     output_file: Path,
 ) -> list[str]:
     command = [
@@ -82,6 +83,8 @@ def _smoke_command(
         "--output-file",
         artifact_display_path(output_file, workspace_root=ROOT),
     ]
+    if model_artifact_suffix:
+        command.extend(["--model-artifact-suffix", model_artifact_suffix])
     for date_value in dates:
         command.extend(["--date", date_value])
     return command
@@ -236,6 +239,8 @@ def main() -> int:
     parser.add_argument("--prediction-backend", choices=["fresh", "replay-existing"], default="replay-existing")
     parser.add_argument("--left-artifact-suffix", default=None)
     parser.add_argument("--right-artifact-suffix", default=None)
+    parser.add_argument("--left-model-artifact-suffix", default=None)
+    parser.add_argument("--right-model-artifact-suffix", default=None)
     parser.add_argument("--left-summary-output", default=None)
     parser.add_argument("--right-summary-output", default=None)
     parser.add_argument("--compare-json-output", default=None)
@@ -300,7 +305,9 @@ def main() -> int:
         log_progress(
             "resolved compare run "
             f"left={args.left_profile} right={args.right_profile} dates={len(dates)} "
-            f"backend={args.prediction_backend} window_label={window_label}"
+            f"backend={args.prediction_backend} window_label={window_label} "
+            f"left_model_artifact_suffix={args.left_model_artifact_suffix or 'none'} "
+            f"right_model_artifact_suffix={args.right_model_artifact_suffix or 'none'}"
         )
         total_steps = 4 + int(args.run_bankroll_sweep) + int(args.run_dashboard)
         progress = ProgressBar(total=total_steps, prefix="[serving-profile-compare]", logger=log_progress, min_interval_sec=0.0)
@@ -316,6 +323,7 @@ def main() -> int:
             dates=dates,
             prediction_backend=args.prediction_backend,
             artifact_suffix=left_suffix,
+            model_artifact_suffix=str(args.left_model_artifact_suffix or "").strip() or None,
             output_file=left_summary_output,
         )
         right_smoke_command = _smoke_command(
@@ -323,6 +331,7 @@ def main() -> int:
             dates=dates,
             prediction_backend=args.prediction_backend,
             artifact_suffix=right_suffix,
+            model_artifact_suffix=str(args.right_model_artifact_suffix or "").strip() or None,
             output_file=right_summary_output,
         )
         compare_command = _compare_command(

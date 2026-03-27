@@ -116,6 +116,39 @@ staged config の場合、2026-03-22 時点の smoke summary / backtest JSON に
 
 明示的に output path を渡す場合は、summary / compare / bankroll / dashboard の各出力とも directory ではなく file path を渡す。
 
+true retrain した suffix 付き model artifact を actual-date compare に載せたいときは、`run_serving_smoke.py` / `run_serving_profile_compare.py` に `--model-artifact-suffix` を渡す。
+
+例:
+
+```bash
+/workspaces/nr-learn/.venv/bin/python scripts/run_serving_profile_compare.py \
+  --left-profile current_recommended_serving_2025_latest \
+  --right-profile current_recommended_serving_2025_recent_2018 \
+  --right-model-artifact-suffix r20260327_recent_2018_component_retrain \
+  --prediction-backend fresh \
+  --date 2025-09-06 \
+  --date 2025-09-07 \
+  --date 2025-09-13 \
+  --date 2025-09-14 \
+  --date 2025-09-20 \
+  --date 2025-09-21 \
+  --date 2025-09-27 \
+  --date 2025-09-28 \
+  --window-label sep_full_month_2025_latest_vs_recent2018_true_retrain_fresh \
+  --run-bankroll-sweep \
+  --run-dashboard
+```
+
+注意:
+
+- `prediction-backend replay-existing` は canonical prediction CSV を再利用するため、true retrain artifact の差を見る用途には向かない。
+- suffix 付き model を比較したいときは `--prediction-backend fresh` を使う。
+- `--model-artifact-suffix` は output artifact の命名用 `--artifact-suffix` とは別物で、読み込む学習済み model artifact の suffix を指定する。
+
+2026-03-27 にこの導線で `current_recommended_serving_2025_latest` と recent-2018 true retrain を fresh compare したところ、2025-09 の 8 日 window では baseline `32 bets / total net -27.3 / pure bankroll 0.2959` に対して recent-2018 true retrain `4 bets / total net -4.0 / pure bankroll 0.8557` だった。
+
+つまり recent-2018 true retrain は、formal support だけでなく actual-date の difficult regime でも strong de-risk 候補として読める。
+
 2026-03-22 に `current_sep_guard_candidate` でもこの wrapper を end-to-end で確認した。
 
 - window は `2024-09-16`, `2024-09-21`, `2024-09-22`, `2024-09-28`, `2024-09-29`

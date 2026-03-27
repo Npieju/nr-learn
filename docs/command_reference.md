@@ -273,6 +273,29 @@ artifact 命名の実務ルール:
 - provenance 用の `serving_smoke_profile_compare_*.json` も出し、途中 step が失敗した場合も可能な限り実行済み step と失敗位置を残す。
 - `--dashboard-summary-output`、`--dashboard-chart-output`、`--dashboard-csv-output` は directory ではなく file path を渡す。
 - `--left-summary-output`、`--right-summary-output`、`--compare-json-output`、`--compare-csv-output`、`--bankroll-json-output`、`--bankroll-csv-output`、`--manifest-output` も同様に file path 前提である。
+- suffix 付き true retrain model を比較したいときは `--left-model-artifact-suffix` / `--right-model-artifact-suffix` を使う。
+- この用途では `--prediction-backend fresh` が必要で、`replay-existing` では canonical prediction CSV を再利用するだけになる。
+
+例:
+
+```bash
+/workspaces/nr-learn/.venv/bin/python scripts/run_serving_profile_compare.py \
+  --left-profile current_recommended_serving_2025_latest \
+  --right-profile current_recommended_serving_2025_recent_2018 \
+  --right-model-artifact-suffix r20260327_recent_2018_component_retrain \
+  --prediction-backend fresh \
+  --date 2025-09-06 \
+  --date 2025-09-07 \
+  --date 2025-09-13 \
+  --date 2025-09-14 \
+  --date 2025-09-20 \
+  --date 2025-09-21 \
+  --date 2025-09-27 \
+  --date 2025-09-28 \
+  --window-label sep_full_month_2025_latest_vs_recent2018_true_retrain_fresh \
+  --run-bankroll-sweep \
+  --run-dashboard
+```
 
 共通注意:
 
