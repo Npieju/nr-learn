@@ -155,6 +155,23 @@ profile 一覧:
 /workspaces/nr-learn/.venv/bin/python scripts/run_backtest.py --profile current_best_eval_2025_latest
 ```
 
+### 3.6 current stable `_2025_latest` family
+
+`_2025_latest` suffix は `data_2025_latest.yaml` を付けた派生 profile を広く作るが、2026-03-27 時点で current stable family として日常的に参照するのは次の 4 本である。
+
+| profile | 種別 | 代表コマンド | 代表 artifact / window |
+| --- | --- | --- | --- |
+| `current_best_eval_2025_latest` | evaluation mainline | `run_train.py`, `run_evaluate.py`, `run_revision_gate.py` | latest formal evaluation / revision gate |
+| `current_recommended_serving_2025_latest` | operational baseline | `run_predict.py`, `run_serving_smoke.py`, `run_serving_profile_compare.py` | `current_recommended_serving_2025_latest_<window_or_purpose>` |
+| `current_long_horizon_serving_2025_latest` | seasonal de-risk alias | `run_serving_profile_compare.py` | `sep_full_month_2025_latest_profile`, `dec_tail_2025_latest_profile` |
+| `current_tighter_policy_search_candidate_2025_latest` | analysis-first defensive candidate | `run_revision_gate.py`, `run_serving_profile_compare.py`, `run_wf_threshold_sweep.py` | `r20260326_tighter_policy_ratio003`, `r20260327_tighter_policy_ratio003_abs80` |
+
+補足:
+
+- `current_bankroll_candidate_2025_latest`、`current_ev_candidate_2025_latest`、`current_sep_guard_candidate_2025_latest` も profile 解決自体はできる。
+- ただし current latest docs の主導線では使わず、必要なときだけ legacy mitigation / alias 系として参照する。
+- `current_sep_guard_candidate_2025_latest` 相当の役割は、latest docs では `current_long_horizon_serving_2025_latest` という名称で扱う。
+
 ## 4. 正式な revision 評価
 
 短い smoke / probe と、正式な改善判断は分けて扱う。

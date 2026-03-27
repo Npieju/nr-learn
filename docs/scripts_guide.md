@@ -73,6 +73,25 @@
 
 これらの profile 対応 CLI では、`current_best_eval` や `current_recommended_serving` のような既存 family に `_2025_latest`、`_2025_recent_2018`、`_2025_recent_2020` を付けるだけで、対応する data split variant を選べる。
 
+ただし、`_2025_latest` が付く profile は自動派生で広く生成される一方、2026-03-27 時点で docs 上の stable family として明示的に参照するのは次の 4 本である。
+
+| profile | 種別 | 現在の扱い | 主な使い道 |
+| --- | --- | --- | --- |
+| `current_best_eval_2025_latest` | evaluation mainline | latest holdout 上の評価基準線 | train / evaluate / revision gate の比較起点 |
+| `current_recommended_serving_2025_latest` | operational baseline | 現在の既定運用 profile | predict / smoke / compare の baseline |
+| `current_long_horizon_serving_2025_latest` | seasonal de-risk alias | September difficult regime 向けの実運用寄り候補 | baseline との replay/fresh compare |
+| `current_tighter_policy_search_candidate_2025_latest` | analysis-first defensive candidate | formal support 改善を持つ比較候補 | threshold sweep と fresh compare |
+
+一方、次の `_2025_latest` variant も profile 解決自体はできるが、現時点の docs では stable family として前面には出さない。
+
+| profile | 位置づけ |
+| --- | --- |
+| `current_bankroll_candidate_2025_latest` | 旧 mitigation 系の generated variant。現行 latest 運用の主導線には置かない。 |
+| `current_ev_candidate_2025_latest` | 旧 mitigation 系の generated variant。現行 latest 運用の主導線には置かない。 |
+| `current_sep_guard_candidate_2025_latest` | `current_long_horizon_serving_2025_latest` と同系統だが、latest docs では long-horizon alias を正面名として使う。 |
+
+したがって、`_2025_latest` suffix が付いているだけで current stable family とは見なさない。まず上の 4 本を基準に読み、追加 variant は必要が生じたときだけ config / artifact 単位で掘る。
+
 ## 6. serving 検証
 
 ### 6.1 単発 smoke と比較

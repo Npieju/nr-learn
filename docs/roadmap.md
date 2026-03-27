@@ -281,13 +281,35 @@
 - 基本整理は `current_recommended_serving_2025_latest` を baseline に固定し、`current_long_horizon_serving_2025_latest`、`current_tighter_policy_search_candidate_2025_latest`、recent-2018 true retrain を September difficult regime 向け defensive candidate 群として参照する、という形で統一した。
 - December tail のような control window では baseline 優位を維持し、formal 通過だけで broad replacement を行わないことも docs 上で明示した。
 
+### M19. `_2025_latest` stable family 棚卸し完了
+
+- `model_profiles.py` の自動派生仕様と docs 上の current stable family を切り分け、`current_best_eval_2025_latest`、`current_recommended_serving_2025_latest`、`current_long_horizon_serving_2025_latest`、`current_tighter_policy_search_candidate_2025_latest` の 4 本を latest 主導線として固定した。
+- `current_bankroll_candidate_2025_latest`、`current_ev_candidate_2025_latest`、`current_sep_guard_candidate_2025_latest` は generated variant ではあるが current latest docs の主導線には置かないことを明文化した。
+- profile 名、artifact suffix、代表 window の対応を command / scripts guide から辿れるようにした。
+
 ## 6. 実行中の優先事項
 
 `current_tighter_policy_search_candidate_2025_latest` の `0.03/80` formalization は M17 で完了した。続いて P1 だった seasonal / recent-heavy の運用境界整理も、benchmark / overview / public snapshot / serving validation / command reference まで役割表現を揃えたことで完了した。
 
-以後の active priority は、latest 2025 の compare / threshold / fresh-vs-replay の再現導線をさらに詰めることに移る。
+以後の active priority は、latest 2025 の compare / threshold / fresh-vs-replay の再現導線をさらに詰めつつ、seasonal runtime policy の明文化を残件として短くしていくことに移る。
 
-### P1. latest baseline の docs 反映拡充
+### P1. seasonal runtime policy の明文化
+
+目的:
+
+- September window では long-horizon latest を de-risk 候補として扱い、それ以外は baseline を使う運用境界を docs 上で短く再確認できる状態にする。
+
+やること:
+
+1. September と non-September の切替条件を、guide と overview でさらに短い言い回しに寄せる。
+2. long-horizon alias を analysis-only candidate と混同しないための補足を必要最小限に絞る。
+3. December tail を control window として使う理由を、運用境界の説明としてまとめ直す。
+
+完了条件:
+
+- seasonal runtime policy の切替境界が 1-2 段で説明できること。
+
+### P2. latest baseline の docs 反映拡充
 
 目的:
 
@@ -303,29 +325,9 @@
 
 - latest baseline と candidate family の再現導線が command / validation docs で迷わず辿れること。
 
-### P2. latest candidate family の棚卸し
-
-目的:
-
-- `_2025_latest` が付く stable family を棚卸しし、operational baseline、seasonal de-risk、analysis-first defensive candidate の境界を profile 単位でも迷わず辿れる状態にする。
-
-やること:
-
-1. `_2025_latest` stable profile 一覧を棚卸しし、現在も運用上意味がある family だけに絞って整理する。
-2. profile 名、artifact suffix、actual-date compare の代表 window を family ごとに結び直す。
-3. seasonal de-risk alias と analysis-first candidate の導線差を docs 上でさらに短く表現できるようにする。
-
-完了条件:
-
-- `_2025_latest` family の profile 名を見ただけで役割と参照順が分かること。
-
 ## 7. 次の候補
 
-### N1. seasonal runtime policy の明文化
-
-- September window では long-horizon latest を de-risk 候補として扱い、それ以外は baseline を使う運用境界を docs に残す。
-
-### N2. recent-heavy learning window の検証
+### N1. recent-heavy learning window の検証
 
 - `2025 latest` holdout を維持したまま、train 側に date-based な下限を入れた split を比較する。
 - 候補は少なくとも `2018-01-01..2024-12-31` と `2020-01-01..2024-12-31` を用意し、古い年帯を減らしたときの support / ROI / actual-date 挙動を確認する。
@@ -333,7 +335,7 @@
 - まずは `configs/data_2025_recent_2018.yaml` と `configs/data_2025_recent_2020.yaml`、および対応 profile を使って train split を比較できる状態まで整えた。
 - `2020` start と `2018` start の true retrain compare は両方完了した。次は `2018` start を暫定上位候補として latest baseline との actual-date compare を揃える。
 
-### N3. 地方競馬データ拡張の feasibility 整理
+### N2. 地方競馬データ拡張の feasibility 整理
 
 - 地方競馬データの大規模収集は将来候補として検討してよい。
 - ただし JRA と地方ではレース場、頭数分布、開催 cadence、市場傾向が異なるため、まずは「JRA 学習へ直接混ぜる」のではなく、別 universe として ingestion / key / benchmark の切り分けが必要かを設計レベルで整理する。
