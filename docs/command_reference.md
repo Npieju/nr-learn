@@ -387,6 +387,13 @@ ingest / diagnostics / manifest:
 WF 後段チェーン:
 
 ```bash
+/workspaces/nr-learn/.venv/bin/python scripts/run_wf_threshold_sweep.py \
+  --wf-summary artifacts/reports/wf_feasibility_diag_catboost_value_stack_lgbm_roi_high_coverage_tune_roi012_liquidity_regime_hybrid_june_strict_serving_tighter_policy_search_probe_wf_full_nested.json \
+  --min-bet-ratio-values 0.03 \
+  --min-bets-abs-values 100,80 \
+  --output artifacts/reports/wf_threshold_sweep_current_tighter_policy_search_candidate_2025_latest_ratio003_100_vs_80.json \
+  --summary-csv artifacts/reports/wf_threshold_sweep_current_tighter_policy_search_candidate_2025_latest_ratio003_100_vs_80.csv
+
 /workspaces/nr-learn/.venv/bin/python scripts/run_wf_threshold_compare.py \
   --reports \
   artifacts/reports/wf_threshold_sweep_catboost_value_stack_lgbm_roi_high_coverage_tune_roi012_liquidity_regime_hybrid_june_strict_serving_20240601_20240929_wf_full_nested.json \
@@ -421,7 +428,9 @@ WF 後段チェーン:
 補足:
 
 - この節のコマンドは、progress が出るかを見るための軽量確認であり、評価改善の根拠には使わない。
+- `run_wf_threshold_sweep.py` は `min_bet_ratio` と `min_bets_abs` を同時に変える frontier 比較に使う。`0.03/100` と `0.03/80` のような compound point 比較はまずこちらで読む。
 - `run_wf_threshold_compare.py` だけは fold 集計を再生成するため、他より少し重いが再学習や推論は伴わない。
+- `run_wf_threshold_compare.py` は source summary 側の baseline `min_bet_ratio` を引き継ぐので、`min_bets_abs` 単独の見比べには向くが、ratio と absolute threshold を同時に変える比較の正本にはしない。
 
 ## 8. artifact の見方
 

@@ -139,6 +139,10 @@ promotion gate は matching な `wf_feasibility_diag_*.json` を参照する。
 - compare 後段の signature report / drilldown では、3 候補とも blocked family は同じ dominant signature `portfolio / blend_weight=0.8 / min_prob=0.03 / top_k=1 / min_ev=0.95` に集約された
 - そのうえで Sep guard だけは recovery threshold が `fold1=55`, `fold5=34` と他 2 候補より重く、fold4 の recovery も `min_expected_value=1.0` を要求した
 
+threshold sweep を読むときの注意点もある。`run_wf_threshold_sweep.py` は `min_bet_ratio` と `min_bets_abs` の両方をまとめて sweep できるので、`0.03/100` と `0.03/80` のような compound point 比較にはこちらを使う。反対に `run_wf_threshold_compare.py` は既存 sweep report から `min_bets_abs` 軸の fold 集計を再生成する補助であり、source summary の baseline `min_bet_ratio` を引き継ぐ。したがって ratio と absolute threshold を同時に変える比較の正本には使わない。
+
+例えば `current_tighter_policy_search_candidate_2025_latest` では、threshold sweep から `0.03/100 -> 4/5 feasible folds`、`0.03/80 -> 5/5 feasible folds` が直接読める。新たに通るのは fold 2 だけで、best feasible は既存と同じ `kelly blend_weight=0.8 / min_prob=0.03 / odds_max=25`、`98 bets / final_bankroll 0.9199 / max_drawdown 0.1098` だった。この種の読み方は、formal support の境界を決めるときに使い、serving role の変更根拠とは切り分ける。
+
 さらに compare -> mitigation probe まで進めると、「formal gate は通らないが runtime 側で試す価値がある policy」を抽出できる。
 
 - dominant blocked signature は `portfolio / blend_weight=0.8 / min_ev=0.95`

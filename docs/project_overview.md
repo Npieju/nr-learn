@@ -76,6 +76,8 @@
 
 actual-date の fresh compare でも役割ははっきりしている。2025-09 の 8 日では baseline `32 bets / total net -27.3 / pure bankroll 0.2959` に対して tighter policy candidate は `9 bets / -4.3 / 0.8395` で、強い損失圧縮を示した。一方で 2025-12 tail の 8 日では baseline `45 bets / +21.8 / 1.6712` に対して `9 bets / +21.4 / 1.6032` で、profit window の top line は baseline を超えなかった。したがって現時点の位置づけは broad replacement ではなく、September difficult regime 向けの defensive candidate である。
 
+formal support 側の境界も切り分け済みである。既存の threshold sweep では、現行 `0.03/100` は `4/5 feasible folds`、`0.03/80` は `5/5 feasible folds` だった。`80` で新たに通るのは fold 2 だけで、best feasible は既存と同じ kelly family、`98 bets / final_bankroll 0.9199 / max_drawdown 0.1098` だった。したがって `0.03/80` は別の攻め筋へ切り替える話ではなく、同じ defensive family を formal gate 上どこまで許容するかの調整とみなせる。一方で serving policy は変わらないため、operational baseline を切り替える根拠にはならない。
+
 ### 5.3 recent-heavy true retrain の current snapshot
 
 recent-heavy split の比較では、`2018-01-01..2024-12-31` と `2020-01-01..2024-12-31` の true retrain run がともに formal に通過している。

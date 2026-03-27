@@ -161,6 +161,13 @@
 - 2025-12 tail の control window では、baseline が `45 bets / total net +21.8 / pure bankroll 1.6712`、tighter policy candidate が `9 bets / total net +21.4 / pure bankroll 1.6032` だった。
 - したがって tighter policy candidate は September difficult regime では有効な defensive variant だが、broad baseline replacement の根拠はまだない。現時点の正しい位置づけは、formal-support 改善を持つ analysis-first defensive candidate である。
 
+### 4.15 tighter policy の formal threshold frontier 確認
+
+- `wf_threshold_sweep_current_tighter_policy_search_candidate_2025_latest.json` を基準に、`0.03/100` と `0.03/80` の frontier を確認した。
+- 現行の `min_bet_ratio=0.03 / min_bets_abs=100` では `4/5 feasible folds`、`0.03 / 80` では `5/5 feasible folds` になる。
+- 新たに通るのは fold 2 だけで、best feasible は既存 family と同じ `kelly blend_weight=0.8 / min_prob=0.03 / odds_max=25`、`98 bets / ROI 0.7542 / final_bankroll 0.9199 / max_drawdown 0.1098` だった。
+- したがって `0.03/80` は新しい aggressive family を追加する変更ではなく、既存 defensive family を formal support 上どこまで許容するかの境界調整として扱える。一方で serving policy 自体は変わらないため、September defensive / December control という operational role はこの変更だけでは変わらない。
+
 ## 5. 完了済みマイルストーン
 
 ### M1. 2025 backfill 完了
@@ -244,23 +251,30 @@
 - 一方で December tail では baseline `45 bets / total net +21.8 / pure bankroll 1.6712` に対して `9 bets / total net +21.4 / pure bankroll 1.6032` で、baseline 優位を維持した。
 - これにより、tighter policy candidate は broad replacement ではなく September difficult regime 向けの analysis-first defensive candidate として位置づけを確定した。
 
+### M16. tighter policy の formal threshold frontier 確認
+
+- existing threshold sweep から、`current_tighter_policy_search_candidate_2025_latest` の `0.03/100 -> 0.03/80` 変化を確認した。
+- `0.03/100` は `4/5 feasible folds`、`0.03/80` は `5/5 feasible folds` で、差分は fold 2 のみだった。
+- fold 2 を通す best feasible は `kelly blend_weight=0.8 / min_prob=0.03 / odds_max=25`、`98 bets / ROI 0.7542 / final_bankroll 0.9199 / max_drawdown 0.1098` で、既存 family の延長として読める。
+- このため `0.03/80` は formal support を広げる候補としては defensible だが、serving policy は不変なので operational baseline の切替根拠には使わない、という整理を確定した。
+
 ## 6. 実行中の優先事項
 
 ### P1. tighter policy の formal 境界確認
 
 目的:
 
-- `current_tighter_policy_search_candidate_2025_latest` の formal gate が、現行の `0.03/100` で十分に保守的か、それとも `0.03/80` まで広げても defensible かを判断できる状態にする。
+- `current_tighter_policy_search_candidate_2025_latest` について、`0.03/80` を docs / command / validation 導線まで含めて再現可能な formal option として残すか、参考 frontier に留めるかを判断できる状態にする。
 
 やること:
 
-1. `0.03/100` と `0.03/80` の threshold frontier を同じ artifact lineage で比較する。
-2. fold support が増えたときに、September defensive reading と December control reading がどう変わるかを切り分ける。
-3. formal support を広げても operational baseline を切り替えない条件を docs に残す。
+1. `0.03/80` を正式 revision として切り直す必要があるか、それとも既存 threshold sweep を canonical evidence として扱うかを決める。
+2. threshold frontier の読み方と、actual-date role が不変である理由を validation guide / command reference から辿れるようにする。
+3. replay compare と fresh compare の使い分けを threshold 境界検討の前提として docs に補う。
 
 完了条件:
 
-- tighter policy candidate の formal 閾値をどこまで広げるか、また広げても role が analysis-first defensive candidate のままかどうかが明確になっていること。
+- `0.03/80` を operationally採用しないまま formal option として残すかどうか、またその再現手順が docs 上で明確になっていること。
 
 ### P2. seasonal / recent-heavy の明示運用境界整理
 
