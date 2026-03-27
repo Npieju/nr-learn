@@ -311,29 +311,19 @@
 - recent-2018 は September 実日付だけ見れば strongest de-risk だが、学習窓の再構成を伴うため、current operational reading では同一 latest family 上で済む tighter policy candidate を先に参照する。
 - この順序により、実運用寄りの alias から順に `long_horizon -> tighter policy -> recent-2018` と辿り、December control ではいずれも broad replacement と見なさない読み筋が揃った。
 
+### M24. public snapshot の短文化完了
+
+- `public_benchmark_snapshot.md` の role 要約を 3 行に圧縮し、baseline と defensive option の読み分けを対外向けにも短く読める形にした。
+- artifact 出典も formal result と September / December control compare の最小集合へ絞り、内部 docs のような過剰列挙を避けた。
+- これにより対外向け文書でも `baseline を維持し、September だけ defensive option を参照する` という読み筋が即座に分かるようになった。
+
 ## 6. 実行中の優先事項
 
 `current_tighter_policy_search_candidate_2025_latest` の `0.03/80` formalization は M17 で完了した。続いて P1 だった seasonal / recent-heavy の運用境界整理も、benchmark / overview / public snapshot / serving validation / command reference まで役割表現を揃えたことで完了した。
 
-以後の active priority は、対外向け snapshot の圧縮と地方競馬データ拡張の位置づけ整理に移る。
+以後の active priority は、地方競馬データ拡張の位置づけ整理に移る。
 
-### P1. 追加の public snapshot 圧縮
-
-目的:
-
-- 対外向け snapshot で current baseline、seasonal de-risk、defensive option の読み分けをさらに短く保つ。
-
-やること:
-
-1. public snapshot で September / December の 2 段読みをさらに圧縮できるか確認する。
-2. internal docs との整合を崩さずに defensive option の説明を短文化する。
-3. artifact 出典の列挙が過剰になっていないか見直す。
-
-完了条件:
-
-- 対外向け説明で current baseline と defensive option の役割差が短く読めること。
-
-### P2. 地方競馬データ拡張の feasibility 整理
+### P1. 地方競馬データ拡張の feasibility 整理
 
 目的:
 
@@ -348,6 +338,22 @@
 完了条件:
 
 - 地方拡張を今やるべきことと誤読しない説明になっていること。
+
+### P2. 追加の actual-date compare 導線整理
+
+目的:
+
+- latest 2025 の fresh compare artifact への到達経路を、guide 類からさらに短く辿れる状態に保つ。
+
+やること:
+
+1. latest 2025 の fresh compare artifact への到達経路を、guide 類からもう一段短く辿れるようにする。
+2. public / internal docs の導線差が大きくなりすぎていないか点検する。
+3. September / December の control pair を最小限で再説明できる形を維持する。
+
+完了条件:
+
+- latest compare の artifact 入口が docs 間で過不足なく揃っていること。
 
 ## 7. 次の候補
 
