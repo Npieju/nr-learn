@@ -77,6 +77,12 @@ formal な evaluation 導線は、[evaluation_guide.md](evaluation_guide.md) を
 - September difficult regime では `current_long_horizon_serving_2025_latest`、`current_tighter_policy_search_candidate_2025_latest`、recent-2018 true retrain を defensive candidate 群として参照する。
 - December tail のような利益局面では、いずれの candidate も baseline を broad に置き換える根拠には使わない。
 
+latest 2025 の判断を再開するときは、次の 3 段で読めばよい。
+
+1. まず `serving_validation_guide.md` の dashboard summary JSON 一覧で、September を `long_horizon -> tighter policy -> recent-2018` の順に見てから December control を確認する。
+2. compare を回し直す必要があるときだけ `command_reference.md` の latest 2025 compare 例を同じ順で使う。
+3. formal support の裏付けまで掘る必要があるときだけ、この文書の formal snapshot と promotion gate artifact に降りる。
+
 ### 5.2 latest 2025 の formal snapshot
 
 latest 2025 split で直近に formal に通過した run は次の 2 本である。
@@ -148,7 +154,7 @@ actual-date の fresh compare も次のように確認済みである。
 ### 5.6 補足
 
 - 過去の de-risk / mitigation probe の詳細比較は、現在の採用位置づけを理解するための補助 evidence である。
-- 現在の判断を再開する際は、まずこの節と [roadmap.md](roadmap.md) を見てから、必要な artifact へ降りる。
+- 現在の判断を再開する際は、まず `5.1` の current position と [roadmap.md](roadmap.md) を見てから、必要な artifact へ降りる。
 - 残り `10/84` occurrence では `portfolio / blend_weight=0.8 / min_prob=0.03 / top_k=1 / min_ev=1.0` が pure bankroll で上回った
 - mitigation probe からは runtime-ready candidate として `portfolio_lower_blend` と `portfolio_ev_only` の 2 本を書き出せたが、`74/10` の staged hybrid は現行 runtime の単一 policy/date override では直接表現できなかった
 

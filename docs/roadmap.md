@@ -335,6 +335,12 @@
 - `command_reference.md` の先頭にも同じ再開順を置き、いきなり CLI 実行へ入る前に dashboard summary を先に見る運用を明示した。
 - これにより overview / docs index / serving validation / command reference の 4 箇所で latest compare の再開順が一致した。
 
+### M28. benchmark と public snapshot の再開導線同期完了
+
+- `benchmarks.md` に latest 2025 判断再開時の 3-step 読み順を追加し、current position から compare / formal support へどう降りるかを明示した。
+- `public_benchmark_snapshot.md` には internal reader 向けの但し書きを足し、actual-date compare の再開入口は snapshot ではなく `serving_validation_guide.md` であることを明示した。
+- これにより latest compare の再開順は overview / docs index / benchmarks / serving validation / command reference / public snapshot で矛盾しない状態になった。
+
 ## 6. 実行中の優先事項
 
 `current_tighter_policy_search_candidate_2025_latest` の `0.03/80` formalization は M17 で完了した。続いて seasonal / recent-heavy の運用境界整理、latest compare artifact map、地方競馬 feasibility の切り分け、actual-date compare 再開導線の 3-step quickstart まで完了した。
