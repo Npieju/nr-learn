@@ -32,7 +32,12 @@
 - `current_long_horizon_serving`
   - non-September は baseline を維持しつつ、September だけ validated Kelly-only guard を適用する long-horizon operational alias
 
-latest 2025 系を読むときも原則は同じである。`current_recommended_serving_2025_latest` を baseline に固定し、September difficult window の compare だけ `current_long_horizon_serving_2025_latest`、`current_tighter_policy_search_candidate_2025_latest`、recent-2018 true retrain を defensive candidate として並べる。December tail のような control window では、candidate が formal に通っていても baseline 優位を崩さないかを確認する。
+latest 2025 系の seasonal runtime policy は次の 2 段で読む。
+
+1. September difficult window だけ `current_long_horizon_serving_2025_latest` を最初の de-risk alias として baseline 比較に載せる。
+2. それ以外は `current_recommended_serving_2025_latest` を既定運用に保ち、`current_tighter_policy_search_candidate_2025_latest` と recent-2018 true retrain は analysis-first compare に留める。
+
+December tail のような control window は、この切替が broad replacement ではなく controlled override に留まっているかを確認するために使う。
 
 ## 4. 代表日の smoke
 
