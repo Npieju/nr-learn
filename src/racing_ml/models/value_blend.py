@@ -5,7 +5,7 @@ from typing import Any
 
 import joblib
 
-from racing_ml.common.artifacts import absolutize_path, read_json, relativize_path, resolve_output_artifacts
+from racing_ml.common.artifacts import append_suffix_to_file_name, absolutize_path, read_json, relativize_path, resolve_output_artifacts
 from racing_ml.common.config import load_yaml
 
 
@@ -25,10 +25,25 @@ def load_component_from_config(
     *,
     workspace_root: Path,
     config_path: str | Path,
+    artifact_suffix: str | None = None,
 ) -> dict[str, Any]:
     config_abs = absolutize_path(config_path, workspace_root)
     config = load_yaml(config_abs)
-    artifacts = resolve_output_artifacts(config.get("output", {}))
+    output_cfg = dict(config.get("output", {}))
+    if artifact_suffix:
+        output_cfg["model_file"] = append_suffix_to_file_name(
+            str(output_cfg.get("model_file", "baseline_model.joblib")),
+            str(artifact_suffix),
+        )
+        output_cfg["report_file"] = append_suffix_to_file_name(
+            str(output_cfg.get("report_file", "train_metrics.json")),
+            str(artifact_suffix),
+        )
+        output_cfg["manifest_file"] = append_suffix_to_file_name(
+            str(output_cfg.get("manifest_file", output_cfg.get("model_file", "baseline_model.joblib"))),
+            str(artifact_suffix),
+        )
+    artifacts = resolve_output_artifacts(output_cfg)
 
     model_abs = absolutize_path(artifacts.model_path, workspace_root)
     report_abs = absolutize_path(artifacts.report_path, workspace_root)
@@ -65,6 +80,7 @@ def load_component_from_config(
         "categorical_columns": categorical_columns,
         "task": str(config.get("task", "classification")),
         "model_name": str(config.get("model", {}).get("name", "unknown")),
+        "artifact_suffix": str(artifact_suffix or ""),
     }
 
 

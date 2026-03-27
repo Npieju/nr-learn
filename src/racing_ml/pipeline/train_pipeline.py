@@ -54,10 +54,38 @@ def _run_value_blend_bundle_build(
         raise ValueError("components.win is required for value_blend build")
 
     with Heartbeat("[train-value-blend]", "loading component artifacts"):
-        win_component = load_component_from_config(workspace_root=workspace_root, config_path=win_config_path)
-        alpha_component = load_component_from_config(workspace_root=workspace_root, config_path=alpha_config_path) if alpha_config_path else None
-        roi_component = load_component_from_config(workspace_root=workspace_root, config_path=roi_config_path) if roi_config_path else None
-        time_component = load_component_from_config(workspace_root=workspace_root, config_path=time_config_path) if time_config_path else None
+        win_component = load_component_from_config(
+            workspace_root=workspace_root,
+            config_path=win_config_path,
+            artifact_suffix=artifact_suffix,
+        )
+        alpha_component = (
+            load_component_from_config(
+                workspace_root=workspace_root,
+                config_path=alpha_config_path,
+                artifact_suffix=artifact_suffix,
+            )
+            if alpha_config_path
+            else None
+        )
+        roi_component = (
+            load_component_from_config(
+                workspace_root=workspace_root,
+                config_path=roi_config_path,
+                artifact_suffix=artifact_suffix,
+            )
+            if roi_config_path
+            else None
+        )
+        time_component = (
+            load_component_from_config(
+                workspace_root=workspace_root,
+                config_path=time_config_path,
+                artifact_suffix=artifact_suffix,
+            )
+            if time_config_path
+            else None
+        )
     progress.update(message="component artifacts loaded")
 
     model_bundle = build_value_blend_bundle(
