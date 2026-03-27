@@ -299,27 +299,39 @@
 - long-horizon、tighter policy、recent-2018 true retrain の September / December control artifact を docs から直接辿れるようにした。
 - これにより latest baseline の compare / threshold / fresh-vs-replay の再現導線は、docs 上で必要十分な入口を揃えた。
 
+### M22. recent-heavy family の参照優先順位整理完了
+
+- recent-heavy family 内では `2018` start を front-line candidate、`2020` start を補助比較用の secondary reference として扱う整理を docs 上で固定した。
+- 根拠は、formal support では `2018` start が `5/5` feasible folds と weighted nested-WF ROI で優位、actual-date でも September difficult window で `2018 > 2020 > baseline` が確認済みである点に置いた。
+- これにより current active question は、recent-heavy family 内の順位づけではなく、recent-2018 と tighter defensive variant の参照順へ絞られた。
+
+### M23. September difficult regime の候補参照順固定
+
+- September difficult regime の候補順は、`current_long_horizon_serving_2025_latest` を第一候補、`current_tighter_policy_search_candidate_2025_latest` を第二候補、recent-2018 true retrain を第三候補の analysis-first fallback とする整理で固定した。
+- recent-2018 は September 実日付だけ見れば strongest de-risk だが、学習窓の再構成を伴うため、current operational reading では同一 latest family 上で済む tighter policy candidate を先に参照する。
+- この順序により、実運用寄りの alias から順に `long_horizon -> tighter policy -> recent-2018` と辿り、December control ではいずれも broad replacement と見なさない読み筋が揃った。
+
 ## 6. 実行中の優先事項
 
 `current_tighter_policy_search_candidate_2025_latest` の `0.03/80` formalization は M17 で完了した。続いて P1 だった seasonal / recent-heavy の運用境界整理も、benchmark / overview / public snapshot / serving validation / command reference まで役割表現を揃えたことで完了した。
 
-以後の active priority は、recent-heavy learning window の候補整理を actual-date / formal support の両面で詰めることに移る。
+以後の active priority は、対外向け snapshot の圧縮と地方競馬データ拡張の位置づけ整理に移る。
 
-### P1. recent-heavy learning window の検証
+### P1. 追加の public snapshot 圧縮
 
 目的:
 
-- `2025 latest` holdout を維持したまま、recent-heavy learning window の候補を actual-date compare と formal support の両面で再配置できる状態にする。
+- 対外向け snapshot で current baseline、seasonal de-risk、defensive option の読み分けをさらに短く保つ。
 
 やること:
 
-1. `2018` start を暫定上位候補として latest baseline との actual-date compare を必要十分な範囲で揃える。
-2. recent-2018 を September difficult regime でどこまで fallback 候補として扱うかを整理する。
-3. recent-2020 を残すべき comparison target かどうかを docs 上でも明確にする。
+1. public snapshot で September / December の 2 段読みをさらに圧縮できるか確認する。
+2. internal docs との整合を崩さずに defensive option の説明を短文化する。
+3. artifact 出典の列挙が過剰になっていないか見直す。
 
 完了条件:
 
-- recent-heavy family の参照優先順位が actual-date / formal support の両面で迷わず読めること。
+- 対外向け説明で current baseline と defensive option の役割差が短く読めること。
 
 ### P2. 地方競馬データ拡張の feasibility 整理
 
@@ -343,11 +355,7 @@
 
 - latest 2025 の fresh compare artifact への到達経路を、guide 類からもう一段短く辿れるようにする。
 
-### N2. 追加の public snapshot 圧縮
-
-- 対外向け snapshot で current baseline と defensive option の読み分けをさらに短くできるかを確認する。
-
-### N3. 地方競馬データ拡張の feasibility 整理
+### N2. 地方競馬データ拡張の feasibility 整理
 
 - 地方競馬データの大規模収集は将来候補として検討してよい。
 - ただし JRA と地方ではレース場、頭数分布、開催 cadence、市場傾向が異なるため、まずは「JRA 学習へ直接混ぜる」のではなく、別 universe として ingestion / key / benchmark の切り分けが必要かを設計レベルで整理する。

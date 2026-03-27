@@ -122,6 +122,8 @@ actual-date の fresh compare も次のように確認済みである。
 
 解釈としては、2020 start は AUC / EV 系で優位だが、2018 start は weighted nested-WF ROI と feasible folds で優位である。さらに actual-date の fresh compare でも、2025-09 の difficult window では recent-2018 が `4 bets / total net -4.0 / pure bankroll 0.8557`、recent-2020 が `8 bets / -8.0 / 0.7408` で、baseline `32 bets / -27.3 / 0.2959` をともに上回りつつ 2018 start が上位だった。一方で 2025-12 tail では recent-2018 が baseline `45 bets / +21.8 / 1.6712` に対して `1 bet / -1.0 / 0.9722` と大きく劣後した。したがって現時点では、recent-heavy true retrain は「formal に通過し、September difficult regime では有効だが、broad baseline replacement ではない analysis-first candidate」と読むのが正しい。recent-heavy family 内の優先窓は 2018 start である。
 
+運用上の整理をさらに詰めると、recent-heavy family の front-line compare target は 2018 start だけで十分である。2020 start は AUC / EV 系の補助比較として記録する価値はあるが、actual-date と formal support を合わせた優先順位では 2018 start を上回っていない。したがって 2020 start は current operational reading の一次候補ではなく、support / metric contrast を確認するための secondary reference として残す。
+
 この 3 系統の September difficult regime での役割差も固定して読む。
 
 | 候補 | September での主な役割 | December tail での読み | 現時点の扱い |

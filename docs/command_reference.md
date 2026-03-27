@@ -352,8 +352,8 @@ latest 2025 系は、まず `current_recommended_serving_2025_latest` を baseli
 理由は次のとおりである。
 
 - `current_long_horizon_serving_2025_latest` は baseline path を最も崩さない seasonal de-risk alias で、実運用寄りの比較起点になる。
-- `current_tighter_policy_search_candidate_2025_latest` は latest 2025 の formal support を持つ defensive candidate で、support 改善と actual-date de-risk をあわせて読める。
-- recent-2018 true retrain は September difficult window では strongest de-risk 側だが、December tail では baseline に劣後するため broad replacement 判定には使わない。
+- `current_tighter_policy_search_candidate_2025_latest` は latest 2025 の同一 family 上で exposure を絞る defensive candidate で、実運用の比較順としては recent-heavy retrain より一段単純である。
+- recent-2018 true retrain は September difficult window では strongest de-risk 側だが、学習窓の再構成を伴うため current reading では analysis-first fallback に置く。December tail でも broad replacement 判定には使わない。
 
 September difficult window で long-horizon alias を最初に見る例:
 
