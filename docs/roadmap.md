@@ -353,22 +353,28 @@
 - `scripts_guide.md` にも、latest compare 再開時は索引から script を探し始めず、quickstart と command entrypoint を先に使う運用を明記した。
 - これにより latest compare の再開順は補助資料レベルでも揃い、docs 間の入口差はほぼ解消した。
 
+### M31. latest compare 導線監査の一巡完了
+
+- docs 全体を横断で点検し、latest 2025 actual-date compare の再開入口が overview / index / benchmark / guide / command / helper docs で矛盾しないことを確認した。
+- この結果、active priority としての「導線整理」は一巡完了とし、以後は定期的な drift 点検だけを残す。
+- 次の候補は、新たな docs 入口追加ではなく future option の深掘りか、通常の保守点検になる。
+
 ## 6. 実行中の優先事項
 
-`current_tighter_policy_search_candidate_2025_latest` の `0.03/80` formalization は M17 で完了した。続いて seasonal / recent-heavy の運用境界整理、latest compare artifact map、地方競馬 feasibility の切り分け、actual-date compare 再開導線の 3-step quickstart まで完了した。
+`current_tighter_policy_search_candidate_2025_latest` の `0.03/80` formalization は M17 で完了した。続いて seasonal / recent-heavy の運用境界整理、latest compare artifact map、地方競馬 feasibility の切り分け、actual-date compare 再開導線の同期監査まで完了した。
 
-以後の active priority は、public / internal docs の軽量保守に絞る。
+以後の active priority は、public / internal docs の定期点検と future option の切り分けに絞る。
 
-### P1. docs 保守の軽量整理
+### P1. docs の定期点検
 
 目的:
 
-- ここまで積み上げた role / artifact / candidate order の説明が docs 間で発散しないように保つ。
+- ここまで積み上げた role / artifact / candidate order の説明が、今後の更新で再び発散しないように保つ。
 
 やること:
 
-1. public / internal docs の重複表現を必要最小限まで揃える。
-2. roadmap の next candidates が active priority と矛盾しないか定期的に点検する。
+1. roadmap の next candidates が active priority と矛盾しないか定期的に点検する。
+2. public / internal docs の current reading が新しい更新でずれていないかを巡回確認する。
 3. `.vscode/` のようなローカル設定を commit 対象へ混ぜない運用を継続する。
 
 完了条件:
@@ -377,15 +383,16 @@
 
 ## 7. 次の候補
 
-### N1. docs 保守の軽量整理
+### N1. 地方競馬データ拡張の feasibility 深掘り
 
-- public / internal docs の重複表現が増えすぎていないかを定期的に点検する。
-
-### N2. 地方競馬データ拡張の feasibility 深掘り
-
+- 地方競馬を別 universe として扱う場合の ingestion / key / benchmark 分離を、設計レベルでさらに具体化する。
 - 地方競馬データの大規模収集は将来候補として検討してよい。
 - ただし JRA と地方ではレース場、頭数分布、開催 cadence、市場傾向が異なるため、まずは「JRA 学習へ直接混ぜる」のではなく、別 universe として ingestion / key / benchmark の切り分けが必要かを設計レベルで整理する。
 - この検討は recent-heavy JRA split の評価が一段落してから着手する。
+
+### N2. docs の定期点検
+
+- public / internal docs の重複表現が増えすぎていないかを定期的に点検する。
 
 ## 8. 当面やらないこと
 
