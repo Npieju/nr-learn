@@ -317,29 +317,19 @@
 - artifact 出典も formal result と September / December control compare の最小集合へ絞り、内部 docs のような過剰列挙を避けた。
 - これにより対外向け文書でも `baseline を維持し、September だけ defensive option を参照する` という読み筋が即座に分かるようになった。
 
+### M25. 地方競馬データ拡張の feasibility 整理完了
+
+- 地方競馬データは JRA latest baseline を直接改善する次タスクではなく、別 universe の将来候補として扱うことを docs 上で固定した。
+- ingestion、key、benchmark の 3 点を少なくとも JRA と切り分ける必要があること、混合学習を試す場合も JRA-only baseline を残すことを前提条件として明記した。
+- これにより「地方拡張を今すぐやるべきか」という誤読を避け、JRA latest の残課題と future option を分離できる状態にした。
+
 ## 6. 実行中の優先事項
 
 `current_tighter_policy_search_candidate_2025_latest` の `0.03/80` formalization は M17 で完了した。続いて P1 だった seasonal / recent-heavy の運用境界整理も、benchmark / overview / public snapshot / serving validation / command reference まで役割表現を揃えたことで完了した。
 
-以後の active priority は、地方競馬データ拡張の位置づけ整理に移る。
+以後の active priority は、latest compare 導線の最終整理と public / internal docs の保守に移る。
 
-### P1. 地方競馬データ拡張の feasibility 整理
-
-目的:
-
-- 地方競馬データ拡張を将来候補として扱う場合に、JRA current baseline と混同しない universe 分離の論点を先に固定する。
-
-やること:
-
-1. JRA と地方で ingestion / key / benchmark をどこから切り分けるべきかを設計レベルで整理する。
-2. current JRA latest の benchmark と混ぜないための前提条件を列挙する。
-3. recent-heavy JRA split の残件を妨げない範囲で future option として位置づける。
-
-完了条件:
-
-- 地方拡張を今やるべきことと誤読しない説明になっていること。
-
-### P2. 追加の actual-date compare 導線整理
+### P1. 追加の actual-date compare 導線整理
 
 目的:
 
@@ -355,13 +345,33 @@
 
 - latest compare の artifact 入口が docs 間で過不足なく揃っていること。
 
+### P2. docs 保守の軽量整理
+
+目的:
+
+- ここまで積み上げた role / artifact / candidate order の説明が docs 間で発散しないように保つ。
+
+やること:
+
+1. public / internal docs の重複表現を必要最小限まで揃える。
+2. roadmap の next candidates が active priority と矛盾しないか定期的に点検する。
+3. `.vscode/` のようなローカル設定を commit 対象へ混ぜない運用を継続する。
+
+完了条件:
+
+- docs の current reading が少ない往復で保守できること。
+
 ## 7. 次の候補
 
 ### N1. 追加の actual-date compare 導線整理
 
 - latest 2025 の fresh compare artifact への到達経路を、guide 類からもう一段短く辿れるようにする。
 
-### N2. 地方競馬データ拡張の feasibility 整理
+### N2. docs 保守の軽量整理
+
+- public / internal docs の重複表現が増えすぎていないかを定期的に点検する。
+
+### N3. 地方競馬データ拡張の feasibility 整理
 
 - 地方競馬データの大規模収集は将来候補として検討してよい。
 - ただし JRA と地方ではレース場、頭数分布、開催 cadence、市場傾向が異なるため、まずは「JRA 学習へ直接混ぜる」のではなく、別 universe として ingestion / key / benchmark の切り分けが必要かを設計レベルで整理する。
