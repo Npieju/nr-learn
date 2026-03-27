@@ -68,11 +68,12 @@ def _resolve_matching_wf_summary(
     config: str | None,
     data_config: str | None,
     feature_config: str | None,
+    artifact_suffix: str | None,
 ) -> tuple[Path | None, dict[str, Any] | None]:
     if not config:
         return None, None
 
-    latest_match: tuple[float, Path, dict[str, Any]] | None = None
+    latest_match: tuple[int, float, Path, dict[str, Any]] | None = None
     for path in sorted(report_dir.glob("wf_feasibility_diag_*.json")):
         payload = _read_json_dict(path)
         if payload is None:
@@ -84,13 +85,15 @@ def _resolve_matching_wf_summary(
             continue
         if feature_config is not None and run_context.get("feature_config") != feature_config:
             continue
-        candidate = (path.stat().st_mtime, path, payload)
-        if latest_match is None or candidate[0] > latest_match[0]:
+        candidate_suffix = str(run_context.get("artifact_suffix") or "")
+        suffix_score = 1 if artifact_suffix is not None and candidate_suffix == artifact_suffix else 0
+        candidate = (suffix_score, path.stat().st_mtime, path, payload)
+        if latest_match is None or candidate[:2] > latest_match[:2]:
             latest_match = candidate
 
     if latest_match is None:
         return None, None
-    return latest_match[1], latest_match[2]
+    return latest_match[2], latest_match[3]
 
 
 def _summarize_wf_feasibility_diagnostics(
@@ -265,11 +268,13 @@ def main() -> int:
         wf_summary_payload = _read_json_dict(wf_summary_path)
         auto_resolved_wf_path: Path | None = None
         if wf_summary_payload is None:
+            manifest_run_context = manifest_payload.get("run_context") if isinstance(manifest_payload.get("run_context"), dict) else {}
             auto_resolved_wf_path, wf_summary_payload = _resolve_matching_wf_summary(
                 report_dir=ROOT / "artifacts" / "reports",
                 config=manifest_payload.get("config"),
                 data_config=manifest_payload.get("data_config"),
                 feature_config=manifest_payload.get("feature_config"),
+                artifact_suffix=str(manifest_run_context.get("artifact_suffix") or ""),
             )
             if auto_resolved_wf_path is not None:
                 wf_summary_path = auto_resolved_wf_path

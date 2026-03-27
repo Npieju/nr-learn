@@ -17,6 +17,7 @@ if str(SRC) not in sys.path:
     sys.path.append(str(SRC))
 
 from racing_ml.common.artifacts import display_path as artifact_display_path
+from racing_ml.common.artifacts import append_suffix_to_file_name
 from racing_ml.common.artifacts import ensure_output_file_path as artifact_ensure_output_file_path
 from racing_ml.common.artifacts import resolve_output_artifacts
 from racing_ml.common.artifacts import write_csv_file, write_text_file
@@ -437,6 +438,7 @@ def main() -> int:
     parser.add_argument("--config", default="configs/model_catboost_value_stack_lgbm_roi_high_coverage_diag.yaml")
     parser.add_argument("--data-config", default="configs/data.yaml")
     parser.add_argument("--feature-config", default="configs/features_catboost_rich_high_coverage_diag.yaml")
+    parser.add_argument("--artifact-suffix", default=None)
     parser.add_argument("--pre-feature-max-rows", type=int, default=None)
     parser.add_argument("--start-date", default=None)
     parser.add_argument("--end-date", default=None)
@@ -481,7 +483,13 @@ def main() -> int:
         frame = _filter_frame_by_date_window(frame, start_date=args.start_date, end_date=args.end_date)
         progress.update(message=f"features ready rows={len(frame):,}")
 
-        output_artifacts = resolve_output_artifacts(model_cfg.get("output", {}))
+        output_cfg = dict(model_cfg.get("output", {}))
+        if args.artifact_suffix:
+            output_cfg["model_file"] = append_suffix_to_file_name(
+                str(output_cfg.get("model_file", "baseline_model.joblib")),
+                str(args.artifact_suffix),
+            )
+        output_artifacts = resolve_output_artifacts(output_cfg)
         model_path = ROOT / output_artifacts.model_path
         with Heartbeat("[wf-feasibility]", f"loading model {model_path.name}", logger=log_progress):
             model = joblib.load(model_path)
@@ -570,6 +578,8 @@ def main() -> int:
                 "races": int(pred["race_id"].nunique()),
                 "feature_count": int(len(feature_selection.feature_columns)),
                 "categorical_feature_count": int(len(feature_selection.categorical_columns)),
+                "artifact_suffix": str(args.artifact_suffix or ""),
+                "model_path": artifact_display_path(model_path, workspace_root=ROOT),
             },
             "policy_constraints": constraints.to_dict(),
             "policy_search": search_config,
