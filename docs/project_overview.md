@@ -37,15 +37,16 @@
 
 ## 4. 現在の運用上の位置づけ
 
-2026-03-26 時点で、現在の位置づけは次の 3 本に整理している。
+2026-03-27 時点で、現在の位置づけは次の 4 本に整理している。
 
 | 区分 | profile | 位置づけ | 状態 |
 | --- | --- | --- | --- |
 | operational baseline | `current_recommended_serving_2025_latest` | 現在の既定運用 profile | formal gate `pass / promote` |
 | seasonal de-risk | `current_long_horizon_serving_2025_latest` | September 系の損失圧縮を狙う保守候補 | actual-date compare で有効 |
 | formal improvement candidate | `current_tighter_policy_search_candidate_2025_latest` | support 改善を確認した analysis-first 候補 | formal gate `pass / promote` |
+| recent-heavy retrain candidate | `current_recommended_serving_2025_recent_2020` family | true retrain 比較用の analysis-first 候補 | promotion gate `pass / promote` |
 
-ここで重要なのは、`pass / promote` した候補が 1 本増えたことと、だからといって自動で baseline を差し替えていないことである。`nr-learn` では formal 通過と operational 採用を分けて扱う。
+ここで重要なのは、`pass / promote` した候補が増えても、だからといって自動で baseline を差し替えていないことである。`nr-learn` では formal 通過と operational 採用を分けて扱う。また recent-heavy family では、profile 名だけの train ではなく、component を再学習した true retrain run だけを比較根拠に採る。
 
 ## 5. 現在の主要スコア
 
@@ -73,6 +74,16 @@
 
 補足すると、tighter policy candidate は support 改善の evidence として重要だが、serving default を即時に置き換える決定まではしていない。現時点の baseline は引き続き `current_recommended_serving_2025_latest` である。
 
+### 5.3 recent-heavy true retrain の current snapshot
+
+recent-heavy split の比較では、`2020-01-01..2024-12-31` を train window にした true retrain run が formal に通過している。
+
+| revision | 判断 | 主要値 |
+| --- | --- | --- |
+| `r20260327_recent_2020_component_retrain` | `pass / promote` | AUC `0.8449`, EV top1 ROI `0.7496`, nested WF `0.9218`, feasible folds `4/5`, bets `878` |
+
+ただし、この run は baseline の代替として即採用するのではなく、recent-heavy learning window の効果を測る analysis-first candidate として扱う。理由は、AUC や EV 系は改善した一方で、nested WF weighted ROI と bet 件数は pseudo-retrain run より下がっているためである。
+
 ## 6. どこまで進んでいるか
 
 現時点では、次の点がすでにできている。
@@ -89,9 +100,9 @@
 
 いま残っている主な論点は次の 3 つである。
 
-1. `current_tighter_policy_search_candidate_2025_latest` を analysis-first のまま維持するか、追加比較を経て次の昇格候補にするか。
-2. `current_long_horizon_serving_2025_latest` を September de-risk 用としてどこまで明示運用するか。
-3. latest 2025 の formal-support 改善を、より単純な policy で再現できるか。
+1. recent-heavy true retrain を `2018` start まで広げたとき、`2020` start より安定するか。
+2. `current_tighter_policy_search_candidate_2025_latest` を analysis-first のまま維持するか、追加比較を経て次の昇格候補にするか。
+3. `current_long_horizon_serving_2025_latest` を September de-risk 用としてどこまで明示運用するか。
 
 進行中の優先順位と最新の実行順は、書き捨ての会話ログではなく [roadmap.md](roadmap.md) を正本として更新する。
 
