@@ -48,6 +48,8 @@
 
 ここで重要なのは、`pass / promote` した候補が増えても、だからといって自動で baseline を差し替えていないことである。`nr-learn` では formal 通過と operational 採用を分けて扱う。また recent-heavy family では、profile 名だけの train ではなく、component を再学習した true retrain run だけを比較根拠に採る。
 
+2026-03-27 時点の実務上の読み方は単純である。既定運用は baseline を維持し、September difficult regime だけを defensive candidate 群の比較対象にする。December tail のような control window では、候補が formal に通っていても baseline 優位を崩さない。
+
 ## 5. 現在の主要スコア
 
 現時点で引き継ぎ時に押さえるべき数値は次の 2 系統である。
@@ -89,6 +91,12 @@ recent-heavy split の比較では、`2018-01-01..2024-12-31` と `2020-01-01..2
 
 ただし、これらの run は baseline の代替として即採用するのではなく、recent-heavy learning window の効果を測る analysis-first candidate として扱う。現時点では 2018 start が formal support で優位で、2025-09 の fresh actual-date compare でも baseline `32 bets / total net -27.3 / pure bankroll 0.2959` に対して `4 bets / -4.0 / 0.8557` と、recent-2020 の `8 bets / -8.0 / 0.7408` より強い de-risk を示した。一方で 2025-12 tail の fresh compare では baseline `45 bets / +21.8 / 1.6712` に対して recent-2018 が `1 bet / -1.0 / 0.9722` と明確に劣後した。したがって現時点の位置づけは broad replacement ではなく、September difficult regime 向けの recent-heavy candidate である。
 
+September difficult regime の 3 候補は、次の順で解釈すると誤読が少ない。
+
+1. `current_long_horizon_serving_2025_latest` は baseline path を最も崩さない seasonal de-risk alias であり、実運用寄りの第一候補である。
+2. `current_tighter_policy_search_candidate_2025_latest` は latest 2025 formal support を持つ defensive candidate であり、support 改善を伴う analysis-first option である。
+3. recent-2018 true retrain は learning window 側を recent-heavy に寄せた strongest de-risk candidate だが、December tail では baseline に劣後するため broad replacement には使わない。
+
 ## 6. どこまで進んでいるか
 
 現時点では、次の点がすでにできている。
@@ -105,9 +113,9 @@ recent-heavy split の比較では、`2018-01-01..2024-12-31` と `2020-01-01..2
 
 いま残っている主な論点は次の 3 つである。
 
-1. recent-heavy true retrain の上位候補である `2018` start を、September difficult regime 向け candidate としてどこまで明示運用するか。
-2. `current_long_horizon_serving_2025_latest` を September de-risk 用としてどこまで明示運用するか。
-3. September difficult regime 向け候補として、tighter defensive variant と recent-heavy 2018 true retrain をどう住み分けるか。
+1. `current_long_horizon_serving_2025_latest` を September de-risk 用の明示 alias としてどこまで運用導線に載せるか。
+2. recent-heavy true retrain の上位候補である `2018` start を、analysis-first candidate のまま保持するか、より明示的な fallback 候補に寄せるか。
+3. tighter defensive variant と recent-heavy 2018 true retrain を、September difficult regime 内でどの順に参照するかを docs / command 導線まで含めて固定するか。
 
 進行中の優先順位と最新の実行順は、書き捨ての会話ログではなく [roadmap.md](roadmap.md) を正本として更新する。
 

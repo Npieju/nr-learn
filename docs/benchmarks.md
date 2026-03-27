@@ -71,6 +71,12 @@ formal な evaluation 導線は、[evaluation_guide.md](evaluation_guide.md) を
 - operational 採用は actual-date compare と role の単純さも含めて別途判断する。
 - recent-heavy family は profile 名だけでは true retrain にならないため、component artifact を同一 suffix で再学習した run だけを正式比較対象として扱う。
 
+運用上の読み方はさらに次の 3 行に圧縮できる。
+
+- 既定運用は `current_recommended_serving_2025_latest` のまま維持する。
+- September difficult regime では `current_long_horizon_serving_2025_latest`、`current_tighter_policy_search_candidate_2025_latest`、recent-2018 true retrain を defensive candidate 群として参照する。
+- December tail のような利益局面では、いずれの candidate も baseline を broad に置き換える根拠には使わない。
+
 ### 5.2 latest 2025 の formal snapshot
 
 latest 2025 split で直近に formal に通過した run は次の 2 本である。
@@ -115,6 +121,14 @@ actual-date の fresh compare も次のように確認済みである。
 | `2025-12` tail 8 日 | `45 bets / +21.8 / 1.6712` | `1 bet / -1.0 / 0.9722` | 未比較 | baseline 優位 |
 
 解釈としては、2020 start は AUC / EV 系で優位だが、2018 start は weighted nested-WF ROI と feasible folds で優位である。さらに actual-date の fresh compare でも、2025-09 の difficult window では recent-2018 が `4 bets / total net -4.0 / pure bankroll 0.8557`、recent-2020 が `8 bets / -8.0 / 0.7408` で、baseline `32 bets / -27.3 / 0.2959` をともに上回りつつ 2018 start が上位だった。一方で 2025-12 tail では recent-2018 が baseline `45 bets / +21.8 / 1.6712` に対して `1 bet / -1.0 / 0.9722` と大きく劣後した。したがって現時点では、recent-heavy true retrain は「formal に通過し、September difficult regime では有効だが、broad baseline replacement ではない analysis-first candidate」と読むのが正しい。recent-heavy family 内の優先窓は 2018 start である。
+
+この 3 系統の September difficult regime での役割差も固定して読む。
+
+| 候補 | September での主な役割 | December tail での読み | 現時点の扱い |
+| --- | --- | --- | --- |
+| `current_long_horizon_serving_2025_latest` | baseline path を大きく崩さず seasonal override をかける最も単純な de-risk 候補 | control window では baseline path 維持を優先 | 実運用寄りの seasonal de-risk alias |
+| `current_tighter_policy_search_candidate_2025_latest` | latest 2025 formal support を保ったまま exposure を絞る defensive candidate | top line は baseline 優位 | analysis-first の formal defensive candidate |
+| recent-2018 true retrain | 学習窓を recent-heavy に寄せたときの strongest de-risk 候補 | profit window では baseline に明確に劣後 | analysis-first の recent-heavy candidate |
 
 ### 5.5 長期 benchmark ladder
 

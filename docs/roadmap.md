@@ -275,56 +275,57 @@
 - evaluation に加えて matching `wf_feasibility_diag` も同じ reused artifact で生成し、promotion gate まで `pass / promote` で整合した。
 - 主要値は `formal_benchmark_weighted_roi=1.1042287961989103`、`formal_benchmark_feasible_fold_count=5/5`、`formal_benchmark_bets_total=598` である。
 
+### M18. regime-specific candidate 境界の docs 整理完了
+
+- benchmark / overview / public snapshot / serving validation / command reference の role 表現を揃え、September difficult regime の候補群を同じ読み筋で再開できるようにした。
+- 基本整理は `current_recommended_serving_2025_latest` を baseline に固定し、`current_long_horizon_serving_2025_latest`、`current_tighter_policy_search_candidate_2025_latest`、recent-2018 true retrain を September difficult regime 向け defensive candidate 群として参照する、という形で統一した。
+- December tail のような control window では baseline 優位を維持し、formal 通過だけで broad replacement を行わないことも docs 上で明示した。
+
 ## 6. 実行中の優先事項
 
-### P1. tighter policy の formal 境界確認
+`current_tighter_policy_search_candidate_2025_latest` の `0.03/80` formalization は M17 で完了した。続いて P1 だった seasonal / recent-heavy の運用境界整理も、benchmark / overview / public snapshot / serving validation / command reference まで役割表現を揃えたことで完了した。
+
+以後の active priority は、latest 2025 の compare / threshold / fresh-vs-replay の再現導線をさらに詰めることに移る。
+
+### P1. latest baseline の docs 反映拡充
 
 目的:
 
-- `current_tighter_policy_search_candidate_2025_latest` について、`0.03/80` を docs / command / validation 導線まで含めて再現可能な formal option として残すか、参考 frontier に留めるかを判断できる状態にする。
+- latest 2025 の compare / threshold / fresh-vs-replay の読み方を、再開時に command / validation docs からすぐ辿れる状態に保つ。
 
 やること:
 
-1. `0.03/80` を正式 revision として切り直す必要があるか、それとも既存 threshold sweep を canonical evidence として扱うかを決める。
-2. threshold frontier の読み方と、actual-date role が不変である理由を validation guide / command reference から辿れるようにする。
-3. replay compare と fresh compare の使い分けを threshold 境界検討の前提として docs に補う。
+1. latest 2025 の fresh actual-date compare artifact への導線を guide 類から辿りやすくする。
+2. threshold 境界比較に入る前提条件を command / validation docs に補足する。
+3. `_2025_latest` family の stable profile 名と artifact suffix の使い方を docs 側で揃える。
 
 完了条件:
 
-- `0.03/80` を operationally採用しないまま formal option として残すかどうか、またその再現手順が docs 上で明確になっていること。
+- latest baseline と candidate family の再現導線が command / validation docs で迷わず辿れること。
 
-### P2. seasonal / recent-heavy の明示運用境界整理
+### P2. latest candidate family の棚卸し
 
 目的:
 
-- broad baseline replacement ではない候補群を、どの regime でどう参照するかを docs 上で誤読なく再開できる状態にする。
+- `_2025_latest` が付く stable family を棚卸しし、operational baseline、seasonal de-risk、analysis-first defensive candidate の境界を profile 単位でも迷わず辿れる状態にする。
 
 やること:
 
-1. `current_long_horizon_serving_2025_latest`、`current_tighter_policy_search_candidate_2025_latest`、recent-2018 true retrain の 3 本を September difficult regime の候補群としてどう使い分けるか整理する。
-2. December tail の control reading を使って、baseline 維持条件を簡潔に表現する。
-3. public / internal docs の role 表現を揃え、formal 通過と operational 採用を再び混同しないようにする。
+1. `_2025_latest` stable profile 一覧を棚卸しし、現在も運用上意味がある family だけに絞って整理する。
+2. profile 名、artifact suffix、actual-date compare の代表 window を family ごとに結び直す。
+3. seasonal de-risk alias と analysis-first candidate の導線差を docs 上でさらに短く表現できるようにする。
 
 完了条件:
 
-- regime-specific candidate 群の運用境界が docs 上で一貫して読めること。
+- `_2025_latest` family の profile 名を見ただけで役割と参照順が分かること。
 
 ## 7. 次の候補
 
-### N1. latest baseline の docs 反映拡充
-
-- latest 2025 の fresh actual-date compare 系 artifact を guide 類から辿りやすくする。
-- threshold 境界比較に入る前提条件を command / validation docs に補足する。
-
-### N2. latest candidate family の棚卸し
-
-- `_2025_latest` が付く stable family を棚卸しし、operational baseline、seasonal de-risk、analysis-first defensive candidate を分ける。
-
-### N3. seasonal runtime policy の明文化
+### N1. seasonal runtime policy の明文化
 
 - September window では long-horizon latest を de-risk 候補として扱い、それ以外は baseline を使う運用境界を docs に残す。
 
-### N4. recent-heavy learning window の検証
+### N2. recent-heavy learning window の検証
 
 - `2025 latest` holdout を維持したまま、train 側に date-based な下限を入れた split を比較する。
 - 候補は少なくとも `2018-01-01..2024-12-31` と `2020-01-01..2024-12-31` を用意し、古い年帯を減らしたときの support / ROI / actual-date 挙動を確認する。
@@ -332,7 +333,7 @@
 - まずは `configs/data_2025_recent_2018.yaml` と `configs/data_2025_recent_2020.yaml`、および対応 profile を使って train split を比較できる状態まで整えた。
 - `2020` start と `2018` start の true retrain compare は両方完了した。次は `2018` start を暫定上位候補として latest baseline との actual-date compare を揃える。
 
-### N5. 地方競馬データ拡張の feasibility 整理
+### N3. 地方競馬データ拡張の feasibility 整理
 
 - 地方競馬データの大規模収集は将来候補として検討してよい。
 - ただし JRA と地方ではレース場、頭数分布、開催 cadence、市場傾向が異なるため、まずは「JRA 学習へ直接混ぜる」のではなく、別 universe として ingestion / key / benchmark の切り分けが必要かを設計レベルで整理する。

@@ -322,6 +322,109 @@ artifact 命名の実務ルール:
 - `--output`, `--output-file`, `--summary-path`, `--summary-csv`, `--manifest-output` のような引数に directory を渡すと fail-fast する。
 - 逆に `--output-dir` のような directory 前提の引数には file path を渡さない。
 
+### 5.3 latest 2025 の候補群をどう比較するか
+
+latest 2025 系は、まず `current_recommended_serving_2025_latest` を baseline に固定し、September difficult window で defensive candidate を横比較し、そのあと December tail の control window で baseline 維持を確認する順に進める。
+
+実務上の参照順は次で固定する。
+
+1. `current_long_horizon_serving_2025_latest`
+2. `current_tighter_policy_search_candidate_2025_latest`
+3. `current_recommended_serving_2025_recent_2018` true retrain
+
+理由は次のとおりである。
+
+- `current_long_horizon_serving_2025_latest` は baseline path を最も崩さない seasonal de-risk alias で、実運用寄りの比較起点になる。
+- `current_tighter_policy_search_candidate_2025_latest` は latest 2025 の formal support を持つ defensive candidate で、support 改善と actual-date de-risk をあわせて読める。
+- recent-2018 true retrain は September difficult window では strongest de-risk 側だが、December tail では baseline に劣後するため broad replacement 判定には使わない。
+
+September difficult window で long-horizon alias を最初に見る例:
+
+```bash
+/workspaces/nr-learn/.venv/bin/python scripts/run_serving_profile_compare.py \
+  --left-profile current_recommended_serving_2025_latest \
+  --right-profile current_long_horizon_serving_2025_latest \
+  --prediction-backend replay-existing \
+  --date 2025-09-06 \
+  --date 2025-09-07 \
+  --date 2025-09-13 \
+  --date 2025-09-14 \
+  --date 2025-09-20 \
+  --date 2025-09-21 \
+  --date 2025-09-27 \
+  --date 2025-09-28 \
+  --window-label sep_full_month_2025_latest_profile \
+  --run-bankroll-sweep \
+  --run-dashboard
+```
+
+September difficult window で tighter policy candidate を fresh compare する例:
+
+```bash
+/workspaces/nr-learn/.venv/bin/python scripts/run_serving_profile_compare.py \
+  --left-profile current_recommended_serving_2025_latest \
+  --right-profile current_tighter_policy_search_candidate_2025_latest \
+  --prediction-backend fresh \
+  --date 2025-09-06 \
+  --date 2025-09-07 \
+  --date 2025-09-13 \
+  --date 2025-09-14 \
+  --date 2025-09-20 \
+  --date 2025-09-21 \
+  --date 2025-09-27 \
+  --date 2025-09-28 \
+  --window-label sep_full_month_2025_latest_vs_tighter_policy_candidate_fresh \
+  --run-bankroll-sweep \
+  --run-dashboard
+```
+
+December tail の control window で baseline 維持を確認する例:
+
+```bash
+/workspaces/nr-learn/.venv/bin/python scripts/run_serving_profile_compare.py \
+  --left-profile current_recommended_serving_2025_latest \
+  --right-profile current_tighter_policy_search_candidate_2025_latest \
+  --prediction-backend fresh \
+  --date 2025-12-06 \
+  --date 2025-12-07 \
+  --date 2025-12-13 \
+  --date 2025-12-14 \
+  --date 2025-12-20 \
+  --date 2025-12-21 \
+  --date 2025-12-27 \
+  --date 2025-12-28 \
+  --window-label dec_tail_2025_latest_vs_tighter_policy_candidate_fresh \
+  --run-bankroll-sweep \
+  --run-dashboard
+```
+
+recent-2018 true retrain を September difficult window に載せるときは、既存の canonical prediction を再利用せず、suffix 付き model artifact を fresh 推論で読む。
+
+```bash
+/workspaces/nr-learn/.venv/bin/python scripts/run_serving_profile_compare.py \
+  --left-profile current_recommended_serving_2025_latest \
+  --right-profile current_recommended_serving_2025_recent_2018 \
+  --right-model-artifact-suffix r20260327_recent_2018_component_retrain \
+  --prediction-backend fresh \
+  --date 2025-09-06 \
+  --date 2025-09-07 \
+  --date 2025-09-13 \
+  --date 2025-09-14 \
+  --date 2025-09-20 \
+  --date 2025-09-21 \
+  --date 2025-09-27 \
+  --date 2025-09-28 \
+  --window-label sep_full_month_2025_latest_vs_recent2018_true_retrain_fresh \
+  --run-bankroll-sweep \
+  --run-dashboard
+```
+
+判断ルール:
+
+- September difficult window では、baseline より net / bankroll の損失圧縮があるかを見る。
+- December tail のような control window では、candidate が formal に通っていても baseline 優位を崩さないかを見る。
+- threshold frontier の改善と actual-date role の変更は分けて読む。`0.03/80` のような formal support 拡張だけで serving default は切り替えない。
+
 ## 6. netkeiba 系の代表コマンド
 
 ID 準備:
