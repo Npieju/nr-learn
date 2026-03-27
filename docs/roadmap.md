@@ -323,29 +323,19 @@
 - ingestion、key、benchmark の 3 点を少なくとも JRA と切り分ける必要があること、混合学習を試す場合も JRA-only baseline を残すことを前提条件として明記した。
 - これにより「地方拡張を今すぐやるべきか」という誤読を避け、JRA latest の残課題と future option を分離できる状態にした。
 
+### M26. actual-date compare 再開導線の最終整理完了
+
+- `project_overview.md` と `serving_validation_guide.md` に、latest 2025 compare を再開するときの 3-step quickstart を追加した。
+- 読み順は `dashboard summary -> compare rerun -> formal support artifact` に固定し、September difficult window の参照順も `long_horizon -> tighter policy -> recent-2018` で揃えた。
+- これにより latest compare の入口は overview / validation guide / command reference の 3 点で過不足なく一致した。
+
 ## 6. 実行中の優先事項
 
-`current_tighter_policy_search_candidate_2025_latest` の `0.03/80` formalization は M17 で完了した。続いて P1 だった seasonal / recent-heavy の運用境界整理も、benchmark / overview / public snapshot / serving validation / command reference まで役割表現を揃えたことで完了した。
+`current_tighter_policy_search_candidate_2025_latest` の `0.03/80` formalization は M17 で完了した。続いて seasonal / recent-heavy の運用境界整理、latest compare artifact map、地方競馬 feasibility の切り分け、actual-date compare 再開導線の 3-step quickstart まで完了した。
 
-以後の active priority は、latest compare 導線の最終整理と public / internal docs の保守に移る。
+以後の active priority は、public / internal docs の軽量保守に絞る。
 
-### P1. 追加の actual-date compare 導線整理
-
-目的:
-
-- latest 2025 の fresh compare artifact への到達経路を、guide 類からさらに短く辿れる状態に保つ。
-
-やること:
-
-1. latest 2025 の fresh compare artifact への到達経路を、guide 類からもう一段短く辿れるようにする。
-2. public / internal docs の導線差が大きくなりすぎていないか点検する。
-3. September / December の control pair を最小限で再説明できる形を維持する。
-
-完了条件:
-
-- latest compare の artifact 入口が docs 間で過不足なく揃っていること。
-
-### P2. docs 保守の軽量整理
+### P1. docs 保守の軽量整理
 
 目的:
 
@@ -363,15 +353,11 @@
 
 ## 7. 次の候補
 
-### N1. 追加の actual-date compare 導線整理
-
-- latest 2025 の fresh compare artifact への到達経路を、guide 類からもう一段短く辿れるようにする。
-
-### N2. docs 保守の軽量整理
+### N1. docs 保守の軽量整理
 
 - public / internal docs の重複表現が増えすぎていないかを定期的に点検する。
 
-### N3. 地方競馬データ拡張の feasibility 整理
+### N2. 地方競馬データ拡張の feasibility 深掘り
 
 - 地方競馬データの大規模収集は将来候補として検討してよい。
 - ただし JRA と地方ではレース場、頭数分布、開催 cadence、市場傾向が異なるため、まずは「JRA 学習へ直接混ぜる」のではなく、別 universe として ingestion / key / benchmark の切り分けが必要かを設計レベルで整理する。

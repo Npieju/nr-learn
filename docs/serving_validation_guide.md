@@ -39,14 +39,20 @@ latest 2025 系の seasonal runtime policy は次の 2 段で読む。
 
 December tail のような control window は、この切替が broad replacement ではなく controlled override に留まっているかを確認するために使う。
 
-latest 2025 の artifact を最短で読むなら、dashboard summary JSON を先に開く。
+latest 2025 の compare を再開するときは、次の 3 段で十分である。
+
+1. まず dashboard summary JSON だけを見る。
+2. それでも迷うときだけ compare コマンドを回し直す。
+3. operational decision の根拠を formal support まで掘る必要があるときだけ promotion gate / evaluation summary に降りる。
+
+dashboard summary JSON は、September difficult window を `long_horizon -> tighter policy -> recent-2018` の順で見てから、対応する December control window を確認する。
 
 - long-horizon September: `artifacts/reports/dashboard/serving_compare_dashboard_current_recommended_serving_2025_latest_sep_full_month_2025_latest_profile_vs_current_long_horizon_serving_2025_latest_sep_full_month_2025_latest_profile.json`
 - long-horizon December control: `artifacts/reports/dashboard/serving_compare_dashboard_current_recommended_serving_2025_latest_dec_tail_2025_latest_profile_vs_current_long_horizon_serving_2025_latest_dec_tail_2025_latest_profile.json`
 - tighter policy September / December: `artifacts/reports/dashboard/serving_compare_dashboard_current_recommended_serving_2025_latest_sep_full_month_2025_latest_vs_tighter_policy_candidate_fresh_vs_current_tighter_policy_search_candidate_2025_latest_sep_full_month_2025_latest_vs_tighter_policy_candidate_fresh.json` と `artifacts/reports/dashboard/serving_compare_dashboard_current_recommended_serving_2025_latest_dec_tail_2025_latest_vs_tighter_policy_candidate_fresh_vs_current_tighter_policy_search_candidate_2025_latest_dec_tail_2025_latest_vs_tighter_policy_candidate_fresh.json`
 - recent-2018 September / December: `artifacts/reports/dashboard/serving_compare_dashboard_current_recommended_serving_2025_latest_sep_full_month_2025_latest_vs_recent2018_true_retrain_fresh_vs_current_recommended_serving_2025_recent_2018_sep_full_month_2025_latest_vs_recent2018_true_retrain_fresh.json` と `artifacts/reports/dashboard/serving_compare_dashboard_current_recommended_serving_2025_latest_dec_tail_2025_latest_vs_recent2018_true_retrain_fresh_vs_current_recommended_serving_2025_recent_2018_dec_tail_2025_latest_vs_recent2018_true_retrain_fresh.json`
 
-運用判断では dashboard summary を先に見て、formal support が必要なときだけ promotion gate / evaluation summary に降りる。
+コマンドを回し直すときも、`command_reference.md` の latest 2025 compare 例を同じ順に使う。運用判断では dashboard summary を先に見て、formal support が必要なときだけ promotion gate / evaluation summary に降りる。
 
 ## 4. 代表日の smoke
 
