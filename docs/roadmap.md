@@ -293,29 +293,19 @@
 - `current_tighter_policy_search_candidate_2025_latest` と recent-2018 true retrain は、September difficult regime では参照してよいが、non-September では analysis-first compare に留めることを短文で再確認できる形にした。
 - December tail は controlled override を確認する control window として使う、という説明に統一した。
 
+### M21. latest 2025 compare artifact 導線整理完了
+
+- `command_reference.md` と `serving_validation_guide.md` に latest 2025 用の quick artifact map を追加し、compare 実行後にどの dashboard summary / promotion gate を最初に見ればよいかを固定した。
+- long-horizon、tighter policy、recent-2018 true retrain の September / December control artifact を docs から直接辿れるようにした。
+- これにより latest baseline の compare / threshold / fresh-vs-replay の再現導線は、docs 上で必要十分な入口を揃えた。
+
 ## 6. 実行中の優先事項
 
 `current_tighter_policy_search_candidate_2025_latest` の `0.03/80` formalization は M17 で完了した。続いて P1 だった seasonal / recent-heavy の運用境界整理も、benchmark / overview / public snapshot / serving validation / command reference まで役割表現を揃えたことで完了した。
 
-以後の active priority は、latest 2025 の compare / threshold / fresh-vs-replay の再現導線をさらに詰めることに移る。
+以後の active priority は、recent-heavy learning window の候補整理を actual-date / formal support の両面で詰めることに移る。
 
-### P1. latest baseline の docs 反映拡充
-
-目的:
-
-- latest 2025 の compare / threshold / fresh-vs-replay の読み方を、再開時に command / validation docs からすぐ辿れる状態に保つ。
-
-やること:
-
-1. latest 2025 の fresh actual-date compare artifact への導線を guide 類から辿りやすくする。
-2. threshold 境界比較に入る前提条件を command / validation docs に補足する。
-3. `_2025_latest` family の stable profile 名と artifact suffix の使い方を docs 側で揃える。
-
-完了条件:
-
-- latest baseline と candidate family の再現導線が command / validation docs で迷わず辿れること。
-
-### P2. recent-heavy learning window の検証
+### P1. recent-heavy learning window の検証
 
 目的:
 
@@ -331,19 +321,31 @@
 
 - recent-heavy family の参照優先順位が actual-date / formal support の両面で迷わず読めること。
 
+### P2. 地方競馬データ拡張の feasibility 整理
+
+目的:
+
+- 地方競馬データ拡張を将来候補として扱う場合に、JRA current baseline と混同しない universe 分離の論点を先に固定する。
+
+やること:
+
+1. JRA と地方で ingestion / key / benchmark をどこから切り分けるべきかを設計レベルで整理する。
+2. current JRA latest の benchmark と混ぜないための前提条件を列挙する。
+3. recent-heavy JRA split の残件を妨げない範囲で future option として位置づける。
+
+完了条件:
+
+- 地方拡張を今やるべきことと誤読しない説明になっていること。
+
 ## 7. 次の候補
 
-### N1. recent-heavy learning window の検証
-
-- `2025 latest` holdout を維持したまま、train 側に date-based な下限を入れた split を比較する。
-- 候補は少なくとも `2018-01-01..2024-12-31` と `2020-01-01..2024-12-31` を用意し、古い年帯を減らしたときの support / ROI / actual-date 挙動を確認する。
-- rows ベースの tail 制限ではなく、date ベースの train window 制限を優先して比較する。
-- まずは `configs/data_2025_recent_2018.yaml` と `configs/data_2025_recent_2020.yaml`、および対応 profile を使って train split を比較できる状態まで整えた。
-- `2020` start と `2018` start の true retrain compare は両方完了した。次は `2018` start を暫定上位候補として latest baseline との actual-date compare を揃える。
-
-### N2. 追加の actual-date compare 導線整理
+### N1. 追加の actual-date compare 導線整理
 
 - latest 2025 の fresh compare artifact への到達経路を、guide 類からもう一段短く辿れるようにする。
+
+### N2. 追加の public snapshot 圧縮
+
+- 対外向け snapshot で current baseline と defensive option の読み分けをさらに短くできるかを確認する。
 
 ### N3. 地方競馬データ拡張の feasibility 整理
 

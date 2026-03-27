@@ -442,6 +442,23 @@ recent-2018 true retrain を September difficult window に載せるときは、
 - December tail のような control window では、candidate が formal に通っていても baseline 優位を崩さないかを見る。
 - threshold frontier の改善と actual-date role の変更は分けて読む。`0.03/80` のような formal support 拡張だけで serving default は切り替えない。
 
+### 5.4 latest 2025 quick artifact map
+
+latest 2025 の compare を回したあと、まず見る artifact は次の 4 系統だけでよい。
+
+| 見たいもの | まず見る artifact |
+| --- | --- |
+| baseline vs long-horizon の September 読み | `artifacts/reports/dashboard/serving_compare_dashboard_current_recommended_serving_2025_latest_sep_full_month_2025_latest_profile_vs_current_long_horizon_serving_2025_latest_sep_full_month_2025_latest_profile.json` |
+| baseline vs long-horizon の December control 読み | `artifacts/reports/dashboard/serving_compare_dashboard_current_recommended_serving_2025_latest_dec_tail_2025_latest_profile_vs_current_long_horizon_serving_2025_latest_dec_tail_2025_latest_profile.json` |
+| baseline vs tighter policy candidate の September / December 読み | `artifacts/reports/dashboard/serving_compare_dashboard_current_recommended_serving_2025_latest_sep_full_month_2025_latest_vs_tighter_policy_candidate_fresh_vs_current_tighter_policy_search_candidate_2025_latest_sep_full_month_2025_latest_vs_tighter_policy_candidate_fresh.json` と `artifacts/reports/dashboard/serving_compare_dashboard_current_recommended_serving_2025_latest_dec_tail_2025_latest_vs_tighter_policy_candidate_fresh_vs_current_tighter_policy_search_candidate_2025_latest_dec_tail_2025_latest_vs_tighter_policy_candidate_fresh.json` |
+| baseline vs recent-2018 true retrain の September / December 読み | `artifacts/reports/dashboard/serving_compare_dashboard_current_recommended_serving_2025_latest_sep_full_month_2025_latest_vs_recent2018_true_retrain_fresh_vs_current_recommended_serving_2025_recent_2018_sep_full_month_2025_latest_vs_recent2018_true_retrain_fresh.json` と `artifacts/reports/dashboard/serving_compare_dashboard_current_recommended_serving_2025_latest_dec_tail_2025_latest_vs_recent2018_true_retrain_fresh_vs_current_recommended_serving_2025_recent_2018_dec_tail_2025_latest_vs_recent2018_true_retrain_fresh.json` |
+
+formal support 側を見たいときだけ、次に降りる。
+
+- baseline: `artifacts/reports/promotion_gate_r20260325_current_recommended_serving_2025_latest_benchmark_refresh.json`
+- tighter policy: `artifacts/reports/promotion_gate_r20260326_tighter_policy_ratio003.json` と `artifacts/reports/promotion_gate_r20260327_tighter_policy_ratio003_abs80.json`
+- recent-2018: `artifacts/reports/promotion_gate_r20260327_recent_2018_component_retrain.json`
+
 ## 6. netkeiba 系の代表コマンド
 
 ID 準備:
