@@ -526,6 +526,7 @@ def main() -> int:
     parser.add_argument("--data-config", default=None)
     parser.add_argument("--feature-config", default=None)
     parser.add_argument("--artifact-suffix", default=None)
+    parser.add_argument("--model-artifact-suffix", default=None)
     parser.add_argument("--max-rows", type=int, default=120000)
     parser.add_argument("--pre-feature-max-rows", type=int, default=None)
     parser.add_argument("--start-date", default=None)
@@ -557,7 +558,8 @@ def main() -> int:
             message=(
                 f"configs loaded profile={resolved_profile or 'custom'} config={model_config_path} "
                 f"data_config={data_config_path} feature_config={feature_config_path} "
-                f"artifact_suffix={args.artifact_suffix or 'none'}"
+                f"artifact_suffix={args.artifact_suffix or 'none'} "
+                f"model_artifact_suffix={args.model_artifact_suffix or args.artifact_suffix or 'none'}"
             )
         )
 
@@ -580,6 +582,23 @@ def main() -> int:
                 args.artifact_suffix,
             )
         output_artifacts = resolve_output_artifacts(output_cfg)
+
+        load_output_cfg = dict(model_cfg.get("output", {}))
+        load_artifact_suffix = args.model_artifact_suffix or args.artifact_suffix
+        if load_artifact_suffix:
+            load_output_cfg["model_file"] = append_suffix_to_file_name(
+                str(load_output_cfg.get("model_file", "baseline_model.joblib")),
+                load_artifact_suffix,
+            )
+            load_output_cfg["report_file"] = append_suffix_to_file_name(
+                str(load_output_cfg.get("report_file", "train_metrics.json")),
+                load_artifact_suffix,
+            )
+            load_output_cfg["manifest_file"] = append_suffix_to_file_name(
+                str(load_output_cfg.get("manifest_file", load_output_cfg.get("model_file", "baseline_model.joblib"))),
+                load_artifact_suffix,
+            )
+        load_artifacts = resolve_output_artifacts(load_output_cfg)
         policy_constraints = PolicyConstraints.from_config(evaluation_cfg)
         leakage_cfg = evaluation_cfg.get("leakage_audit", {})
         leakage_enabled = bool(leakage_cfg.get("enabled", True))
@@ -625,8 +644,8 @@ def main() -> int:
         if label_col not in frame.columns:
             raise RuntimeError(f"Missing label column: {label_col}")
 
-        model_path = output_artifacts.model_path if output_artifacts.model_path.is_absolute() else (ROOT / output_artifacts.model_path)
-        model = joblib.load(model_path)
+        loaded_model_path = load_artifacts.model_path if load_artifacts.model_path.is_absolute() else (ROOT / load_artifacts.model_path)
+        model = joblib.load(loaded_model_path)
         fallback_selection = resolve_feature_selection(frame, feature_cfg, label_column=label_col)
         feature_selection = resolve_model_feature_selection(model, fallback_selection)
         feature_coverage = summarize_feature_coverage(frame, feature_cfg, feature_selection)
@@ -659,7 +678,7 @@ def main() -> int:
             "default": {
                 "pred": pred,
                 "model_config": str(model_config_path),
-                "model_path": output_artifacts.model_path.as_posix(),
+                "model_path": load_artifacts.model_path.as_posix(),
                 "feature_count": int(len(feature_selection.feature_columns)),
                 "categorical_feature_count": int(len(feature_selection.categorical_columns)),
             }
@@ -765,7 +784,9 @@ def main() -> int:
             "feature_count": int(len(feature_selection.feature_columns)),
             "categorical_feature_count": int(len(feature_selection.categorical_columns)),
             "score_source_count": int(len(prediction_sources)),
-            "artifact_manifest": output_artifacts.manifest_path.as_posix() if (ROOT / output_artifacts.manifest_path).exists() else None,
+            "artifact_suffix": args.artifact_suffix,
+            "model_artifact_suffix": args.model_artifact_suffix or args.artifact_suffix,
+            "artifact_manifest": load_artifacts.manifest_path.as_posix() if (ROOT / load_artifacts.manifest_path).exists() else None,
         }
         summary["feature_coverage"] = feature_coverage
         summary["policy_constraints"] = policy_constraints.to_dict()
@@ -1164,7 +1185,7 @@ def main() -> int:
         report_dir.mkdir(parents=True, exist_ok=True)
         output_slug = _derive_evaluation_output_slug(
             model_config_path,
-            model_path,
+            output_artifacts.model_path,
             prefer_config=bool(isinstance(score_regime_overrides_cfg, list) and score_regime_overrides_cfg),
         )
         date_window_slug = _derive_date_window_slug(args.start_date, args.end_date)

@@ -167,6 +167,8 @@ threshold sweep を読むときの注意点もある。`run_wf_threshold_sweep.p
 
 この流れは `run_revision_gate.py` でまとめて実行できる。
 
+threshold だけを変えた revision を既存の学習済み artifact に対して formal 評価したいときは、train を skip しつつ reused model artifact を evaluate / wf feasibility の両方に渡せる。
+
 例:
 
 ```bash
@@ -177,6 +179,24 @@ threshold sweep を読むときの注意点もある。`run_wf_threshold_sweep.p
   --evaluate-wf-mode full
 ```
 
+threshold-only revision 例:
+
+```bash
+/workspaces/nr-learn/.venv/bin/python scripts/run_revision_gate.py \
+  --config configs/model_catboost_value_stack_lgbm_roi_high_coverage_tune_roi012_liquidity_regime_hybrid_june_strict_serving_tighter_policy_search_probe_ratio003_abs80.yaml \
+  --data-config configs/data_2025_latest.yaml \
+  --feature-config configs/features_catboost_rich_high_coverage_diag.yaml \
+  --revision r20260327_tighter_policy_ratio003_abs80 \
+  --train-artifact-suffix r20260327_tighter_policy_ratio003_abs80 \
+  --skip-train \
+  --evaluate-model-artifact-suffix r20260326_tighter_policy_ratio003 \
+  --evaluate-max-rows 120000 \
+  --evaluate-pre-feature-max-rows 300000 \
+  --evaluate-wf-mode full \
+  --evaluate-wf-scheme nested \
+  --promotion-min-feasible-folds 3
+```
+
 重い実行の前に orchestration だけ確認したいときは `--dry-run` を付ける。
 
 主な出力:
@@ -185,6 +205,8 @@ threshold sweep を読むときの注意点もある。`run_wf_threshold_sweep.p
 - `artifacts/reports/revision_gate_<revision>.json`
 
 `--dry-run` のときは `revision_gate_<revision>.json` に planned command と `status=dry_run` が保存される。
+
+`--skip-train` を使う場合でも、現在の `run_revision_gate.py` は evaluate の後に matching `run_wf_feasibility_diag.py` を自動で走らせる。したがって promotion gate が必要とする matching WF summary は別コマンドで手動生成しなくてよい。
 
 軽量 smoke を real 実行したい場合は、`--train-max-train-rows` / `--train-max-valid-rows` と evaluate 側 row 制限で train/evaluate の負荷を下げられる。
 

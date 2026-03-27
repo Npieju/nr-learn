@@ -45,6 +45,8 @@
 - `current_long_horizon_serving_2025_latest` の actual-date 再検証も完了し、`2025-09` 実日付では baseline に対する de-risk が確認され、`2025-12` tail では baseline と完全一致だった。
 - `current_tighter_policy_search_candidate_2025_latest` は、evaluation policy の `min_bet_ratio=0.03` / `min_bets_abs=100` で formal revision gate を通過した。
 - `r20260326_tighter_policy_ratio003` では revision manifest / promotion report がともに `pass / promote` で整合し、`formal_benchmark_weighted_roi=1.172842678442708`、`formal_benchmark_feasible_fold_count=4` を確認した。
+- threshold-only revision として `r20260327_tighter_policy_ratio003_abs80` も完了し、既存 train artifact を再利用したまま matching WF feasibility と promotion gate まで `pass / promote` で整合した。
+- 同 run では `formal_benchmark_weighted_roi=1.1042287961989103`、`formal_benchmark_feasible_fold_count=5`、`formal_benchmark_bets_total=598` を確認した。
 - recent-heavy split の比較では、`value_blend` profile を profile 単位で train するだけでは component 再学習にならず、真の比較にはならないことを確認した。
 - その root issue を解消した上で、`r20260327_recent_2020_component_retrain` として recent-2020 の win / roi component を実際に再学習し、matching な stack bundle、evaluation、WF feasibility、promotion gate まで完了した。
 - 同 run は `pass / promote` で整合し、`AUC=0.8449`、`ev_top1_roi=0.7496`、`nested WF weighted test ROI=0.9218`、`formal_benchmark_feasible_fold_count=4` を確認した。
@@ -168,6 +170,15 @@
 - 新たに通るのは fold 2 だけで、best feasible は既存 family と同じ `kelly blend_weight=0.8 / min_prob=0.03 / odds_max=25`、`98 bets / ROI 0.7542 / final_bankroll 0.9199 / max_drawdown 0.1098` だった。
 - したがって `0.03/80` は新しい aggressive family を追加する変更ではなく、既存 defensive family を formal support 上どこまで許容するかの境界調整として扱える。一方で serving policy 自体は変わらないため、September defensive / December control という operational role はこの変更だけでは変わらない。
 
+### 4.16 tighter policy `0.03/80` の threshold-only revision 完了
+
+- `configs/model_catboost_value_stack_lgbm_roi_high_coverage_tune_roi012_liquidity_regime_hybrid_june_strict_serving_tighter_policy_search_probe_ratio003_abs80.yaml` を追加し、`min_bets_abs=80` だけを落とした threshold-only variant を formal revision に載せた。
+- `value_blend` family では新 revision suffix の component model が自動では存在しないため、`run_evaluate.py` に `--model-artifact-suffix`、`run_wf_feasibility_diag.py` に同等の model artifact reuse、`run_revision_gate.py` に `--skip-train` と matching WF feasibility の自動実行を追加した。
+- この flow により、`r20260327_tighter_policy_ratio003_abs80` は train を skip しつつ `r20260326_tighter_policy_ratio003` の学習済み artifact を再利用し、evaluation、WF feasibility、promotion gate まで一貫して完了した。
+- promotion gate は `pass / promote` で、`formal_benchmark_feasible_fold_count=5/5`、`formal_benchmark_weighted_roi=1.1042287961989103`、`formal_benchmark_bets_total=598` だった。
+- fold 2 の best feasible は既存 frontier 読みと一致し、`kelly blend_weight=0.8 / min_prob=0.03 / odds_max=25 / bets=98 / ROI=0.7542 / final_bankroll=0.9199 / max_drawdown=0.1098` だった。
+- したがって `0.03/80` は frontier 上の読みだけでなく formal revision としても成立する。一方で December control で baseline 優位という operational role は変わらないため、位置づけは broad serving replacement ではなく「formal に通過した tighter defensive variant」のままとする。
+
 ## 5. 完了済みマイルストーン
 
 ### M1. 2025 backfill 完了
@@ -257,6 +268,12 @@
 - `0.03/100` は `4/5 feasible folds`、`0.03/80` は `5/5 feasible folds` で、差分は fold 2 のみだった。
 - fold 2 を通す best feasible は `kelly blend_weight=0.8 / min_prob=0.03 / odds_max=25`、`98 bets / ROI 0.7542 / final_bankroll 0.9199 / max_drawdown 0.1098` で、既存 family の延長として読める。
 - このため `0.03/80` は formal support を広げる候補としては defensible だが、serving policy は不変なので operational baseline の切替根拠には使わない、という整理を確定した。
+
+### M17. tighter policy `0.03/80` の threshold-only revision 完了
+
+- `r20260327_tighter_policy_ratio003_abs80` を train skip / model artifact reuse の threshold-only revision として完了した。
+- evaluation に加えて matching `wf_feasibility_diag` も同じ reused artifact で生成し、promotion gate まで `pass / promote` で整合した。
+- 主要値は `formal_benchmark_weighted_roi=1.1042287961989103`、`formal_benchmark_feasible_fold_count=5/5`、`formal_benchmark_bets_total=598` である。
 
 ## 6. 実行中の優先事項
 

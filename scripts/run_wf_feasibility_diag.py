@@ -439,6 +439,7 @@ def main() -> int:
     parser.add_argument("--data-config", default="configs/data.yaml")
     parser.add_argument("--feature-config", default="configs/features_catboost_rich_high_coverage_diag.yaml")
     parser.add_argument("--artifact-suffix", default=None)
+    parser.add_argument("--model-artifact-suffix", default=None)
     parser.add_argument("--pre-feature-max-rows", type=int, default=None)
     parser.add_argument("--start-date", default=None)
     parser.add_argument("--end-date", default=None)
@@ -490,7 +491,16 @@ def main() -> int:
                 str(args.artifact_suffix),
             )
         output_artifacts = resolve_output_artifacts(output_cfg)
-        model_path = ROOT / output_artifacts.model_path
+
+        load_output_cfg = dict(model_cfg.get("output", {}))
+        load_artifact_suffix = args.model_artifact_suffix or args.artifact_suffix
+        if load_artifact_suffix:
+            load_output_cfg["model_file"] = append_suffix_to_file_name(
+                str(load_output_cfg.get("model_file", "baseline_model.joblib")),
+                str(load_artifact_suffix),
+            )
+        load_artifacts = resolve_output_artifacts(load_output_cfg)
+        model_path = ROOT / load_artifacts.model_path
         with Heartbeat("[wf-feasibility]", f"loading model {model_path.name}", logger=log_progress):
             model = joblib.load(model_path)
         fallback_selection = resolve_feature_selection(frame, feature_cfg, label_column=label_col)
@@ -579,6 +589,7 @@ def main() -> int:
                 "feature_count": int(len(feature_selection.feature_columns)),
                 "categorical_feature_count": int(len(feature_selection.categorical_columns)),
                 "artifact_suffix": str(args.artifact_suffix or ""),
+                "model_artifact_suffix": str(args.model_artifact_suffix or args.artifact_suffix or ""),
                 "model_path": artifact_display_path(model_path, workspace_root=ROOT),
             },
             "policy_constraints": constraints.to_dict(),

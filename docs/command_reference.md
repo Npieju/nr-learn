@@ -193,6 +193,24 @@ profile 一覧:
   --evaluate-wf-mode off
 ```
 
+既存の学習済み artifact を再利用した threshold-only revision 例:
+
+```bash
+/workspaces/nr-learn/.venv/bin/python scripts/run_revision_gate.py \
+  --config configs/model_catboost_value_stack_lgbm_roi_high_coverage_tune_roi012_liquidity_regime_hybrid_june_strict_serving_tighter_policy_search_probe_ratio003_abs80.yaml \
+  --data-config configs/data_2025_latest.yaml \
+  --feature-config configs/features_catboost_rich_high_coverage_diag.yaml \
+  --revision r20260327_tighter_policy_ratio003_abs80 \
+  --train-artifact-suffix r20260327_tighter_policy_ratio003_abs80 \
+  --skip-train \
+  --evaluate-model-artifact-suffix r20260326_tighter_policy_ratio003 \
+  --evaluate-pre-feature-max-rows 300000 \
+  --evaluate-max-rows 120000 \
+  --evaluate-wf-mode full \
+  --evaluate-wf-scheme nested \
+  --promotion-min-feasible-folds 3
+```
+
 関連:
 
 - [../scripts/run_revision_gate.py](../scripts/run_revision_gate.py)
@@ -203,8 +221,10 @@ profile 一覧:
 補足:
 
 - `run_revision_gate.py` は train、evaluate、promotion gate の各段階を progress 付きで出力する。
+- 現在の `run_revision_gate.py` は evaluate の後に matching `wf_feasibility_diag` も自動実行するので、promotion gate に必要な WF summary を別途手で作らなくてよい。
 - `--dry-run` を付けると、重い train / evaluate を実行せずに planned command と revision manifest だけを確認できる。
 - `--train-max-train-rows` と `--train-max-valid-rows` を使うと、real run でも lightweight smoke を組める。
+- `--skip-train` と `--evaluate-model-artifact-suffix` を組み合わせると、設定だけ変えた threshold-only revision を既存学習済み model artifact に対して formal 評価できる。
 
 ## 5. serving 検証
 

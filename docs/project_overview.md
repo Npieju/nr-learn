@@ -72,7 +72,7 @@
 | `current_recommended_serving_2025_latest` | `r20260325_current_recommended_serving_2025_latest_benchmark_refresh` | `pass / promote` | nested WF `0.7628` | `544` |
 | `current_tighter_policy_search_candidate_2025_latest` | `r20260326_tighter_policy_ratio003` | `pass / promote` | formal benchmark `1.1728` | `424` |
 
-補足すると、tighter policy candidate は support 改善の evidence として重要だが、serving default を即時に置き換える決定まではしていない。現時点の baseline は引き続き `current_recommended_serving_2025_latest` である。
+補足すると、tighter policy candidate は `r20260326_tighter_policy_ratio003` に加えて、threshold-only revision `r20260327_tighter_policy_ratio003_abs80` も `pass / promote` まで通っている。後者は `min_bets_abs=80` で `formal_benchmark_feasible_fold_count=5/5`、`formal_benchmark_weighted_roi=1.1042` を確認したが、serving default を即時に置き換える決定まではしていない。現時点の baseline は引き続き `current_recommended_serving_2025_latest` である。
 
 actual-date の fresh compare でも役割ははっきりしている。2025-09 の 8 日では baseline `32 bets / total net -27.3 / pure bankroll 0.2959` に対して tighter policy candidate は `9 bets / -4.3 / 0.8395` で、強い損失圧縮を示した。一方で 2025-12 tail の 8 日では baseline `45 bets / +21.8 / 1.6712` に対して `9 bets / +21.4 / 1.6032` で、profit window の top line は baseline を超えなかった。したがって現時点の位置づけは broad replacement ではなく、September difficult regime 向けの defensive candidate である。
 
@@ -106,8 +106,8 @@ recent-heavy split の比較では、`2018-01-01..2024-12-31` と `2020-01-01..2
 いま残っている主な論点は次の 3 つである。
 
 1. recent-heavy true retrain の上位候補である `2018` start を、September difficult regime 向け candidate としてどこまで明示運用するか。
-2. `current_tighter_policy_search_candidate_2025_latest` の formal 閾値を `0.03/100` のまま維持するか、`0.03/80` まで広げて support 境界を再確認するか。
-3. `current_long_horizon_serving_2025_latest` を September de-risk 用としてどこまで明示運用するか。
+2. `current_long_horizon_serving_2025_latest` を September de-risk 用としてどこまで明示運用するか。
+3. September difficult regime 向け候補として、tighter defensive variant と recent-heavy 2018 true retrain をどう住み分けるか。
 
 進行中の優先順位と最新の実行順は、書き捨ての会話ログではなく [roadmap.md](roadmap.md) を正本として更新する。
 

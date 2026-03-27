@@ -43,6 +43,35 @@ def _normalize_revision_slug(value: str) -> str:
     return normalized
 
 
+def _sanitize_output_slug(value: str) -> str:
+    slug = "".join(char.lower() if char.isalnum() else "_" for char in value.strip())
+    while "__" in slug:
+        slug = slug.replace("__", "_")
+    return slug.strip("_") or "model"
+
+
+def _derive_date_window_slug(start_date: str | None, end_date: str | None) -> str:
+    if not start_date and not end_date:
+        return ""
+
+    start_token = _sanitize_output_slug((start_date or "start_auto").replace("-", ""))
+    end_token = _sanitize_output_slug((end_date or "end_auto").replace("-", ""))
+    return f"_{start_token}_{end_token}"
+
+
+def _derive_wf_slug(wf_mode: str, wf_scheme: str) -> str:
+    return f"_wf_{_sanitize_output_slug(wf_mode)}_{_sanitize_output_slug(wf_scheme)}"
+
+
+def _derive_wf_output_slug(config_path: str) -> str:
+    stem = Path(config_path).stem.strip()
+    if stem.endswith("_model"):
+        stem = stem[: -len("_model")]
+    if stem.startswith("model_"):
+        stem = stem[len("model_") :]
+    return _sanitize_output_slug(stem)
+
+
 def _extend_profile_or_config_args(
     command: list[str],
     *,
@@ -98,14 +127,17 @@ def _build_manifest_payload(
     data_config_path: str,
     feature_config_path: str,
     train_artifact_suffix: str,
+    skip_train: bool,
     train_max_train_rows: int | None,
     train_max_valid_rows: int | None,
+    evaluate_model_artifact_suffix: str | None,
     evaluate_max_rows: int,
     evaluate_pre_feature_max_rows: int | None,
     evaluate_start_date: str | None,
     evaluate_end_date: str | None,
     evaluate_wf_mode: str,
     evaluate_wf_scheme: str,
+    wf_summary_output: Path,
     promotion_min_feasible_folds: int,
     promotion_output: Path,
     manifest_output: Path,
@@ -125,10 +157,12 @@ def _build_manifest_payload(
         "feature_config": feature_config_path,
         "train_artifact_suffix": train_artifact_suffix,
         "training": {
+            "skipped": bool(skip_train),
             "max_train_rows": int(train_max_train_rows) if train_max_train_rows is not None else None,
             "max_valid_rows": int(train_max_valid_rows) if train_max_valid_rows is not None else None,
         },
         "evaluation": {
+            "model_artifact_suffix": evaluate_model_artifact_suffix,
             "max_rows": int(evaluate_max_rows),
             "pre_feature_max_rows": int(evaluate_pre_feature_max_rows) if evaluate_pre_feature_max_rows is not None else None,
             "start_date": evaluate_start_date,
@@ -144,6 +178,7 @@ def _build_manifest_payload(
         },
         "steps": executed_steps,
         "artifacts": {
+            "wf_summary": artifact_display_path(wf_summary_output, workspace_root=ROOT),
             "promotion_report": artifact_display_path(promotion_output, workspace_root=ROOT),
             "evaluation_manifest": "artifacts/reports/evaluation_manifest.json",
             "evaluation_summary": "artifacts/reports/evaluation_summary.json",
@@ -169,8 +204,10 @@ def main() -> int:
     parser.add_argument("--feature-config", default=None)
     parser.add_argument("--revision", required=False, default=None)
     parser.add_argument("--train-artifact-suffix", default=None)
+    parser.add_argument("--skip-train", action="store_true")
     parser.add_argument("--train-max-train-rows", type=int, default=None)
     parser.add_argument("--train-max-valid-rows", type=int, default=None)
+    parser.add_argument("--evaluate-model-artifact-suffix", default=None)
     parser.add_argument("--evaluate-max-rows", type=int, default=120000)
     parser.add_argument("--evaluate-pre-feature-max-rows", type=int, default=None)
     parser.add_argument("--evaluate-start-date", default=None)
@@ -179,6 +216,7 @@ def main() -> int:
     parser.add_argument("--evaluate-wf-scheme", choices=["single", "nested"], default="nested")
     parser.add_argument("--promotion-min-feasible-folds", type=int, default=1)
     parser.add_argument("--promotion-output", default=None)
+    parser.add_argument("--wf-summary-output", default=None)
     parser.add_argument("--manifest-output", default=None)
     parser.add_argument("--dry-run", action="store_true")
     args = parser.parse_args()
@@ -205,18 +243,31 @@ def main() -> int:
 
         report_dir = ROOT / "artifacts" / "reports"
         promotion_output = _resolve_path(args.promotion_output) if args.promotion_output else report_dir / f"promotion_gate_{revision_slug}.json"
+        wf_summary_output = (
+            _resolve_path(args.wf_summary_output)
+            if args.wf_summary_output
+            else report_dir
+            / (
+                f"wf_feasibility_diag_{_derive_wf_output_slug(config_path)}"
+                f"{_derive_date_window_slug(args.evaluate_start_date, args.evaluate_end_date)}"
+                f"{_derive_wf_slug(args.evaluate_wf_mode, args.evaluate_wf_scheme)}.json"
+            )
+        )
         manifest_output = _resolve_path(args.manifest_output) if args.manifest_output else report_dir / f"revision_gate_{revision_slug}.json"
         artifact_ensure_output_file_path(promotion_output, label="promotion output", workspace_root=ROOT)
+        artifact_ensure_output_file_path(wf_summary_output, label="wf summary output", workspace_root=ROOT)
         artifact_ensure_output_file_path(manifest_output, label="manifest output", workspace_root=ROOT)
         manifest_output.parent.mkdir(parents=True, exist_ok=True)
         promotion_output.parent.mkdir(parents=True, exist_ok=True)
+        wf_summary_output.parent.mkdir(parents=True, exist_ok=True)
 
-        progress = ProgressBar(total=3, prefix="[revision-gate]", logger=log_progress, min_interval_sec=0.0)
+        progress = ProgressBar(total=4, prefix="[revision-gate]", logger=log_progress, min_interval_sec=0.0)
         progress.start(
             message=(
                 f"starting revision={revision_slug} profile={resolved_profile or 'custom'} config={config_path} "
                 f"data_config={data_config_path} feature_config={feature_config_path} "
-                f"train_max_train_rows={args.train_max_train_rows or 'config'} train_max_valid_rows={args.train_max_valid_rows or 'config'}"
+                f"train_max_train_rows={args.train_max_train_rows or 'config'} train_max_valid_rows={args.train_max_valid_rows or 'config'} "
+                f"skip_train={args.skip_train} evaluate_model_artifact_suffix={args.evaluate_model_artifact_suffix or 'none'}"
             )
         )
 
@@ -252,6 +303,8 @@ def main() -> int:
             feature_config_path=feature_config_path,
         )
         evaluate_command.extend(["--artifact-suffix", train_artifact_suffix])
+        if args.evaluate_model_artifact_suffix:
+            evaluate_command.extend(["--model-artifact-suffix", str(args.evaluate_model_artifact_suffix)])
         if args.evaluate_pre_feature_max_rows is not None:
             evaluate_command.extend(["--pre-feature-max-rows", str(args.evaluate_pre_feature_max_rows)])
         if args.evaluate_start_date:
@@ -259,11 +312,38 @@ def main() -> int:
         if args.evaluate_end_date:
             evaluate_command.extend(["--end-date", str(args.evaluate_end_date)])
 
+        wf_command = [
+            sys.executable,
+            "scripts/run_wf_feasibility_diag.py",
+            "--wf-mode",
+            args.evaluate_wf_mode,
+            "--wf-scheme",
+            args.evaluate_wf_scheme,
+        ]
+        _extend_profile_or_config_args(
+            wf_command,
+            profile=resolved_profile,
+            config_path=config_path,
+            data_config_path=data_config_path,
+            feature_config_path=feature_config_path,
+        )
+        wf_command.extend(["--artifact-suffix", train_artifact_suffix])
+        if args.evaluate_model_artifact_suffix:
+            wf_command.extend(["--model-artifact-suffix", str(args.evaluate_model_artifact_suffix)])
+        if args.evaluate_pre_feature_max_rows is not None:
+            wf_command.extend(["--pre-feature-max-rows", str(args.evaluate_pre_feature_max_rows)])
+        if args.evaluate_start_date:
+            wf_command.extend(["--start-date", str(args.evaluate_start_date)])
+        if args.evaluate_end_date:
+            wf_command.extend(["--end-date", str(args.evaluate_end_date)])
+
         promotion_command = [
             sys.executable,
             "scripts/run_promotion_gate.py",
             "--evaluation-manifest",
             "artifacts/reports/evaluation_manifest.json",
+            "--wf-summary",
+            artifact_display_path(wf_summary_output, workspace_root=ROOT),
             "--min-feasible-folds",
             str(args.promotion_min_feasible_folds),
             "--output",
@@ -279,12 +359,14 @@ def main() -> int:
             executed_steps = [
                 _planned_step("train", train_command),
                 _planned_step("evaluate", evaluate_command),
+                _planned_step("wf_feasibility", wf_command),
                 _planned_step("promotion_gate", promotion_command),
             ]
             status = "dry_run"
             decision = "not_run"
             progress.update(message=f"planned train artifact_suffix={train_artifact_suffix}")
             progress.update(message="planned evaluation")
+            progress.update(message="planned wf feasibility")
 
             manifest_payload = _build_manifest_payload(
                 revision_slug=revision_slug,
@@ -296,14 +378,17 @@ def main() -> int:
                 data_config_path=data_config_path,
                 feature_config_path=feature_config_path,
                 train_artifact_suffix=train_artifact_suffix,
+                skip_train=bool(args.skip_train),
                 train_max_train_rows=args.train_max_train_rows,
                 train_max_valid_rows=args.train_max_valid_rows,
+                evaluate_model_artifact_suffix=args.evaluate_model_artifact_suffix,
                 evaluate_max_rows=args.evaluate_max_rows,
                 evaluate_pre_feature_max_rows=args.evaluate_pre_feature_max_rows,
                 evaluate_start_date=args.evaluate_start_date,
                 evaluate_end_date=args.evaluate_end_date,
                 evaluate_wf_mode=args.evaluate_wf_mode,
                 evaluate_wf_scheme=args.evaluate_wf_scheme,
+                wf_summary_output=wf_summary_output,
                 promotion_min_feasible_folds=args.promotion_min_feasible_folds,
                 promotion_output=promotion_output,
                 manifest_output=manifest_output,
@@ -316,48 +401,62 @@ def main() -> int:
             print(f"[revision-gate] dry-run manifest saved: {manifest_output}")
             print(f"[revision-gate] train command: {' '.join(train_command)}")
             print(f"[revision-gate] evaluate command: {' '.join(evaluate_command)}")
+            print(f"[revision-gate] wf command: {' '.join(wf_command)}")
             print(f"[revision-gate] promotion command: {' '.join(promotion_command)}")
             return 0
 
-        train_result = _run_command_result(train_command, label="train")
-        executed_steps.append({
-            "name": "train",
-            "command": train_command,
-            "status": "completed" if train_result.returncode == 0 else "failed",
-            "return_code": int(train_result.returncode),
-        })
-        if train_result.returncode != 0:
-            status = "failed"
-            decision = "error"
-            manifest_payload = _build_manifest_payload(
-                revision_slug=revision_slug,
-                started_at=started_at,
-                status=status,
-                decision=decision,
-                resolved_profile=resolved_profile,
-                config_path=config_path,
-                data_config_path=data_config_path,
-                feature_config_path=feature_config_path,
-                train_artifact_suffix=train_artifact_suffix,
-                train_max_train_rows=args.train_max_train_rows,
-                train_max_valid_rows=args.train_max_valid_rows,
-                evaluate_max_rows=args.evaluate_max_rows,
-                evaluate_pre_feature_max_rows=args.evaluate_pre_feature_max_rows,
-                evaluate_start_date=args.evaluate_start_date,
-                evaluate_end_date=args.evaluate_end_date,
-                evaluate_wf_mode=args.evaluate_wf_mode,
-                evaluate_wf_scheme=args.evaluate_wf_scheme,
-                promotion_min_feasible_folds=args.promotion_min_feasible_folds,
-                promotion_output=promotion_output,
-                manifest_output=manifest_output,
-                executed_steps=executed_steps,
-                promotion_report=None,
+        if args.skip_train:
+            executed_steps.append(
+                {
+                    "name": "train",
+                    "command": train_command,
+                    "status": "skipped",
+                    "reason": "skip_train",
+                }
             )
-            _write_manifest(manifest_output, manifest_payload, label="writing failed revision manifest")
-            print(f"[revision-gate] manifest saved: {manifest_output}")
-            print("[revision-gate] decision: error")
-            return int(train_result.returncode) or 1
-        progress.update(message=f"train completed artifact_suffix={train_artifact_suffix}")
+            progress.update(message=f"train skipped artifact_suffix={train_artifact_suffix}")
+        else:
+            train_result = _run_command_result(train_command, label="train")
+            executed_steps.append({
+                "name": "train",
+                "command": train_command,
+                "status": "completed" if train_result.returncode == 0 else "failed",
+                "return_code": int(train_result.returncode),
+            })
+            if train_result.returncode != 0:
+                status = "failed"
+                decision = "error"
+                manifest_payload = _build_manifest_payload(
+                    revision_slug=revision_slug,
+                    started_at=started_at,
+                    status=status,
+                    decision=decision,
+                    resolved_profile=resolved_profile,
+                    config_path=config_path,
+                    data_config_path=data_config_path,
+                    feature_config_path=feature_config_path,
+                    train_artifact_suffix=train_artifact_suffix,
+                    skip_train=bool(args.skip_train),
+                    train_max_train_rows=args.train_max_train_rows,
+                    train_max_valid_rows=args.train_max_valid_rows,
+                    evaluate_model_artifact_suffix=args.evaluate_model_artifact_suffix,
+                    evaluate_max_rows=args.evaluate_max_rows,
+                    evaluate_pre_feature_max_rows=args.evaluate_pre_feature_max_rows,
+                    evaluate_start_date=args.evaluate_start_date,
+                    evaluate_end_date=args.evaluate_end_date,
+                    evaluate_wf_mode=args.evaluate_wf_mode,
+                    evaluate_wf_scheme=args.evaluate_wf_scheme,
+                    promotion_min_feasible_folds=args.promotion_min_feasible_folds,
+                    promotion_output=promotion_output,
+                    manifest_output=manifest_output,
+                    executed_steps=executed_steps,
+                    promotion_report=None,
+                )
+                _write_manifest(manifest_output, manifest_payload, label="writing failed revision manifest")
+                print(f"[revision-gate] manifest saved: {manifest_output}")
+                print("[revision-gate] decision: error")
+                return int(train_result.returncode) or 1
+            progress.update(message=f"train completed artifact_suffix={train_artifact_suffix}")
 
         evaluate_result = _run_command_result(evaluate_command, label="evaluate")
         executed_steps.append({
@@ -379,14 +478,17 @@ def main() -> int:
                 data_config_path=data_config_path,
                 feature_config_path=feature_config_path,
                 train_artifact_suffix=train_artifact_suffix,
+                skip_train=bool(args.skip_train),
                 train_max_train_rows=args.train_max_train_rows,
                 train_max_valid_rows=args.train_max_valid_rows,
+                evaluate_model_artifact_suffix=args.evaluate_model_artifact_suffix,
                 evaluate_max_rows=args.evaluate_max_rows,
                 evaluate_pre_feature_max_rows=args.evaluate_pre_feature_max_rows,
                 evaluate_start_date=args.evaluate_start_date,
                 evaluate_end_date=args.evaluate_end_date,
                 evaluate_wf_mode=args.evaluate_wf_mode,
                 evaluate_wf_scheme=args.evaluate_wf_scheme,
+                wf_summary_output=wf_summary_output,
                 promotion_min_feasible_folds=args.promotion_min_feasible_folds,
                 promotion_output=promotion_output,
                 manifest_output=manifest_output,
@@ -398,6 +500,49 @@ def main() -> int:
             print("[revision-gate] decision: error")
             return int(evaluate_result.returncode) or 1
         progress.update(message="evaluation completed")
+
+        wf_result = _run_command_result(wf_command, label="wf_feasibility")
+        executed_steps.append({
+            "name": "wf_feasibility",
+            "command": wf_command,
+            "status": "completed" if wf_result.returncode == 0 else "failed",
+            "return_code": int(wf_result.returncode),
+        })
+        if wf_result.returncode != 0:
+            status = "failed"
+            decision = "error"
+            manifest_payload = _build_manifest_payload(
+                revision_slug=revision_slug,
+                started_at=started_at,
+                status=status,
+                decision=decision,
+                resolved_profile=resolved_profile,
+                config_path=config_path,
+                data_config_path=data_config_path,
+                feature_config_path=feature_config_path,
+                train_artifact_suffix=train_artifact_suffix,
+                skip_train=bool(args.skip_train),
+                train_max_train_rows=args.train_max_train_rows,
+                train_max_valid_rows=args.train_max_valid_rows,
+                evaluate_model_artifact_suffix=args.evaluate_model_artifact_suffix,
+                evaluate_max_rows=args.evaluate_max_rows,
+                evaluate_pre_feature_max_rows=args.evaluate_pre_feature_max_rows,
+                evaluate_start_date=args.evaluate_start_date,
+                evaluate_end_date=args.evaluate_end_date,
+                evaluate_wf_mode=args.evaluate_wf_mode,
+                evaluate_wf_scheme=args.evaluate_wf_scheme,
+                wf_summary_output=wf_summary_output,
+                promotion_min_feasible_folds=args.promotion_min_feasible_folds,
+                promotion_output=promotion_output,
+                manifest_output=manifest_output,
+                executed_steps=executed_steps,
+                promotion_report=None,
+            )
+            _write_manifest(manifest_output, manifest_payload, label="writing failed revision manifest")
+            print(f"[revision-gate] manifest saved: {manifest_output}")
+            print("[revision-gate] decision: error")
+            return int(wf_result.returncode) or 1
+        progress.update(message="wf feasibility completed")
 
         promotion_result = subprocess.run(promotion_command, cwd=ROOT, check=False)
         executed_steps.append(
@@ -425,14 +570,17 @@ def main() -> int:
             data_config_path=data_config_path,
             feature_config_path=feature_config_path,
             train_artifact_suffix=train_artifact_suffix,
+            skip_train=bool(args.skip_train),
             train_max_train_rows=args.train_max_train_rows,
             train_max_valid_rows=args.train_max_valid_rows,
+            evaluate_model_artifact_suffix=args.evaluate_model_artifact_suffix,
             evaluate_max_rows=args.evaluate_max_rows,
             evaluate_pre_feature_max_rows=args.evaluate_pre_feature_max_rows,
             evaluate_start_date=args.evaluate_start_date,
             evaluate_end_date=args.evaluate_end_date,
             evaluate_wf_mode=args.evaluate_wf_mode,
             evaluate_wf_scheme=args.evaluate_wf_scheme,
+            wf_summary_output=wf_summary_output,
             promotion_min_feasible_folds=args.promotion_min_feasible_folds,
             promotion_output=promotion_output,
             manifest_output=manifest_output,
