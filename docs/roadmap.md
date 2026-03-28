@@ -389,9 +389,15 @@
 - 方針は既存 `netkeiba_*` gate の operator experience を維持しつつ、追加は `universe`, `source-scope`, `baseline-reference`, `schema-version` に限定することである。
 - `scripts_guide.md` にも同じ原則を補足し、将来 CLI を追加しても既存運用から大きく逸れないことを明示した。
 
+### M37. 地方-only step 名と fail-fast taxonomy の具体化
+
+- `data_extension.md` に、地方-only coverage snapshot / benchmark gate の推奨 step 名と `completed_step` の読み方を追記した。
+- あわせて operator error / readiness block / execution failure の 3 層で failure taxonomy を整理し、`status`, `completed_step`, `error_code`, `recommended_action` の最小 contract を固定した。
+- `scripts_guide.md` にも step 系列を補足し、将来 CLI を足すときの進捗表示と停止点の読み方を揃えた。
+
 ## 6. 実行中の優先事項
 
-`current_tighter_policy_search_candidate_2025_latest` の `0.03/80` formalization は M17 で完了した。続いて seasonal / recent-heavy の運用境界整理、latest compare artifact map、actual-date compare 再開導線の同期監査、地方競馬 feasibility の設計チェックリスト・artifact 方針・benchmark 完了条件・payload schema・CLI 引数契約の具体化まで完了した。
+`current_tighter_policy_search_candidate_2025_latest` の `0.03/80` formalization は M17 で完了した。続いて seasonal / recent-heavy の運用境界整理、latest compare artifact map、actual-date compare 再開導線の同期監査、地方競馬 feasibility の設計チェックリスト・artifact 方針・benchmark 完了条件・payload schema・CLI 引数契約・step/failure taxonomy の具体化まで完了した。
 
 以後の active priority は、public / internal docs の定期点検と future option の切り分けに絞る。
 
@@ -416,7 +422,7 @@
 ### N1. 地方競馬データ拡張の feasibility 深掘り
 
 - universe slug を config / artifact / revision にどう通すかを、必要なら実装前提まで下ろす。
-- local-only coverage snapshot / benchmark gate の fail-fast 条件と step 名を、必要なら実装前提まで下ろす。
+- local-only coverage snapshot / benchmark gate を、必要なら実装スケルトンへ下ろす。
 
 ### N2. docs の定期点検
 

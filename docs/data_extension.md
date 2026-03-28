@@ -391,6 +391,62 @@ CLI 実装時の fail-fast 条件も先に決めておく。
 
 この形なら、既存 `run_netkeiba_benchmark_gate.py` の operator experience を維持しつつ、local-only / mixed の違いだけを明示的に増やせる。
 
+step 名と fail-fast taxonomy も先に固定しておくと、将来 CLI を追加するときに manifest の読み方がぶれない。
+
+coverage snapshot 側の推奨 step 名:
+
+1. `load_config`
+2. `load_source_tables`
+3. `compute_alignment`
+4. `compute_coverage`
+5. `write_snapshot`
+6. `completed`
+
+benchmark gate 側の推奨 step 名:
+
+1. `init_manifest`
+2. `run_snapshot`
+3. `validate_readiness`
+4. `run_train`
+5. `run_evaluate`
+6. `write_manifest`
+7. `completed`
+
+`completed_step` は最後に正常終了した段階を指すものとして扱う。たとえば readiness で止まった場合は `status=not_ready`, `completed_step=validate_readiness` まで進んだ、と読める形にする。
+
+fail-fast の分類は、少なくとも次の 3 層に分ける。
+
+1. operator error
+  - config 不足、必須引数不足、output path 取り違え、`--source-scope=mixed` で `--baseline-reference` 不足など。
+  - 表示は既存方針どおり concise な `failed: ...` でよい。
+2. readiness block
+  - source 欠落、key 不整合、coverage 不足により benchmark rerun 準備ができていない状態。
+  - これは exception ではなく `status=not_ready` と `recommended_action` で返す。
+3. execution failure
+  - train / evaluate / snapshot subprocess の exit code 非ゼロ、unexpected exception、interrupt。
+  - `status=failed` または `status=interrupted` を使い、step result に `exit_code` と `label` を残す。
+
+manifest に残す failure field も最小で固定してよい。
+
+- `status`
+- `completed_step`
+- `error_code`
+- `error_message`
+- `recommended_action`
+
+`error_code` の語彙は、実装前提として次程度に絞ると扱いやすい。
+
+- `missing_universe`
+- `mixed_baseline_required`
+- `invalid_output_path`
+- `slug_mismatch`
+- `snapshot_not_ready`
+- `train_failed`
+- `evaluate_failed`
+- `interrupted`
+
+この taxonomy を先に持っておくと、将来 local-only / mixed の gate を足したときも、`status` と `completed_step` だけで operator が停止点を読める。
+
 逆に、地方-only benchmark の完了条件に次を混ぜない。
 
 - mixed 学習で JRA-only baseline を上回ったこと

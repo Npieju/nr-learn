@@ -183,6 +183,8 @@ netkeiba 系は lock 待機、収集、backfill、gate 実行の各段で heartb
 
 地方 universe を将来追加する場合も、CLI 契約はこの系統に寄せる。つまり `data-config`, `tail-rows`, `snapshot-output`, `manifest-output`, `skip-train`, `skip-evaluate` を基底にし、追加は `universe`, `source-scope`, `baseline-reference`, `schema-version` だけに留める。
 
+さらに step 名も既存 gate の読み方に寄せ、snapshot 側は `load_config -> load_source_tables -> compute_alignment -> compute_coverage -> write_snapshot`、gate 側は `init_manifest -> run_snapshot -> validate_readiness -> run_train -> run_evaluate -> write_manifest` を基本系列にするとよい。
+
 外部データの設計意図は [data_extension.md](data_extension.md) を参照する。
 
 ## 10. 長時間バッチと運転監視
