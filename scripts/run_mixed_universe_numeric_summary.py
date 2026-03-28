@@ -59,6 +59,47 @@ def _numeric_row_summary(rows: list[dict[str, object]]) -> dict[str, object]:
     }
 
 
+def _build_notes(
+    *,
+    verdict: str,
+    row_count: int,
+    missing_left_rows: list[str],
+    missing_right_rows: list[str],
+    categorical_different_rows: list[str],
+    numeric_summary: dict[str, object],
+) -> tuple[str, list[str]]:
+    notes: list[str] = []
+    missing_total = len(missing_left_rows) + len(missing_right_rows)
+    missing_ratio = (missing_total / row_count) if row_count else 0.0
+
+    severity = "info"
+    if verdict == "evidence_incomplete":
+        severity = "severe" if missing_ratio >= 0.5 else "moderate"
+        notes.append("numeric compare is incomplete and should not be used as promotion evidence")
+    elif verdict == "categorical_difference_present":
+        severity = "moderate"
+        notes.append("categorical rows differ, so numeric deltas alone are insufficient for replacement decisions")
+    else:
+        severity = "info"
+        notes.append("summary is intended for comparison triage and does not replace the underlying artifacts")
+
+    if missing_left_rows:
+        notes.append(f"left-side metrics are missing for {len(missing_left_rows)} rows")
+    if missing_right_rows:
+        notes.append(f"right-side reference is missing for {len(missing_right_rows)} rows")
+    if categorical_different_rows:
+        notes.append(f"categorical differences detected in {len(categorical_different_rows)} rows")
+
+    negative_rows = numeric_summary.get("negative_rows") if isinstance(numeric_summary.get("negative_rows"), list) else []
+    positive_rows = numeric_summary.get("positive_rows") if isinstance(numeric_summary.get("positive_rows"), list) else []
+    if negative_rows:
+        notes.append(f"negative numeric deltas detected in {len(negative_rows)} rows")
+    if positive_rows:
+        notes.append(f"positive numeric deltas detected in {len(positive_rows)} rows")
+
+    return severity, notes
+
+
 def _promote_safe_summary(compare_payload: dict[str, object]) -> dict[str, object]:
     rows = [row for row in (compare_payload.get("row_results") or []) if isinstance(row, dict)]
     summary = compare_payload.get("summary") if isinstance(compare_payload.get("summary"), dict) else {}
@@ -75,8 +116,18 @@ def _promote_safe_summary(compare_payload: dict[str, object]) -> dict[str, objec
     elif categorical_different_rows:
         verdict = "categorical_difference_present"
 
+    severity, notes = _build_notes(
+        verdict=verdict,
+        row_count=len(rows),
+        missing_left_rows=missing_left_rows,
+        missing_right_rows=missing_right_rows,
+        categorical_different_rows=categorical_different_rows,
+        numeric_summary=numeric_summary,
+    )
+
     return {
         "verdict": verdict,
+        "severity": severity,
         "readiness_status": blocking_context.get("readiness_status"),
         "schema_status": blocking_context.get("schema_status"),
         "numeric_rows": numeric_summary,
@@ -87,6 +138,7 @@ def _promote_safe_summary(compare_payload: dict[str, object]) -> dict[str, objec
         "categorical_match_rows": summary.get("categorical_match_rows"),
         "categorical_different_rows_count": summary.get("categorical_different_rows"),
         "recommended_action": compare_payload.get("recommended_action"),
+        "notes": notes,
     }
 
 
