@@ -120,6 +120,13 @@ def _build_planned_payload(
     }
 
 
+def _build_compare_contract(*, snapshot_path: Path, universe: str, revision: str) -> dict[str, str]:
+    return {
+        "local_only_public_snapshot": artifact_display_path(snapshot_path, workspace_root=ROOT),
+        "mixed_compare_manifest": f"artifacts/reports/mixed_universe_compare_{universe}_vs_jra_{revision}.json",
+    }
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--revision", default=None)
@@ -161,16 +168,20 @@ def main() -> int:
         evaluation_pointer_payload = lineage_payload.get("evaluation_pointer_payload")
         if not isinstance(evaluation_pointer_payload, dict):
             evaluation_pointer_payload = _read_optional_payload(artifacts.get("evaluation_pointer"))
+        resolved_revision = str(lineage_payload.get("revision") or revision_slug)
+        resolved_universe = str(lineage_payload.get("universe") or args.universe)
+        resolved_source_scope = str(lineage_payload.get("source_scope") or args.source_scope)
+        resolved_baseline_reference = str(lineage_payload.get("baseline_reference") or args.baseline_reference)
 
         payload: dict[str, object] = {
             "started_at": utc_now_iso(),
             "finished_at": utc_now_iso(),
             "status": "completed",
             "snapshot_kind": "local_public_snapshot",
-            "revision": str(lineage_payload.get("revision") or revision_slug),
-            "universe": str(lineage_payload.get("universe") or args.universe),
-            "source_scope": str(lineage_payload.get("source_scope") or args.source_scope),
-            "baseline_reference": str(lineage_payload.get("baseline_reference") or args.baseline_reference),
+            "revision": resolved_revision,
+            "universe": resolved_universe,
+            "source_scope": resolved_source_scope,
+            "baseline_reference": resolved_baseline_reference,
             "lineage_status": str(lineage_payload.get("status") or "unknown"),
             "lineage_completed_step": str(lineage_payload.get("completed_step") or "unknown"),
             "lineage_manifest": artifact_display_path(lineage_path, workspace_root=ROOT),
@@ -187,10 +198,11 @@ def main() -> int:
             },
             "readiness": _extract_readiness(lineage_payload),
             "promotion_summary": _extract_promotion_summary(lineage_payload),
-            "compare_contract": {
-                "local_only_public_snapshot": f"artifacts/reports/local_public_snapshot_{revision_slug}.json",
-                "mixed_compare_manifest": f"artifacts/reports/mixed_universe_compare_{str(lineage_payload.get('universe') or args.universe)}_vs_jra_{revision_slug}.json",
-            },
+            "compare_contract": _build_compare_contract(
+                snapshot_path=output_path,
+                universe=resolved_universe,
+                revision=resolved_revision,
+            ),
         }
         if benchmark_payload is not None:
             payload["benchmark_gate_summary"] = {
