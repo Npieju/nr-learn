@@ -166,6 +166,25 @@ def _recommended_action(plan_steps: list[dict[str, object]], gap_audit_payload: 
     return gap_audit_payload.get("recommended_action")
 
 
+def _planned_summary(*, requested_revision: str, left_universe: str) -> dict[str, object]:
+    return {
+        "severity": "info",
+        "requested_revision": requested_revision,
+        "resolved_left_revision": None,
+        "resolved_left_source_kind": None,
+        "resolved_left_artifact": None,
+        "step_count": 0,
+        "command_status_counts": {},
+        "rows_missing_all_sources": [],
+        "rows_with_planned_commands": [],
+        "rows_with_blocking_action": [],
+        "notes": [
+            f"gap audit is not available yet for {left_universe}",
+            "generate the left gap audit manifest before building a recovery plan",
+        ],
+    }
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--revision", default=None)
@@ -207,6 +226,12 @@ def main() -> int:
                     "recovery_plan_manifest": artifact_display_path(output_path, workspace_root=ROOT),
                     "gap_audit_manifest": artifact_display_path(gap_audit_path, workspace_root=ROOT),
                 },
+                "read_order": [
+                    "mixed_universe_left_gap_audit",
+                    "mixed_universe_left_recovery_plan",
+                ],
+                "summary": _planned_summary(requested_revision=revision_slug, left_universe=left_universe),
+                "plan_steps": [],
             }
             write_json(output_path, payload)
             print(f"[mixed-universe-left-recovery-plan] planned manifest saved: {artifact_display_path(output_path, workspace_root=ROOT)}", flush=True)
