@@ -127,3 +127,12 @@ mixed-universe 比較 artifact は JRA-only / local-only と衝突しない別 f
 この命名にしておくと、public snapshot、local revision lineage、mixed compare を grep だけで並べ替えられる。JRA current baseline の artifact には mixed compare の結果を直接混ぜず、比較結果は常に別 manifest として切り出す。
 
 最小実装としては `run_mixed_universe_compare.py` が pointer-only manifest を出す。ここでの `decision` は promote 判定ではなく `separate_lineage_required` を返し、left 側の local snapshot / lineage と right 側の JRA public reference の入口を固定する役割に留める。
+
+pointer-only compare の前には、`artifacts/reports/mixed_universe_readiness_<left_universe>_vs_<right_universe>_<revision>.json` を見て前提条件を確認してよい。最小 check は次である。
+
+1. left 側 universe の readiness が `benchmark_rerun_ready=true`
+2. left 側 evaluation pointer が存在する
+3. left 側 evaluation の `stability_assessment` が `representative`
+4. right 側の public reference と public doc が存在する
+
+この readiness manifest が `status=ready` なら pointer-only compare へ進み、`status=not_ready` なら mixed compare ではなく left 側の readiness / evaluation を先に補う。

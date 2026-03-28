@@ -437,6 +437,12 @@
 - mixed compare は当面 `pointer_only` とし、`decision=separate_lineage_required` を返して promote 判定とは分離した。
 - これで docs だけで先行していた mixed compare 命名規則が、最小 artifact まで揃った。
 
+### M45. mixed-universe compare readiness precheck を追加した
+
+- `run_mixed_universe_readiness.py` を追加し、mixed compare 前に left 側 readiness、evaluation pointer、`stability_assessment=representative`、right 側 public reference を点検できるようにした。
+- readiness artifact は `mixed_universe_readiness_<left_universe>_vs_<right_universe>_<revision>.json` とし、`status=ready/not_ready` と `checks[]` から停止点を読めるようにした。
+- これにより mixed compare は pointer-only であっても、比較前提が足りているかを別 manifest で機械的に確認できる段階へ進んだ。
+
 ## 6. 実行中の優先事項
 
 `current_tighter_policy_search_candidate_2025_latest` の `0.03/80` formalization は M17 で完了した。続いて seasonal / recent-heavy の運用境界整理、latest compare artifact map、actual-date compare 再開導線の同期監査、地方競馬 feasibility の設計チェックリスト・artifact 方針・benchmark 完了条件・payload schema・CLI 引数契約・step/failure taxonomy の具体化、既存 `netkeiba_*` snapshot / gate への universe-aware 契約実装、local-only snapshot / gate 雛形の追加、local-only integrity / feature gap / evaluation 入口の追加、local-only orchestration manifest の追加、および local-only revision lineage の追加まで完了した。
@@ -464,7 +470,7 @@
 ### N1. 地方競馬データ拡張の feasibility 深掘り
 
 - universe slug を config / artifact / revision にどう通すかを、必要なら実装前提まで下ろす。
-- mixed-universe compare の pointer manifest までは入ったので、next は local-only / mixed の実数値比較に進む前提条件と artifact 読み順の重複を点検する。
+- mixed compare readiness precheck までは入ったので、next は docs の重複を整理しつつ、left / right の実数値比較で何を同列に置くかを comparison schema として固定する。
 
 ### N2. docs の定期点検
 

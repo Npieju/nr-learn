@@ -194,6 +194,8 @@ serving 系の重い script は、smoke 本体、replay、bankroll sweep、dashb
   - local revision lineage を public 向けの要約 manifest に潰し、local-only の読み順を固定する入口。
 - [../scripts/run_mixed_universe_compare.py](../scripts/run_mixed_universe_compare.py)
   - local public snapshot または lineage と JRA public reference を束ね、mixed-universe compare の pointer manifest を作る入口。
+- [../scripts/run_mixed_universe_readiness.py](../scripts/run_mixed_universe_readiness.py)
+  - mixed compare の前提条件を点検し、left readiness / representative evaluation / right public reference の揃い具合を manifest 化する入口。
 - [../scripts/run_netkeiba_wait_then_cycle.py](../scripts/run_netkeiba_wait_then_cycle.py)
   - 待機と再試行を含む連続運転に使う。
 
@@ -214,6 +216,8 @@ netkeiba 系は lock 待機、収集、backfill、gate 実行の各段で heartb
 さらに `run_local_public_snapshot.py` を追加し、`local_revision_gate_<revision>.json` を起点に `local_public_snapshot_<revision>.json` を出せるようにした。public 向けに local-only を読むときは、この snapshot を先頭にして、必要な場合だけ lineage / promotion / revision / evaluation pointer の順へ降りる。
 
 mixed-universe 比較も `run_mixed_universe_compare.py` を追加して、`mixed_universe_compare_<left_universe>_vs_<right_universe>_<revision>.json` を最小 pointer manifest として出せるようにした。ここでは数値比較そのものではなく、left 側の local public snapshot または lineage と、right 側の JRA public reference を 1 本へ束ねる。
+
+さらに `run_mixed_universe_readiness.py` を追加し、mixed compare の前に `mixed_universe_readiness_<left_universe>_vs_<right_universe>_<revision>.json` で前提条件を確認できるようにした。ここでは left 側の `benchmark_rerun_ready`、evaluation pointer の有無、`stability_assessment=representative`、right 側の public reference を check として並べる。
 
 step 名も既存 gate の読み方に寄せてあり、snapshot 側は `load_config -> load_source_tables -> compute_alignment -> compute_coverage -> write_snapshot`、gate 側は `init_manifest -> run_snapshot -> validate_readiness -> run_train -> run_evaluate -> write_manifest` を基本系列として読める。
 

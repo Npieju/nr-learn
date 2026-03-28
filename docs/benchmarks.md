@@ -91,6 +91,8 @@ local-only universe の benchmark を読むときは、順序を別にする。
 
 mixed-universe 比較を導入するときも、JRA-only benchmark table に直接混ぜず、`mixed_universe_compare_<left_universe>_vs_<right_universe>_<revision>.json` を先頭 artifact として別読みする。現時点の mixed compare は pointer-only manifest なので、比較結果は baseline の置換根拠ではなく、universe 間の差分検証へ降りるための入口として読む。
 
+pointer-only compare に進む前には、`mixed_universe_readiness_<left_universe>_vs_<right_universe>_<revision>.json` を先に見る。ここで left 側の readiness と representative evaluation が揃っていないなら、mixed compare を読んでも比較材料がまだ不足していると判断する。
+
 ### 5.2 latest 2025 の formal snapshot
 
 latest 2025 split で直近に formal に通過した run は次の 2 本である。
