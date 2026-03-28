@@ -20,6 +20,9 @@ from racing_ml.common.progress import Heartbeat, ProgressBar
 DEFAULT_UNIVERSE = "jra"
 DEFAULT_SOURCE_SCOPE = "netkeiba"
 DEFAULT_SCHEMA_VERSION = "netkeiba.benchmark_gate.v1"
+DEFAULT_RACE_RESULT_PATH = "data/external/netkeiba/results/netkeiba_race_result_crawled.csv"
+DEFAULT_RACE_CARD_PATH = "data/external/netkeiba/racecard/netkeiba_racecard_crawled.csv"
+DEFAULT_PEDIGREE_PATH = "data/external/netkeiba/pedigree/netkeiba_pedigree_crawled.csv"
 
 
 def _set_step(payload: dict[str, object], step_name: str) -> None:
@@ -97,6 +100,9 @@ def main() -> int:
     parser.add_argument("--source-scope", default=DEFAULT_SOURCE_SCOPE)
     parser.add_argument("--schema-version", default=DEFAULT_SCHEMA_VERSION)
     parser.add_argument("--baseline-reference", default=None)
+    parser.add_argument("--race-result-path", default=DEFAULT_RACE_RESULT_PATH)
+    parser.add_argument("--race-card-path", default=DEFAULT_RACE_CARD_PATH)
+    parser.add_argument("--pedigree-path", default=DEFAULT_PEDIGREE_PATH)
     parser.add_argument("--skip-train", action="store_true")
     parser.add_argument("--skip-evaluate", action="store_true")
     args = parser.parse_args()
@@ -131,6 +137,9 @@ def main() -> int:
             "wf_scheme": args.wf_scheme,
             "skip_train": bool(args.skip_train),
             "skip_evaluate": bool(args.skip_evaluate),
+            "race_result_path": args.race_result_path,
+            "race_card_path": args.race_card_path,
+            "pedigree_path": args.pedigree_path,
         },
     }
 
@@ -171,6 +180,12 @@ def main() -> int:
             source_scope,
             "--schema-version",
             "netkeiba.coverage_snapshot.v1",
+            "--race-result-path",
+            args.race_result_path,
+            "--race-card-path",
+            args.race_card_path,
+            "--pedigree-path",
+            args.pedigree_path,
         ]
         if baseline_reference is not None:
             snapshot_command.extend(["--baseline-reference", baseline_reference])

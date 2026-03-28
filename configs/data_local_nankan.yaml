@@ -1,0 +1,101 @@
+dataset:
+  source_dataset: "local_nankan"
+  raw_dir: "data/local_nankan/raw"
+  interim_dir: "data/local_nankan/interim"
+  processed_dir: "data/local_nankan/processed"
+  external_raw_dirs:
+    - "data/external/local_nankan/results"
+    - "data/external/local_nankan/racecard"
+    - "data/external/local_nankan/pedigree"
+  append_tables:
+    - name: "local_nankan_race_result"
+      optional: true
+      search_dirs:
+        - "data/external/local_nankan/results"
+      pattern: "**/*.csv"
+      required_columns:
+        - "date"
+        - "race_id"
+      dedupe_on:
+        - "race_id"
+        - "horse_id"
+  supplemental_tables:
+    - name: "local_nankan_race_result_keys"
+      optional: true
+      search_dirs:
+        - "data/external/local_nankan/results"
+      pattern: "**/*.csv"
+      join_on:
+        - "race_id"
+        - "horse_id"
+      required_columns:
+        - "race_id"
+        - "horse_id"
+        - "horse_key"
+      keep_columns:
+        - "race_id"
+        - "horse_id"
+        - "horse_key"
+        - "owner_name"
+      dedupe_on:
+        - "race_id"
+        - "horse_id"
+      merge_mode: "prefer_supplemental"
+    - name: "local_nankan_race_card"
+      optional: true
+      search_dirs:
+        - "data/external/local_nankan/racecard"
+      pattern: "**/*.csv"
+      join_on:
+        - "race_id"
+        - "horse_id"
+      required_columns:
+        - "race_id"
+        - "horse_id"
+        - "horse_key"
+      keep_columns:
+        - "race_id"
+        - "horse_id"
+        - "date"
+        - "track"
+        - "distance"
+        - "weather"
+        - "ground_condition"
+        - "horse_key"
+        - "frame_no"
+        - "gate_no"
+        - "horse_name"
+        - "sex"
+        - "age"
+        - "weight"
+        - "jockey_id"
+        - "trainer_id"
+      dedupe_on:
+        - "race_id"
+        - "horse_id"
+      merge_mode: "fill_missing"
+    - name: "local_nankan_pedigree"
+      optional: true
+      search_dirs:
+        - "data/external/local_nankan/pedigree"
+      pattern: "**/*.csv"
+      join_on:
+        - "horse_key"
+      required_columns:
+        - "horse_key"
+      keep_columns:
+        - "horse_key"
+        - "sire_name"
+        - "dam_name"
+        - "damsire_name"
+        - "owner_name"
+        - "breeder_name"
+      dedupe_on:
+        - "horse_key"
+      merge_mode: "prefer_supplemental"
+
+split:
+  method: "time_series"
+  train_end: "2024-12-31"
+  valid_start: "2025-01-01"
+  valid_end: "2025-12-31"

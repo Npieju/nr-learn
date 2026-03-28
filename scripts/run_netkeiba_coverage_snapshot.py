@@ -37,6 +37,9 @@ TARGET_MANIFEST_PATHS = {
     "pedigree": ROOT / "artifacts/reports/netkeiba_crawl_manifest_pedigree.json",
 }
 DEFAULT_CRAWL_LOCK_PATH = ROOT / "artifacts/reports/netkeiba_crawl_manifest.json.lock"
+DEFAULT_RACE_RESULT_PATH = "data/external/netkeiba/results/netkeiba_race_result_crawled.csv"
+DEFAULT_RACE_CARD_PATH = "data/external/netkeiba/racecard/netkeiba_racecard_crawled.csv"
+DEFAULT_PEDIGREE_PATH = "data/external/netkeiba/pedigree/netkeiba_pedigree_crawled.csv"
 DEFAULT_UNIVERSE = "jra"
 DEFAULT_SOURCE_SCOPE = "netkeiba"
 DEFAULT_SCHEMA_VERSION = "netkeiba.coverage_snapshot.v1"
@@ -403,6 +406,9 @@ def main() -> int:
     parser.add_argument("--source-scope", default=DEFAULT_SOURCE_SCOPE)
     parser.add_argument("--schema-version", default=DEFAULT_SCHEMA_VERSION)
     parser.add_argument("--baseline-reference", default=None)
+    parser.add_argument("--race-result-path", default=DEFAULT_RACE_RESULT_PATH)
+    parser.add_argument("--race-card-path", default=DEFAULT_RACE_CARD_PATH)
+    parser.add_argument("--pedigree-path", default=DEFAULT_PEDIGREE_PATH)
     parser.add_argument("--race-result-manifest", default=None)
     parser.add_argument("--race-card-manifest", default=None)
     parser.add_argument("--pedigree-manifest", default=None)
@@ -458,6 +464,15 @@ def main() -> int:
         crawl_lock_path = Path(args.crawl_lock_path) if args.crawl_lock_path else DEFAULT_CRAWL_LOCK_PATH
         if not crawl_lock_path.is_absolute():
             crawl_lock_path = ROOT / crawl_lock_path
+        race_result_path = Path(args.race_result_path)
+        if not race_result_path.is_absolute():
+            race_result_path = ROOT / race_result_path
+        race_card_path = Path(args.race_card_path)
+        if not race_card_path.is_absolute():
+            race_card_path = ROOT / race_card_path
+        pedigree_path = Path(args.pedigree_path)
+        if not pedigree_path.is_absolute():
+            pedigree_path = ROOT / pedigree_path
         tail_rows = max(int(args.tail_rows), 0)
         progress.start(message=f"config loaded tail_rows={tail_rows}")
         _set_step(payload, "load_source_tables")
@@ -476,13 +491,8 @@ def main() -> int:
             primary_source_rows_total = int(len(frame))
             tail_frame = frame.copy()
         progress.update(message=f"training data loaded rows={len(frame)}")
-
-        result_path = ROOT / "data/external/netkeiba/results/netkeiba_race_result_crawled.csv"
-        race_card_path = ROOT / "data/external/netkeiba/racecard/netkeiba_racecard_crawled.csv"
-        pedigree_path = ROOT / "data/external/netkeiba/pedigree/netkeiba_pedigree_crawled.csv"
-
         with Heartbeat("[netkeiba-snapshot]", "loading external outputs", logger=log_progress):
-            race_result = _read_external(result_path)
+            race_result = _read_external(race_result_path)
             race_card = _read_external(race_card_path)
             pedigree = _read_external(pedigree_path)
         target_states = {
@@ -523,6 +533,11 @@ def main() -> int:
                 "baseline_reference": baseline_reference,
                 "primary_source_rows_total": int(primary_source_rows_total),
                 "rows_tail": int(len(tail_frame)),
+                "external_output_paths": {
+                    "race_result": artifact_display_path(race_result_path, workspace_root=ROOT),
+                    "race_card": artifact_display_path(race_card_path, workspace_root=ROOT),
+                    "pedigree": artifact_display_path(pedigree_path, workspace_root=ROOT),
+                },
                 "target_manifests": {
                     name: artifact_display_path(path, workspace_root=ROOT)
                     for name, path in target_manifest_paths.items()
