@@ -193,6 +193,38 @@ def _audit_summary(
     }
 
 
+def _planned_audit_summary(*, requested_revision: str, left_universe: str) -> dict[str, object]:
+    return {
+        "severity": "info",
+        "requested_revision": requested_revision,
+        "resolved_left_revision": None,
+        "resolved_left_source_kind": None,
+        "resolved_left_artifact": None,
+        "row_count": 0,
+        "rows_missing_all_sources": [],
+        "rows_with_planned_commands": [],
+        "rows_with_blocking_action": [],
+        "notes": [
+            f"numeric compare or lineage is not available yet for {left_universe}",
+            "generate numeric compare and local lineage before auditing missing left-side rows",
+        ],
+    }
+
+
+def _planned_lineage_blocker(*, left_universe: str) -> dict[str, object]:
+    return {
+        "status": "planned",
+        "error_code": "lineage_manifest_missing",
+        "error_message": f"local revision lineage is not available yet for {left_universe}",
+        "recommended_action": "generate_numeric_compare_and_lineage_manifests",
+        "artifact_path": None,
+        "reasons": [
+            "numeric compare manifest is missing",
+            "local revision lineage manifest is missing",
+        ],
+    }
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--revision", default=None)
@@ -243,6 +275,14 @@ def main() -> int:
                     "numeric_compare_manifest": artifact_display_path(compare_path, workspace_root=ROOT),
                     "left_lineage_manifest": artifact_display_path(lineage_path, workspace_root=ROOT),
                 },
+                "read_order": [
+                    "mixed_universe_numeric_compare",
+                    "local_revision_gate",
+                    "mixed_universe_left_gap_audit",
+                ],
+                "summary": _planned_audit_summary(requested_revision=revision_slug, left_universe=left_universe),
+                "lineage_blocker": _planned_lineage_blocker(left_universe=left_universe),
+                "gap_rows": [],
             }
             write_json(output_path, payload)
             print(f"[mixed-universe-left-gap-audit] planned manifest saved: {artifact_display_path(output_path, workspace_root=ROOT)}", flush=True)
