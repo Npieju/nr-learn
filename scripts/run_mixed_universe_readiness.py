@@ -15,6 +15,8 @@ if str(SRC) not in sys.path:
 from racing_ml.common.artifacts import display_path as artifact_display_path
 from racing_ml.common.artifacts import ensure_output_file_path as artifact_ensure_output_file_path
 from racing_ml.common.artifacts import read_json, utc_now_iso, write_json
+from racing_ml.common.mixed_artifacts import read_optional_json_path
+from racing_ml.common.mixed_artifacts import resolve_local_snapshot_and_lineage_paths
 
 
 DEFAULT_LEFT_UNIVERSE = "local_nankan"
@@ -38,29 +40,10 @@ def _normalize_slug(value: str) -> str:
     return normalized
 
 
-def _latest_matching(pattern: str) -> Path | None:
-    matches = sorted(ROOT.glob(pattern), key=lambda path: path.stat().st_mtime, reverse=True)
-    return matches[0] if matches else None
-
-
-def _revision_prefix_candidates(revision_slug: str) -> list[str]:
-    candidates: list[str] = []
-    if revision_slug:
-        candidates.append(revision_slug)
-    head = revision_slug.split("_", 1)[0].strip()
-    if head and head not in candidates:
-        candidates.append(head)
-    return candidates
-
-
 def _read_optional_payload(path_text: object) -> dict[str, object] | None:
     if not isinstance(path_text, str) or not path_text.strip():
         return None
-    path = _resolve_path(path_text)
-    if not path.exists():
-        return None
-    payload = read_json(path)
-    return payload if isinstance(payload, dict) else None
+    return read_optional_json_path(path_text, workspace_root=ROOT)
 
 
 def _read_required_payload(path: Path, *, label: str) -> dict[str, object]:
@@ -70,65 +53,6 @@ def _read_required_payload(path: Path, *, label: str) -> dict[str, object]:
     if not isinstance(payload, dict):
         raise ValueError(f"{label} must be a JSON object: {artifact_display_path(path, workspace_root=ROOT)}")
     return payload
-
-
-def _resolve_left_inputs(
-    *,
-    explicit_snapshot: str | None,
-    explicit_lineage: str | None,
-    revision_slug: str,
-    left_universe: str,
-) -> tuple[Path, Path]:
-    if explicit_snapshot or explicit_lineage:
-        snapshot_path = _resolve_path(explicit_snapshot) if explicit_snapshot else _resolve_path(f"artifacts/reports/local_public_snapshot_{revision_slug}.json")
-        lineage_path = _resolve_path(explicit_lineage) if explicit_lineage else _resolve_path(f"artifacts/reports/local_revision_gate_{revision_slug}.json")
-        return snapshot_path, lineage_path
-
-    snapshot_candidates: list[Path] = []
-    lineage_candidates: list[Path] = []
-    seen_snapshots: set[Path] = set()
-    seen_lineages: set[Path] = set()
-
-    def add_snapshot(path: Path | None) -> None:
-        if path is None:
-            return
-        resolved = path if path.is_absolute() else _resolve_path(path)
-        if resolved in seen_snapshots:
-            return
-        seen_snapshots.add(resolved)
-        snapshot_candidates.append(resolved)
-
-    def add_lineage(path: Path | None) -> None:
-        if path is None:
-            return
-        resolved = path if path.is_absolute() else _resolve_path(path)
-        if resolved in seen_lineages:
-            return
-        seen_lineages.add(resolved)
-        lineage_candidates.append(resolved)
-
-    for prefix in _revision_prefix_candidates(revision_slug):
-        add_snapshot(_resolve_path(f"artifacts/reports/local_public_snapshot_{prefix}.json"))
-        add_lineage(_resolve_path(f"artifacts/reports/local_revision_gate_{prefix}.json"))
-        add_snapshot(_latest_matching(f"artifacts/reports/local_public_snapshot_{prefix}_*.json"))
-        add_lineage(_latest_matching(f"artifacts/reports/local_revision_gate_{prefix}_*.json"))
-
-    add_snapshot(_latest_matching(f"artifacts/reports/local_public_snapshot_*_{left_universe}_*.json"))
-    add_lineage(_latest_matching(f"artifacts/reports/local_revision_gate_*_{left_universe}_*.json"))
-    add_snapshot(_latest_matching("artifacts/reports/local_public_snapshot_*.json"))
-    add_lineage(_latest_matching("artifacts/reports/local_revision_gate_*.json"))
-
-    snapshot_path = next((candidate for candidate in snapshot_candidates if candidate.exists()), snapshot_candidates[0] if snapshot_candidates else _resolve_path(f"artifacts/reports/local_public_snapshot_{revision_slug}.json"))
-    lineage_path = next((candidate for candidate in lineage_candidates if candidate.exists()), lineage_candidates[0] if lineage_candidates else _resolve_path(f"artifacts/reports/local_revision_gate_{revision_slug}.json"))
-
-    if snapshot_path.exists():
-        snapshot_payload = _read_optional_payload(artifact_display_path(snapshot_path, workspace_root=ROOT))
-        if isinstance(snapshot_payload, dict):
-            lineage_manifest = snapshot_payload.get("lineage_manifest")
-            if isinstance(lineage_manifest, str) and lineage_manifest.strip():
-                lineage_path = _resolve_path(lineage_manifest)
-
-    return snapshot_path, lineage_path
 
 
 def _extract_evaluation_pointer(left_payload: dict[str, object]) -> dict[str, object] | None:
@@ -286,7 +210,8 @@ def main() -> int:
     right_universe = _normalize_slug(args.right_universe)
     output = args.output or f"artifacts/reports/mixed_universe_readiness_{left_universe}_vs_{right_universe}_{revision_slug}.json"
 
-    left_snapshot_path, left_lineage_path = _resolve_left_inputs(
+    left_snapshot_path, left_lineage_path = resolve_local_snapshot_and_lineage_paths(
+        workspace_root=ROOT,
         explicit_snapshot=args.left_public_snapshot,
         explicit_lineage=args.left_lineage_manifest,
         revision_slug=revision_slug,

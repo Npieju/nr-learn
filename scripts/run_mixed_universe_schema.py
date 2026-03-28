@@ -15,6 +15,7 @@ if str(SRC) not in sys.path:
 from racing_ml.common.artifacts import display_path as artifact_display_path
 from racing_ml.common.artifacts import ensure_output_file_path as artifact_ensure_output_file_path
 from racing_ml.common.artifacts import read_json, utc_now_iso, write_json
+from racing_ml.common.mixed_artifacts import prefer_existing_path
 
 
 DEFAULT_LEFT_UNIVERSE = "local_nankan"
@@ -35,18 +36,6 @@ def _normalize_slug(value: str) -> str:
     if not normalized:
         raise ValueError("slug must not be empty")
     return normalized
-
-
-def _latest_matching(pattern: str) -> Path | None:
-    matches = sorted(ROOT.glob(pattern), key=lambda path: path.stat().st_mtime, reverse=True)
-    return matches[0] if matches else None
-
-
-def _prefer_existing(path: Path, fallback_pattern: str) -> Path:
-    if path.exists():
-        return path
-    fallback = _latest_matching(fallback_pattern)
-    return fallback if fallback is not None else path
 
 
 def _read_required_payload(path: Path, *, label: str) -> dict[str, object]:
@@ -207,13 +196,15 @@ def main() -> int:
     compare_manifest = args.compare_manifest or f"artifacts/reports/mixed_universe_compare_{left_universe}_vs_{right_universe}_{revision_slug}.json"
     output = args.output or f"artifacts/reports/mixed_universe_schema_{left_universe}_vs_{right_universe}_{revision_slug}.json"
 
-    readiness_path = _prefer_existing(
-        _resolve_path(readiness_manifest),
-        f"artifacts/reports/mixed_universe_readiness_{left_universe}_vs_{right_universe}_*.json",
+    readiness_path = prefer_existing_path(
+        workspace_root=ROOT,
+        expected_path=readiness_manifest,
+        fallback_pattern=f"artifacts/reports/mixed_universe_readiness_{left_universe}_vs_{right_universe}_*.json",
     )
-    compare_path = _prefer_existing(
-        _resolve_path(compare_manifest),
-        f"artifacts/reports/mixed_universe_compare_{left_universe}_vs_{right_universe}_*.json",
+    compare_path = prefer_existing_path(
+        workspace_root=ROOT,
+        expected_path=compare_manifest,
+        fallback_pattern=f"artifacts/reports/mixed_universe_compare_{left_universe}_vs_{right_universe}_*.json",
     )
     output_path = _resolve_path(output)
 

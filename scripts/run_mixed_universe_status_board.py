@@ -15,6 +15,9 @@ if str(SRC) not in sys.path:
 from racing_ml.common.artifacts import display_path as artifact_display_path
 from racing_ml.common.artifacts import ensure_output_file_path as artifact_ensure_output_file_path
 from racing_ml.common.artifacts import read_json, utc_now_iso, write_json
+from racing_ml.common.mixed_artifacts import prefer_existing_path
+from racing_ml.common.mixed_artifacts import read_optional_json_path
+from racing_ml.common.mixed_artifacts import resolve_local_snapshot_and_lineage_paths
 
 
 DEFAULT_LEFT_UNIVERSE = "local_nankan"
@@ -24,18 +27,6 @@ DEFAULT_RIGHT_UNIVERSE = "jra"
 def _resolve_path(path_text: str | Path) -> Path:
     path = Path(path_text)
     return path if path.is_absolute() else (ROOT / path)
-
-
-def _latest_matching(pattern: str) -> Path | None:
-    matches = sorted((ROOT.glob(pattern)), key=lambda path: path.stat().st_mtime, reverse=True)
-    return matches[0] if matches else None
-
-
-def _prefer_existing(path: Path, fallback_pattern: str) -> Path:
-    if path.exists():
-        return path
-    fallback = _latest_matching(fallback_pattern)
-    return fallback if fallback is not None else path
 
 
 def _normalize_slug(value: str) -> str:
@@ -49,10 +40,7 @@ def _normalize_slug(value: str) -> str:
 
 
 def _read_optional_payload(path: Path) -> dict[str, object] | None:
-    if not path.exists():
-        return None
-    payload = read_json(path)
-    return payload if isinstance(payload, dict) else None
+    return read_optional_json_path(path, workspace_root=ROOT)
 
 
 def _phase_status(payload: dict[str, object] | None, status_keys: list[str]) -> str:
@@ -134,38 +122,47 @@ def main() -> int:
     right_universe = _normalize_slug(args.right_universe)
     output = args.output or f"artifacts/reports/mixed_universe_status_board_{left_universe}_vs_{right_universe}_{revision_slug}.json"
 
+    public_snapshot_path, _ = resolve_local_snapshot_and_lineage_paths(
+        workspace_root=ROOT,
+        revision_slug=revision_slug,
+        left_universe=left_universe,
+    )
     paths = {
-        "public_snapshot": _prefer_existing(
-            _resolve_path(f"artifacts/reports/local_public_snapshot_{revision_slug}.json"),
-            "artifacts/reports/local_public_snapshot_*.json",
+        "public_snapshot": public_snapshot_path,
+        "readiness": prefer_existing_path(
+            workspace_root=ROOT,
+            expected_path=f"artifacts/reports/mixed_universe_readiness_{left_universe}_vs_{right_universe}_{revision_slug}.json",
+            fallback_pattern=f"artifacts/reports/mixed_universe_readiness_{left_universe}_vs_{right_universe}_*.json",
         ),
-        "readiness": _prefer_existing(
-            _resolve_path(f"artifacts/reports/mixed_universe_readiness_{left_universe}_vs_{right_universe}_{revision_slug}.json"),
-            f"artifacts/reports/mixed_universe_readiness_{left_universe}_vs_{right_universe}_*.json",
+        "compare": prefer_existing_path(
+            workspace_root=ROOT,
+            expected_path=f"artifacts/reports/mixed_universe_compare_{left_universe}_vs_{right_universe}_{revision_slug}.json",
+            fallback_pattern=f"artifacts/reports/mixed_universe_compare_{left_universe}_vs_{right_universe}_*.json",
         ),
-        "compare": _prefer_existing(
-            _resolve_path(f"artifacts/reports/mixed_universe_compare_{left_universe}_vs_{right_universe}_{revision_slug}.json"),
-            f"artifacts/reports/mixed_universe_compare_{left_universe}_vs_{right_universe}_*.json",
+        "schema": prefer_existing_path(
+            workspace_root=ROOT,
+            expected_path=f"artifacts/reports/mixed_universe_schema_{left_universe}_vs_{right_universe}_{revision_slug}.json",
+            fallback_pattern=f"artifacts/reports/mixed_universe_schema_{left_universe}_vs_{right_universe}_*.json",
         ),
-        "schema": _prefer_existing(
-            _resolve_path(f"artifacts/reports/mixed_universe_schema_{left_universe}_vs_{right_universe}_{revision_slug}.json"),
-            f"artifacts/reports/mixed_universe_schema_{left_universe}_vs_{right_universe}_*.json",
+        "numeric_compare": prefer_existing_path(
+            workspace_root=ROOT,
+            expected_path=f"artifacts/reports/mixed_universe_numeric_compare_{left_universe}_vs_{right_universe}_{revision_slug}.json",
+            fallback_pattern=f"artifacts/reports/mixed_universe_numeric_compare_{left_universe}_vs_{right_universe}_*.json",
         ),
-        "numeric_compare": _prefer_existing(
-            _resolve_path(f"artifacts/reports/mixed_universe_numeric_compare_{left_universe}_vs_{right_universe}_{revision_slug}.json"),
-            f"artifacts/reports/mixed_universe_numeric_compare_{left_universe}_vs_{right_universe}_*.json",
+        "numeric_summary": prefer_existing_path(
+            workspace_root=ROOT,
+            expected_path=f"artifacts/reports/mixed_universe_numeric_summary_{left_universe}_vs_{right_universe}_{revision_slug}.json",
+            fallback_pattern=f"artifacts/reports/mixed_universe_numeric_summary_{left_universe}_vs_{right_universe}_*.json",
         ),
-        "numeric_summary": _prefer_existing(
-            _resolve_path(f"artifacts/reports/mixed_universe_numeric_summary_{left_universe}_vs_{right_universe}_{revision_slug}.json"),
-            f"artifacts/reports/mixed_universe_numeric_summary_{left_universe}_vs_{right_universe}_*.json",
+        "left_gap_audit": prefer_existing_path(
+            workspace_root=ROOT,
+            expected_path=f"artifacts/reports/mixed_universe_left_gap_audit_{left_universe}_vs_{right_universe}_{revision_slug}.json",
+            fallback_pattern=f"artifacts/reports/mixed_universe_left_gap_audit_{left_universe}_vs_{right_universe}_*.json",
         ),
-        "left_gap_audit": _prefer_existing(
-            _resolve_path(f"artifacts/reports/mixed_universe_left_gap_audit_{left_universe}_vs_{right_universe}_{revision_slug}.json"),
-            f"artifacts/reports/mixed_universe_left_gap_audit_{left_universe}_vs_{right_universe}_*.json",
-        ),
-        "left_recovery_plan": _prefer_existing(
-            _resolve_path(f"artifacts/reports/mixed_universe_left_recovery_plan_{left_universe}_vs_{right_universe}_{revision_slug}.json"),
-            f"artifacts/reports/mixed_universe_left_recovery_plan_{left_universe}_vs_{right_universe}_*.json",
+        "left_recovery_plan": prefer_existing_path(
+            workspace_root=ROOT,
+            expected_path=f"artifacts/reports/mixed_universe_left_recovery_plan_{left_universe}_vs_{right_universe}_{revision_slug}.json",
+            fallback_pattern=f"artifacts/reports/mixed_universe_left_recovery_plan_{left_universe}_vs_{right_universe}_*.json",
         ),
     }
     output_path = _resolve_path(output)

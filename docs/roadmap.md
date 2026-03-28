@@ -526,6 +526,11 @@
 - `run_mixed_universe_schema.py` と `run_mixed_universe_numeric_compare.py` も、exact revision 名が無いときは同じ universe の既存 mixed manifest を fallback で拾うようにした。
 - これにより `r20260328_reference_bridge` 系は readiness -> compare -> schema -> numeric compare まで既定引数だけで再生成できるようになった。
 
+### M60. mixed alias 解決 helper を共通化した
+
+- `src/racing_ml/common/mixed_artifacts.py` を追加し、revision prefix、latest manifest fallback、local snapshot-lineage 自動解決を共通 helper としてまとめた。
+- `run_mixed_universe_readiness.py`, `run_mixed_universe_compare.py`, `run_mixed_universe_left_gap_audit.py`, `run_mixed_universe_status_board.py`, `run_mixed_universe_schema.py`, `run_mixed_universe_numeric_compare.py`, `run_mixed_universe_recovery.py` はこの helper を使うように更新し、alias 規則の drift を減らした。
+
 ## 6. 実行中の優先事項
 
 `current_tighter_policy_search_candidate_2025_latest` の `0.03/80` formalization は M17 で完了した。続いて seasonal / recent-heavy の運用境界整理、latest compare artifact map、actual-date compare 再開導線の同期監査、地方競馬 feasibility の設計チェックリスト・artifact 方針・benchmark 完了条件・payload schema・CLI 引数契約・step/failure taxonomy の具体化、既存 `netkeiba_*` snapshot / gate への universe-aware 契約実装、local-only snapshot / gate 雛形の追加、local-only integrity / feature gap / evaluation 入口の追加、local-only orchestration manifest の追加、および local-only revision lineage の追加まで完了した。

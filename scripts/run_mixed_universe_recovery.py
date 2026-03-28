@@ -16,6 +16,8 @@ if str(SRC) not in sys.path:
 from racing_ml.common.artifacts import display_path as artifact_display_path
 from racing_ml.common.artifacts import ensure_output_file_path as artifact_ensure_output_file_path
 from racing_ml.common.artifacts import read_json, utc_now_iso, write_json
+from racing_ml.common.mixed_artifacts import latest_matching_path
+from racing_ml.common.mixed_artifacts import read_optional_json_path
 
 
 DEFAULT_LEFT_UNIVERSE = "local_nankan"
@@ -37,11 +39,6 @@ def _normalize_slug(value: str) -> str:
     return normalized
 
 
-def _latest_matching(pattern: str) -> Path | None:
-    matches = sorted(ROOT.glob(pattern), key=lambda path: path.stat().st_mtime, reverse=True)
-    return matches[0] if matches else None
-
-
 def _read_required_payload(path: Path, *, label: str) -> dict[str, object]:
     if not path.exists():
         raise FileNotFoundError(f"{label} not found: {artifact_display_path(path, workspace_root=ROOT)}")
@@ -54,11 +51,7 @@ def _read_required_payload(path: Path, *, label: str) -> dict[str, object]:
 def _read_optional_payload(path_text: object) -> dict[str, object] | None:
     if not isinstance(path_text, str) or not path_text.strip():
         return None
-    path = _resolve_path(path_text)
-    if not path.exists():
-        return None
-    payload = read_json(path)
-    return payload if isinstance(payload, dict) else None
+    return read_optional_json_path(path_text, workspace_root=ROOT)
 
 
 def _path_arg(path: Path) -> str:
@@ -73,7 +66,10 @@ def _status_board_path(*, revision_slug: str, left_universe: str, right_universe
     )
     if expected.exists():
         return expected
-    fallback = _latest_matching(f"artifacts/reports/mixed_universe_status_board_{left_universe}_vs_{right_universe}_*.json")
+    fallback = latest_matching_path(
+        workspace_root=ROOT,
+        pattern=f"artifacts/reports/mixed_universe_status_board_{left_universe}_vs_{right_universe}_*.json",
+    )
     return fallback if fallback is not None else expected
 
 
