@@ -219,6 +219,20 @@ def _summarize_rows(rows: list[dict[str, object]]) -> dict[str, object]:
     }
 
 
+def _planned_summary() -> dict[str, object]:
+    return {
+        "row_count": 0,
+        "numeric_compared_rows": 0,
+        "categorical_match_rows": 0,
+        "categorical_different_rows": 0,
+        "missing_left_rows": [],
+        "missing_right_rows": [],
+        "rows_with_positive_delta": [],
+        "rows_with_negative_delta": [],
+        "rows_with_zero_delta": [],
+    }
+
+
 def _requested_revision(*, readiness_payload: dict[str, object], compare_payload: dict[str, object], schema_payload: dict[str, object], fallback: str) -> str:
     for payload in (schema_payload, compare_payload, readiness_payload):
         value = payload.get("requested_revision")
@@ -327,6 +341,20 @@ def main() -> int:
                     "schema_manifest": artifact_display_path(schema_path, workspace_root=ROOT),
                     "right_reference_manifest": artifact_display_path(right_reference_manifest_path, workspace_root=ROOT),
                 },
+                "read_order": [
+                    "mixed_universe_readiness",
+                    "mixed_universe_compare",
+                    "mixed_universe_schema",
+                    "mixed_universe_numeric_compare",
+                ],
+                "blocking_context": {
+                    "readiness_status": "missing",
+                    "schema_status": "missing",
+                    "readiness_error_code": "readiness_manifest_missing",
+                    "schema_recommended_action": "generate_readiness_and_compare_manifests",
+                },
+                "summary": _planned_summary(),
+                "row_results": [],
             }
             write_json(output_path, payload)
             print(f"[mixed-universe-numeric-compare] planned manifest saved: {artifact_display_path(output_path, workspace_root=ROOT)}", flush=True)

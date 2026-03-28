@@ -251,7 +251,7 @@ local public snapshot / local revision lineage の fallback は revision prefix 
 
 right 側の JRA baseline については `run_public_benchmark_reference.py` も追加し、promotion / revision / evaluation artifact から `public_benchmark_reference_<reference>.json` を生成できるようにした。mixed compare/readiness/schema はこの JSON を right-side の machine-readable reference として参照してよい。
 
-その次段として `run_mixed_universe_numeric_compare.py` を追加し、schema manifest の row 名を基準に left/right の値を解決して `mixed_universe_numeric_compare_<left_universe>_vs_<right_universe>_<revision>.json` と CSV を出せるようにした。left 値が未整備の行は `missing_left_value` として残し、取得できた numeric 行だけ `delta_left_minus_right` と `delta_direction` を計算する。
+その次段として `run_mixed_universe_numeric_compare.py` を追加し、schema manifest の row 名を基準に left/right の値を解決して `mixed_universe_numeric_compare_<left_universe>_vs_<right_universe>_<revision>.json` と CSV を出せるようにした。left 値が未整備の行は `missing_left_value` として残し、取得できた numeric 行だけ `delta_left_minus_right` と `delta_direction` を計算する。planned / dry-run でも `read_order`, `blocking_context`, `summary`, `row_results=[]` を返すので、numeric compare 入口も completed payload と同じ shape で読める。
 
 `run_mixed_universe_schema.py` と `run_mixed_universe_numeric_compare.py` は、exact revision 名の upstream manifest が無いときでも、同じ universe の既存 mixed manifest を fallback で拾う。
 
