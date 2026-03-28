@@ -194,6 +194,20 @@ def _resolved_left_revision(*, readiness_payload: dict[str, object], compare_pay
     return str(value) if value is not None else None
 
 
+def _resolved_left_source_kind(*, readiness_payload: dict[str, object], compare_payload: dict[str, object]) -> str | None:
+    value = compare_payload.get("resolved_left_source_kind")
+    if value is None:
+        value = readiness_payload.get("resolved_left_source_kind")
+    return str(value) if value is not None else None
+
+
+def _resolved_left_artifact(*, readiness_payload: dict[str, object], compare_payload: dict[str, object]) -> str | None:
+    value = compare_payload.get("resolved_left_artifact")
+    if value is None:
+        value = readiness_payload.get("resolved_left_artifact")
+    return str(value) if value is not None else None
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--revision", default=None)
@@ -238,6 +252,8 @@ def main() -> int:
                 "revision": revision_slug,
                 "requested_revision": revision_slug,
                 "resolved_left_revision": None,
+                "resolved_left_source_kind": None,
+                "resolved_left_artifact": None,
                 "left_universe": left_universe,
                 "right_universe": right_universe,
                 "right_reference": args.right_reference,
@@ -268,6 +284,8 @@ def main() -> int:
             "revision": revision_slug,
             "requested_revision": _requested_revision(readiness_payload=readiness_payload, compare_payload=compare_payload, fallback=revision_slug),
             "resolved_left_revision": _resolved_left_revision(readiness_payload=readiness_payload, compare_payload=compare_payload),
+            "resolved_left_source_kind": _resolved_left_source_kind(readiness_payload=readiness_payload, compare_payload=compare_payload),
+            "resolved_left_artifact": _resolved_left_artifact(readiness_payload=readiness_payload, compare_payload=compare_payload),
             "left_universe": left_universe,
             "right_universe": right_universe,
             "right_reference": args.right_reference,

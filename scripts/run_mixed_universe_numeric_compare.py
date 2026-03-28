@@ -239,6 +239,22 @@ def _resolved_left_revision(*, readiness_payload: dict[str, object], compare_pay
     return None
 
 
+def _resolved_left_source_kind(*, readiness_payload: dict[str, object], compare_payload: dict[str, object], schema_payload: dict[str, object]) -> str | None:
+    for payload in (schema_payload, compare_payload, readiness_payload):
+        value = payload.get("resolved_left_source_kind")
+        if value is not None:
+            return str(value)
+    return None
+
+
+def _resolved_left_artifact(*, readiness_payload: dict[str, object], compare_payload: dict[str, object], schema_payload: dict[str, object]) -> str | None:
+    for payload in (schema_payload, compare_payload, readiness_payload):
+        value = payload.get("resolved_left_artifact")
+        if value is not None:
+            return str(value)
+    return None
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--revision", default=None)
@@ -297,6 +313,8 @@ def main() -> int:
                 "revision": revision_slug,
                 "requested_revision": revision_slug,
                 "resolved_left_revision": None,
+                "resolved_left_source_kind": None,
+                "resolved_left_artifact": None,
                 "left_universe": left_universe,
                 "right_universe": right_universe,
                 "right_reference": args.right_reference,
@@ -350,6 +368,8 @@ def main() -> int:
             "revision": revision_slug,
             "requested_revision": _requested_revision(readiness_payload=readiness_payload, compare_payload=compare_payload, schema_payload=schema_payload, fallback=revision_slug),
             "resolved_left_revision": _resolved_left_revision(readiness_payload=readiness_payload, compare_payload=compare_payload, schema_payload=schema_payload),
+            "resolved_left_source_kind": _resolved_left_source_kind(readiness_payload=readiness_payload, compare_payload=compare_payload, schema_payload=schema_payload),
+            "resolved_left_artifact": _resolved_left_artifact(readiness_payload=readiness_payload, compare_payload=compare_payload, schema_payload=schema_payload),
             "left_universe": left_universe,
             "right_universe": right_universe,
             "right_reference": args.right_reference,

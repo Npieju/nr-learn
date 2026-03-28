@@ -145,19 +145,19 @@ compare 前提が揃った後は、`artifacts/reports/mixed_universe_schema_<lef
 2. `evaluation`: `stability_assessment`, `auc`, `top1_roi`, `ev_top1_roi`, `nested_wf_weighted_test_roi`, `nested_wf_bets_total`
 3. `support`: `formal_benchmark_weighted_roi`, `formal_benchmark_feasible_folds`
 
-この schema manifest は numeric compare そのものではなく、left 側でどの artifact path から値を拾い、right 側ではどの public reference を正本にするかを固定する contract として扱う。
+この schema manifest は numeric compare そのものではなく、left 側でどの artifact path から値を拾い、right 側ではどの public reference を正本にするかを固定する contract として扱う。alias bridge を使っている場合も `resolved_left_revision`, `resolved_left_source_kind`, `resolved_left_artifact` を引き継ぐので、schema の段階で left 側の参照元を見失わない。
 
 right 側 JRA baseline の machine-readable 正本は `artifacts/reports/public_benchmark_reference_<reference>.json` とする。ここでは promotion manifest、revision manifest、evaluation manifest、evaluation summary を束ね、mixed compare 系 script は docs だけでなくこの reference manifest も参照する。
 
-numeric compare 本体は `artifacts/reports/mixed_universe_numeric_compare_<left_universe>_vs_<right_universe>_<revision>.json` とする。ここでは schema manifest の row ごとに `left_value`, `right_value`, `delta_left_minus_right`, `comparison_status` を持たせ、left 側未整備でも partial compare を残せるようにする。
+numeric compare 本体は `artifacts/reports/mixed_universe_numeric_compare_<left_universe>_vs_<right_universe>_<revision>.json` とする。ここでは schema manifest の row ごとに `left_value`, `right_value`, `delta_left_minus_right`, `comparison_status` を持たせ、left 側未整備でも partial compare を残せるようにする。ここでも `resolved_left_revision`, `resolved_left_source_kind`, `resolved_left_artifact` を保持して、どの left artifact から比較したかを追えるようにする。
 
 一覧確認用には `artifacts/reports/mixed_universe_numeric_compare_<left_universe>_vs_<right_universe>_<revision>.csv` も併せて出してよい。CSV には `name`, `left_value`, `right_value`, `delta_left_minus_right`, `delta_direction`, `comparison_status` を最低限並べる。
 
-判読用には `artifacts/reports/mixed_universe_numeric_summary_<left_universe>_vs_<right_universe>_<revision>.json` を置いてよい。ここでは row 全件を再掲せず、`verdict`, `severity`, `missing_left_rows`, `missing_right_rows`, `positive_rows`, `negative_rows`, `notes`, `recommended_action` のような summary だけを持たせる。
+判読用には `artifacts/reports/mixed_universe_numeric_summary_<left_universe>_vs_<right_universe>_<revision>.json` を置いてよい。ここでは row 全件を再掲せず、`verdict`, `severity`, `missing_left_rows`, `missing_right_rows`, `positive_rows`, `negative_rows`, `notes`, `recommended_action` のような summary だけを持たせる。upstream compare の `resolved_left_*` も保持するので、summary だけを開いても left-side 参照元を確認できる。
 
-left 側の欠損原因を詰めたいときは `artifacts/reports/mixed_universe_left_gap_audit_<left_universe>_vs_<right_universe>_<revision>.json` を見る。ここでは `missing_left_rows` ごとに必要 source artifact、実在状況、local revision lineage に残っている command preview を並べる。local benchmark が preflight で止まった場合は、`lineage_blocker.recommended_action` とその根拠 artifact もここに残る。mixed revision と local revision が別名でも、gap audit は readiness/public snapshot artifact を使って local lineage を自動で拾う。
+left 側の欠損原因を詰めたいときは `artifacts/reports/mixed_universe_left_gap_audit_<left_universe>_vs_<right_universe>_<revision>.json` を見る。ここでは `missing_left_rows` ごとに必要 source artifact、実在状況、local revision lineage に残っている command preview を並べる。local benchmark が preflight で止まった場合は、`lineage_blocker.recommended_action` とその根拠 artifact もここに残る。mixed revision と local revision が別名でも、gap audit は readiness/public snapshot artifact を使って local lineage を自動で拾い、`resolved_left_*` で実際に辿った left-side 参照元も残す。
 
-実行順まで落としたいときは `artifacts/reports/mixed_universe_left_recovery_plan_<left_universe>_vs_<right_universe>_<revision>.json` を見る。ここでは gap audit の command preview を重複除去し、`required_for_rows` と必要 artifact path を付けて並べる。もし command preview が無ければ、`populate_primary_raw_dir` のような手動 blocker step が plan に残る。
+実行順まで落としたいときは `artifacts/reports/mixed_universe_left_recovery_plan_<left_universe>_vs_<right_universe>_<revision>.json` を見る。ここでは gap audit の command preview を重複除去し、`required_for_rows` と必要 artifact path を付けて並べる。もし command preview が無ければ、`populate_primary_raw_dir` のような手動 blocker step が plan に残る。recovery plan も `resolved_left_*` を引き継ぐので、plan 単体でも left-side の参照元を確認できる。
 
 この recovery plan を実際に回して下流 manifest まで更新したいときは、`artifacts/reports/mixed_universe_recovery_<left_universe>_vs_<right_universe>_<revision>.json` を使ってよい。ここでは local lineage 再実行から status board 再生成までの step 実行結果、exit code、更新後 board の `recommended_action` に加えて、実際に参照している left-side の `resolved_left_revision`, `resolved_left_source_kind`, `resolved_left_artifact` もまとめる。
 

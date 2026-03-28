@@ -243,7 +243,7 @@ mixed-universe 比較も `run_mixed_universe_compare.py` を追加して、`mixe
 
 mixed-universe 系 manifest の `revision` は引き続き要求した mixed revision alias を表す。一方で alias 解決後に実際に参照した local revision は `resolved_left_revision` として readiness / compare / status board / recovery に併記し、入口側の readiness / compare では `resolved_left_source_kind` と `resolved_left_artifact` も合わせて出して、operator が left-side の実体と参照元 path をすぐ追えるようにしている。
 
-この bridge 情報は downstream の schema / numeric compare / numeric summary / left gap audit / left recovery plan にも引き継ぐ。したがって mixed alias を保ったまま生成を続けても、どの段で見ても `requested_revision` と `resolved_left_revision` の両方を読める。
+この bridge 情報は downstream の schema / numeric compare / numeric summary / left gap audit / left recovery plan にも引き継ぐ。したがって mixed alias を保ったまま生成を続けても、どの段で見ても `requested_revision`, `resolved_left_revision`, `resolved_left_source_kind`, `resolved_left_artifact` を読める。
 
 その次段として `run_mixed_universe_schema.py` も追加し、readiness manifest と pointer-only compare manifest を受けて、`mixed_universe_schema_<left_universe>_vs_<right_universe>_<revision>.json` へ comparison axes と metric rows を固定できるようにした。現段階では numeric compare ではなく、`decision`, `stability_assessment`, `auc`, `top1_roi`, `ev_top1_roi`, `nested_wf_weighted_test_roi`, `formal_benchmark_weighted_roi`, `formal_benchmark_feasible_folds` を左右でどこから読むかを揃える役割に留める。
 
