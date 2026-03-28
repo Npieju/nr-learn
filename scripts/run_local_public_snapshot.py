@@ -113,10 +113,11 @@ def _build_planned_payload(
             "public_snapshot": artifact_display_path(output_path, workspace_root=ROOT),
             "lineage_manifest": artifact_display_path(lineage_path, workspace_root=ROOT),
         },
-        "compare_contract": {
-            "local_only_public_snapshot": f"artifacts/reports/local_public_snapshot_{revision_slug}.json",
-            "mixed_compare_manifest": f"artifacts/reports/mixed_universe_compare_{universe}_vs_jra_{revision_slug}.json",
-        },
+        "compare_contract": _build_compare_contract(
+            snapshot_path=output_path,
+            universe=universe,
+            revision=revision_slug,
+        ),
     }
 
 
