@@ -201,7 +201,7 @@ def _build_recovery_steps(
     *,
     board_payload: dict[str, object],
     board_path: Path,
-) -> tuple[list[dict[str, object]], dict[str, str], str]:
+) -> tuple[list[dict[str, object]], dict[str, str], str, str, str]:
     artifacts = board_payload.get("artifacts") if isinstance(board_payload.get("artifacts"), dict) else {}
     if not isinstance(artifacts, dict):
         raise ValueError("status board artifacts are missing")
@@ -427,7 +427,7 @@ def _build_recovery_steps(
         "left_gap_audit_manifest": _path_arg(gap_audit_path),
         "left_recovery_plan_manifest": _path_arg(recovery_plan_path),
     }
-    return steps, artifact_map, resolved_left_revision
+    return steps, artifact_map, resolved_left_revision, "local_public_snapshot", _path_arg(public_snapshot_path)
 
 
 def _run_command(step: dict[str, object]) -> dict[str, object]:
@@ -477,7 +477,7 @@ def main() -> int:
         artifact_ensure_output_file_path(output_path, label="output", workspace_root=ROOT)
 
         board_payload = _read_required_payload(board_path, label="mixed status board")
-        steps, artifact_map, resolved_left_revision = _build_recovery_steps(board_payload=board_payload, board_path=board_path)
+        steps, artifact_map, resolved_left_revision, resolved_left_source_kind, resolved_left_artifact = _build_recovery_steps(board_payload=board_payload, board_path=board_path)
         payload: dict[str, object] = {
             "started_at": utc_now_iso(),
             "finished_at": None,
@@ -486,6 +486,8 @@ def main() -> int:
             "revision": str(board_payload.get("revision") or revision_slug),
             "requested_revision": str(board_payload.get("revision") or revision_slug),
             "resolved_left_revision": resolved_left_revision,
+            "resolved_left_source_kind": resolved_left_source_kind,
+            "resolved_left_artifact": resolved_left_artifact,
             "left_universe": str(board_payload.get("left_universe") or left_universe),
             "right_universe": str(board_payload.get("right_universe") or right_universe),
             "source_status_board": _path_arg(board_path),
@@ -528,6 +530,10 @@ def main() -> int:
             payload["refreshed_current_phase"] = refreshed_board_payload.get("current_phase")
             payload["refreshed_next_action_source"] = refreshed_board_payload.get("next_action_source")
             payload["refreshed_highlights"] = refreshed_board_payload.get("highlights")
+            if payload.get("resolved_left_source_kind") is None:
+                payload["resolved_left_source_kind"] = refreshed_board_payload.get("resolved_left_source_kind")
+            if payload.get("resolved_left_artifact") is None:
+                payload["resolved_left_artifact"] = refreshed_board_payload.get("resolved_left_artifact")
         write_json(output_path, payload)
         print(f"[mixed-universe-recovery] manifest saved: {_path_arg(output_path)}", flush=True)
         return overall_exit_code

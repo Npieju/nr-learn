@@ -107,6 +107,30 @@ def _derive_next_action(payloads: dict[str, dict[str, object] | None]) -> tuple[
     return None, None
 
 
+def _resolved_left_source_kind(payloads: dict[str, dict[str, object] | None]) -> str | None:
+    compare_payload = payloads.get("compare")
+    if isinstance(compare_payload, dict):
+        comparison_contract = compare_payload.get("comparison_contract") if isinstance(compare_payload.get("comparison_contract"), dict) else None
+        if isinstance(comparison_contract, dict):
+            value = comparison_contract.get("left_source_kind")
+            if value is not None:
+                return str(value)
+    public_snapshot_payload = payloads.get("public_snapshot")
+    if isinstance(public_snapshot_payload, dict):
+        return "local_public_snapshot"
+    return None
+
+
+def _resolved_left_artifact(path: Path, payload: dict[str, object] | None) -> str | None:
+    if isinstance(payload, dict):
+        artifacts = payload.get("artifacts") if isinstance(payload.get("artifacts"), dict) else None
+        if isinstance(artifacts, dict):
+            public_snapshot = artifacts.get("public_snapshot")
+            if isinstance(public_snapshot, str) and public_snapshot.strip():
+                return public_snapshot
+    return artifact_display_path(path, workspace_root=ROOT) if path.exists() else None
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--revision", default=None)
@@ -189,6 +213,8 @@ def main() -> int:
             return 0
 
         payloads = {key: _read_optional_payload(path) for key, path in paths.items()}
+        resolved_left_source_kind = _resolved_left_source_kind(payloads)
+        resolved_left_artifact = _resolved_left_artifact(paths["public_snapshot"], payloads.get("public_snapshot"))
         summaries = [
             _artifact_summary("public_snapshot", paths["public_snapshot"], payloads["public_snapshot"], ["status", "lineage_status"]),
             _artifact_summary("readiness", paths["readiness"], payloads["readiness"], ["status"]),
@@ -214,6 +240,8 @@ def main() -> int:
             "revision": revision_slug,
             "requested_revision": revision_slug,
             "resolved_left_revision": (payloads.get("public_snapshot") or {}).get("revision") if isinstance(payloads.get("public_snapshot"), dict) else None,
+            "resolved_left_source_kind": resolved_left_source_kind,
+            "resolved_left_artifact": resolved_left_artifact,
             "left_universe": left_universe,
             "right_universe": right_universe,
             "recommended_action": next_action,
@@ -238,6 +266,8 @@ def main() -> int:
             "highlights": {
                 "requested_revision": revision_slug,
                 "resolved_left_revision": (payloads.get("public_snapshot") or {}).get("revision") if isinstance(payloads.get("public_snapshot"), dict) else None,
+                "resolved_left_source_kind": resolved_left_source_kind,
+                "resolved_left_artifact": resolved_left_artifact,
                 "numeric_summary_verdict": ((payloads.get("numeric_summary") or {}).get("promote_safe_summary", {}) or {}).get("verdict") if isinstance(payloads.get("numeric_summary"), dict) else None,
                 "numeric_summary_severity": ((payloads.get("numeric_summary") or {}).get("promote_safe_summary", {}) or {}).get("severity") if isinstance(payloads.get("numeric_summary"), dict) else None,
                 "gap_audit_severity": ((payloads.get("left_gap_audit") or {}).get("summary", {}) or {}).get("severity") if isinstance(payloads.get("left_gap_audit"), dict) else None,
