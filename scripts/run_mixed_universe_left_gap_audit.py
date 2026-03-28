@@ -36,6 +36,84 @@ def _normalize_slug(value: str) -> str:
     return normalized
 
 
+def _latest_matching(pattern: str) -> Path | None:
+    matches = sorted(ROOT.glob(pattern), key=lambda path: path.stat().st_mtime, reverse=True)
+    return matches[0] if matches else None
+
+
+def _read_optional_payload(path: Path) -> dict[str, object] | None:
+    if not path.exists():
+        return None
+    payload = read_json(path)
+    return payload if isinstance(payload, dict) else None
+
+
+def _revision_prefix_candidates(revision_slug: str) -> list[str]:
+    candidates: list[str] = []
+    if revision_slug:
+        candidates.append(revision_slug)
+    head = revision_slug.split("_", 1)[0].strip()
+    if head and head not in candidates:
+        candidates.append(head)
+    return candidates
+
+
+def _resolve_lineage_path(
+    *,
+    explicit_manifest: str | None,
+    revision_slug: str,
+    left_universe: str,
+    numeric_compare_path: Path,
+) -> Path:
+    if explicit_manifest:
+        return _resolve_path(explicit_manifest)
+
+    candidates: list[Path] = []
+    seen: set[Path] = set()
+
+    def add_candidate(path: Path | None) -> None:
+        if path is None:
+            return
+        resolved = path if path.is_absolute() else _resolve_path(path)
+        if resolved in seen:
+            return
+        seen.add(resolved)
+        candidates.append(resolved)
+
+    for prefix in _revision_prefix_candidates(revision_slug):
+        add_candidate(_resolve_path(f"artifacts/reports/local_revision_gate_{prefix}.json"))
+
+    numeric_compare_payload = _read_optional_payload(numeric_compare_path)
+    if isinstance(numeric_compare_payload, dict):
+        artifacts = numeric_compare_payload.get("artifacts") if isinstance(numeric_compare_payload.get("artifacts"), dict) else {}
+        readiness_manifest = artifacts.get("readiness_manifest") if isinstance(artifacts, dict) else None
+        if isinstance(readiness_manifest, str) and readiness_manifest.strip():
+            readiness_path = _resolve_path(readiness_manifest)
+            readiness_payload = _read_optional_payload(readiness_path)
+            if isinstance(readiness_payload, dict):
+                readiness_artifacts = readiness_payload.get("artifacts") if isinstance(readiness_payload.get("artifacts"), dict) else {}
+                left_lineage_manifest = readiness_artifacts.get("left_lineage_manifest") if isinstance(readiness_artifacts, dict) else None
+                if isinstance(left_lineage_manifest, str) and left_lineage_manifest.strip():
+                    add_candidate(_resolve_path(left_lineage_manifest))
+                left_public_snapshot = readiness_artifacts.get("left_public_snapshot") if isinstance(readiness_artifacts, dict) else None
+                if isinstance(left_public_snapshot, str) and left_public_snapshot.strip():
+                    public_snapshot_payload = _read_optional_payload(_resolve_path(left_public_snapshot))
+                    lineage_manifest = public_snapshot_payload.get("lineage_manifest") if isinstance(public_snapshot_payload, dict) else None
+                    if isinstance(lineage_manifest, str) and lineage_manifest.strip():
+                        add_candidate(_resolve_path(lineage_manifest))
+
+    for prefix in _revision_prefix_candidates(revision_slug):
+        add_candidate(_latest_matching(f"artifacts/reports/local_revision_gate_{prefix}_*.json"))
+    add_candidate(_latest_matching(f"artifacts/reports/local_revision_gate_*_{left_universe}_*.json"))
+    add_candidate(_latest_matching("artifacts/reports/local_revision_gate_*.json"))
+
+    for candidate in candidates:
+        if candidate.exists():
+            return candidate
+
+    return candidates[0] if candidates else _resolve_path(f"artifacts/reports/local_revision_gate_{revision_slug}.json")
+
+
 def _read_required_payload(path: Path, *, label: str) -> dict[str, object]:
     if not path.exists():
         raise FileNotFoundError(f"{label} not found: {artifact_display_path(path, workspace_root=ROOT)}")
@@ -190,11 +268,15 @@ def main() -> int:
     left_universe = _normalize_slug(args.left_universe)
     right_universe = _normalize_slug(args.right_universe)
     numeric_compare_manifest = args.numeric_compare_manifest or f"artifacts/reports/mixed_universe_numeric_compare_{left_universe}_vs_{right_universe}_{revision_slug}.json"
-    left_lineage_manifest = args.left_lineage_manifest or f"artifacts/reports/local_revision_gate_{revision_slug}.json"
     output = args.output or f"artifacts/reports/mixed_universe_left_gap_audit_{left_universe}_vs_{right_universe}_{revision_slug}.json"
 
     compare_path = _resolve_path(numeric_compare_manifest)
-    lineage_path = _resolve_path(left_lineage_manifest)
+    lineage_path = _resolve_lineage_path(
+        explicit_manifest=args.left_lineage_manifest,
+        revision_slug=revision_slug,
+        left_universe=left_universe,
+        numeric_compare_path=compare_path,
+    )
     output_path = _resolve_path(output)
 
     try:

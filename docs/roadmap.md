@@ -515,6 +515,11 @@
 - `run_mixed_universe_left_recovery_plan.py` も更新し、`populate_primary_raw_dir` のような upstream blocker を手動 step として plan に保持するようにした。
 - `run_mixed_universe_status_board.py` では gap audit blocker の `recommended_action` と `error_code` を highlights に含め、board から raw 未配置の根本原因へ直接降りられるようにした。
 
+### M58. mixed gap audit の local lineage 解決を自動化した
+
+- `run_mixed_universe_left_gap_audit.py` は `--left-lineage-manifest` を省略しても、numeric compare の readiness manifest から `left_lineage_manifest` と local public snapshot を辿って local revision lineage を自動解決するようにした。
+- これにより `r20260328_reference_bridge` のように mixed revision 名と local public snapshot revision 名がズレるケースでも、手で lineage path を渡さず gap audit を再生成できるようになった。
+
 ## 6. 実行中の優先事項
 
 `current_tighter_policy_search_candidate_2025_latest` の `0.03/80` formalization は M17 で完了した。続いて seasonal / recent-heavy の運用境界整理、latest compare artifact map、actual-date compare 再開導線の同期監査、地方競馬 feasibility の設計チェックリスト・artifact 方針・benchmark 完了条件・payload schema・CLI 引数契約・step/failure taxonomy の具体化、既存 `netkeiba_*` snapshot / gate への universe-aware 契約実装、local-only snapshot / gate 雛形の追加、local-only integrity / feature gap / evaluation 入口の追加、local-only orchestration manifest の追加、および local-only revision lineage の追加まで完了した。
