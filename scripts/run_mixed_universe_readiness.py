@@ -125,6 +125,91 @@ def _resolved_left_artifact(*, left_source_kind: str | None, left_snapshot_path:
     return None
 
 
+def _compare_command_preview(
+    *,
+    revision_slug: str,
+    left_universe: str,
+    right_universe: str,
+    right_reference: str,
+    right_reference_manifest_path: Path,
+    left_source_kind: str | None,
+    left_snapshot_path: Path,
+    left_lineage_path: Path,
+) -> list[str]:
+    command = [
+        sys.executable,
+        str(ROOT / "scripts/run_mixed_universe_compare.py"),
+        "--revision",
+        revision_slug,
+        "--left-universe",
+        left_universe,
+        "--right-universe",
+        right_universe,
+        "--right-reference",
+        right_reference,
+        "--right-reference-manifest",
+        artifact_display_path(right_reference_manifest_path, workspace_root=ROOT),
+    ]
+    if left_source_kind == "local_public_snapshot":
+        command.extend(["--left-public-snapshot", artifact_display_path(left_snapshot_path, workspace_root=ROOT)])
+    elif left_source_kind == "local_revision_gate":
+        command.extend(["--left-lineage-manifest", artifact_display_path(left_lineage_path, workspace_root=ROOT)])
+    return command
+
+
+def _planned_checks(
+    *,
+    left_snapshot_path: Path,
+    left_lineage_path: Path,
+    right_public_doc_path: Path,
+    right_reference: str,
+    right_reference_manifest_path: Path,
+) -> list[dict[str, object]]:
+    return [
+        {
+            "name": "left_input_exists",
+            "status": "failed",
+            "details": {
+                "left_public_snapshot": artifact_display_path(left_snapshot_path, workspace_root=ROOT),
+                "left_lineage_manifest": artifact_display_path(left_lineage_path, workspace_root=ROOT),
+            },
+        },
+        {
+            "name": "left_universe_matches",
+            "status": "failed",
+            "details": None,
+        },
+        {
+            "name": "left_readiness_ready",
+            "status": "failed",
+            "details": None,
+        },
+        {
+            "name": "left_evaluation_pointer_present",
+            "status": "failed",
+            "details": None,
+        },
+        {
+            "name": "left_representative_evaluation",
+            "status": "failed",
+            "details": None,
+        },
+        {
+            "name": "right_reference_manifest_present",
+            "status": "passed" if right_reference_manifest_path.exists() else "failed",
+            "details": artifact_display_path(right_reference_manifest_path, workspace_root=ROOT),
+        },
+        {
+            "name": "right_public_reference_present",
+            "status": "passed" if right_public_doc_path.exists() and bool(str(right_reference).strip()) else "failed",
+            "details": {
+                "public_doc": artifact_display_path(right_public_doc_path, workspace_root=ROOT),
+                "reference": right_reference,
+            },
+        },
+    ]
+
+
 def _evaluate_requirements(
     *,
     left_payload: dict[str, object],
@@ -279,6 +364,31 @@ def main() -> int:
                     "finished_at": utc_now_iso(),
                     "error_code": "left_input_missing",
                     "recommended_action": "generate_local_public_snapshot_or_lineage",
+                    "checks": _planned_checks(
+                        left_snapshot_path=left_snapshot_path,
+                        left_lineage_path=left_lineage_path,
+                        right_public_doc_path=right_public_doc_path,
+                        right_reference=args.right_reference,
+                        right_reference_manifest_path=right_reference_manifest_path,
+                    ),
+                    "left_summary": {
+                        "status": "missing",
+                        "revision": None,
+                        "universe": left_universe,
+                        "readiness": None,
+                        "promotion_decision": None,
+                        "evaluation_stability_assessment": None,
+                    },
+                    "compare_command_preview": _compare_command_preview(
+                        revision_slug=revision_slug,
+                        left_universe=left_universe,
+                        right_universe=right_universe,
+                        right_reference=args.right_reference,
+                        right_reference_manifest_path=right_reference_manifest_path,
+                        left_source_kind=None,
+                        left_snapshot_path=left_snapshot_path,
+                        left_lineage_path=left_lineage_path,
+                    ),
                 }
             )
             write_json(output_path, payload)
@@ -315,24 +425,16 @@ def main() -> int:
             "promotion_decision": _extract_promotion_decision(left_payload),
             "evaluation_stability_assessment": _extract_stability_assessment(pointer_payload),
         }
-        payload["compare_command_preview"] = [
-            sys.executable,
-            str(ROOT / "scripts/run_mixed_universe_compare.py"),
-            "--revision",
-            revision_slug,
-            "--left-universe",
-            left_universe,
-            "--right-universe",
-            right_universe,
-            "--right-reference",
-            args.right_reference,
-            "--right-reference-manifest",
-            artifact_display_path(right_reference_manifest_path, workspace_root=ROOT),
-        ]
-        if left_source_kind == "local_public_snapshot":
-            payload["compare_command_preview"].extend(["--left-public-snapshot", artifact_display_path(left_snapshot_path, workspace_root=ROOT)])
-        else:
-            payload["compare_command_preview"].extend(["--left-lineage-manifest", artifact_display_path(left_lineage_path, workspace_root=ROOT)])
+        payload["compare_command_preview"] = _compare_command_preview(
+            revision_slug=revision_slug,
+            left_universe=left_universe,
+            right_universe=right_universe,
+            right_reference=args.right_reference,
+            right_reference_manifest_path=right_reference_manifest_path,
+            left_source_kind=left_source_kind,
+            left_snapshot_path=left_snapshot_path,
+            left_lineage_path=left_lineage_path,
+        )
 
         payload["status"] = status
         payload["error_code"] = None if status == "ready" else error_code

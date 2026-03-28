@@ -586,6 +586,11 @@
 - `mixed_artifacts.py` の local public snapshot / local revision lineage 解決は、revision prefix wildcard と global wildcard の両方で payload の `universe` 一致を確認するようにした。
 - これにより未知 universe や将来の別 local universe で dry-run したときに、既存 `local_nankan` artifact を誤って left-side input として拾う cross-universe 汚染を防げる。
 
+### M72. readiness planned payload も completed と同じ読み口へ寄せた
+
+- `run_mixed_universe_readiness.py --dry-run` は left input が未生成でも `checks`, `left_summary`, `compare_command_preview` を含む planned payload を返すようにした。
+- これにより mixed compare 入口の operator は、left snapshot/lineage 不足時でも completed payload と同じ shape で不足条件と次の compare コマンドを確認できる。
+
 ## 6. 実行中の優先事項
 
 `current_tighter_policy_search_candidate_2025_latest` の `0.03/80` formalization は M17 で完了した。続いて seasonal / recent-heavy の運用境界整理、latest compare artifact map、actual-date compare 再開導線の同期監査、地方競馬 feasibility の設計チェックリスト・artifact 方針・benchmark 完了条件・payload schema・CLI 引数契約・step/failure taxonomy の具体化、既存 `netkeiba_*` snapshot / gate への universe-aware 契約実装、local-only snapshot / gate 雛形の追加、local-only integrity / feature gap / evaluation 入口の追加、local-only orchestration manifest の追加、および local-only revision lineage の追加まで完了した。

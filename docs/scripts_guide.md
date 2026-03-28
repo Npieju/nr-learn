@@ -237,7 +237,7 @@ mixed-universe 比較も `run_mixed_universe_compare.py` を追加して、`mixe
 
 `run_mixed_universe_compare.py` は、mixed revision 名と local public snapshot revision 名がズレる場合でも、`local_public_snapshot_*` / `local_revision_gate_*` と snapshot 内の `lineage_manifest` を辿って left input を自動解決する。
 
-さらに `run_mixed_universe_readiness.py` を追加し、mixed compare の前に `mixed_universe_readiness_<left_universe>_vs_<right_universe>_<revision>.json` で前提条件を確認できるようにした。ここでは left 側の `benchmark_rerun_ready`、evaluation pointer の有無、`stability_assessment=representative`、right 側の public reference を check として並べる。
+さらに `run_mixed_universe_readiness.py` を追加し、mixed compare の前に `mixed_universe_readiness_<left_universe>_vs_<right_universe>_<revision>.json` で前提条件を確認できるようにした。ここでは left 側の `benchmark_rerun_ready`、evaluation pointer の有無、`stability_assessment=representative`、right 側の public reference を check として並べる。planned / dry-run でも `checks`, `left_summary`, `compare_command_preview` を同じ shape で返すので、left input 未生成の段階から不足条件と次に回す compare CLI を確認できる。
 
 `run_mixed_universe_readiness.py` も同様に left-side artifact を自動探索するので、`reference_bridge` 系の revision でも `--left-public-snapshot` や `--left-lineage-manifest` を省略したまま再生成できる。
 
