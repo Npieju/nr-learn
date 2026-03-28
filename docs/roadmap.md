@@ -497,6 +497,12 @@
 - board では `current_phase`, `next_action_source`, `recommended_action`, `phase_summaries` と summary / audit / recovery の主要 severity を持たせ、全体の現在地を一目で読めるようにした。
 - これにより mixed-universe workflow は、個別 manifest を順に追わなくても status board から必要な layer へ降りられるようになった。
 
+### M55. mixed-universe recovery wrapper を追加した
+
+- `run_mixed_universe_recovery.py` を追加し、既存 status board を起点に local revision lineage の再実行と mixed-universe manifest 群の再生成を 1 本で回せるようにした。
+- wrapper は `local_revision_gate -> local_public_snapshot -> readiness -> compare -> schema -> numeric compare -> numeric summary -> left gap audit -> left recovery plan -> status board` を既存 artifact path へ書き戻しながら実行し、partial のままでも最新停止点まで更新する。
+- これにより mixed compare の left-side recovery は、plan を読む段階から実行と board 再同期まで一貫した CLI を持つようになった。
+
 ## 6. 実行中の優先事項
 
 `current_tighter_policy_search_candidate_2025_latest` の `0.03/80` formalization は M17 で完了した。続いて seasonal / recent-heavy の運用境界整理、latest compare artifact map、actual-date compare 再開導線の同期監査、地方競馬 feasibility の設計チェックリスト・artifact 方針・benchmark 完了条件・payload schema・CLI 引数契約・step/failure taxonomy の具体化、既存 `netkeiba_*` snapshot / gate への universe-aware 契約実装、local-only snapshot / gate 雛形の追加、local-only integrity / feature gap / evaluation 入口の追加、local-only orchestration manifest の追加、および local-only revision lineage の追加まで完了した。

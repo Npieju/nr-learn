@@ -157,4 +157,6 @@ left 側の欠損原因を詰めたいときは `artifacts/reports/mixed_univers
 
 実行順まで落としたいときは `artifacts/reports/mixed_universe_left_recovery_plan_<left_universe>_vs_<right_universe>_<revision>.json` を見る。ここでは gap audit の command preview を重複除去し、`required_for_rows` と必要 artifact path を付けて並べる。
 
+この recovery plan を実際に回して下流 manifest まで更新したいときは、`artifacts/reports/mixed_universe_recovery_<left_universe>_vs_<right_universe>_<revision>.json` を使ってよい。ここでは local lineage 再実行から status board 再生成までの step 実行結果、exit code、更新後 board の `recommended_action` をまとめる。
+
 全体の現在地を 1 本で見たいときは `artifacts/reports/mixed_universe_status_board_<left_universe>_vs_<right_universe>_<revision>.json` を置いてよい。ここでは `current_phase`, `next_action_source`, `recommended_action`, `phase_summaries` と、summary / audit / recovery の主要 severity をまとめる。
