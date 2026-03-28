@@ -213,17 +213,58 @@ def main() -> int:
         artifact_ensure_output_file_path(output_path, label="output", workspace_root=ROOT)
 
         if args.dry_run and not any(path.exists() for path in paths.values()):
+            planned_summaries = [
+                _artifact_summary("public_snapshot", paths["public_snapshot"], None, ["status", "lineage_status"], requested_revision=revision_slug),
+                _artifact_summary("readiness", paths["readiness"], None, ["status"], requested_revision=revision_slug),
+                _artifact_summary("compare", paths["compare"], None, ["status", "compare_mode"], requested_revision=revision_slug),
+                _artifact_summary("schema", paths["schema"], None, ["status"], requested_revision=revision_slug),
+                _artifact_summary("numeric_compare", paths["numeric_compare"], None, ["status"], requested_revision=revision_slug),
+                _artifact_summary("numeric_summary", paths["numeric_summary"], None, ["status"], requested_revision=revision_slug),
+                _artifact_summary("left_gap_audit", paths["left_gap_audit"], None, ["status"], requested_revision=revision_slug),
+                _artifact_summary("left_recovery_plan", paths["left_recovery_plan"], None, ["status"], requested_revision=revision_slug),
+            ]
             payload = {
                 "started_at": utc_now_iso(),
                 "finished_at": utc_now_iso(),
                 "status": "planned",
                 "board_kind": "mixed_universe_status_board",
                 "revision": revision_slug,
+                "requested_revision": revision_slug,
+                "resolved_left_revision": None,
+                "resolved_left_source_kind": None,
+                "resolved_left_artifact": None,
                 "left_universe": left_universe,
                 "right_universe": right_universe,
                 "recommended_action": "generate_mixed_universe_manifests",
                 "artifacts": {
                     "status_board_manifest": artifact_display_path(output_path, workspace_root=ROOT),
+                    **{f"{key}_manifest": artifact_display_path(path, workspace_root=ROOT) for key, path in paths.items()},
+                },
+                "read_order": [
+                    "public_snapshot",
+                    "readiness",
+                    "compare",
+                    "schema",
+                    "numeric_compare",
+                    "numeric_summary",
+                    "left_gap_audit",
+                    "left_recovery_plan",
+                    "mixed_universe_status_board",
+                ],
+                "current_phase": "public_snapshot",
+                "next_action_source": None,
+                "phase_summaries": planned_summaries,
+                "highlights": {
+                    "requested_revision": revision_slug,
+                    "resolved_left_revision": None,
+                    "resolved_left_source_kind": None,
+                    "resolved_left_artifact": None,
+                    "numeric_summary_verdict": None,
+                    "numeric_summary_severity": None,
+                    "gap_audit_severity": None,
+                    "gap_audit_blocking_action": None,
+                    "gap_audit_blocking_error_code": None,
+                    "recovery_plan_step_count": None,
                 },
             }
             write_json(output_path, payload)

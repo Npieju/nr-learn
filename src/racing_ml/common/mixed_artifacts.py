@@ -10,6 +10,15 @@ def latest_matching_path(*, workspace_root: Path, pattern: str) -> Path | None:
     return matches[0] if matches else None
 
 
+def latest_matching_path_for_universe(*, workspace_root: Path, pattern: str, universe: str, universe_key: str = "universe") -> Path | None:
+    matches = sorted(workspace_root.glob(pattern), key=lambda path: path.stat().st_mtime, reverse=True)
+    for match in matches:
+        payload = read_optional_json_path(match, workspace_root=workspace_root)
+        if isinstance(payload, dict) and str(payload.get(universe_key) or "") == universe:
+            return match
+    return None
+
+
 def prefer_existing_path(*, workspace_root: Path, expected_path: str | Path, fallback_pattern: str) -> Path:
     path = absolutize_path(expected_path, workspace_root)
     if path.exists():
@@ -75,13 +84,29 @@ def resolve_local_snapshot_and_lineage_paths(
     for prefix in revision_prefix_candidates(revision_slug):
         add_snapshot(workspace_root / f"artifacts/reports/local_public_snapshot_{prefix}.json")
         add_lineage(workspace_root / f"artifacts/reports/local_revision_gate_{prefix}.json")
-        add_snapshot(latest_matching_path(workspace_root=workspace_root, pattern=f"artifacts/reports/local_public_snapshot_{prefix}_*.json"))
-        add_lineage(latest_matching_path(workspace_root=workspace_root, pattern=f"artifacts/reports/local_revision_gate_{prefix}_*.json"))
+        add_snapshot(latest_matching_path_for_universe(
+            workspace_root=workspace_root,
+            pattern=f"artifacts/reports/local_public_snapshot_{prefix}_*.json",
+            universe=left_universe,
+        ))
+        add_lineage(latest_matching_path_for_universe(
+            workspace_root=workspace_root,
+            pattern=f"artifacts/reports/local_revision_gate_{prefix}_*.json",
+            universe=left_universe,
+        ))
 
     add_snapshot(latest_matching_path(workspace_root=workspace_root, pattern=f"artifacts/reports/local_public_snapshot_*_{left_universe}_*.json"))
     add_lineage(latest_matching_path(workspace_root=workspace_root, pattern=f"artifacts/reports/local_revision_gate_*_{left_universe}_*.json"))
-    add_snapshot(latest_matching_path(workspace_root=workspace_root, pattern="artifacts/reports/local_public_snapshot_*.json"))
-    add_lineage(latest_matching_path(workspace_root=workspace_root, pattern="artifacts/reports/local_revision_gate_*.json"))
+    add_snapshot(latest_matching_path_for_universe(
+        workspace_root=workspace_root,
+        pattern="artifacts/reports/local_public_snapshot_*.json",
+        universe=left_universe,
+    ))
+    add_lineage(latest_matching_path_for_universe(
+        workspace_root=workspace_root,
+        pattern="artifacts/reports/local_revision_gate_*.json",
+        universe=left_universe,
+    ))
 
     snapshot_path = next(
         (candidate for candidate in snapshot_candidates if candidate.exists()),
@@ -147,9 +172,17 @@ def resolve_local_lineage_path(
                         add_candidate(absolutize_path(lineage_manifest, workspace_root))
 
     for prefix in revision_prefix_candidates(revision_slug):
-        add_candidate(latest_matching_path(workspace_root=workspace_root, pattern=f"artifacts/reports/local_revision_gate_{prefix}_*.json"))
+        add_candidate(latest_matching_path_for_universe(
+            workspace_root=workspace_root,
+            pattern=f"artifacts/reports/local_revision_gate_{prefix}_*.json",
+            universe=left_universe,
+        ))
     add_candidate(latest_matching_path(workspace_root=workspace_root, pattern=f"artifacts/reports/local_revision_gate_*_{left_universe}_*.json"))
-    add_candidate(latest_matching_path(workspace_root=workspace_root, pattern="artifacts/reports/local_revision_gate_*.json"))
+    add_candidate(latest_matching_path_for_universe(
+        workspace_root=workspace_root,
+        pattern="artifacts/reports/local_revision_gate_*.json",
+        universe=left_universe,
+    ))
 
     for candidate in candidates:
         if candidate.exists():
