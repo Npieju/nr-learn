@@ -176,6 +176,24 @@ def _build_metric_rows(
     return rows
 
 
+def _requested_revision(*, readiness_payload: dict[str, object], compare_payload: dict[str, object], fallback: str) -> str:
+    value = compare_payload.get("requested_revision")
+    if value is None:
+        value = readiness_payload.get("requested_revision")
+    if value is None:
+        value = compare_payload.get("revision")
+    if value is None:
+        value = readiness_payload.get("revision")
+    return str(value or fallback)
+
+
+def _resolved_left_revision(*, readiness_payload: dict[str, object], compare_payload: dict[str, object]) -> str | None:
+    value = compare_payload.get("resolved_left_revision")
+    if value is None:
+        value = readiness_payload.get("resolved_left_revision")
+    return str(value) if value is not None else None
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--revision", default=None)
@@ -218,6 +236,8 @@ def main() -> int:
                 "status": "planned",
                 "schema_kind": "mixed_universe_comparison_schema",
                 "revision": revision_slug,
+                "requested_revision": revision_slug,
+                "resolved_left_revision": None,
                 "left_universe": left_universe,
                 "right_universe": right_universe,
                 "right_reference": args.right_reference,
@@ -246,6 +266,8 @@ def main() -> int:
             "status": schema_status,
             "schema_kind": "mixed_universe_comparison_schema",
             "revision": revision_slug,
+            "requested_revision": _requested_revision(readiness_payload=readiness_payload, compare_payload=compare_payload, fallback=revision_slug),
+            "resolved_left_revision": _resolved_left_revision(readiness_payload=readiness_payload, compare_payload=compare_payload),
             "left_universe": left_universe,
             "right_universe": right_universe,
             "right_reference": args.right_reference,
