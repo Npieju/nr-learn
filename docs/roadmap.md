@@ -359,9 +359,15 @@
 - この結果、active priority としての「導線整理」は一巡完了とし、以後は定期的な drift 点検だけを残す。
 - 次の候補は、新たな docs 入口追加ではなく future option の深掘りか、通常の保守点検になる。
 
+### M32. 地方競馬 feasibility の設計チェックリスト具体化
+
+- `data_extension.md` に、地方競馬を別 universe として扱うときの判定軸を `source / key / feature / benchmark / rollout` の 5 境界へ分解して追記した。
+- さらに、最小チェックリストと非推奨な始め方を明記し、JRA-only baseline を壊さずに feasibility を切る順序を具体化した。
+- これにより地方競馬は「将来候補」という抽象表現から、着手前に確認すべき設計項目を持つ future option へ進んだ。
+
 ## 6. 実行中の優先事項
 
-`current_tighter_policy_search_candidate_2025_latest` の `0.03/80` formalization は M17 で完了した。続いて seasonal / recent-heavy の運用境界整理、latest compare artifact map、地方競馬 feasibility の切り分け、actual-date compare 再開導線の同期監査まで完了した。
+`current_tighter_policy_search_candidate_2025_latest` の `0.03/80` formalization は M17 で完了した。続いて seasonal / recent-heavy の運用境界整理、latest compare artifact map、actual-date compare 再開導線の同期監査、地方競馬 feasibility の設計チェックリスト具体化まで完了した。
 
 以後の active priority は、public / internal docs の定期点検と future option の切り分けに絞る。
 
@@ -385,10 +391,8 @@
 
 ### N1. 地方競馬データ拡張の feasibility 深掘り
 
-- 地方競馬を別 universe として扱う場合の ingestion / key / benchmark 分離を、設計レベルでさらに具体化する。
-- 地方競馬データの大規模収集は将来候補として検討してよい。
-- ただし JRA と地方ではレース場、頭数分布、開催 cadence、市場傾向が異なるため、まずは「JRA 学習へ直接混ぜる」のではなく、別 universe として ingestion / key / benchmark の切り分けが必要かを設計レベルで整理する。
-- この検討は recent-heavy JRA split の評価が一段落してから着手する。
+- 地方-only coverage snapshot / benchmark gate をどう artifact 化するかを、必要なら次に具体化する。
+- mixed 学習へ進む前に、地方-only benchmark の完了条件をどう置くかを整理する。
 
 ### N2. docs の定期点検
 
