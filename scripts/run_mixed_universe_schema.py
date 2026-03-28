@@ -176,6 +176,14 @@ def _build_metric_rows(
     return rows
 
 
+def _comparison_axes() -> list[dict[str, str]]:
+    return [
+        {"name": "promotion", "description": "decision and promote eligibility are read separately from baseline replacement"},
+        {"name": "evaluation", "description": "AUC, top1 ROI, EV top1 ROI, nested WF weighted test ROI, nested bets total"},
+        {"name": "support", "description": "formal benchmark weighted ROI and feasible folds"},
+    ]
+
+
 def _requested_revision(*, readiness_payload: dict[str, object], compare_payload: dict[str, object], fallback: str) -> str:
     value = compare_payload.get("requested_revision")
     if value is None:
@@ -263,6 +271,19 @@ def main() -> int:
                     "readiness_manifest": artifact_display_path(readiness_path, workspace_root=ROOT),
                     "compare_manifest": artifact_display_path(compare_path, workspace_root=ROOT),
                 },
+                "read_order": [
+                    "mixed_universe_readiness",
+                    "mixed_universe_compare",
+                    "mixed_universe_schema",
+                    "future_numeric_compare",
+                ],
+                "comparison_axes": _comparison_axes(),
+                "metric_rows": _build_metric_rows(None, None, None),
+                "blocking_context": {
+                    "readiness_status": "missing",
+                    "readiness_error_code": "readiness_manifest_missing",
+                    "readiness_checks": None,
+                },
             }
             write_json(output_path, payload)
             print(f"[mixed-universe-schema] planned manifest saved: {artifact_display_path(output_path, workspace_root=ROOT)}", flush=True)
@@ -301,11 +322,7 @@ def main() -> int:
                 "mixed_universe_schema",
                 "future_numeric_compare",
             ],
-            "comparison_axes": [
-                {"name": "promotion", "description": "decision and promote eligibility are read separately from baseline replacement"},
-                {"name": "evaluation", "description": "AUC, top1 ROI, EV top1 ROI, nested WF weighted test ROI, nested bets total"},
-                {"name": "support", "description": "formal benchmark weighted ROI and feasible folds"},
-            ],
+            "comparison_axes": _comparison_axes(),
             "metric_rows": metric_rows,
             "blocking_context": {
                 "readiness_status": readiness_status,

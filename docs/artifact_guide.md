@@ -145,7 +145,7 @@ compare 前提が揃った後は、`artifacts/reports/mixed_universe_schema_<lef
 2. `evaluation`: `stability_assessment`, `auc`, `top1_roi`, `ev_top1_roi`, `nested_wf_weighted_test_roi`, `nested_wf_bets_total`
 3. `support`: `formal_benchmark_weighted_roi`, `formal_benchmark_feasible_folds`
 
-この schema manifest は numeric compare そのものではなく、left 側でどの artifact path から値を拾い、right 側ではどの public reference を正本にするかを固定する contract として扱う。alias bridge を使っている場合も `resolved_left_revision`, `resolved_left_source_kind`, `resolved_left_artifact` を引き継ぐので、schema の段階で left 側の参照元を見失わない。
+この schema manifest は numeric compare そのものではなく、left 側でどの artifact path から値を拾い、right 側ではどの public reference を正本にするかを固定する contract として扱う。alias bridge を使っている場合も `resolved_left_revision`, `resolved_left_source_kind`, `resolved_left_artifact` を引き継ぐので、schema の段階で left 側の参照元を見失わない。planned / dry-run でも `read_order`, `comparison_axes`, `metric_rows`, `blocking_context` を返して、readiness/compare 未生成の段階から比較契約そのものを同じ shape で読めるようにする。
 
 right 側 JRA baseline の machine-readable 正本は `artifacts/reports/public_benchmark_reference_<reference>.json` とする。ここでは promotion manifest、revision manifest、evaluation manifest、evaluation summary を束ね、mixed compare 系 script は docs だけでなくこの reference manifest も参照する。入口の `mixed_universe_readiness_<left>_vs_<right>_<revision>.json` は planned / dry-run でも `checks`, `left_summary`, `compare_command_preview` を出して、left input 未生成の段階から次に回す compare CLI と不足条件を同じ shape で確認できるようにする。
 

@@ -247,7 +247,7 @@ mixed-universe 系 manifest の `revision` は引き続き要求した mixed rev
 
 local public snapshot / local revision lineage の fallback は revision prefix だけでなく `left_universe` も条件に入れて解決する。したがって未知 universe の dry-run や別 local universe の将来追加時にも、既存 `local_nankan` artifact を誤って拾わない。
 
-その次段として `run_mixed_universe_schema.py` も追加し、readiness manifest と pointer-only compare manifest を受けて、`mixed_universe_schema_<left_universe>_vs_<right_universe>_<revision>.json` へ comparison axes と metric rows を固定できるようにした。現段階では numeric compare ではなく、`decision`, `stability_assessment`, `auc`, `top1_roi`, `ev_top1_roi`, `nested_wf_weighted_test_roi`, `formal_benchmark_weighted_roi`, `formal_benchmark_feasible_folds` を左右でどこから読むかを揃える役割に留める。
+その次段として `run_mixed_universe_schema.py` も追加し、readiness manifest と pointer-only compare manifest を受けて、`mixed_universe_schema_<left_universe>_vs_<right_universe>_<revision>.json` へ comparison axes と metric rows を固定できるようにした。現段階では numeric compare ではなく、`decision`, `stability_assessment`, `auc`, `top1_roi`, `ev_top1_roi`, `nested_wf_weighted_test_roi`, `formal_benchmark_weighted_roi`, `formal_benchmark_feasible_folds` を左右でどこから読むかを揃える役割に留める。planned / dry-run でも `read_order`, `comparison_axes`, `metric_rows`, `blocking_context` を返すので、schema 入口も completed payload と同じ shape で読める。
 
 right 側の JRA baseline については `run_public_benchmark_reference.py` も追加し、promotion / revision / evaluation artifact から `public_benchmark_reference_<reference>.json` を生成できるようにした。mixed compare/readiness/schema はこの JSON を right-side の machine-readable reference として参照してよい。
 
