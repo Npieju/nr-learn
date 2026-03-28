@@ -621,6 +621,11 @@
 - `run_mixed_universe_compare.py --dry-run` は left input 未生成でも `left_summary`, `right_summary`, `comparison_contract` を含む planned payload を返すようにした。
 - これにより pointer bridge 入口でも、operator は completed payload と同じ shape で left/right 入力と compare contract を読める。
 
+### M79. recovery planned payload に source board 現在地を写した
+
+- `run_mixed_universe_recovery.py --dry-run` は step 一覧だけでなく、source board 由来の `recommended_action`, `refreshed_board_status`, `refreshed_current_phase`, `refreshed_next_action_source`, `refreshed_highlights` も planned payload に含めるようにした。
+- これにより recovery 入口でも、operator は実行前の段階から「いまどこで止まっているか」を recovery manifest 単体で読める。
+
 ## 6. 実行中の優先事項
 
 `current_tighter_policy_search_candidate_2025_latest` の `0.03/80` formalization は M17 で完了した。続いて seasonal / recent-heavy の運用境界整理、latest compare artifact map、actual-date compare 再開導線の同期監査、地方競馬 feasibility の設計チェックリスト・artifact 方針・benchmark 完了条件・payload schema・CLI 引数契約・step/failure taxonomy の具体化、既存 `netkeiba_*` snapshot / gate への universe-aware 契約実装、local-only snapshot / gate 雛形の追加、local-only integrity / feature gap / evaluation 入口の追加、local-only orchestration manifest の追加、および local-only revision lineage の追加まで完了した。

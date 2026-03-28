@@ -492,7 +492,7 @@ def main() -> int:
             "right_universe": str(board_payload.get("right_universe") or right_universe),
             "source_status_board": _path_arg(board_path),
             "completed_step": "plan_built",
-            "recommended_action": None,
+            "recommended_action": board_payload.get("recommended_action"),
             "artifacts": {
                 "recovery_run_manifest": _path_arg(output_path),
                 **artifact_map,
@@ -502,6 +502,10 @@ def main() -> int:
         write_json(output_path, payload)
 
         if args.dry_run:
+            payload["refreshed_board_status"] = board_payload.get("status")
+            payload["refreshed_current_phase"] = board_payload.get("current_phase")
+            payload["refreshed_next_action_source"] = board_payload.get("next_action_source")
+            payload["refreshed_highlights"] = board_payload.get("highlights")
             payload["finished_at"] = utc_now_iso()
             write_json(output_path, payload)
             print(f"[mixed-universe-recovery] planned manifest saved: {_path_arg(output_path)}", flush=True)
