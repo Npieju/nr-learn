@@ -20,6 +20,7 @@ from racing_ml.common.artifacts import read_json, utc_now_iso, write_json
 DEFAULT_LEFT_UNIVERSE = "local_nankan"
 DEFAULT_RIGHT_UNIVERSE = "jra"
 DEFAULT_RIGHT_REFERENCE = "current_recommended_serving_2025_latest"
+DEFAULT_RIGHT_REFERENCE_MANIFEST = "artifacts/reports/public_benchmark_reference_current_recommended_serving_2025_latest.json"
 
 
 def _resolve_path(path_text: str | Path) -> Path:
@@ -118,6 +119,7 @@ def _evaluate_requirements(
     left_universe: str,
     right_public_doc_path: Path,
     right_reference: str,
+    right_reference_manifest_path: Path,
 ) -> tuple[list[dict[str, object]], str, str, str]:
     pointer_payload = _extract_evaluation_pointer(left_payload)
     readiness = _extract_readiness(left_payload)
@@ -162,6 +164,13 @@ def _evaluate_requirements(
     )
     checks.append(
         {
+            "name": "right_reference_manifest_present",
+            "status": "passed" if right_reference_manifest_path.exists() else "failed",
+            "details": artifact_display_path(right_reference_manifest_path, workspace_root=ROOT),
+        }
+    )
+    checks.append(
+        {
             "name": "right_public_reference_present",
             "status": "passed" if right_public_doc_path.exists() and bool(str(right_reference).strip()) else "failed",
             "details": {
@@ -191,6 +200,7 @@ def main() -> int:
     parser.add_argument("--left-public-snapshot", default=None)
     parser.add_argument("--left-lineage-manifest", default=None)
     parser.add_argument("--right-reference", default=DEFAULT_RIGHT_REFERENCE)
+    parser.add_argument("--right-reference-manifest", default=DEFAULT_RIGHT_REFERENCE_MANIFEST)
     parser.add_argument("--right-public-doc", default="docs/public_benchmark_snapshot.md")
     parser.add_argument("--output", default=None)
     parser.add_argument("--dry-run", action="store_true")
@@ -207,6 +217,7 @@ def main() -> int:
     left_snapshot_path = _resolve_path(args.left_public_snapshot or default_snapshot)
     left_lineage_path = _resolve_path(args.left_lineage_manifest or default_lineage)
     right_public_doc_path = _resolve_path(args.right_public_doc)
+    right_reference_manifest_path = _resolve_path(args.right_reference_manifest)
     output_path = _resolve_path(output)
 
     try:
@@ -229,6 +240,7 @@ def main() -> int:
                 "left_public_snapshot": artifact_display_path(left_snapshot_path, workspace_root=ROOT),
                 "left_lineage_manifest": artifact_display_path(left_lineage_path, workspace_root=ROOT),
                 "right_public_doc": artifact_display_path(right_public_doc_path, workspace_root=ROOT),
+                "right_reference_manifest": artifact_display_path(right_reference_manifest_path, workspace_root=ROOT),
                 "mixed_compare_manifest": f"artifacts/reports/mixed_universe_compare_{left_universe}_vs_{right_universe}_{revision_slug}.json",
             },
             "read_order": [
@@ -264,6 +276,7 @@ def main() -> int:
             left_universe=left_universe,
             right_public_doc_path=right_public_doc_path,
             right_reference=args.right_reference,
+            right_reference_manifest_path=right_reference_manifest_path,
         )
         pointer_payload = _extract_evaluation_pointer(left_payload)
         payload["checks"] = checks
@@ -286,6 +299,8 @@ def main() -> int:
             right_universe,
             "--right-reference",
             args.right_reference,
+            "--right-reference-manifest",
+            artifact_display_path(right_reference_manifest_path, workspace_root=ROOT),
         ]
         if left_source_kind == "local_public_snapshot":
             payload["compare_command_preview"].extend(["--left-public-snapshot", artifact_display_path(left_snapshot_path, workspace_root=ROOT)])

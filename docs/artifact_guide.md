@@ -144,3 +144,5 @@ compare 前提が揃った後は、`artifacts/reports/mixed_universe_schema_<lef
 3. `support`: `formal_benchmark_weighted_roi`, `formal_benchmark_feasible_folds`
 
 この schema manifest は numeric compare そのものではなく、left 側でどの artifact path から値を拾い、right 側ではどの public reference を正本にするかを固定する contract として扱う。
+
+right 側 JRA baseline の machine-readable 正本は `artifacts/reports/public_benchmark_reference_<reference>.json` とする。ここでは promotion manifest、revision manifest、evaluation manifest、evaluation summary を束ね、mixed compare 系 script は docs だけでなくこの reference manifest も参照する。

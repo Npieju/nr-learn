@@ -95,6 +95,8 @@ pointer-only compare に進む前には、`mixed_universe_readiness_<left_univer
 
 readiness が揃ったら、次は `mixed_universe_schema_<left_universe>_vs_<right_universe>_<revision>.json` を見て comparison axes を固定する。現時点では、左右を同列に置く軸は `decision`、`stability_assessment`、`auc`、`top1_roi`、`ev_top1_roi`、`nested_wf_weighted_test_roi`、`formal_benchmark_weighted_roi`、`formal_benchmark_feasible_folds` までに留める。
 
+right 側 JRA baseline は `public_benchmark_reference_<reference>.json` を machine-readable な入口として扱う。つまり mixed compare の right side は markdown の public snapshot だけでなく、promotion / evaluation artifact を束ねた JSON reference からも読める状態を正本とする。
+
 ### 5.2 latest 2025 の formal snapshot
 
 latest 2025 split で直近に formal に通過した run は次の 2 本である。

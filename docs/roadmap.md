@@ -449,6 +449,12 @@
 - schema は当面 numeric compare を実行せず、left 側 artifact path と right 側 public reference の対応関係だけを固定する contract として扱う。
 - これにより mixed compare は readiness -> pointer -> schema の 3 段で、実数値比較前の読み筋と比較軸を揃えられるようになった。
 
+### M47. JRA public benchmark reference manifest を追加した
+
+- `run_public_benchmark_reference.py` を追加し、JRA latest baseline の promotion / revision / evaluation artifact を `public_benchmark_reference_<reference>.json` に束ねられるようにした。
+- mixed compare / readiness / schema は right 側の参照先としてこの machine-readable reference manifest を使えるようにした。
+- これにより mixed compare の右側は doc 参照だけでなく JSON 正本を持ち、numeric compare へ進む土台が揃った。
+
 ## 6. 実行中の優先事項
 
 `current_tighter_policy_search_candidate_2025_latest` の `0.03/80` formalization は M17 で完了した。続いて seasonal / recent-heavy の運用境界整理、latest compare artifact map、actual-date compare 再開導線の同期監査、地方競馬 feasibility の設計チェックリスト・artifact 方針・benchmark 完了条件・payload schema・CLI 引数契約・step/failure taxonomy の具体化、既存 `netkeiba_*` snapshot / gate への universe-aware 契約実装、local-only snapshot / gate 雛形の追加、local-only integrity / feature gap / evaluation 入口の追加、local-only orchestration manifest の追加、および local-only revision lineage の追加まで完了した。
@@ -476,7 +482,7 @@
 ### N1. 地方競馬データ拡張の feasibility 深掘り
 
 - universe slug を config / artifact / revision にどう通すかを、必要なら実装前提まで下ろす。
-- mixed compare comparison schema までは入ったので、next は docs の重複を整理しつつ、numeric compare をどの source artifact から生成するかの最小 CLI 契約を固定する。
+- JRA public benchmark reference manifest までは入ったので、next は numeric compare 本体の最小 CLI 契約を置き、left/right JSON reference から delta row を切れるようにする。
 
 ### N2. docs の定期点検
 

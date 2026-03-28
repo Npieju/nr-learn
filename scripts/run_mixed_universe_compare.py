@@ -20,6 +20,7 @@ from racing_ml.common.artifacts import read_json, utc_now_iso, write_json
 DEFAULT_LEFT_UNIVERSE = "local_nankan"
 DEFAULT_RIGHT_UNIVERSE = "jra"
 DEFAULT_RIGHT_REFERENCE = "current_recommended_serving_2025_latest"
+DEFAULT_RIGHT_REFERENCE_MANIFEST = "artifacts/reports/public_benchmark_reference_current_recommended_serving_2025_latest.json"
 
 
 def _resolve_path(path_text: str | Path) -> Path:
@@ -127,6 +128,7 @@ def main() -> int:
     parser.add_argument("--left-public-snapshot", default=None)
     parser.add_argument("--left-lineage-manifest", default=None)
     parser.add_argument("--right-reference", default=DEFAULT_RIGHT_REFERENCE)
+    parser.add_argument("--right-reference-manifest", default=DEFAULT_RIGHT_REFERENCE_MANIFEST)
     parser.add_argument("--right-public-doc", default="docs/public_benchmark_snapshot.md")
     parser.add_argument("--output", default=None)
     parser.add_argument("--dry-run", action="store_true")
@@ -144,6 +146,7 @@ def main() -> int:
     left_snapshot_path = _resolve_path(args.left_public_snapshot or default_left_snapshot)
     left_lineage_path = _resolve_path(args.left_lineage_manifest or default_left_lineage)
     right_public_doc_path = _resolve_path(args.right_public_doc)
+    right_reference_manifest_path = _resolve_path(args.right_reference_manifest)
 
     try:
         artifact_ensure_output_file_path(output_path, label="output", workspace_root=ROOT)
@@ -162,6 +165,7 @@ def main() -> int:
             }
             payload["right_inputs"] = {
                 "public_doc": artifact_display_path(right_public_doc_path, workspace_root=ROOT),
+                "reference_manifest": artifact_display_path(right_reference_manifest_path, workspace_root=ROOT),
             }
             write_json(output_path, payload)
             print(f"[mixed-universe-compare] planned manifest saved: {artifact_display_path(output_path, workspace_root=ROOT)}", flush=True)
@@ -183,6 +187,7 @@ def main() -> int:
 
         if not right_public_doc_path.exists():
             raise FileNotFoundError(f"right public doc not found: {artifact_display_path(right_public_doc_path, workspace_root=ROOT)}")
+        right_reference_payload = _read_optional_payload(artifact_display_path(right_reference_manifest_path, workspace_root=ROOT))
 
         payload: dict[str, object] = {
             "started_at": utc_now_iso(),
@@ -204,12 +209,15 @@ def main() -> int:
                 "compare_manifest": artifact_display_path(output_path, workspace_root=ROOT),
                 "left_public_snapshot": artifact_display_path(left_snapshot_path, workspace_root=ROOT) if left_snapshot_path.exists() else None,
                 "left_lineage_manifest": artifact_display_path(left_lineage_path, workspace_root=ROOT) if left_lineage_path.exists() else None,
+                "right_reference_manifest": artifact_display_path(right_reference_manifest_path, workspace_root=ROOT) if right_reference_manifest_path.exists() else None,
             },
             "left_summary": _summary_from_local_public(left_payload) if left_source_kind == "local_public_snapshot" else _summary_from_local_lineage(left_payload),
             "right_summary": {
                 "universe": right_universe,
                 "reference": args.right_reference,
                 "public_doc": artifact_display_path(right_public_doc_path, workspace_root=ROOT),
+                "reference_manifest": artifact_display_path(right_reference_manifest_path, workspace_root=ROOT),
+                "metrics": (right_reference_payload or {}).get("metrics") if isinstance(right_reference_payload, dict) else None,
                 "reading_role": "jra_latest_public_snapshot",
             },
             "comparison_contract": {
