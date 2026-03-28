@@ -37,6 +37,18 @@ def _normalize_slug(value: str) -> str:
     return normalized
 
 
+def _latest_matching(pattern: str) -> Path | None:
+    matches = sorted(ROOT.glob(pattern), key=lambda path: path.stat().st_mtime, reverse=True)
+    return matches[0] if matches else None
+
+
+def _prefer_existing(path: Path, fallback_pattern: str) -> Path:
+    if path.exists():
+        return path
+    fallback = _latest_matching(fallback_pattern)
+    return fallback if fallback is not None else path
+
+
 def _read_required_payload(path: Path, *, label: str) -> dict[str, object]:
     if not path.exists():
         raise FileNotFoundError(f"{label} not found: {artifact_display_path(path, workspace_root=ROOT)}")
@@ -195,8 +207,14 @@ def main() -> int:
     compare_manifest = args.compare_manifest or f"artifacts/reports/mixed_universe_compare_{left_universe}_vs_{right_universe}_{revision_slug}.json"
     output = args.output or f"artifacts/reports/mixed_universe_schema_{left_universe}_vs_{right_universe}_{revision_slug}.json"
 
-    readiness_path = _resolve_path(readiness_manifest)
-    compare_path = _resolve_path(compare_manifest)
+    readiness_path = _prefer_existing(
+        _resolve_path(readiness_manifest),
+        f"artifacts/reports/mixed_universe_readiness_{left_universe}_vs_{right_universe}_*.json",
+    )
+    compare_path = _prefer_existing(
+        _resolve_path(compare_manifest),
+        f"artifacts/reports/mixed_universe_compare_{left_universe}_vs_{right_universe}_*.json",
+    )
     output_path = _resolve_path(output)
 
     try:
