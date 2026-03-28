@@ -125,3 +125,5 @@ local-only の formal 結果を public 向けに要約するときは、まず `
 mixed-universe 比較 artifact は JRA-only / local-only と衝突しない別 family として命名する。最小ルールは `artifacts/reports/mixed_universe_compare_<left_universe>_vs_<right_universe>_<revision>.json` で、`left_universe` と `right_universe` は `jra`、`local_nankan` のような universe slug をそのまま使う。
 
 この命名にしておくと、public snapshot、local revision lineage、mixed compare を grep だけで並べ替えられる。JRA current baseline の artifact には mixed compare の結果を直接混ぜず、比較結果は常に別 manifest として切り出す。
+
+最小実装としては `run_mixed_universe_compare.py` が pointer-only manifest を出す。ここでの `decision` は promote 判定ではなく `separate_lineage_required` を返し、left 側の local snapshot / lineage と right 側の JRA public reference の入口を固定する役割に留める。

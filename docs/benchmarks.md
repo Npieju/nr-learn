@@ -89,7 +89,7 @@ local-only universe の benchmark を読むときは、順序を別にする。
 2. `local_revision_gate_<revision>.json` で benchmark gate、promotion、evaluation pointer の lineage を確認する。
 3. 詳細が必要な場合だけ `promotion_gate_<revision>.json`、`revision_gate_<revision>.json`、`evaluation_<revision>_pointer.json` に降りる。
 
-mixed-universe 比較を導入するときも、JRA-only benchmark table に直接混ぜず、`mixed_universe_compare_<left_universe>_vs_<right_universe>_<revision>.json` を先頭 artifact として別読みする。比較結果は baseline の置換根拠ではなく、universe 間の差分検証として読む。
+mixed-universe 比較を導入するときも、JRA-only benchmark table に直接混ぜず、`mixed_universe_compare_<left_universe>_vs_<right_universe>_<revision>.json` を先頭 artifact として別読みする。現時点の mixed compare は pointer-only manifest なので、比較結果は baseline の置換根拠ではなく、universe 間の差分検証へ降りるための入口として読む。
 
 ### 5.2 latest 2025 の formal snapshot
 

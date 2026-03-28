@@ -8,7 +8,7 @@
 
 internal reader が latest 2025 actual-date compare を再開したい場合は、この文書ではなく `serving_validation_guide.md` の dashboard summary JSON 一覧から入り、必要なときだけ `command_reference.md` と formal artifact に降りる。
 
-local-only universe や mixed-universe compare を対外向けに説明するときも、この文書へ直接追記するのではなく、まず `artifacts/reports/local_public_snapshot_<revision>.json` または `artifacts/reports/mixed_universe_compare_<left_universe>_vs_<right_universe>_<revision>.json` を別系統で用意する。ここは引き続き JRA latest の public snapshot を正本とする。
+local-only universe や mixed-universe compare を対外向けに説明するときも、この文書へ直接追記するのではなく、まず `artifacts/reports/local_public_snapshot_<revision>.json` または `artifacts/reports/mixed_universe_compare_<left_universe>_vs_<right_universe>_<revision>.json` を別系統で用意する。ここは引き続き JRA latest の public snapshot を正本とする。mixed 側は当面 pointer manifest として扱い、JRA latest の数値 snapshot 自体はここで維持する。
 
 ここでは次だけを簡潔に示す。
 

@@ -431,6 +431,12 @@
 - public 向けの local-only 読み順を `local_public_snapshot -> local_revision_gate -> promotion_gate -> revision_gate -> evaluation_pointer` に固定した。
 - mixed-universe compare の artifact 名を `mixed_universe_compare_<left_universe>_vs_<right_universe>_<revision>.json` 系で統一し、JRA-only / local-only / mixed の lineage を名前だけで分離できるようにした。
 
+### M44. mixed-universe compare の pointer manifest を追加した
+
+- `run_mixed_universe_compare.py` を追加し、left 側の local public snapshot または lineage と right 側の JRA public reference を `mixed_universe_compare_<left_universe>_vs_<right_universe>_<revision>.json` に束ねられるようにした。
+- mixed compare は当面 `pointer_only` とし、`decision=separate_lineage_required` を返して promote 判定とは分離した。
+- これで docs だけで先行していた mixed compare 命名規則が、最小 artifact まで揃った。
+
 ## 6. 実行中の優先事項
 
 `current_tighter_policy_search_candidate_2025_latest` の `0.03/80` formalization は M17 で完了した。続いて seasonal / recent-heavy の運用境界整理、latest compare artifact map、actual-date compare 再開導線の同期監査、地方競馬 feasibility の設計チェックリスト・artifact 方針・benchmark 完了条件・payload schema・CLI 引数契約・step/failure taxonomy の具体化、既存 `netkeiba_*` snapshot / gate への universe-aware 契約実装、local-only snapshot / gate 雛形の追加、local-only integrity / feature gap / evaluation 入口の追加、local-only orchestration manifest の追加、および local-only revision lineage の追加まで完了した。
@@ -458,7 +464,7 @@
 ### N1. 地方競馬データ拡張の feasibility 深掘り
 
 - universe slug を config / artifact / revision にどう通すかを、必要なら実装前提まで下ろす。
-- local public snapshot までは入ったので、next は mixed-universe compare の最小 CLI か pointer manifest を置き、docs の命名規則を実 artifact まで揃える。
+- mixed-universe compare の pointer manifest までは入ったので、next は local-only / mixed の実数値比較に進む前提条件と artifact 読み順の重複を点検する。
 
 ### N2. docs の定期点検
 
