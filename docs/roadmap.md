@@ -407,9 +407,15 @@
 - `run_local_coverage_snapshot.py` と `run_local_benchmark_gate.py` を追加し、`local_nankan` を既定 universe とする artifact 名、baseline reference、source path を wrapper 側で固定した。
 - `configs/data_local_nankan.yaml`、`configs/model_local_baseline.yaml`、`configs/features_local_baseline.yaml` を追加し、JRA artifact を上書きしない local-only smoke の入口を切った。
 
+### M40. local-only integrity / feature gap / evaluation 入口の追加
+
+- `run_local_data_source_validation.py` を追加し、`run_validate_data_sources.py` の report を `data_source_validation_local_nankan.json` へ分離して出せるようにした。
+- `run_local_feature_gap_report.py` を追加し、feature gap summary / feature coverage / raw coverage を `local_nankan` 名義の artifact へ固定出力できるようにした。
+- `run_local_evaluate.py` を追加し、既存 `run_evaluate.py` の versioned output を再利用しつつ、local-only 側では `evaluation_local_nankan_pointer.json` から evaluation artifact lineage を辿れるようにした。
+
 ## 6. 実行中の優先事項
 
-`current_tighter_policy_search_candidate_2025_latest` の `0.03/80` formalization は M17 で完了した。続いて seasonal / recent-heavy の運用境界整理、latest compare artifact map、actual-date compare 再開導線の同期監査、地方競馬 feasibility の設計チェックリスト・artifact 方針・benchmark 完了条件・payload schema・CLI 引数契約・step/failure taxonomy の具体化、既存 `netkeiba_*` snapshot / gate への universe-aware 契約実装、および local-only snapshot / gate 雛形の追加まで完了した。
+`current_tighter_policy_search_candidate_2025_latest` の `0.03/80` formalization は M17 で完了した。続いて seasonal / recent-heavy の運用境界整理、latest compare artifact map、actual-date compare 再開導線の同期監査、地方競馬 feasibility の設計チェックリスト・artifact 方針・benchmark 完了条件・payload schema・CLI 引数契約・step/failure taxonomy の具体化、既存 `netkeiba_*` snapshot / gate への universe-aware 契約実装、local-only snapshot / gate 雛形の追加、および local-only integrity / feature gap / evaluation 入口の追加まで完了した。
 
 以後の active priority は、public / internal docs の定期点検と future option の切り分けに絞る。
 
@@ -434,7 +440,7 @@
 ### N1. 地方競馬データ拡張の feasibility 深掘り
 
 - universe slug を config / artifact / revision にどう通すかを、必要なら実装前提まで下ろす。
-- local-only wrapper から先に進めるなら、data integrity / feature gap / evaluation summary を local-only artifact 名で接続する。
+- local-only wrapper から先に進めるなら、next は readiness / validation / feature gap / evaluation pointer を束ねる orchestration manifest を切る。
 
 ### N2. docs の定期点検
 
