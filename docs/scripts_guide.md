@@ -181,6 +181,8 @@ serving 系の重い script は、smoke 本体、replay、bankroll sweep、dashb
 
 netkeiba 系は lock 待機、収集、backfill、gate 実行の各段で heartbeat または status を出す。
 
+地方 universe を将来追加する場合も、CLI 契約はこの系統に寄せる。つまり `data-config`, `tail-rows`, `snapshot-output`, `manifest-output`, `skip-train`, `skip-evaluate` を基底にし、追加は `universe`, `source-scope`, `baseline-reference`, `schema-version` だけに留める。
+
 外部データの設計意図は [data_extension.md](data_extension.md) を参照する。
 
 ## 10. 長時間バッチと運転監視

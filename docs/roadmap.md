@@ -383,9 +383,15 @@
 - 必須キーとして `universe`, `readiness`, `coverage_summary`, `integrity_summary`, `completed_step` を固定し、artifact 名だけでなく payload 本体でも universe を判別できる方針を明記した。
 - `artifact_guide.md` にも同じ原則を補足し、将来の local-only / mixed CLI が返すべき payload 契約の輪郭を揃えた。
 
+### M36. 地方-only CLI 引数契約の具体化
+
+- `data_extension.md` に、地方-only coverage snapshot / benchmark gate が持つべき最小 CLI 引数セットを追記した。
+- 方針は既存 `netkeiba_*` gate の operator experience を維持しつつ、追加は `universe`, `source-scope`, `baseline-reference`, `schema-version` に限定することである。
+- `scripts_guide.md` にも同じ原則を補足し、将来 CLI を追加しても既存運用から大きく逸れないことを明示した。
+
 ## 6. 実行中の優先事項
 
-`current_tighter_policy_search_candidate_2025_latest` の `0.03/80` formalization は M17 で完了した。続いて seasonal / recent-heavy の運用境界整理、latest compare artifact map、actual-date compare 再開導線の同期監査、地方競馬 feasibility の設計チェックリスト・artifact 方針・benchmark 完了条件・payload schema の具体化まで完了した。
+`current_tighter_policy_search_candidate_2025_latest` の `0.03/80` formalization は M17 で完了した。続いて seasonal / recent-heavy の運用境界整理、latest compare artifact map、actual-date compare 再開導線の同期監査、地方競馬 feasibility の設計チェックリスト・artifact 方針・benchmark 完了条件・payload schema・CLI 引数契約の具体化まで完了した。
 
 以後の active priority は、public / internal docs の定期点検と future option の切り分けに絞る。
 
@@ -410,7 +416,7 @@
 ### N1. 地方競馬データ拡張の feasibility 深掘り
 
 - universe slug を config / artifact / revision にどう通すかを、必要なら実装前提まで下ろす。
-- local-only coverage snapshot / benchmark gate の CLI 引数と payload field を、必要なら実装前提まで下ろす。
+- local-only coverage snapshot / benchmark gate の fail-fast 条件と step 名を、必要なら実装前提まで下ろす。
 
 ### N2. docs の定期点検
 

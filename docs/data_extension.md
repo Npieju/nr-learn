@@ -344,6 +344,53 @@ JRA 既存 script と揃えてよい部分もある。
 - `baseline_reference`: 比較対象の JRA-only baseline slug
 - `schema_version`: payload の互換性管理
 
+将来 CLI を作るなら、引数契約も既存 `netkeiba_*` 系に寄せると実装負荷が低い。最小の引数セットは次でよい。
+
+地方-only coverage snapshot 向け:
+
+- `--data-config`
+- `--tail-rows`
+- `--output`
+- `--universe`
+- `--schema-version`
+- 必要なら `--columns`, `--source-scope`, `--baseline-reference`
+
+地方-only benchmark gate 向け:
+
+- `--data-config`
+- `--model-config`
+- `--feature-config`
+- `--tail-rows`
+- `--snapshot-output`
+- `--manifest-output`
+- `--max-rows`
+- `--pre-feature-max-rows`
+- `--wf-mode`
+- `--wf-scheme`
+- `--skip-train`
+- `--skip-evaluate`
+- `--universe`
+- `--source-scope`
+- `--baseline-reference`
+- `--schema-version`
+
+引数名の設計ルールは次で固定すると分かりやすい。
+
+1. JRA 既存 gate にある引数名は変えず、universe 固有情報だけを追加する。
+2. `--universe` は artifact slug と同じ値を受ける。
+3. `--source-scope` は `local_only` または `mixed` を受ける。
+4. `--baseline-reference` は mixed 比較時だけ必須にし、local-only では任意にする。
+5. `--schema-version` は payload 互換性を上げたときだけ明示変更する。
+
+CLI 実装時の fail-fast 条件も先に決めておく。
+
+- `--universe` が未指定なら fail する。
+- `--source-scope=mixed` なのに `--baseline-reference` が空なら fail する。
+- `--snapshot-output` / `--manifest-output` に directory を渡したら fail する。
+- `--universe` と output file 名の slug が食い違う場合は warning ではなく fail-fast してよい。
+
+この形なら、既存 `run_netkeiba_benchmark_gate.py` の operator experience を維持しつつ、local-only / mixed の違いだけを明示的に増やせる。
+
 逆に、地方-only benchmark の完了条件に次を混ぜない。
 
 - mixed 学習で JRA-only baseline を上回ったこと
