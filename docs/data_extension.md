@@ -258,6 +258,92 @@ artifact に残す最低限の判定項目も決めておくとよい。
 - `evaluation.status` と `evaluation.stability_assessment`
 - `gate.status` と `gate.completed_step`
 
+script 仕様レベルへ下ろすなら、payload schema は既存の `run_netkeiba_coverage_snapshot.py` と `run_netkeiba_benchmark_gate.py` に寄せつつ、universe 境界を明示するのが安全である。
+
+地方-only coverage snapshot の最小 schema 例:
+
+```json
+{
+  "run_context": {
+    "config": "configs/data_local_nankan.yaml",
+    "tail_rows": 5000,
+    "universe": "local_nankan",
+    "primary_source_rows_total": 123456
+  },
+  "coverage": {
+    "latest_tail": {},
+    "paired_race_subset": {}
+  },
+  "integrity_summary": {
+    "missing_keys": {},
+    "duplicate_rows": {},
+    "canonical_mismatch": {}
+  },
+  "readiness": {
+    "snapshot_consistent": true,
+    "benchmark_rerun_ready": false,
+    "recommended_action": "inspect_local_alignment",
+    "reasons": []
+  }
+}
+```
+
+地方-only benchmark gate manifest の最小 schema 例:
+
+```json
+{
+  "started_at": "2026-03-28T00:00:00Z",
+  "finished_at": null,
+  "status": "running",
+  "universe": "local_nankan",
+  "configs": {
+    "data_config": "configs/data_local_nankan.yaml",
+    "model_config": "configs/model_local_baseline.yaml",
+    "feature_config": "configs/features_local_baseline.yaml"
+  },
+  "snapshot": {
+    "label": "snapshot",
+    "status": "completed",
+    "exit_code": 0
+  },
+  "readiness": {
+    "benchmark_rerun_ready": true,
+    "recommended_action": "run_local_benchmark"
+  },
+  "coverage_summary": {},
+  "integrity_summary": {},
+  "train": null,
+  "evaluate": null,
+  "completed_step": "snapshot"
+}
+```
+
+この 2 本で最低限そろえるキーは次である。
+
+1. `universe`
+   - config 名だけに依存せず、payload 自体に source universe を持たせる。
+2. `run_context` または `configs`
+   - data / model / feature config と tail_rows / max_rows を追えるようにする。
+3. `readiness`
+   - `benchmark_rerun_ready`、`recommended_action`、`reasons` を必須にする。
+4. `coverage_summary` と `integrity_summary`
+   - coverage 不足と key 整合を分けて読めるようにする。
+5. `completed_step`
+   - local gate がどこまで進んだかを、`snapshot`, `train`, `evaluate`, `completed` のような段階で読めるようにする。
+
+JRA 既存 script と揃えてよい部分もある。
+
+- `status`: `running / completed / failed / not_ready / interrupted`
+- `started_at` / `finished_at`
+- `snapshot`, `train`, `evaluate` の各 step result に `label / status / exit_code / started_at / finished_at`
+
+一方で、地方-only schema で追加したほうがよい項目は次である。
+
+- `universe_display_name`: 人間向けの source 名
+- `source_scope`: `local_only` / `mixed`
+- `baseline_reference`: 比較対象の JRA-only baseline slug
+- `schema_version`: payload の互換性管理
+
 逆に、地方-only benchmark の完了条件に次を混ぜない。
 
 - mixed 学習で JRA-only baseline を上回ったこと
