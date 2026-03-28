@@ -153,7 +153,7 @@ numeric compare 本体は `artifacts/reports/mixed_universe_numeric_compare_<lef
 
 一覧確認用には `artifacts/reports/mixed_universe_numeric_compare_<left_universe>_vs_<right_universe>_<revision>.csv` も併せて出してよい。CSV には `name`, `left_value`, `right_value`, `delta_left_minus_right`, `delta_direction`, `comparison_status` を最低限並べる。
 
-判読用には `artifacts/reports/mixed_universe_numeric_summary_<left_universe>_vs_<right_universe>_<revision>.json` を置いてよい。ここでは row 全件を再掲せず、`verdict`, `severity`, `missing_left_rows`, `missing_right_rows`, `positive_rows`, `negative_rows`, `notes`, `recommended_action` のような summary だけを持たせる。`promote_safe_summary` 自体にも upstream compare の `resolved_left_*` を保持するので、要約だけを読んでも left-side 参照元を確認できる。
+判読用には `artifacts/reports/mixed_universe_numeric_summary_<left_universe>_vs_<right_universe>_<revision>.json` を置いてよい。ここでは row 全件を再掲せず、`verdict`, `severity`, `missing_left_rows`, `missing_right_rows`, `positive_rows`, `negative_rows`, `notes`, `recommended_action` のような summary だけを持たせる。`promote_safe_summary` 自体にも upstream compare の `resolved_left_*` を保持するので、要約だけを読んでも left-side 参照元を確認できる。planned / dry-run でも `read_order` と空の `promote_safe_summary` を返して、numeric compare 未生成の段階から同じ shape で読めるようにする。
 
 left 側の欠損原因を詰めたいときは `artifacts/reports/mixed_universe_left_gap_audit_<left_universe>_vs_<right_universe>_<revision>.json` を見る。ここでは `missing_left_rows` ごとに必要 source artifact、実在状況、local revision lineage に残っている command preview を並べる。local benchmark が preflight で止まった場合は、`lineage_blocker.recommended_action` とその根拠 artifact もここに残る。mixed revision と local revision が別名でも、gap audit は readiness/public snapshot artifact を使って local lineage を自動で拾い、`summary` にも `resolved_left_*` を残す。
 

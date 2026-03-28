@@ -146,6 +146,36 @@ def _promote_safe_summary(compare_payload: dict[str, object]) -> dict[str, objec
     }
 
 
+def _planned_promote_safe_summary(*, requested_revision: str) -> dict[str, object]:
+    return {
+        "verdict": "evidence_pending",
+        "severity": "info",
+        "requested_revision": requested_revision,
+        "resolved_left_revision": None,
+        "resolved_left_source_kind": None,
+        "resolved_left_artifact": None,
+        "readiness_status": None,
+        "schema_status": None,
+        "numeric_rows": {
+            "row_count": 0,
+            "positive_rows": [],
+            "negative_rows": [],
+            "zero_rows": [],
+        },
+        "categorical_different_rows": [],
+        "missing_left_rows": [],
+        "missing_right_rows": [],
+        "numeric_compared_rows": 0,
+        "categorical_match_rows": 0,
+        "categorical_different_rows_count": 0,
+        "recommended_action": "generate_numeric_compare_manifest",
+        "notes": [
+            "numeric compare manifest is not available yet",
+            "generate numeric compare before using the summary as comparison triage",
+        ],
+    }
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--revision", default=None)
@@ -187,6 +217,11 @@ def main() -> int:
                     "summary_manifest": artifact_display_path(output_path, workspace_root=ROOT),
                     "numeric_compare_manifest": artifact_display_path(compare_path, workspace_root=ROOT),
                 },
+                "read_order": [
+                    "mixed_universe_numeric_compare",
+                    "mixed_universe_numeric_summary",
+                ],
+                "promote_safe_summary": _planned_promote_safe_summary(requested_revision=revision_slug),
             }
             write_json(output_path, payload)
             print(f"[mixed-universe-numeric-summary] planned manifest saved: {artifact_display_path(output_path, workspace_root=ROOT)}", flush=True)
