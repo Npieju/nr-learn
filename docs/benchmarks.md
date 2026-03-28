@@ -103,6 +103,8 @@ schema の次は `mixed_universe_numeric_compare_<left_universe>_vs_<right_unive
 
 `missing_left_rows` の中身を具体的に潰したいときは `mixed_universe_left_gap_audit_<left_universe>_vs_<right_universe>_<revision>.json` に進む。ここでは各 row に必要な left artifact と command preview が出るので、次にどの local lineage step を実行すべきかを機械的に読める。
 
+row ごとの情報を実行 plan にまとめたいときは `mixed_universe_left_recovery_plan_<left_universe>_vs_<right_universe>_<revision>.json` を使う。ここでは `run_revision_gate` や `run_local_evaluate` のような command を重複除去して、どの missing row 群を埋めるかを一段薄く読める。
+
 ### 5.2 latest 2025 の formal snapshot
 
 latest 2025 split で直近に formal に通過した run は次の 2 本である。
