@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import csv
 from pathlib import Path
 import sys
 import time
@@ -115,6 +116,40 @@ def _to_number(value: object) -> float | int | None:
     return None
 
 
+def _delta_direction(value: object) -> str:
+    number = _to_number(value)
+    if number is None:
+        return "unknown"
+    if number > 0:
+        return "positive"
+    if number < 0:
+        return "negative"
+    return "zero"
+
+
+def _write_compare_csv(path: Path, rows: list[dict[str, object]]) -> None:
+    output_path = artifact_ensure_output_file_path(path, label="csv output", workspace_root=ROOT)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    fieldnames = [
+        "name",
+        "category",
+        "comparison_role",
+        "left_value",
+        "right_value",
+        "left_path",
+        "right_path",
+        "delta_kind",
+        "delta_left_minus_right",
+        "delta_direction",
+        "comparison_status",
+    ]
+    with output_path.open("w", encoding="utf-8", newline="") as file:
+        writer = csv.DictWriter(file, fieldnames=fieldnames)
+        writer.writeheader()
+        for row in rows:
+            writer.writerow({key: row.get(key) for key in fieldnames})
+
+
 def _build_row_result(
     row: dict[str, object],
     left_sources: dict[str, dict[str, object] | None],
@@ -140,6 +175,7 @@ def _build_row_result(
         "right_path": right_path,
         "delta_left_minus_right": None,
         "delta_kind": None,
+        "delta_direction": "unknown",
         "comparison_status": None,
     }
 
@@ -153,6 +189,7 @@ def _build_row_result(
     if left_number is not None and right_number is not None:
         row_result["delta_left_minus_right"] = left_number - right_number
         row_result["delta_kind"] = "numeric"
+        row_result["delta_direction"] = _delta_direction(row_result["delta_left_minus_right"])
         row_result["comparison_status"] = "numeric_compared"
         return row_result
 
@@ -192,6 +229,7 @@ def main() -> int:
     parser.add_argument("--schema-manifest", default=None)
     parser.add_argument("--right-reference-manifest", default=DEFAULT_RIGHT_REFERENCE_MANIFEST)
     parser.add_argument("--output", default=None)
+    parser.add_argument("--csv-output", default=None)
     parser.add_argument("--dry-run", action="store_true")
     args = parser.parse_args()
 
@@ -203,15 +241,18 @@ def main() -> int:
     compare_manifest = args.compare_manifest or f"artifacts/reports/mixed_universe_compare_{left_universe}_vs_{right_universe}_{revision_slug}.json"
     schema_manifest = args.schema_manifest or f"artifacts/reports/mixed_universe_schema_{left_universe}_vs_{right_universe}_{revision_slug}.json"
     output = args.output or f"artifacts/reports/mixed_universe_numeric_compare_{left_universe}_vs_{right_universe}_{revision_slug}.json"
+    csv_output = args.csv_output or f"artifacts/reports/mixed_universe_numeric_compare_{left_universe}_vs_{right_universe}_{revision_slug}.csv"
 
     readiness_path = _resolve_path(readiness_manifest)
     compare_path = _resolve_path(compare_manifest)
     schema_path = _resolve_path(schema_manifest)
     right_reference_manifest_path = _resolve_path(args.right_reference_manifest)
     output_path = _resolve_path(output)
+    csv_output_path = _resolve_path(csv_output)
 
     try:
         artifact_ensure_output_file_path(output_path, label="output", workspace_root=ROOT)
+        artifact_ensure_output_file_path(csv_output_path, label="csv output", workspace_root=ROOT)
 
         if args.dry_run and not readiness_path.exists() and not compare_path.exists() and not schema_path.exists():
             payload = {
@@ -227,6 +268,7 @@ def main() -> int:
                 "recommended_action": "generate_readiness_compare_schema_manifests",
                 "artifacts": {
                     "numeric_compare_manifest": artifact_display_path(output_path, workspace_root=ROOT),
+                    "numeric_compare_csv": artifact_display_path(csv_output_path, workspace_root=ROOT),
                     "readiness_manifest": artifact_display_path(readiness_path, workspace_root=ROOT),
                     "compare_manifest": artifact_display_path(compare_path, workspace_root=ROOT),
                     "schema_manifest": artifact_display_path(schema_path, workspace_root=ROOT),
@@ -277,6 +319,7 @@ def main() -> int:
             "recommended_action": recommended_action,
             "artifacts": {
                 "numeric_compare_manifest": artifact_display_path(output_path, workspace_root=ROOT),
+                "numeric_compare_csv": artifact_display_path(csv_output_path, workspace_root=ROOT),
                 "readiness_manifest": artifact_display_path(readiness_path, workspace_root=ROOT),
                 "compare_manifest": artifact_display_path(compare_path, workspace_root=ROOT),
                 "schema_manifest": artifact_display_path(schema_path, workspace_root=ROOT),
@@ -297,6 +340,7 @@ def main() -> int:
             "summary": summary,
             "row_results": row_results,
         }
+        _write_compare_csv(csv_output_path, row_results)
         write_json(output_path, payload)
         print(f"[mixed-universe-numeric-compare] saved: {artifact_display_path(output_path, workspace_root=ROOT)}", flush=True)
         return 0 if compare_status == "completed" else 2
