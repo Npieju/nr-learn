@@ -128,9 +128,9 @@ mixed-universe 比較 artifact は JRA-only / local-only と衝突しない別 f
 
 この命名にしておくと、public snapshot、local revision lineage、mixed compare を grep だけで並べ替えられる。JRA current baseline の artifact には mixed compare の結果を直接混ぜず、比較結果は常に別 manifest として切り出す。
 
-最小実装としては `run_mixed_universe_compare.py` が pointer-only manifest を出す。ここでの `decision` は promote 判定ではなく `separate_lineage_required` を返し、left 側の local snapshot / lineage と right 側の JRA public reference の入口を固定する役割に留める。
+最小実装としては `run_mixed_universe_compare.py` が pointer-only manifest を出す。ここでの `decision` は promote 判定ではなく `separate_lineage_required` を返し、left 側の local snapshot / lineage と right 側の JRA public reference の入口を固定する役割に留める。alias 解決を使った場合でも `resolved_left_revision`, `resolved_left_source_kind`, `resolved_left_artifact` を見れば、実際に束ねた left-side 参照元を manifest 自体から追える。
 
-pointer-only compare の前には、`artifacts/reports/mixed_universe_readiness_<left_universe>_vs_<right_universe>_<revision>.json` を見て前提条件を確認してよい。最小 check は次である。
+pointer-only compare の前には、`artifacts/reports/mixed_universe_readiness_<left_universe>_vs_<right_universe>_<revision>.json` を見て前提条件を確認してよい。ここでは check 群に加えて `resolved_left_revision`, `resolved_left_source_kind`, `resolved_left_artifact` も見れば、どの left-side artifact を前提に readiness を判定したかがすぐ分かる。最小 check は次である。
 
 1. left 側 universe の readiness が `benchmark_rerun_ready=true`
 2. left 側 evaluation pointer が存在する

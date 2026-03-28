@@ -94,6 +94,14 @@ def _resolved_left_revision(payload: dict[str, object] | None) -> str | None:
     return str(revision) if revision is not None else None
 
 
+def _resolved_left_artifact(*, left_source_kind: str | None, left_snapshot_path: Path, left_lineage_path: Path) -> str | None:
+    if left_source_kind == "local_public_snapshot" and left_snapshot_path.exists():
+        return artifact_display_path(left_snapshot_path, workspace_root=ROOT)
+    if left_source_kind == "local_revision_gate" and left_lineage_path.exists():
+        return artifact_display_path(left_lineage_path, workspace_root=ROOT)
+    return None
+
+
 def _build_planned_payload(
     *,
     revision_slug: str,
@@ -111,6 +119,8 @@ def _build_planned_payload(
         "revision": revision_slug,
         "requested_revision": revision_slug,
         "resolved_left_revision": None,
+        "resolved_left_source_kind": None,
+        "resolved_left_artifact": None,
         "left_universe": left_universe,
         "right_universe": right_universe,
         "right_reference": right_reference,
@@ -208,6 +218,12 @@ def main() -> int:
             "revision": revision_slug,
             "requested_revision": revision_slug,
             "resolved_left_revision": _resolved_left_revision(left_payload),
+            "resolved_left_source_kind": left_source_kind,
+            "resolved_left_artifact": _resolved_left_artifact(
+                left_source_kind=left_source_kind,
+                left_snapshot_path=left_snapshot_path,
+                left_lineage_path=left_lineage_path,
+            ),
             "left_universe": left_universe,
             "right_universe": right_universe,
             "decision": "separate_lineage_required",

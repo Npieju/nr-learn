@@ -241,7 +241,7 @@ mixed-universe 比較も `run_mixed_universe_compare.py` を追加して、`mixe
 
 `run_mixed_universe_readiness.py` も同様に left-side artifact を自動探索するので、`reference_bridge` 系の revision でも `--left-public-snapshot` や `--left-lineage-manifest` を省略したまま再生成できる。
 
-mixed-universe 系 manifest の `revision` は引き続き要求した mixed revision alias を表す。一方で alias 解決後に実際に参照した local revision は `resolved_left_revision` として readiness / compare / status board / recovery に併記し、operator が left-side の実体を追いやすくしている。
+mixed-universe 系 manifest の `revision` は引き続き要求した mixed revision alias を表す。一方で alias 解決後に実際に参照した local revision は `resolved_left_revision` として readiness / compare / status board / recovery に併記し、入口側の readiness / compare では `resolved_left_source_kind` と `resolved_left_artifact` も合わせて出して、operator が left-side の実体と参照元 path をすぐ追えるようにしている。
 
 この bridge 情報は downstream の schema / numeric compare / numeric summary / left gap audit / left recovery plan にも引き継ぐ。したがって mixed alias を保ったまま生成を続けても、どの段で見ても `requested_revision` と `resolved_left_revision` の両方を読める。
 
