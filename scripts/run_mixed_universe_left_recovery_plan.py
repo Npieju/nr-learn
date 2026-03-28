@@ -62,6 +62,11 @@ def _step_name_from_command(command_preview: object) -> str:
     return script_name.replace(".py", "")
 
 
+def _blocking_step_name(action: object) -> str:
+    text = str(action or "").strip()
+    return text if text else "resolve_upstream_blocker"
+
+
 def _build_plan_steps(gap_audit_payload: dict[str, object]) -> list[dict[str, object]]:
     gap_rows = [row for row in (gap_audit_payload.get("gap_rows") or []) if isinstance(row, dict)]
     deduped: dict[str, dict[str, object]] = {}
@@ -74,21 +79,47 @@ def _build_plan_steps(gap_audit_payload: dict[str, object]) -> list[dict[str, ob
                 continue
             command_preview = source.get("command_preview")
             key = _command_key(command_preview)
-            if key is None:
+            if key is not None:
+                current = deduped.get(key)
+                if current is None:
+                    deduped[key] = {
+                        "step": _step_name_from_command(command_preview),
+                        "command_preview": command_preview,
+                        "command_status": source.get("command_status"),
+                        "required_for_rows": [row_name],
+                        "artifacts": [source.get("artifact_path")] if source.get("artifact_path") is not None else [],
+                    }
+                else:
+                    if row_name not in current["required_for_rows"]:
+                        current["required_for_rows"].append(row_name)
+                    artifact_path = source.get("artifact_path")
+                    if artifact_path is not None and artifact_path not in current["artifacts"]:
+                        current["artifacts"].append(artifact_path)
                 continue
-            current = deduped.get(key)
+
+            blocking_action = str(source.get("blocking_action") or "").strip()
+            if not blocking_action:
+                continue
+            blocker_key = f"blocker:{blocking_action}"
+            current = deduped.get(blocker_key)
             if current is None:
-                deduped[key] = {
-                    "step": _step_name_from_command(command_preview),
-                    "command_preview": command_preview,
-                    "command_status": source.get("command_status"),
+                artifacts = []
+                if source.get("blocking_artifact_path") is not None:
+                    artifacts.append(source.get("blocking_artifact_path"))
+                deduped[blocker_key] = {
+                    "step": _blocking_step_name(blocking_action),
+                    "action_kind": "manual",
+                    "recommended_action": blocking_action,
+                    "blocking_error_code": source.get("blocking_error_code"),
+                    "blocking_error_message": source.get("blocking_error_message"),
+                    "blocking_reasons": source.get("blocking_reasons"),
                     "required_for_rows": [row_name],
-                    "artifacts": [source.get("artifact_path")] if source.get("artifact_path") is not None else [],
+                    "artifacts": artifacts,
                 }
             else:
                 if row_name not in current["required_for_rows"]:
                     current["required_for_rows"].append(row_name)
-                artifact_path = source.get("artifact_path")
+                artifact_path = source.get("blocking_artifact_path")
                 if artifact_path is not None and artifact_path not in current["artifacts"]:
                     current["artifacts"].append(artifact_path)
 
@@ -99,21 +130,36 @@ def _build_summary(plan_steps: list[dict[str, object]], gap_audit_payload: dict[
     gap_summary = gap_audit_payload.get("summary") if isinstance(gap_audit_payload.get("summary"), dict) else {}
     statuses = {}
     for step in plan_steps:
-        status = str(step.get("command_status") or "unknown")
+        status = str(step.get("command_status") or step.get("action_kind") or "unknown")
         statuses[status] = int(statuses.get(status, 0)) + 1
     notes = []
     if plan_steps:
-        notes.append(f"{len(plan_steps)} deduplicated commands cover {sum(len(step.get('required_for_rows') or []) for step in plan_steps)} missing-row dependencies")
+        notes.append(f"{len(plan_steps)} deduplicated recovery steps cover {sum(len(step.get('required_for_rows') or []) for step in plan_steps)} missing-row dependencies")
     if gap_summary.get("rows_missing_all_sources"):
         notes.append("all missing-left rows currently depend on artifacts that do not yet exist")
+    if gap_summary.get("rows_with_blocking_action"):
+        notes.append("at least one upstream readiness blocker must be resolved before local metrics can be generated")
     return {
         "severity": gap_summary.get("severity"),
         "step_count": len(plan_steps),
         "command_status_counts": statuses,
         "rows_missing_all_sources": gap_summary.get("rows_missing_all_sources"),
         "rows_with_planned_commands": gap_summary.get("rows_with_planned_commands"),
+        "rows_with_blocking_action": gap_summary.get("rows_with_blocking_action"),
         "notes": notes,
     }
+
+
+def _recommended_action(plan_steps: list[dict[str, object]], gap_audit_payload: dict[str, object]) -> object:
+    if plan_steps:
+        first_step = plan_steps[0]
+        manual_action = first_step.get("recommended_action")
+        if isinstance(manual_action, str) and manual_action.strip():
+            return manual_action
+        step_name = first_step.get("step")
+        if isinstance(step_name, str) and step_name.strip():
+            return step_name
+    return gap_audit_payload.get("recommended_action")
 
 
 def main() -> int:
@@ -171,7 +217,7 @@ def main() -> int:
             "revision": revision_slug,
             "left_universe": left_universe,
             "right_universe": right_universe,
-            "recommended_action": gap_audit_payload.get("recommended_action"),
+            "recommended_action": _recommended_action(plan_steps, gap_audit_payload),
             "artifacts": {
                 "recovery_plan_manifest": artifact_display_path(output_path, workspace_root=ROOT),
                 "gap_audit_manifest": artifact_display_path(gap_audit_path, workspace_root=ROOT),

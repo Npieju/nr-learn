@@ -101,9 +101,9 @@ schema の次は `mixed_universe_numeric_compare_<left_universe>_vs_<right_unive
 
 さらに判断を急がず要点だけを見たいときは `mixed_universe_numeric_summary_<left_universe>_vs_<right_universe>_<revision>.json` を使う。ここでは `evidence_incomplete` のような verdict に加えて `severity` と `notes` も読み、promote 判定とは切り分けて扱う。
 
-`missing_left_rows` の中身を具体的に潰したいときは `mixed_universe_left_gap_audit_<left_universe>_vs_<right_universe>_<revision>.json` に進む。ここでは各 row に必要な left artifact と command preview が出るので、次にどの local lineage step を実行すべきかを機械的に読める。
+`missing_left_rows` の中身を具体的に潰したいときは `mixed_universe_left_gap_audit_<left_universe>_vs_<right_universe>_<revision>.json` に進む。ここでは各 row に必要な left artifact と command preview が出るので、次にどの local lineage step を実行すべきかを機械的に読める。upstream preflight blocker があるときは、その `recommended_action` も同時に読める。
 
-row ごとの情報を実行 plan にまとめたいときは `mixed_universe_left_recovery_plan_<left_universe>_vs_<right_universe>_<revision>.json` を使う。ここでは `run_revision_gate` や `run_local_evaluate` のような command を重複除去して、どの missing row 群を埋めるかを一段薄く読める。
+row ごとの情報を実行 plan にまとめたいときは `mixed_universe_left_recovery_plan_<left_universe>_vs_<right_universe>_<revision>.json` を使う。ここでは `run_revision_gate` や `run_local_evaluate` のような command を重複除去して、どの missing row 群を埋めるかを一段薄く読める。command がまだ無い段階でも、preflight blocker を手動 step として保持する。
 
 実際に left recovery を回して board まで更新したいときは `mixed_universe_recovery_<left_universe>_vs_<right_universe>_<revision>.json` を見る。ここでは local lineage 再実行、public snapshot 更新、mixed compare 系 manifest 再生成の各 step が並ぶので、partial のままでもどこまで進んだかを機械的に読める。
 

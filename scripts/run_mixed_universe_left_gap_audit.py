@@ -51,6 +51,29 @@ def _artifact_exists(path_text: object) -> bool:
     return _resolve_path(path_text).exists()
 
 
+def _lineage_blocker(lineage_payload: dict[str, object]) -> dict[str, object] | None:
+    data_preflight = lineage_payload.get("data_preflight_payload") if isinstance(lineage_payload.get("data_preflight_payload"), dict) else None
+    benchmark_gate = lineage_payload.get("benchmark_gate_payload") if isinstance(lineage_payload.get("benchmark_gate_payload"), dict) else None
+
+    candidate = data_preflight if isinstance(data_preflight, dict) else benchmark_gate
+    if not isinstance(candidate, dict):
+        return None
+
+    status = str(candidate.get("status") or "")
+    if status in {"", "completed", "pass", "ready"}:
+        return None
+
+    artifacts = candidate.get("artifacts") if isinstance(candidate.get("artifacts"), dict) else {}
+    return {
+        "status": status,
+        "error_code": candidate.get("error_code"),
+        "error_message": candidate.get("error_message"),
+        "recommended_action": candidate.get("recommended_action"),
+        "artifact_path": artifacts.get("preflight_manifest") if isinstance(artifacts, dict) else None,
+        "reasons": ((candidate.get("readiness") or {}).get("reasons") if isinstance(candidate.get("readiness"), dict) else None),
+    }
+
+
 def _required_sources_for_row(row_name: str) -> list[dict[str, str]]:
     if row_name == "decision":
         return [
@@ -74,6 +97,7 @@ def _build_gap_rows(
 ) -> list[dict[str, object]]:
     row_results = [row for row in (numeric_compare_payload.get("row_results") or []) if isinstance(row, dict)]
     lineage_artifacts = lineage_payload.get("artifacts") if isinstance(lineage_payload.get("artifacts"), dict) else {}
+    lineage_blocker = _lineage_blocker(lineage_payload)
 
     gap_rows: list[dict[str, object]] = []
     for row in row_results:
@@ -92,6 +116,11 @@ def _build_gap_rows(
                     "exists": _artifact_exists(artifact_path),
                     "command_preview": ((lineage_payload.get(source["command_key"]) or {}).get("command") if isinstance(lineage_payload.get(source["command_key"]), dict) else None),
                     "command_status": ((lineage_payload.get(source["command_key"]) or {}).get("status") if isinstance(lineage_payload.get(source["command_key"]), dict) else None),
+                    "blocking_action": (lineage_blocker or {}).get("recommended_action"),
+                    "blocking_error_code": (lineage_blocker or {}).get("error_code"),
+                    "blocking_error_message": (lineage_blocker or {}).get("error_message"),
+                    "blocking_artifact_path": (lineage_blocker or {}).get("artifact_path"),
+                    "blocking_reasons": (lineage_blocker or {}).get("reasons"),
                 }
             )
         gap_rows.append(
@@ -100,6 +129,7 @@ def _build_gap_rows(
                 "category": row.get("category"),
                 "comparison_status": row.get("comparison_status"),
                 "required_sources": source_checks,
+                "lineage_blocker": lineage_blocker,
             }
         )
     return gap_rows
@@ -108,12 +138,15 @@ def _build_gap_rows(
 def _audit_summary(gap_rows: list[dict[str, object]]) -> dict[str, object]:
     rows_missing_all_sources = []
     rows_with_planned_commands = []
+    rows_with_blocking_action = []
     for row in gap_rows:
         required_sources = row.get("required_sources") if isinstance(row.get("required_sources"), list) else []
         if required_sources and all(not bool(source.get("exists")) for source in required_sources if isinstance(source, dict)):
             rows_missing_all_sources.append(row.get("name"))
         if any(str(source.get("command_status") or "") == "planned" for source in required_sources if isinstance(source, dict)):
             rows_with_planned_commands.append(row.get("name"))
+        if any(str(source.get("blocking_action") or "").strip() for source in required_sources if isinstance(source, dict)):
+            rows_with_blocking_action.append(row.get("name"))
 
     severity = "info"
     if rows_missing_all_sources:
@@ -126,6 +159,8 @@ def _audit_summary(gap_rows: list[dict[str, object]]) -> dict[str, object]:
         notes.append(f"{len(rows_missing_all_sources)} rows still lack every required left-side source artifact")
     if rows_with_planned_commands:
         notes.append(f"{len(rows_with_planned_commands)} rows can be addressed by commands already recorded in local revision lineage")
+    if rows_with_blocking_action:
+        notes.append(f"{len(rows_with_blocking_action)} rows are currently blocked by an upstream local readiness action")
     if not notes:
         notes.append("no missing-left rows were found in the numeric compare manifest")
 
@@ -134,6 +169,7 @@ def _audit_summary(gap_rows: list[dict[str, object]]) -> dict[str, object]:
         "row_count": len(gap_rows),
         "rows_missing_all_sources": rows_missing_all_sources,
         "rows_with_planned_commands": rows_with_planned_commands,
+        "rows_with_blocking_action": rows_with_blocking_action,
         "notes": notes,
     }
 
@@ -210,6 +246,7 @@ def main() -> int:
                 "mixed_universe_left_gap_audit",
             ],
             "summary": audit_summary,
+            "lineage_blocker": _lineage_blocker(lineage_payload),
             "gap_rows": gap_rows,
         }
         write_json(output_path, payload)

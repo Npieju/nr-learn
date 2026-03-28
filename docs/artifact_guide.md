@@ -155,9 +155,9 @@ numeric compare 本体は `artifacts/reports/mixed_universe_numeric_compare_<lef
 
 判読用には `artifacts/reports/mixed_universe_numeric_summary_<left_universe>_vs_<right_universe>_<revision>.json` を置いてよい。ここでは row 全件を再掲せず、`verdict`, `severity`, `missing_left_rows`, `missing_right_rows`, `positive_rows`, `negative_rows`, `notes`, `recommended_action` のような summary だけを持たせる。
 
-left 側の欠損原因を詰めたいときは `artifacts/reports/mixed_universe_left_gap_audit_<left_universe>_vs_<right_universe>_<revision>.json` を見る。ここでは `missing_left_rows` ごとに必要 source artifact、実在状況、local revision lineage に残っている command preview を並べる。
+left 側の欠損原因を詰めたいときは `artifacts/reports/mixed_universe_left_gap_audit_<left_universe>_vs_<right_universe>_<revision>.json` を見る。ここでは `missing_left_rows` ごとに必要 source artifact、実在状況、local revision lineage に残っている command preview を並べる。local benchmark が preflight で止まった場合は、`lineage_blocker.recommended_action` とその根拠 artifact もここに残る。
 
-実行順まで落としたいときは `artifacts/reports/mixed_universe_left_recovery_plan_<left_universe>_vs_<right_universe>_<revision>.json` を見る。ここでは gap audit の command preview を重複除去し、`required_for_rows` と必要 artifact path を付けて並べる。
+実行順まで落としたいときは `artifacts/reports/mixed_universe_left_recovery_plan_<left_universe>_vs_<right_universe>_<revision>.json` を見る。ここでは gap audit の command preview を重複除去し、`required_for_rows` と必要 artifact path を付けて並べる。もし command preview が無ければ、`populate_primary_raw_dir` のような手動 blocker step が plan に残る。
 
 この recovery plan を実際に回して下流 manifest まで更新したいときは、`artifacts/reports/mixed_universe_recovery_<left_universe>_vs_<right_universe>_<revision>.json` を使ってよい。ここでは local lineage 再実行から status board 再生成までの step 実行結果、exit code、更新後 board の `recommended_action` をまとめる。
 

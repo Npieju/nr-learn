@@ -240,6 +240,8 @@ def main() -> int:
                 "numeric_summary_verdict": ((payloads.get("numeric_summary") or {}).get("promote_safe_summary", {}) or {}).get("verdict") if isinstance(payloads.get("numeric_summary"), dict) else None,
                 "numeric_summary_severity": ((payloads.get("numeric_summary") or {}).get("promote_safe_summary", {}) or {}).get("severity") if isinstance(payloads.get("numeric_summary"), dict) else None,
                 "gap_audit_severity": ((payloads.get("left_gap_audit") or {}).get("summary", {}) or {}).get("severity") if isinstance(payloads.get("left_gap_audit"), dict) else None,
+                "gap_audit_blocking_action": ((payloads.get("left_gap_audit") or {}).get("lineage_blocker", {}) or {}).get("recommended_action") if isinstance(payloads.get("left_gap_audit"), dict) else None,
+                "gap_audit_blocking_error_code": ((payloads.get("left_gap_audit") or {}).get("lineage_blocker", {}) or {}).get("error_code") if isinstance(payloads.get("left_gap_audit"), dict) else None,
                 "recovery_plan_step_count": ((payloads.get("left_recovery_plan") or {}).get("summary", {}) or {}).get("step_count") if isinstance(payloads.get("left_recovery_plan"), dict) else None,
             },
         }
