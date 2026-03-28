@@ -371,9 +371,15 @@
 - 具体例として config / snapshot / gate / revision に共通の universe slug を入れるルールを示し、JRA-only / local-only / mixed の lineage を名前で追跡できる形にした。
 - `artifact_guide.md` にも同じ方針を補足し、外部データ universe 拡張時に latest JRA artifact を上書きしない原則を明記した。
 
+### M34. 地方-only benchmark 完了条件の具体化
+
+- `data_extension.md` に、地方-only benchmark を完了とみなす最小条件を `snapshot readiness / data integrity / feature readiness / representative evaluation / local-only gate` の 5 段で追記した。
+- あわせて artifact に残す最低限の判定項目を整理し、completion bar が「JRA を上回ること」ではなく「別 universe を再現可能にすること」であると明示した。
+- これにより地方競馬 future option は、artifact lineage だけでなく benchmark 完了条件まで設計レベルで持つ状態になった。
+
 ## 6. 実行中の優先事項
 
-`current_tighter_policy_search_candidate_2025_latest` の `0.03/80` formalization は M17 で完了した。続いて seasonal / recent-heavy の運用境界整理、latest compare artifact map、actual-date compare 再開導線の同期監査、地方競馬 feasibility の設計チェックリストと artifact 方針の具体化まで完了した。
+`current_tighter_policy_search_candidate_2025_latest` の `0.03/80` formalization は M17 で完了した。続いて seasonal / recent-heavy の運用境界整理、latest compare artifact map、actual-date compare 再開導線の同期監査、地方競馬 feasibility の設計チェックリスト・artifact 方針・benchmark 完了条件の具体化まで完了した。
 
 以後の active priority は、public / internal docs の定期点検と future option の切り分けに絞る。
 
@@ -397,8 +403,8 @@
 
 ### N1. 地方競馬データ拡張の feasibility 深掘り
 
-- mixed 学習へ進む前に、地方-only benchmark の完了条件をどう置くかを整理する。
 - universe slug を config / artifact / revision にどう通すかを、必要なら実装前提まで下ろす。
+- local-only coverage snapshot / benchmark gate の payload schema を、必要なら script 仕様レベルへ下ろす。
 
 ### N2. docs の定期点検
 
