@@ -571,6 +571,11 @@
 - `run_mixed_universe_numeric_summary.py` の `promote_safe_summary`、`run_mixed_universe_left_gap_audit.py` の `summary`、`run_mixed_universe_left_recovery_plan.py` の `summary` も `requested_revision` と `resolved_left_*` を持つようにした。
 - `run_mixed_universe_status_board.py` の `phase_summaries` も同じ情報を段ごとに持つようにして、top-level を読まずに要約だけ見ても left-side の参照元を追えるようにした。
 
+### M69. status board の public snapshot 行も bridge 情報で埋めた
+
+- `run_mixed_universe_status_board.py` は `public_snapshot` payload 自身に `requested_revision` や `resolved_left_*` が無くても、board 文脈から `phase_summaries` の同項目を補完するようにした。
+- これで status board の全 phase 行を同じキー集合で読めるようになり、`public_snapshot` 行だけ `null` になる穴をなくした。
+
 ## 6. 実行中の優先事項
 
 `current_tighter_policy_search_candidate_2025_latest` の `0.03/80` formalization は M17 で完了した。続いて seasonal / recent-heavy の運用境界整理、latest compare artifact map、actual-date compare 再開導線の同期監査、地方競馬 feasibility の設計チェックリスト・artifact 方針・benchmark 完了条件・payload schema・CLI 引数契約・step/failure taxonomy の具体化、既存 `netkeiba_*` snapshot / gate への universe-aware 契約実装、local-only snapshot / gate 雛形の追加、local-only integrity / feature gap / evaluation 入口の追加、local-only orchestration manifest の追加、および local-only revision lineage の追加まで完了した。

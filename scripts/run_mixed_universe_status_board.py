@@ -53,17 +53,31 @@ def _phase_status(payload: dict[str, object] | None, status_keys: list[str]) -> 
     return "unknown"
 
 
-def _artifact_summary(label: str, path: Path, payload: dict[str, object] | None, status_keys: list[str]) -> dict[str, object]:
+def _artifact_summary(
+    label: str,
+    path: Path,
+    payload: dict[str, object] | None,
+    status_keys: list[str],
+    *,
+    requested_revision: str | None = None,
+    resolved_left_revision: str | None = None,
+    resolved_left_source_kind: str | None = None,
+    resolved_left_artifact: str | None = None,
+) -> dict[str, object]:
+    payload_requested_revision = payload.get("requested_revision") if isinstance(payload, dict) else None
+    payload_resolved_left_revision = payload.get("resolved_left_revision") if isinstance(payload, dict) else None
+    payload_resolved_left_source_kind = payload.get("resolved_left_source_kind") if isinstance(payload, dict) else None
+    payload_resolved_left_artifact = payload.get("resolved_left_artifact") if isinstance(payload, dict) else None
     return {
         "label": label,
         "path": artifact_display_path(path, workspace_root=ROOT),
         "exists": path.exists(),
         "status": _phase_status(payload, status_keys),
         "recommended_action": payload.get("recommended_action") if isinstance(payload, dict) else None,
-        "requested_revision": payload.get("requested_revision") if isinstance(payload, dict) else None,
-        "resolved_left_revision": payload.get("resolved_left_revision") if isinstance(payload, dict) else None,
-        "resolved_left_source_kind": payload.get("resolved_left_source_kind") if isinstance(payload, dict) else None,
-        "resolved_left_artifact": payload.get("resolved_left_artifact") if isinstance(payload, dict) else None,
+        "requested_revision": payload_requested_revision if payload_requested_revision is not None else requested_revision,
+        "resolved_left_revision": payload_resolved_left_revision if payload_resolved_left_revision is not None else resolved_left_revision,
+        "resolved_left_source_kind": payload_resolved_left_source_kind if payload_resolved_left_source_kind is not None else resolved_left_source_kind,
+        "resolved_left_artifact": payload_resolved_left_artifact if payload_resolved_left_artifact is not None else resolved_left_artifact,
     }
 
 
@@ -217,10 +231,20 @@ def main() -> int:
             return 0
 
         payloads = {key: _read_optional_payload(path) for key, path in paths.items()}
+        resolved_left_revision = (payloads.get("public_snapshot") or {}).get("revision") if isinstance(payloads.get("public_snapshot"), dict) else None
         resolved_left_source_kind = _resolved_left_source_kind(payloads)
         resolved_left_artifact = _resolved_left_artifact(paths["public_snapshot"], payloads.get("public_snapshot"))
         summaries = [
-            _artifact_summary("public_snapshot", paths["public_snapshot"], payloads["public_snapshot"], ["status", "lineage_status"]),
+            _artifact_summary(
+                "public_snapshot",
+                paths["public_snapshot"],
+                payloads["public_snapshot"],
+                ["status", "lineage_status"],
+                requested_revision=revision_slug,
+                resolved_left_revision=str(resolved_left_revision) if resolved_left_revision is not None else None,
+                resolved_left_source_kind=resolved_left_source_kind,
+                resolved_left_artifact=resolved_left_artifact,
+            ),
             _artifact_summary("readiness", paths["readiness"], payloads["readiness"], ["status"]),
             _artifact_summary("compare", paths["compare"], payloads["compare"], ["status", "compare_mode"]),
             _artifact_summary("schema", paths["schema"], payloads["schema"], ["status"]),
@@ -243,7 +267,7 @@ def main() -> int:
             "board_kind": "mixed_universe_status_board",
             "revision": revision_slug,
             "requested_revision": revision_slug,
-            "resolved_left_revision": (payloads.get("public_snapshot") or {}).get("revision") if isinstance(payloads.get("public_snapshot"), dict) else None,
+            "resolved_left_revision": resolved_left_revision,
             "resolved_left_source_kind": resolved_left_source_kind,
             "resolved_left_artifact": resolved_left_artifact,
             "left_universe": left_universe,
@@ -269,7 +293,7 @@ def main() -> int:
             "phase_summaries": summaries,
             "highlights": {
                 "requested_revision": revision_slug,
-                "resolved_left_revision": (payloads.get("public_snapshot") or {}).get("revision") if isinstance(payloads.get("public_snapshot"), dict) else None,
+                "resolved_left_revision": resolved_left_revision,
                 "resolved_left_source_kind": resolved_left_source_kind,
                 "resolved_left_artifact": resolved_left_artifact,
                 "numeric_summary_verdict": ((payloads.get("numeric_summary") or {}).get("promote_safe_summary", {}) or {}).get("verdict") if isinstance(payloads.get("numeric_summary"), dict) else None,
