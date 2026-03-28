@@ -105,6 +105,8 @@ schema の次は `mixed_universe_numeric_compare_<left_universe>_vs_<right_unive
 
 row ごとの情報を実行 plan にまとめたいときは `mixed_universe_left_recovery_plan_<left_universe>_vs_<right_universe>_<revision>.json` を使う。ここでは `run_revision_gate` や `run_local_evaluate` のような command を重複除去して、どの missing row 群を埋めるかを一段薄く読める。
 
+全部をまとめて 1 枚で見たいときは `mixed_universe_status_board_<left_universe>_vs_<right_universe>_<revision>.json` を使う。ここでは `current_phase` と `recommended_action` を先に見てから、必要なら各 layer の manifest に降りる。
+
 ### 5.2 latest 2025 の formal snapshot
 
 latest 2025 split で直近に formal に通過した run は次の 2 本である。

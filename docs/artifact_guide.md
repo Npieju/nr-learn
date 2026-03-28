@@ -156,3 +156,5 @@ numeric compare 本体は `artifacts/reports/mixed_universe_numeric_compare_<lef
 left 側の欠損原因を詰めたいときは `artifacts/reports/mixed_universe_left_gap_audit_<left_universe>_vs_<right_universe>_<revision>.json` を見る。ここでは `missing_left_rows` ごとに必要 source artifact、実在状況、local revision lineage に残っている command preview を並べる。
 
 実行順まで落としたいときは `artifacts/reports/mixed_universe_left_recovery_plan_<left_universe>_vs_<right_universe>_<revision>.json` を見る。ここでは gap audit の command preview を重複除去し、`required_for_rows` と必要 artifact path を付けて並べる。
+
+全体の現在地を 1 本で見たいときは `artifacts/reports/mixed_universe_status_board_<left_universe>_vs_<right_universe>_<revision>.json` を置いてよい。ここでは `current_phase`, `next_action_source`, `recommended_action`, `phase_summaries` と、summary / audit / recovery の主要 severity をまとめる。
