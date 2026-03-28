@@ -20,6 +20,7 @@ DEFAULT_BASELINE_REFERENCE = "current_recommended_serving_2025_latest"
 DEFAULT_RACE_RESULT_PATH = "data/external/local_nankan/results/local_race_result.csv"
 DEFAULT_RACE_CARD_PATH = "data/external/local_nankan/racecard/local_racecard.csv"
 DEFAULT_PEDIGREE_PATH = "data/external/local_nankan/pedigree/local_pedigree.csv"
+DEFAULT_PREFLIGHT_OUTPUT = "artifacts/reports/data_preflight_local_nankan.json"
 
 
 def main() -> int:
@@ -41,6 +42,7 @@ def main() -> int:
     parser.add_argument("--race-result-path", default=DEFAULT_RACE_RESULT_PATH)
     parser.add_argument("--race-card-path", default=DEFAULT_RACE_CARD_PATH)
     parser.add_argument("--pedigree-path", default=DEFAULT_PEDIGREE_PATH)
+    parser.add_argument("--preflight-output", default=DEFAULT_PREFLIGHT_OUTPUT)
     parser.add_argument("--skip-train", action="store_true")
     parser.add_argument("--skip-evaluate", action="store_true")
     args = parser.parse_args()
@@ -80,6 +82,8 @@ def main() -> int:
         args.race_card_path,
         "--pedigree-path",
         args.pedigree_path,
+        "--preflight-output",
+        args.preflight_output,
     ]
     if args.pre_feature_max_rows is not None:
         command.extend(["--pre-feature-max-rows", str(args.pre_feature_max_rows)])

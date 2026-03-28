@@ -223,6 +223,8 @@ netkeiba 系は lock 待機、収集、backfill、gate 実行の各段で heartb
 
 さらに local-only の最小雛形として、`configs/data_local_nankan.yaml`、`configs/model_local_baseline.yaml`、`configs/features_local_baseline.yaml` と、`run_local_coverage_snapshot.py` / `run_local_benchmark_gate.py` を置いた。ここでは real local data の存在を前提にせず、artifact 名、source path、baseline reference を JRA 系から分離した状態で smoke できるところまでを入口にしている。
 
+`run_local_benchmark_gate.py` は現在、source preflight も先に実行する。ここで `data_preflight_<revision>.json` または `data_preflight_local_nankan.json` を通して raw dir / primary CSV / required source table の不足を早期に `not_ready` として返し、snapshot 深部の `No CSV files found ...` まで潜らなくても停止理由を読める。
+
 その次段として、`run_local_data_source_validation.py`、`run_local_feature_gap_report.py`、`run_local_evaluate.py` も追加した。validation / feature gap は local-only artifact 名へ直接出し、evaluation は既存 `run_evaluate.py` の versioned output を再利用しつつ `evaluation_local_nankan_pointer.json` で local-only 側の入口を固定する。
 
 さらに `run_local_feasibility_manifest.py` を追加し、readiness snapshot、data integrity、feature gap、evaluation pointer を fail-fast で直列実行しつつ、`local_feasibility_manifest_local_nankan.json` から停止点と artifact lineage をまとめて読めるようにした。

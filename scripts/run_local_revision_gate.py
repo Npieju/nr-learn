@@ -162,6 +162,7 @@ def main() -> int:
     parser.add_argument("--benchmark-manifest-output", default=None)
     parser.add_argument("--snapshot-output", default=None)
     parser.add_argument("--evaluation-pointer-output", default=None)
+    parser.add_argument("--data-preflight-output", default=None)
     parser.add_argument("--promotion-output", default=None)
     parser.add_argument("--revision-manifest-output", default=None)
     parser.add_argument("--wf-summary-output", default=None)
@@ -172,6 +173,7 @@ def main() -> int:
     revision_slug = _normalize_revision_slug(revision_value)
     snapshot_output = args.snapshot_output or f"artifacts/reports/coverage_snapshot_{revision_slug}.json"
     benchmark_manifest_output = args.benchmark_manifest_output or f"artifacts/reports/benchmark_gate_{revision_slug}.json"
+    data_preflight_output = args.data_preflight_output or f"artifacts/reports/data_preflight_{revision_slug}.json"
     evaluation_pointer_output = args.evaluation_pointer_output or f"artifacts/reports/evaluation_{revision_slug}_pointer.json"
     promotion_output = args.promotion_output or f"artifacts/reports/promotion_gate_{revision_slug}.json"
     revision_manifest_output = args.revision_manifest_output or f"artifacts/reports/revision_gate_{revision_slug}.json"
@@ -181,6 +183,7 @@ def main() -> int:
     lineage_path = _resolve_path(lineage_output)
     snapshot_path = _resolve_path(snapshot_output)
     benchmark_manifest_path = _resolve_path(benchmark_manifest_output)
+    data_preflight_path = _resolve_path(data_preflight_output)
     evaluation_pointer_path = _resolve_path(evaluation_pointer_output)
     promotion_path = _resolve_path(promotion_output)
     revision_manifest_path = _resolve_path(revision_manifest_output)
@@ -215,6 +218,7 @@ def main() -> int:
         "artifacts": {
             "snapshot": artifact_display_path(snapshot_path, workspace_root=ROOT),
             "benchmark_manifest": artifact_display_path(benchmark_manifest_path, workspace_root=ROOT),
+            "data_preflight": artifact_display_path(data_preflight_path, workspace_root=ROOT),
             "evaluation_pointer": artifact_display_path(evaluation_pointer_path, workspace_root=ROOT),
             "promotion_output": artifact_display_path(promotion_path, workspace_root=ROOT),
             "revision_manifest": artifact_display_path(revision_manifest_path, workspace_root=ROOT),
@@ -245,6 +249,8 @@ def main() -> int:
             snapshot_output,
             "--manifest-output",
             benchmark_manifest_output,
+            "--preflight-output",
+            data_preflight_output,
             "--max-rows",
             str(args.evaluate_max_rows),
             "--universe",
@@ -269,16 +275,19 @@ def main() -> int:
                 benchmark_result = _run_command(benchmark_command, label="benchmark_gate")
             payload["benchmark_gate"] = benchmark_result
             benchmark_payload = _read_optional_json(benchmark_manifest_path)
+            data_preflight_payload = _read_optional_json(data_preflight_path)
             if benchmark_payload is not None:
                 payload["benchmark_gate_payload"] = benchmark_payload
+            if data_preflight_payload is not None:
+                payload["data_preflight_payload"] = data_preflight_payload
             if int(benchmark_result["exit_code"]) != 0:
                 error_code = "benchmark_gate_blocked" if int(benchmark_result["exit_code"]) == 2 else "benchmark_gate_failed"
                 _set_failure(
                     payload,
-                    status="benchmark_gate_failed",
+                    status="benchmark_gate_blocked" if int(benchmark_result["exit_code"]) == 2 else "benchmark_gate_failed",
                     error_code=error_code,
                     error_message="local benchmark gate returned non-zero exit code",
-                    recommended_action="inspect_local_benchmark_gate",
+                    recommended_action=str((benchmark_payload or {}).get("recommended_action") or "inspect_local_benchmark_gate"),
                 )
                 _safe_write_manifest(lineage_path, payload)
                 return int(benchmark_result["exit_code"]) or 1

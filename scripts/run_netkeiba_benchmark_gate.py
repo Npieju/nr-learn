@@ -14,7 +14,9 @@ if str(SRC) not in sys.path:
 from racing_ml.common.artifacts import display_path as artifact_display_path
 from racing_ml.common.artifacts import ensure_output_file_path as artifact_ensure_output_file_path
 from racing_ml.common.artifacts import read_json, utc_now_iso, write_json
+from racing_ml.common.config import load_yaml
 from racing_ml.common.progress import Heartbeat, ProgressBar
+from racing_ml.data.dataset_loader import inspect_dataset_sources
 
 
 DEFAULT_UNIVERSE = "jra"
@@ -23,6 +25,100 @@ DEFAULT_SCHEMA_VERSION = "netkeiba.benchmark_gate.v1"
 DEFAULT_RACE_RESULT_PATH = "data/external/netkeiba/results/netkeiba_race_result_crawled.csv"
 DEFAULT_RACE_CARD_PATH = "data/external/netkeiba/racecard/netkeiba_racecard_crawled.csv"
 DEFAULT_PEDIGREE_PATH = "data/external/netkeiba/pedigree/netkeiba_pedigree_crawled.csv"
+
+
+def _healthy_table_status(status: object, *, optional: bool) -> bool:
+    normalized = str(status or "")
+    if normalized == "ok":
+        return True
+    return optional and normalized == "optional_missing"
+
+
+def _recommended_action_for_primary(report: dict[str, object]) -> str:
+    if not bool(report.get("raw_dir_exists")):
+        return "populate_primary_raw_dir"
+    return "add_primary_csv_to_raw_dir"
+
+
+def _preflight_readiness(report: dict[str, object]) -> tuple[str, str | None, str | None, dict[str, object]]:
+    primary = report.get("primary_dataset") if isinstance(report.get("primary_dataset"), dict) else {}
+    append_tables = [row for row in (report.get("append_tables") or []) if isinstance(row, dict)]
+    supplemental_tables = [row for row in (report.get("supplemental_tables") or []) if isinstance(row, dict)]
+
+    missing_required_append = [
+        str(row.get("name") or "")
+        for row in append_tables
+        if not _healthy_table_status(row.get("status"), optional=bool(row.get("optional")))
+    ]
+    missing_required_supplemental = [
+        str(row.get("name") or "")
+        for row in supplemental_tables
+        if not _healthy_table_status(row.get("status"), optional=bool(row.get("optional")))
+    ]
+
+    readiness = {
+        "benchmark_rerun_ready": True,
+        "recommended_action": "run_local_benchmark",
+        "reasons": [],
+        "primary_dataset_status": primary.get("status"),
+        "missing_required_append_tables": missing_required_append,
+        "missing_required_supplemental_tables": missing_required_supplemental,
+    }
+
+    if str(primary.get("status") or "") != "ok":
+        readiness["benchmark_rerun_ready"] = False
+        readiness["recommended_action"] = _recommended_action_for_primary(report)
+        readiness["reasons"] = [str(primary.get("error") or "primary dataset is missing")]
+        return "not_ready", "primary_dataset_missing", str(primary.get("error") or "primary dataset is missing"), readiness
+
+    if missing_required_append:
+        readiness["benchmark_rerun_ready"] = False
+        readiness["recommended_action"] = "populate_required_append_tables"
+        readiness["reasons"] = [f"required append tables missing: {', '.join(missing_required_append)}"]
+        return "not_ready", "required_append_tables_missing", readiness["reasons"][0], readiness
+
+    if missing_required_supplemental:
+        readiness["benchmark_rerun_ready"] = False
+        readiness["recommended_action"] = "populate_required_supplemental_tables"
+        readiness["reasons"] = [f"required supplemental tables missing: {', '.join(missing_required_supplemental)}"]
+        return "not_ready", "required_supplemental_tables_missing", readiness["reasons"][0], readiness
+
+    return "ready", None, None, readiness
+
+
+def _build_preflight_payload(
+    *,
+    config_path: str,
+    universe: str,
+    source_scope: str,
+    baseline_reference: str | None,
+    output_path: Path,
+    report: dict[str, object],
+    status: str,
+    error_code: str | None,
+    error_message: str | None,
+    recommended_action: str | None,
+    readiness: dict[str, object],
+) -> dict[str, object]:
+    return {
+        "started_at": utc_now_iso(),
+        "finished_at": utc_now_iso(),
+        "status": status,
+        "completed_step": "completed",
+        "artifact_type": "dataset_source_preflight",
+        "config": config_path,
+        "universe": universe,
+        "source_scope": source_scope,
+        "baseline_reference": baseline_reference,
+        "error_code": error_code,
+        "error_message": error_message,
+        "recommended_action": recommended_action,
+        "artifacts": {
+            "preflight_manifest": artifact_display_path(output_path, workspace_root=ROOT),
+        },
+        "readiness": readiness,
+        "source_report": report,
+    }
 
 
 def _set_step(payload: dict[str, object], step_name: str) -> None:
@@ -103,12 +199,14 @@ def main() -> int:
     parser.add_argument("--race-result-path", default=DEFAULT_RACE_RESULT_PATH)
     parser.add_argument("--race-card-path", default=DEFAULT_RACE_CARD_PATH)
     parser.add_argument("--pedigree-path", default=DEFAULT_PEDIGREE_PATH)
+    parser.add_argument("--preflight-output", default=None)
     parser.add_argument("--skip-train", action="store_true")
     parser.add_argument("--skip-evaluate", action="store_true")
     args = parser.parse_args()
 
     manifest_path = _resolve_path(args.manifest_output)
     snapshot_path = _resolve_path(args.snapshot_output)
+    preflight_path = _resolve_path(args.preflight_output) if args.preflight_output else None
     universe = DEFAULT_UNIVERSE
     source_scope = DEFAULT_SOURCE_SCOPE
     schema_version = DEFAULT_SCHEMA_VERSION
@@ -140,6 +238,7 @@ def main() -> int:
             "race_result_path": args.race_result_path,
             "race_card_path": args.race_card_path,
             "pedigree_path": args.pedigree_path,
+            "preflight_output": artifact_display_path(preflight_path, workspace_root=ROOT) if preflight_path is not None else None,
         },
     }
 
@@ -159,11 +258,60 @@ def main() -> int:
         _set_step(payload, "init_manifest")
         artifact_ensure_output_file_path(manifest_path, label="manifest output", workspace_root=ROOT)
         artifact_ensure_output_file_path(snapshot_path, label="snapshot output", workspace_root=ROOT)
+        if preflight_path is not None:
+            artifact_ensure_output_file_path(preflight_path, label="preflight output", workspace_root=ROOT)
         _safe_write_manifest(manifest_path, payload)
 
-        total_steps = 3 + int(not args.skip_train) + int(not args.skip_evaluate)
+        total_steps = 3 + int(preflight_path is not None) + int(not args.skip_train) + int(not args.skip_evaluate)
         progress = ProgressBar(total=total_steps, prefix="[netkeiba-benchmark-gate]", logger=log_progress, min_interval_sec=0.0)
         progress.start(message="gate manifest initialized")
+
+        if preflight_path is not None:
+            _set_step(payload, "preflight_sources")
+            data_cfg = load_yaml(ROOT / args.data_config)
+            dataset_cfg = data_cfg.get("dataset", {}) if isinstance(data_cfg, dict) else {}
+            raw_dir = dataset_cfg.get("raw_dir", "data/raw") if isinstance(dataset_cfg, dict) else "data/raw"
+            with Heartbeat("[netkeiba-benchmark-gate]", "running source preflight", logger=log_progress):
+                preflight_report = inspect_dataset_sources(raw_dir, dataset_config=dataset_cfg, base_dir=ROOT)
+            preflight_status, preflight_error_code, preflight_error_message, preflight_readiness = _preflight_readiness(preflight_report)
+            preflight_payload = _build_preflight_payload(
+                config_path=args.data_config,
+                universe=universe,
+                source_scope=source_scope,
+                baseline_reference=baseline_reference,
+                output_path=preflight_path,
+                report=preflight_report,
+                status=preflight_status,
+                error_code=preflight_error_code,
+                error_message=preflight_error_message,
+                recommended_action=preflight_readiness.get("recommended_action") if isinstance(preflight_readiness, dict) else None,
+                readiness=preflight_readiness,
+            )
+            write_json(preflight_path, preflight_payload)
+            payload["preflight"] = {
+                "status": preflight_status,
+                "output": artifact_display_path(preflight_path, workspace_root=ROOT),
+            }
+            payload["preflight_payload"] = preflight_payload
+            payload["readiness"] = preflight_readiness
+            if preflight_status != "ready":
+                _set_failure(
+                    payload,
+                    status="not_ready",
+                    error_code=str(preflight_error_code or "source_preflight_not_ready"),
+                    error_message=str(preflight_error_message or "source preflight reported not ready"),
+                    recommended_action=str(preflight_readiness.get("recommended_action") or "inspect_source_preflight"),
+                )
+                _safe_write_manifest(manifest_path, payload)
+                progress.complete(message="source preflight says not ready")
+                print(
+                    "[netkeiba-benchmark-gate] "
+                    f"preflight not ready: action={preflight_readiness.get('recommended_action')} reasons={preflight_readiness.get('reasons')}",
+                    flush=True,
+                )
+                return 2
+            progress.update(message="source preflight completed")
+
         _set_step(payload, "run_snapshot")
         snapshot_command = [
             sys.executable,
@@ -327,6 +475,9 @@ def main() -> int:
             "missing_universe",
             "missing_source_scope",
             "missing_schema_version",
+            "primary_dataset_missing",
+            "required_append_tables_missing",
+            "required_supplemental_tables_missing",
         }:
             error_code = "invalid_output_path" if isinstance(error, IsADirectoryError) else "gate_failed"
             message = error_text

@@ -503,6 +503,12 @@
 - wrapper は `local_revision_gate -> local_public_snapshot -> readiness -> compare -> schema -> numeric compare -> numeric summary -> left gap audit -> left recovery plan -> status board` を既存 artifact path へ書き戻しながら実行し、partial のままでも最新停止点まで更新する。
 - これにより mixed compare の left-side recovery は、plan を読む段階から実行と board 再同期まで一貫した CLI を持つようになった。
 
+### M56. local benchmark の source preflight を追加した
+
+- `run_netkeiba_benchmark_gate.py` に optional な source preflight を追加し、`inspect_dataset_sources` を使って raw dir / primary CSV / required table の不足を snapshot 前に `not_ready` として返せるようにした。
+- `run_local_benchmark_gate.py` と `run_local_revision_gate.py` はこの preflight を使うように更新し、`data_preflight_<revision>.json` を lineage artifact に含めるようにした。
+- これにより local-only recovery は、`No CSV files found ...` の深い失敗ではなく、早期の `primary_dataset_missing` と `recommended_action` で停止点を読めるようになった。
+
 ## 6. 実行中の優先事項
 
 `current_tighter_policy_search_candidate_2025_latest` の `0.03/80` formalization は M17 で完了した。続いて seasonal / recent-heavy の運用境界整理、latest compare artifact map、actual-date compare 再開導線の同期監査、地方競馬 feasibility の設計チェックリスト・artifact 方針・benchmark 完了条件・payload schema・CLI 引数契約・step/failure taxonomy の具体化、既存 `netkeiba_*` snapshot / gate への universe-aware 契約実装、local-only snapshot / gate 雛形の追加、local-only integrity / feature gap / evaluation 入口の追加、local-only orchestration manifest の追加、および local-only revision lineage の追加まで完了した。
