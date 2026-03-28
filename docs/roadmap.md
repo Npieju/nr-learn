@@ -365,9 +365,15 @@
 - さらに、最小チェックリストと非推奨な始め方を明記し、JRA-only baseline を壊さずに feasibility を切る順序を具体化した。
 - これにより地方競馬は「将来候補」という抽象表現から、着手前に確認すべき設計項目を持つ future option へ進んだ。
 
+### M33. 地方-only snapshot / gate artifact 方針の具体化
+
+- `data_extension.md` に、地方-only coverage snapshot と benchmark gate manifest を JRA 既存 artifact から分離する命名方針を追記した。
+- 具体例として config / snapshot / gate / revision に共通の universe slug を入れるルールを示し、JRA-only / local-only / mixed の lineage を名前で追跡できる形にした。
+- `artifact_guide.md` にも同じ方針を補足し、外部データ universe 拡張時に latest JRA artifact を上書きしない原則を明記した。
+
 ## 6. 実行中の優先事項
 
-`current_tighter_policy_search_candidate_2025_latest` の `0.03/80` formalization は M17 で完了した。続いて seasonal / recent-heavy の運用境界整理、latest compare artifact map、actual-date compare 再開導線の同期監査、地方競馬 feasibility の設計チェックリスト具体化まで完了した。
+`current_tighter_policy_search_candidate_2025_latest` の `0.03/80` formalization は M17 で完了した。続いて seasonal / recent-heavy の運用境界整理、latest compare artifact map、actual-date compare 再開導線の同期監査、地方競馬 feasibility の設計チェックリストと artifact 方針の具体化まで完了した。
 
 以後の active priority は、public / internal docs の定期点検と future option の切り分けに絞る。
 
@@ -391,8 +397,8 @@
 
 ### N1. 地方競馬データ拡張の feasibility 深掘り
 
-- 地方-only coverage snapshot / benchmark gate をどう artifact 化するかを、必要なら次に具体化する。
 - mixed 学習へ進む前に、地方-only benchmark の完了条件をどう置くかを整理する。
+- universe slug を config / artifact / revision にどう通すかを、必要なら実装前提まで下ろす。
 
 ### N2. docs の定期点検
 
