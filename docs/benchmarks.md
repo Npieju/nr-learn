@@ -101,6 +101,8 @@ schema の次は `mixed_universe_numeric_compare_<left_universe>_vs_<right_unive
 
 さらに判断を急がず要点だけを見たいときは `mixed_universe_numeric_summary_<left_universe>_vs_<right_universe>_<revision>.json` を使う。ここでは `evidence_incomplete` のような verdict に加えて `severity` と `notes` も読み、promote 判定とは切り分けて扱う。
 
+`missing_left_rows` の中身を具体的に潰したいときは `mixed_universe_left_gap_audit_<left_universe>_vs_<right_universe>_<revision>.json` に進む。ここでは各 row に必要な left artifact と command preview が出るので、次にどの local lineage step を実行すべきかを機械的に読める。
+
 ### 5.2 latest 2025 の formal snapshot
 
 latest 2025 split で直近に formal に通過した run は次の 2 本である。

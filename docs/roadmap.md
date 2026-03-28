@@ -479,6 +479,12 @@
 - `evidence_incomplete` では missing 比率に応じて `moderate` / `severe` を返し、numeric compare を promotion evidence とみなさない note も残すようにした。
 - これにより summary は verdict だけでなく、停止強度と実務上の読み方まで 1 枚で伝えられるようになった。
 
+### M52. mixed-universe left gap audit を追加した
+
+- `run_mixed_universe_left_gap_audit.py` を追加し、numeric compare の `missing_left_rows` を local revision lineage と突き合わせて、必要 source artifact と command preview を row ごとに追えるようにした。
+- audit summary では `rows_missing_all_sources`, `rows_with_planned_commands`, `severity`, `notes` を持たせ、left formal metrics がなぜ埋まっていないかを一段深く読めるようにした。
+- これにより mixed compare の左側欠損は、summary で止まらず source gap まで manifest で追跡できるようになった。
+
 ## 6. 実行中の優先事項
 
 `current_tighter_policy_search_candidate_2025_latest` の `0.03/80` formalization は M17 で完了した。続いて seasonal / recent-heavy の運用境界整理、latest compare artifact map、actual-date compare 再開導線の同期監査、地方競馬 feasibility の設計チェックリスト・artifact 方針・benchmark 完了条件・payload schema・CLI 引数契約・step/failure taxonomy の具体化、既存 `netkeiba_*` snapshot / gate への universe-aware 契約実装、local-only snapshot / gate 雛形の追加、local-only integrity / feature gap / evaluation 入口の追加、local-only orchestration manifest の追加、および local-only revision lineage の追加まで完了した。
@@ -506,7 +512,7 @@
 ### N1. 地方競馬データ拡張の feasibility 深掘り
 
 - universe slug を config / artifact / revision にどう通すかを、必要なら実装前提まで下ろす。
-- summary の severity / notes までは入ったので、next は left formal metrics が埋まった時に row 欠損がどこまで解消されるかを追う。
+- left gap audit までは入ったので、next は left formal metrics が埋まった時に row 欠損がどこまで解消されるかを追う。
 
 ### N2. docs の定期点検
 

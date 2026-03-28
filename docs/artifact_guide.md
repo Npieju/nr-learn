@@ -152,3 +152,5 @@ numeric compare 本体は `artifacts/reports/mixed_universe_numeric_compare_<lef
 一覧確認用には `artifacts/reports/mixed_universe_numeric_compare_<left_universe>_vs_<right_universe>_<revision>.csv` も併せて出してよい。CSV には `name`, `left_value`, `right_value`, `delta_left_minus_right`, `delta_direction`, `comparison_status` を最低限並べる。
 
 判読用には `artifacts/reports/mixed_universe_numeric_summary_<left_universe>_vs_<right_universe>_<revision>.json` を置いてよい。ここでは row 全件を再掲せず、`verdict`, `severity`, `missing_left_rows`, `missing_right_rows`, `positive_rows`, `negative_rows`, `notes`, `recommended_action` のような summary だけを持たせる。
+
+left 側の欠損原因を詰めたいときは `artifacts/reports/mixed_universe_left_gap_audit_<left_universe>_vs_<right_universe>_<revision>.json` を見る。ここでは `missing_left_rows` ごとに必要 source artifact、実在状況、local revision lineage に残っている command preview を並べる。
