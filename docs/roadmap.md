@@ -467,6 +467,12 @@
 - numeric 行には `delta_direction` も付け、positive / negative / zero / unknown を一目で確認できるようにした。
 - これにより partial compare の欠損確認と、将来 left formal metrics が埋まった後の差分レビューが軽くなった。
 
+### M50. mixed-universe numeric summary を追加した
+
+- `run_mixed_universe_numeric_summary.py` を追加し、numeric compare manifest から promote-safe な summary manifest を生成できるようにした。
+- summary では `verdict`, `missing_left_rows`, `missing_right_rows`, numeric delta の正負行を要約し、row 全件を読まずに停止理由と差分方向を追えるようにした。
+- これにより mixed compare の最上段に、人間向けの薄い判読レイヤを 1 枚追加できた。
+
 ## 6. 実行中の優先事項
 
 `current_tighter_policy_search_candidate_2025_latest` の `0.03/80` formalization は M17 で完了した。続いて seasonal / recent-heavy の運用境界整理、latest compare artifact map、actual-date compare 再開導線の同期監査、地方競馬 feasibility の設計チェックリスト・artifact 方針・benchmark 完了条件・payload schema・CLI 引数契約・step/failure taxonomy の具体化、既存 `netkeiba_*` snapshot / gate への universe-aware 契約実装、local-only snapshot / gate 雛形の追加、local-only integrity / feature gap / evaluation 入口の追加、local-only orchestration manifest の追加、および local-only revision lineage の追加まで完了した。
@@ -494,7 +500,7 @@
 ### N1. 地方競馬データ拡張の feasibility 深掘り
 
 - universe slug を config / artifact / revision にどう通すかを、必要なら実装前提まで下ろす。
-- numeric compare の CSV までは入ったので、next は promote-safe な判読 summary を追加するか、left formal metrics が埋まった時に row 欠損がどこまで解消されるかを追う。
+- promote-safe な判読 summary までは入ったので、next は left formal metrics が埋まった時に row 欠損がどこまで解消されるかを追うか、summary に threshold-based な note を足す。
 
 ### N2. docs の定期点検
 

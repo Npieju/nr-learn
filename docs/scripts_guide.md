@@ -202,6 +202,8 @@ serving 系の重い script は、smoke 本体、replay、bankroll sweep、dashb
   - JRA latest baseline の public benchmark を machine-readable な reference manifest に切り出す入口。
 - [../scripts/run_mixed_universe_numeric_compare.py](../scripts/run_mixed_universe_numeric_compare.py)
   - mixed readiness / compare / schema と right-side reference manifest を受け、row 単位の left/right 値と delta を numeric compare manifest / CSV に落とす入口。
+- [../scripts/run_mixed_universe_numeric_summary.py](../scripts/run_mixed_universe_numeric_summary.py)
+  - numeric compare manifest から promote-safe な要点だけを summary manifest に落とす入口。
 - [../scripts/run_netkeiba_wait_then_cycle.py](../scripts/run_netkeiba_wait_then_cycle.py)
   - 待機と再試行を含む連続運転に使う。
 
@@ -230,6 +232,8 @@ mixed-universe 比較も `run_mixed_universe_compare.py` を追加して、`mixe
 right 側の JRA baseline については `run_public_benchmark_reference.py` も追加し、promotion / revision / evaluation artifact から `public_benchmark_reference_<reference>.json` を生成できるようにした。mixed compare/readiness/schema はこの JSON を right-side の machine-readable reference として参照してよい。
 
 その次段として `run_mixed_universe_numeric_compare.py` を追加し、schema manifest の row 名を基準に left/right の値を解決して `mixed_universe_numeric_compare_<left_universe>_vs_<right_universe>_<revision>.json` と CSV を出せるようにした。left 値が未整備の行は `missing_left_value` として残し、取得できた numeric 行だけ `delta_left_minus_right` と `delta_direction` を計算する。
+
+さらに `run_mixed_universe_numeric_summary.py` を追加し、numeric compare から `verdict`, `missing_left_rows`, `missing_right_rows`, `positive_rows`, `negative_rows` を promote-safe にまとめた `mixed_universe_numeric_summary_<left_universe>_vs_<right_universe>_<revision>.json` を出せるようにした。
 
 step 名も既存 gate の読み方に寄せてあり、snapshot 側は `load_config -> load_source_tables -> compute_alignment -> compute_coverage -> write_snapshot`、gate 側は `init_manifest -> run_snapshot -> validate_readiness -> run_train -> run_evaluate -> write_manifest` を基本系列として読める。
 

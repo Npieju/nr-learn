@@ -99,6 +99,8 @@ right 側 JRA baseline は `public_benchmark_reference_<reference>.json` を mac
 
 schema の次は `mixed_universe_numeric_compare_<left_universe>_vs_<right_universe>_<revision>.json` を見る。この manifest では row ごとに left/right の値を並べ、numeric な行だけ `delta_left_minus_right` を持たせる。left が未整備の行は compare を止めずに `missing_left_value` として残す。ざっと一覧したいときは同名 stem の CSV を見る。
 
+さらに判断を急がず要点だけを見たいときは `mixed_universe_numeric_summary_<left_universe>_vs_<right_universe>_<revision>.json` を使う。ここでは `evidence_incomplete` のような verdict と欠損行、正負の delta 行だけを読み、promote 判定とは切り分けて扱う。
+
 ### 5.2 latest 2025 の formal snapshot
 
 latest 2025 split で直近に formal に通過した run は次の 2 本である。
