@@ -186,6 +186,8 @@ serving 系の重い script は、smoke 本体、replay、bankroll sweep、dashb
   - local-only universe 用に feature gap summary / coverage CSV を別名出力する wrapper。
 - [../scripts/run_local_evaluate.py](../scripts/run_local_evaluate.py)
   - local-only evaluation 実行後に、versioned output へのポインタ manifest を別名で残す wrapper。
+- [../scripts/run_local_feasibility_manifest.py](../scripts/run_local_feasibility_manifest.py)
+  - snapshot / validation / feature gap / evaluation pointer を 1 本の orchestration manifest に束ねる入口。
 - [../scripts/run_netkeiba_wait_then_cycle.py](../scripts/run_netkeiba_wait_then_cycle.py)
   - 待機と再試行を含む連続運転に使う。
 
@@ -198,6 +200,8 @@ netkeiba 系は lock 待機、収集、backfill、gate 実行の各段で heartb
 さらに local-only の最小雛形として、`configs/data_local_nankan.yaml`、`configs/model_local_baseline.yaml`、`configs/features_local_baseline.yaml` と、`run_local_coverage_snapshot.py` / `run_local_benchmark_gate.py` を置いた。ここでは real local data の存在を前提にせず、artifact 名、source path、baseline reference を JRA 系から分離した状態で smoke できるところまでを入口にしている。
 
 その次段として、`run_local_data_source_validation.py`、`run_local_feature_gap_report.py`、`run_local_evaluate.py` も追加した。validation / feature gap は local-only artifact 名へ直接出し、evaluation は既存 `run_evaluate.py` の versioned output を再利用しつつ `evaluation_local_nankan_pointer.json` で local-only 側の入口を固定する。
+
+さらに `run_local_feasibility_manifest.py` を追加し、readiness snapshot、data integrity、feature gap、evaluation pointer を fail-fast で直列実行しつつ、`local_feasibility_manifest_local_nankan.json` から停止点と artifact lineage をまとめて読めるようにした。
 
 step 名も既存 gate の読み方に寄せてあり、snapshot 側は `load_config -> load_source_tables -> compute_alignment -> compute_coverage -> write_snapshot`、gate 側は `init_manifest -> run_snapshot -> validate_readiness -> run_train -> run_evaluate -> write_manifest` を基本系列として読める。
 

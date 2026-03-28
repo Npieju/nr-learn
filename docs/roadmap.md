@@ -413,9 +413,15 @@
 - `run_local_feature_gap_report.py` を追加し、feature gap summary / feature coverage / raw coverage を `local_nankan` 名義の artifact へ固定出力できるようにした。
 - `run_local_evaluate.py` を追加し、既存 `run_evaluate.py` の versioned output を再利用しつつ、local-only 側では `evaluation_local_nankan_pointer.json` から evaluation artifact lineage を辿れるようにした。
 
+### M41. local-only orchestration manifest の追加
+
+- `run_local_feasibility_manifest.py` を追加し、readiness snapshot、data validation、feature gap、evaluation pointer を fail-fast で直列実行できるようにした。
+- 同 script は `local_feasibility_manifest_local_nankan.json` に `completed_step`, `error_code`, `recommended_action`, 各 step command / exit_code / artifact path を残し、local-only feasibility の停止点を 1 本で追えるようにする。
+- これにより local-only wrapper 群は単発 CLI の集合から、次の orchestration 単位で読める実装スケルトンへ進んだ。
+
 ## 6. 実行中の優先事項
 
-`current_tighter_policy_search_candidate_2025_latest` の `0.03/80` formalization は M17 で完了した。続いて seasonal / recent-heavy の運用境界整理、latest compare artifact map、actual-date compare 再開導線の同期監査、地方競馬 feasibility の設計チェックリスト・artifact 方針・benchmark 完了条件・payload schema・CLI 引数契約・step/failure taxonomy の具体化、既存 `netkeiba_*` snapshot / gate への universe-aware 契約実装、local-only snapshot / gate 雛形の追加、および local-only integrity / feature gap / evaluation 入口の追加まで完了した。
+`current_tighter_policy_search_candidate_2025_latest` の `0.03/80` formalization は M17 で完了した。続いて seasonal / recent-heavy の運用境界整理、latest compare artifact map、actual-date compare 再開導線の同期監査、地方競馬 feasibility の設計チェックリスト・artifact 方針・benchmark 完了条件・payload schema・CLI 引数契約・step/failure taxonomy の具体化、既存 `netkeiba_*` snapshot / gate への universe-aware 契約実装、local-only snapshot / gate 雛形の追加、local-only integrity / feature gap / evaluation 入口の追加、および local-only orchestration manifest の追加まで完了した。
 
 以後の active priority は、public / internal docs の定期点検と future option の切り分けに絞る。
 
@@ -440,7 +446,7 @@
 ### N1. 地方競馬データ拡張の feasibility 深掘り
 
 - universe slug を config / artifact / revision にどう通すかを、必要なら実装前提まで下ろす。
-- local-only wrapper から先に進めるなら、next は readiness / validation / feature gap / evaluation pointer を束ねる orchestration manifest を切る。
+- local-only orchestration から先に進めるなら、next は benchmark gate / evaluation pointer / future local revision slug を 1 lineage へまとめる。
 
 ### N2. docs の定期点検
 
