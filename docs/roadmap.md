@@ -395,9 +395,15 @@
 - あわせて operator error / readiness block / execution failure の 3 層で failure taxonomy を整理し、`status`, `completed_step`, `error_code`, `recommended_action` の最小 contract を固定した。
 - `scripts_guide.md` にも step 系列を補足し、将来 CLI を足すときの進捗表示と停止点の読み方を揃えた。
 
+### M38. `netkeiba_*` snapshot / gate の universe-aware 契約実装
+
+- `run_netkeiba_coverage_snapshot.py` に `universe`, `source-scope`, `baseline-reference`, `schema-version` を追加し、snapshot payload に `status`, `completed_step`, `coverage_summary`, `integrity_summary`, `error_code`, `recommended_action` を残せるようにした。
+- `run_netkeiba_benchmark_gate.py` にも同じ 4 引数を追加し、snapshot / readiness / train / evaluate の停止点を `completed_step` と error vocabulary で読めるようにした。
+- これにより local-only CLI を新設する前に、既存 `netkeiba_*` 系で universe-aware payload 契約と fail-fast 読み筋を先に検証できる状態になった。
+
 ## 6. 実行中の優先事項
 
-`current_tighter_policy_search_candidate_2025_latest` の `0.03/80` formalization は M17 で完了した。続いて seasonal / recent-heavy の運用境界整理、latest compare artifact map、actual-date compare 再開導線の同期監査、地方競馬 feasibility の設計チェックリスト・artifact 方針・benchmark 完了条件・payload schema・CLI 引数契約・step/failure taxonomy の具体化まで完了した。
+`current_tighter_policy_search_candidate_2025_latest` の `0.03/80` formalization は M17 で完了した。続いて seasonal / recent-heavy の運用境界整理、latest compare artifact map、actual-date compare 再開導線の同期監査、地方競馬 feasibility の設計チェックリスト・artifact 方針・benchmark 完了条件・payload schema・CLI 引数契約・step/failure taxonomy の具体化、および既存 `netkeiba_*` snapshot / gate への universe-aware 契約実装まで完了した。
 
 以後の active priority は、public / internal docs の定期点検と future option の切り分けに絞る。
 
@@ -422,7 +428,7 @@
 ### N1. 地方競馬データ拡張の feasibility 深掘り
 
 - universe slug を config / artifact / revision にどう通すかを、必要なら実装前提まで下ろす。
-- local-only coverage snapshot / benchmark gate を、必要なら実装スケルトンへ下ろす。
+- local-only coverage snapshot / benchmark gate の script 雛形を、既存 `netkeiba_*` 契約の上に最小追加で切る。
 
 ### N2. docs の定期点検
 

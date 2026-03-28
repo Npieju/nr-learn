@@ -15,6 +15,7 @@ if str(SRC) not in sys.path:
 
 from racing_ml.common.artifacts import display_path as artifact_display_path
 from racing_ml.common.artifacts import ensure_output_file_path as artifact_ensure_output_file_path
+from racing_ml.common.artifacts import utc_now_iso
 from racing_ml.common.artifacts import write_json
 from racing_ml.common.config import load_yaml
 from racing_ml.common.progress import Heartbeat, ProgressBar
@@ -36,6 +37,29 @@ TARGET_MANIFEST_PATHS = {
     "pedigree": ROOT / "artifacts/reports/netkeiba_crawl_manifest_pedigree.json",
 }
 DEFAULT_CRAWL_LOCK_PATH = ROOT / "artifacts/reports/netkeiba_crawl_manifest.json.lock"
+DEFAULT_UNIVERSE = "jra"
+DEFAULT_SOURCE_SCOPE = "netkeiba"
+DEFAULT_SCHEMA_VERSION = "netkeiba.coverage_snapshot.v1"
+
+
+def _safe_write_snapshot(path: Path | None, payload: dict[str, object]) -> None:
+    if path is None:
+        return
+    try:
+        write_json(path, payload)
+    except Exception:
+        return
+
+
+def _set_step(payload: dict[str, object], step_name: str) -> None:
+    payload["completed_step"] = step_name
+
+
+def _require_text(value: str, *, field_name: str, error_code: str) -> str:
+    normalized = str(value).strip()
+    if not normalized:
+        raise ValueError(f"{error_code}:{field_name} must not be empty")
+    return normalized
 
 
 def log_progress(message: str) -> None:
@@ -375,6 +399,10 @@ def main() -> int:
     parser.add_argument("--config", default="configs/data.yaml")
     parser.add_argument("--tail-rows", type=int, default=5000)
     parser.add_argument("--output", default="artifacts/reports/netkeiba_coverage_snapshot.json")
+    parser.add_argument("--universe", default=DEFAULT_UNIVERSE)
+    parser.add_argument("--source-scope", default=DEFAULT_SOURCE_SCOPE)
+    parser.add_argument("--schema-version", default=DEFAULT_SCHEMA_VERSION)
+    parser.add_argument("--baseline-reference", default=None)
     parser.add_argument("--race-result-manifest", default=None)
     parser.add_argument("--race-card-manifest", default=None)
     parser.add_argument("--pedigree-manifest", default=None)
@@ -386,9 +414,34 @@ def main() -> int:
     )
     args = parser.parse_args()
 
+    output_path = ROOT / args.output
+    payload: dict[str, object] = {
+        "schema_version": DEFAULT_SCHEMA_VERSION,
+        "artifact_type": "coverage_snapshot",
+        "status": "running",
+        "completed_step": "init",
+        "started_at": utc_now_iso(),
+        "finished_at": None,
+        "universe": DEFAULT_UNIVERSE,
+        "source_scope": DEFAULT_SOURCE_SCOPE,
+        "baseline_reference": None,
+    }
+
     try:
+        universe = _require_text(args.universe, field_name="universe", error_code="missing_universe")
+        source_scope = _require_text(args.source_scope, field_name="source_scope", error_code="missing_source_scope")
+        schema_version = _require_text(args.schema_version, field_name="schema_version", error_code="missing_schema_version")
+        baseline_reference = str(args.baseline_reference).strip() or None
+        payload.update(
+            {
+                "schema_version": schema_version,
+                "universe": universe,
+                "source_scope": source_scope,
+                "baseline_reference": baseline_reference,
+            }
+        )
+        _set_step(payload, "load_config")
         progress = ProgressBar(total=4, prefix="[netkeiba-snapshot]", logger=log_progress, min_interval_sec=0.0)
-        output_path = ROOT / args.output
         artifact_ensure_output_file_path(output_path, label="output", workspace_root=ROOT)
         data_cfg = load_yaml(ROOT / args.config)
         dataset_cfg = data_cfg.get("dataset", {})
@@ -407,6 +460,7 @@ def main() -> int:
             crawl_lock_path = ROOT / crawl_lock_path
         tail_rows = max(int(args.tail_rows), 0)
         progress.start(message=f"config loaded tail_rows={tail_rows}")
+        _set_step(payload, "load_source_tables")
         if tail_rows > 0:
             with Heartbeat("[netkeiba-snapshot]", "loading tail training table", logger=log_progress):
                 tail_frame, primary_source_rows_total = load_training_table_tail(
@@ -437,6 +491,7 @@ def main() -> int:
         }
         progress.update(message="external outputs loaded")
 
+        _set_step(payload, "compute_alignment")
         paired_race_ids: set[object] = set()
         if "race_id" in race_result.columns and "race_id" in race_card.columns:
             paired_race_ids = set(race_result["race_id"].dropna().tolist()).intersection(set(race_card["race_id"].dropna().tolist()))
@@ -453,10 +508,19 @@ def main() -> int:
             "paired_race_subset": _build_result_integrity_summary(collected_subset),
             "external_race_result": _build_result_integrity_summary(race_result),
         }
-        payload = {
+        _set_step(payload, "compute_coverage")
+        coverage = {
+            "latest_tail": _build_coverage(tail_frame, list(args.columns)),
+            "paired_race_subset": _build_coverage(collected_subset, list(args.columns)),
+        }
+        payload.update({
             "run_context": {
                 "config": args.config,
                 "tail_rows": int(args.tail_rows),
+                "universe": universe,
+                "source_scope": source_scope,
+                "schema_version": schema_version,
+                "baseline_reference": baseline_reference,
                 "primary_source_rows_total": int(primary_source_rows_total),
                 "rows_tail": int(len(tail_frame)),
                 "target_manifests": {
@@ -474,18 +538,32 @@ def main() -> int:
             "target_states": target_states,
             "alignment": alignment,
             "result_integrity": result_integrity,
-            "coverage": {
-                "latest_tail": _build_coverage(tail_frame, list(args.columns)),
-                "paired_race_subset": _build_coverage(collected_subset, list(args.columns)),
-            },
+            "coverage": coverage,
             "paired_race_subset": {
                 "rows": int(len(collected_subset)),
                 "races": int(len(paired_race_ids)),
             },
             "readiness": _build_readiness(target_states, alignment, result_integrity["external_race_result"]),
-        }
+            "coverage_summary": {
+                "latest_tail_horse_key_ratio": coverage["latest_tail"].get("horse_key", {}).get("non_null_ratio"),
+                "latest_tail_breeder_ratio": coverage["latest_tail"].get("breeder_name", {}).get("non_null_ratio"),
+                "latest_tail_sire_ratio": coverage["latest_tail"].get("sire_name", {}).get("non_null_ratio"),
+                "paired_subset_horse_key_ratio": coverage["paired_race_subset"].get("horse_key", {}).get("non_null_ratio"),
+            },
+            "integrity_summary": {
+                "race_result_only_races": alignment.get("race_result_only_races"),
+                "race_card_only_races": alignment.get("race_card_only_races"),
+                "paired_negative_diff_races": alignment.get("paired_negative_diff_races"),
+                "external_all_odds_missing_races": result_integrity["external_race_result"].get("all_odds_missing_races"),
+            },
+        })
+        _set_step(payload, "write_snapshot")
         with Heartbeat("[netkeiba-snapshot]", "writing snapshot output", logger=log_progress):
             write_json(output_path, payload)
+        payload["status"] = "completed"
+        payload["finished_at"] = utc_now_iso()
+        _set_step(payload, "completed")
+        _safe_write_snapshot(output_path, payload)
 
         print(f"[netkeiba-snapshot] output={output_path}")
         print(f"[netkeiba-snapshot] alignment={payload['alignment']}")
@@ -507,12 +585,40 @@ def main() -> int:
         progress.complete(message="snapshot completed")
         return 0
     except KeyboardInterrupt:
+        payload["status"] = "interrupted"
+        payload["finished_at"] = utc_now_iso()
+        payload["error_code"] = "interrupted"
+        payload["error_message"] = "interrupted by user"
+        payload["recommended_action"] = "rerun_snapshot"
+        _safe_write_snapshot(output_path, payload)
         print("[netkeiba-snapshot] interrupted by user")
         return 130
     except (ValueError, FileNotFoundError, IsADirectoryError) as error:
+        error_text = str(error)
+        error_code, _, message = error_text.partition(":")
+        if error_code not in {
+            "missing_universe",
+            "missing_source_scope",
+            "missing_schema_version",
+            "invalid_output_path",
+        }:
+            error_code = "invalid_output_path" if isinstance(error, IsADirectoryError) else "snapshot_failed"
+            message = error_text
+        payload["status"] = "failed"
+        payload["finished_at"] = utc_now_iso()
+        payload["error_code"] = error_code
+        payload["error_message"] = message or error_text
+        payload["recommended_action"] = "inspect_snapshot_inputs"
+        _safe_write_snapshot(output_path, payload)
         print(f"[netkeiba-snapshot] failed: {error}")
         return 1
     except Exception as error:
+        payload["status"] = "failed"
+        payload["finished_at"] = utc_now_iso()
+        payload["error_code"] = "snapshot_failed"
+        payload["error_message"] = str(error)
+        payload["recommended_action"] = "inspect_snapshot_traceback"
+        _safe_write_snapshot(output_path, payload)
         print(f"[netkeiba-snapshot] failed: {error}")
         traceback.print_exc()
         return 1

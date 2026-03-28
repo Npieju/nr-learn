@@ -181,9 +181,11 @@ serving 系の重い script は、smoke 本体、replay、bankroll sweep、dashb
 
 netkeiba 系は lock 待機、収集、backfill、gate 実行の各段で heartbeat または status を出す。
 
-地方 universe を将来追加する場合も、CLI 契約はこの系統に寄せる。つまり `data-config`, `tail-rows`, `snapshot-output`, `manifest-output`, `skip-train`, `skip-evaluate` を基底にし、追加は `universe`, `source-scope`, `baseline-reference`, `schema-version` だけに留める。
+`run_netkeiba_coverage_snapshot.py` と `run_netkeiba_benchmark_gate.py` は、すでに `universe`, `source-scope`, `baseline-reference`, `schema-version` を受け取れる。既定値のままなら従来どおり JRA / netkeiba 向けとして動き、payload 側には universe-aware な metadata と `completed_step`, `error_code`, `recommended_action` が残る。
 
-さらに step 名も既存 gate の読み方に寄せ、snapshot 側は `load_config -> load_source_tables -> compute_alignment -> compute_coverage -> write_snapshot`、gate 側は `init_manifest -> run_snapshot -> validate_readiness -> run_train -> run_evaluate -> write_manifest` を基本系列にするとよい。
+地方 universe を将来追加する場合も、CLI 契約はこの系統に寄せる。つまり `data-config`, `tail-rows`, `snapshot-output`, `manifest-output`, `skip-train`, `skip-evaluate` を基底にし、追加は同じ 4 引数だけに留める。
+
+step 名も既存 gate の読み方に寄せてあり、snapshot 側は `load_config -> load_source_tables -> compute_alignment -> compute_coverage -> write_snapshot`、gate 側は `init_manifest -> run_snapshot -> validate_readiness -> run_train -> run_evaluate -> write_manifest` を基本系列として読める。
 
 外部データの設計意図は [data_extension.md](data_extension.md) を参照する。
 
