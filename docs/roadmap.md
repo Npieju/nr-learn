@@ -455,6 +455,12 @@
 - mixed compare / readiness / schema は right 側の参照先としてこの machine-readable reference manifest を使えるようにした。
 - これにより mixed compare の右側は doc 参照だけでなく JSON 正本を持ち、numeric compare へ進む土台が揃った。
 
+### M48. mixed-universe numeric compare の最小 CLI を追加した
+
+- `run_mixed_universe_numeric_compare.py` を追加し、mixed readiness / compare / schema と JRA public benchmark reference manifest から row 単位の compare manifest を生成できるようにした。
+- row ごとに `left_value`, `right_value`, `delta_left_minus_right`, `comparison_status` を持たせ、left 側が未整備でも partial compare を止めずに欠損箇所を manifest へ残すようにした。
+- これにより mixed compare は readiness -> pointer -> schema -> numeric compare の 4 段で、left/right JSON reference から最小差分行まで切り出せるようになった。
+
 ## 6. 実行中の優先事項
 
 `current_tighter_policy_search_candidate_2025_latest` の `0.03/80` formalization は M17 で完了した。続いて seasonal / recent-heavy の運用境界整理、latest compare artifact map、actual-date compare 再開導線の同期監査、地方競馬 feasibility の設計チェックリスト・artifact 方針・benchmark 完了条件・payload schema・CLI 引数契約・step/failure taxonomy の具体化、既存 `netkeiba_*` snapshot / gate への universe-aware 契約実装、local-only snapshot / gate 雛形の追加、local-only integrity / feature gap / evaluation 入口の追加、local-only orchestration manifest の追加、および local-only revision lineage の追加まで完了した。
@@ -482,7 +488,7 @@
 ### N1. 地方競馬データ拡張の feasibility 深掘り
 
 - universe slug を config / artifact / revision にどう通すかを、必要なら実装前提まで下ろす。
-- JRA public benchmark reference manifest までは入ったので、next は numeric compare 本体の最小 CLI 契約を置き、left/right JSON reference から delta row を切れるようにする。
+- numeric compare の最小 CLI までは入ったので、next は left 側 formal metrics が埋まった時に row 欠損がどこまで解消されるかを見つつ、必要なら compare CSV や promote-safe な判読 summary を追加する。
 
 ### N2. docs の定期点検
 

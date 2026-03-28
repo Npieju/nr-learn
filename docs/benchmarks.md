@@ -97,6 +97,8 @@ readiness が揃ったら、次は `mixed_universe_schema_<left_universe>_vs_<ri
 
 right 側 JRA baseline は `public_benchmark_reference_<reference>.json` を machine-readable な入口として扱う。つまり mixed compare の right side は markdown の public snapshot だけでなく、promotion / evaluation artifact を束ねた JSON reference からも読める状態を正本とする。
 
+schema の次は `mixed_universe_numeric_compare_<left_universe>_vs_<right_universe>_<revision>.json` を見る。この manifest では row ごとに left/right の値を並べ、numeric な行だけ `delta_left_minus_right` を持たせる。left が未整備の行は compare を止めずに `missing_left_value` として残す。
+
 ### 5.2 latest 2025 の formal snapshot
 
 latest 2025 split で直近に formal に通過した run は次の 2 本である。
