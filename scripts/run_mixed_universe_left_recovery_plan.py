@@ -141,6 +141,10 @@ def _build_summary(plan_steps: list[dict[str, object]], gap_audit_payload: dict[
         notes.append("at least one upstream readiness blocker must be resolved before local metrics can be generated")
     return {
         "severity": gap_summary.get("severity"),
+        "requested_revision": gap_audit_payload.get("requested_revision"),
+        "resolved_left_revision": gap_audit_payload.get("resolved_left_revision"),
+        "resolved_left_source_kind": gap_audit_payload.get("resolved_left_source_kind"),
+        "resolved_left_artifact": gap_audit_payload.get("resolved_left_artifact"),
         "step_count": len(plan_steps),
         "command_status_counts": statuses,
         "rows_missing_all_sources": gap_summary.get("rows_missing_all_sources"),

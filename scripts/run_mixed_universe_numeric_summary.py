@@ -128,6 +128,10 @@ def _promote_safe_summary(compare_payload: dict[str, object]) -> dict[str, objec
     return {
         "verdict": verdict,
         "severity": severity,
+        "requested_revision": compare_payload.get("requested_revision") or compare_payload.get("revision"),
+        "resolved_left_revision": compare_payload.get("resolved_left_revision"),
+        "resolved_left_source_kind": compare_payload.get("resolved_left_source_kind"),
+        "resolved_left_artifact": compare_payload.get("resolved_left_artifact"),
         "readiness_status": blocking_context.get("readiness_status"),
         "schema_status": blocking_context.get("schema_status"),
         "numeric_rows": numeric_summary,

@@ -143,7 +143,14 @@ def _build_gap_rows(
     return gap_rows
 
 
-def _audit_summary(gap_rows: list[dict[str, object]]) -> dict[str, object]:
+def _audit_summary(
+    gap_rows: list[dict[str, object]],
+    *,
+    requested_revision: str | None,
+    resolved_left_revision: str | None,
+    resolved_left_source_kind: str | None,
+    resolved_left_artifact: str | None,
+) -> dict[str, object]:
     rows_missing_all_sources = []
     rows_with_planned_commands = []
     rows_with_blocking_action = []
@@ -174,6 +181,10 @@ def _audit_summary(gap_rows: list[dict[str, object]]) -> dict[str, object]:
 
     return {
         "severity": severity,
+        "requested_revision": requested_revision,
+        "resolved_left_revision": resolved_left_revision,
+        "resolved_left_source_kind": resolved_left_source_kind,
+        "resolved_left_artifact": resolved_left_artifact,
         "row_count": len(gap_rows),
         "rows_missing_all_sources": rows_missing_all_sources,
         "rows_with_planned_commands": rows_with_planned_commands,
@@ -240,7 +251,17 @@ def main() -> int:
         numeric_compare_payload = _read_required_payload(compare_path, label="numeric compare manifest")
         lineage_payload = _read_required_payload(lineage_path, label="left lineage manifest")
         gap_rows = _build_gap_rows(numeric_compare_payload=numeric_compare_payload, lineage_payload=lineage_payload)
-        audit_summary = _audit_summary(gap_rows)
+        requested_revision = str(numeric_compare_payload.get("requested_revision") or numeric_compare_payload.get("revision") or revision_slug)
+        resolved_left_revision = str(numeric_compare_payload.get("resolved_left_revision") or lineage_payload.get("revision") or "") or None
+        resolved_left_source_kind = str(numeric_compare_payload.get("resolved_left_source_kind") or "local_revision_gate")
+        resolved_left_artifact = str(numeric_compare_payload.get("resolved_left_artifact") or artifact_display_path(lineage_path, workspace_root=ROOT))
+        audit_summary = _audit_summary(
+            gap_rows,
+            requested_revision=requested_revision,
+            resolved_left_revision=resolved_left_revision,
+            resolved_left_source_kind=resolved_left_source_kind,
+            resolved_left_artifact=resolved_left_artifact,
+        )
         status = "completed" if not gap_rows else "partial"
 
         payload = {
@@ -249,10 +270,10 @@ def main() -> int:
             "status": status,
             "audit_kind": "mixed_universe_left_gap_audit",
             "revision": revision_slug,
-            "requested_revision": numeric_compare_payload.get("requested_revision") or numeric_compare_payload.get("revision") or revision_slug,
-            "resolved_left_revision": numeric_compare_payload.get("resolved_left_revision") or lineage_payload.get("revision"),
-            "resolved_left_source_kind": numeric_compare_payload.get("resolved_left_source_kind") or "local_revision_gate",
-            "resolved_left_artifact": numeric_compare_payload.get("resolved_left_artifact") or artifact_display_path(lineage_path, workspace_root=ROOT),
+            "requested_revision": requested_revision,
+            "resolved_left_revision": resolved_left_revision,
+            "resolved_left_source_kind": resolved_left_source_kind,
+            "resolved_left_artifact": resolved_left_artifact,
             "left_universe": left_universe,
             "right_universe": right_universe,
             "recommended_action": numeric_compare_payload.get("recommended_action"),

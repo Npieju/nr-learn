@@ -60,6 +60,10 @@ def _artifact_summary(label: str, path: Path, payload: dict[str, object] | None,
         "exists": path.exists(),
         "status": _phase_status(payload, status_keys),
         "recommended_action": payload.get("recommended_action") if isinstance(payload, dict) else None,
+        "requested_revision": payload.get("requested_revision") if isinstance(payload, dict) else None,
+        "resolved_left_revision": payload.get("resolved_left_revision") if isinstance(payload, dict) else None,
+        "resolved_left_source_kind": payload.get("resolved_left_source_kind") if isinstance(payload, dict) else None,
+        "resolved_left_artifact": payload.get("resolved_left_artifact") if isinstance(payload, dict) else None,
     }
 
 
