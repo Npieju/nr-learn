@@ -136,3 +136,11 @@ pointer-only compare の前には、`artifacts/reports/mixed_universe_readiness_
 4. right 側の public reference と public doc が存在する
 
 この readiness manifest が `status=ready` なら pointer-only compare へ進み、`status=not_ready` なら mixed compare ではなく left 側の readiness / evaluation を先に補う。
+
+compare 前提が揃った後は、`artifacts/reports/mixed_universe_schema_<left_universe>_vs_<right_universe>_<revision>.json` を見て comparison axes を固定する。最小の軸は次である。
+
+1. `promotion`: `decision`
+2. `evaluation`: `stability_assessment`, `auc`, `top1_roi`, `ev_top1_roi`, `nested_wf_weighted_test_roi`, `nested_wf_bets_total`
+3. `support`: `formal_benchmark_weighted_roi`, `formal_benchmark_feasible_folds`
+
+この schema manifest は numeric compare そのものではなく、left 側でどの artifact path から値を拾い、right 側ではどの public reference を正本にするかを固定する contract として扱う。

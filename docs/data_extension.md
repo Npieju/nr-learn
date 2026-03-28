@@ -255,6 +255,13 @@ mixed compare に進む前の前提条件も、この 5 段の延長で固定し
 3. right 側は JRA public reference として別 artifact / doc から参照し、同一 gate manifest に混ぜないこと。
 4. mixed compare の最初の artifact は promote 判定ではなく readiness / pointer manifest に留めること。
 
+その次段の comparison schema も先に固定しておく。
+
+1. promotion 軸では `decision` だけを比較し、baseline 置換可否と混同しない。
+2. evaluation 軸では `stability_assessment`, `auc`, `top1_roi`, `ev_top1_roi`, `nested_wf_weighted_test_roi`, `nested_wf_bets_total` を候補にする。
+3. support 軸では `formal_benchmark_weighted_roi`, `formal_benchmark_feasible_folds` を候補にする。
+4. 最初の schema artifact は numeric compare ではなく「どの値をどこから読むか」の contract に留める。
+
 artifact に残す最低限の判定項目も決めておくとよい。
 
 - `universe`: `local_nankan` のような source slug

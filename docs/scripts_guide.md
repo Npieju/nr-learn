@@ -196,6 +196,8 @@ serving 系の重い script は、smoke 本体、replay、bankroll sweep、dashb
   - local public snapshot または lineage と JRA public reference を束ね、mixed-universe compare の pointer manifest を作る入口。
 - [../scripts/run_mixed_universe_readiness.py](../scripts/run_mixed_universe_readiness.py)
   - mixed compare の前提条件を点検し、left readiness / representative evaluation / right public reference の揃い具合を manifest 化する入口。
+- [../scripts/run_mixed_universe_schema.py](../scripts/run_mixed_universe_schema.py)
+  - mixed compare で左右に並べる指標名と source artifact を schema manifest に落とす入口。
 - [../scripts/run_netkeiba_wait_then_cycle.py](../scripts/run_netkeiba_wait_then_cycle.py)
   - 待機と再試行を含む連続運転に使う。
 
@@ -218,6 +220,8 @@ netkeiba 系は lock 待機、収集、backfill、gate 実行の各段で heartb
 mixed-universe 比較も `run_mixed_universe_compare.py` を追加して、`mixed_universe_compare_<left_universe>_vs_<right_universe>_<revision>.json` を最小 pointer manifest として出せるようにした。ここでは数値比較そのものではなく、left 側の local public snapshot または lineage と、right 側の JRA public reference を 1 本へ束ねる。
 
 さらに `run_mixed_universe_readiness.py` を追加し、mixed compare の前に `mixed_universe_readiness_<left_universe>_vs_<right_universe>_<revision>.json` で前提条件を確認できるようにした。ここでは left 側の `benchmark_rerun_ready`、evaluation pointer の有無、`stability_assessment=representative`、right 側の public reference を check として並べる。
+
+その次段として `run_mixed_universe_schema.py` も追加し、readiness manifest と pointer-only compare manifest を受けて、`mixed_universe_schema_<left_universe>_vs_<right_universe>_<revision>.json` へ comparison axes と metric rows を固定できるようにした。現段階では numeric compare ではなく、`decision`, `stability_assessment`, `auc`, `top1_roi`, `ev_top1_roi`, `nested_wf_weighted_test_roi`, `formal_benchmark_weighted_roi`, `formal_benchmark_feasible_folds` を左右でどこから読むかを揃える役割に留める。
 
 step 名も既存 gate の読み方に寄せてあり、snapshot 側は `load_config -> load_source_tables -> compute_alignment -> compute_coverage -> write_snapshot`、gate 側は `init_manifest -> run_snapshot -> validate_readiness -> run_train -> run_evaluate -> write_manifest` を基本系列として読める。
 
