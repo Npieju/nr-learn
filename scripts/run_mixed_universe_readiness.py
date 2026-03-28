@@ -110,6 +110,13 @@ def _extract_left_payload(left_snapshot_path: Path, left_lineage_path: Path) -> 
     )
 
 
+def _resolved_left_revision(left_payload: dict[str, object] | None) -> str | None:
+    if not isinstance(left_payload, dict):
+        return None
+    revision = left_payload.get("revision")
+    return str(revision) if revision is not None else None
+
+
 def _evaluate_requirements(
     *,
     left_payload: dict[str, object],
@@ -231,6 +238,8 @@ def main() -> int:
             "completed_step": "init",
             "readiness_kind": "mixed_universe_compare_precheck",
             "revision": revision_slug,
+            "requested_revision": revision_slug,
+            "resolved_left_revision": None,
             "left_universe": left_universe,
             "right_universe": right_universe,
             "right_reference": args.right_reference,
@@ -269,6 +278,7 @@ def main() -> int:
         payload["completed_step"] = "inspect_left_inputs"
         left_payload, left_source_kind = _extract_left_payload(left_snapshot_path, left_lineage_path)
         payload["left_source_kind"] = left_source_kind
+        payload["resolved_left_revision"] = _resolved_left_revision(left_payload)
 
         payload["completed_step"] = "evaluate_requirements"
         checks, status, error_code, recommended_action = _evaluate_requirements(

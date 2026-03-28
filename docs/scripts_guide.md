@@ -241,6 +241,8 @@ mixed-universe 比較も `run_mixed_universe_compare.py` を追加して、`mixe
 
 `run_mixed_universe_readiness.py` も同様に left-side artifact を自動探索するので、`reference_bridge` 系の revision でも `--left-public-snapshot` や `--left-lineage-manifest` を省略したまま再生成できる。
 
+mixed-universe 系 manifest の `revision` は引き続き要求した mixed revision alias を表す。一方で alias 解決後に実際に参照した local revision は `resolved_left_revision` として readiness / compare / status board / recovery に併記し、operator が left-side の実体を追いやすくしている。
+
 その次段として `run_mixed_universe_schema.py` も追加し、readiness manifest と pointer-only compare manifest を受けて、`mixed_universe_schema_<left_universe>_vs_<right_universe>_<revision>.json` へ comparison axes と metric rows を固定できるようにした。現段階では numeric compare ではなく、`decision`, `stability_assessment`, `auc`, `top1_roi`, `ev_top1_roi`, `nested_wf_weighted_test_roi`, `formal_benchmark_weighted_roi`, `formal_benchmark_feasible_folds` を左右でどこから読むかを揃える役割に留める。
 
 right 側の JRA baseline については `run_public_benchmark_reference.py` も追加し、promotion / revision / evaluation artifact から `public_benchmark_reference_<reference>.json` を生成できるようにした。mixed compare/readiness/schema はこの JSON を right-side の machine-readable reference として参照してよい。

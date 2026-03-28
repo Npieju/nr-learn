@@ -541,6 +541,11 @@
 - `run_local_public_snapshot.py` の dry-run planned payload でも、`compare_contract.local_only_public_snapshot` は既定ファイル名の組み立てではなく実 `--output` path を返すようにした。
 - これで custom output を使う smoke / validation 時も、planned と completed で contract の path 規則がズレなくなった。
 
+### M63. mixed manifest に resolved left revision を持たせた
+
+- `run_mixed_universe_readiness.py` と `run_mixed_universe_compare.py` は、`revision` を mixed alias のまま維持しつつ、実際に読んだ local snapshot/lineage の revision を `resolved_left_revision` に出すようにした。
+- `run_mixed_universe_status_board.py` と `run_mixed_universe_recovery.py` も同じ値を引き継ぐようにして、status board と recovery manifest から left-side の実体 revision を直接追えるようにした。
+
 ## 6. 実行中の優先事項
 
 `current_tighter_policy_search_candidate_2025_latest` の `0.03/80` formalization は M17 で完了した。続いて seasonal / recent-heavy の運用境界整理、latest compare artifact map、actual-date compare 再開導線の同期監査、地方競馬 feasibility の設計チェックリスト・artifact 方針・benchmark 完了条件・payload schema・CLI 引数契約・step/failure taxonomy の具体化、既存 `netkeiba_*` snapshot / gate への universe-aware 契約実装、local-only snapshot / gate 雛形の追加、local-only integrity / feature gap / evaluation 入口の追加、local-only orchestration manifest の追加、および local-only revision lineage の追加まで完了した。

@@ -212,6 +212,8 @@ def main() -> int:
             "status": overall_status,
             "board_kind": "mixed_universe_status_board",
             "revision": revision_slug,
+            "requested_revision": revision_slug,
+            "resolved_left_revision": (payloads.get("public_snapshot") or {}).get("revision") if isinstance(payloads.get("public_snapshot"), dict) else None,
             "left_universe": left_universe,
             "right_universe": right_universe,
             "recommended_action": next_action,
@@ -234,6 +236,8 @@ def main() -> int:
             "next_action_source": next_action_source,
             "phase_summaries": summaries,
             "highlights": {
+                "requested_revision": revision_slug,
+                "resolved_left_revision": (payloads.get("public_snapshot") or {}).get("revision") if isinstance(payloads.get("public_snapshot"), dict) else None,
                 "numeric_summary_verdict": ((payloads.get("numeric_summary") or {}).get("promote_safe_summary", {}) or {}).get("verdict") if isinstance(payloads.get("numeric_summary"), dict) else None,
                 "numeric_summary_severity": ((payloads.get("numeric_summary") or {}).get("promote_safe_summary", {}) or {}).get("severity") if isinstance(payloads.get("numeric_summary"), dict) else None,
                 "gap_audit_severity": ((payloads.get("left_gap_audit") or {}).get("summary", {}) or {}).get("severity") if isinstance(payloads.get("left_gap_audit"), dict) else None,

@@ -201,7 +201,7 @@ def _build_recovery_steps(
     *,
     board_payload: dict[str, object],
     board_path: Path,
-) -> tuple[list[dict[str, object]], dict[str, str]]:
+) -> tuple[list[dict[str, object]], dict[str, str], str]:
     artifacts = board_payload.get("artifacts") if isinstance(board_payload.get("artifacts"), dict) else {}
     if not isinstance(artifacts, dict):
         raise ValueError("status board artifacts are missing")
@@ -242,6 +242,7 @@ def _build_recovery_steps(
     left_universe = str(board_payload.get("left_universe") or public_snapshot_payload.get("universe") or DEFAULT_LEFT_UNIVERSE)
     right_universe = str(board_payload.get("right_universe") or DEFAULT_RIGHT_UNIVERSE)
     revision_slug = str(board_payload.get("revision") or public_snapshot_payload.get("revision") or "")
+    resolved_left_revision = str(public_snapshot_payload.get("revision") or lineage_payload.get("revision") or "")
     baseline_reference = str(public_snapshot_payload.get("baseline_reference") or lineage_payload.get("baseline_reference") or right_reference)
     source_scope = str(public_snapshot_payload.get("source_scope") or lineage_payload.get("source_scope") or "local_only")
 
@@ -426,7 +427,7 @@ def _build_recovery_steps(
         "left_gap_audit_manifest": _path_arg(gap_audit_path),
         "left_recovery_plan_manifest": _path_arg(recovery_plan_path),
     }
-    return steps, artifact_map
+    return steps, artifact_map, resolved_left_revision
 
 
 def _run_command(step: dict[str, object]) -> dict[str, object]:
@@ -476,13 +477,15 @@ def main() -> int:
         artifact_ensure_output_file_path(output_path, label="output", workspace_root=ROOT)
 
         board_payload = _read_required_payload(board_path, label="mixed status board")
-        steps, artifact_map = _build_recovery_steps(board_payload=board_payload, board_path=board_path)
+        steps, artifact_map, resolved_left_revision = _build_recovery_steps(board_payload=board_payload, board_path=board_path)
         payload: dict[str, object] = {
             "started_at": utc_now_iso(),
             "finished_at": None,
             "status": "planned" if args.dry_run else "running",
             "run_kind": "mixed_universe_recovery",
             "revision": str(board_payload.get("revision") or revision_slug),
+            "requested_revision": str(board_payload.get("revision") or revision_slug),
+            "resolved_left_revision": resolved_left_revision,
             "left_universe": str(board_payload.get("left_universe") or left_universe),
             "right_universe": str(board_payload.get("right_universe") or right_universe),
             "source_status_board": _path_arg(board_path),

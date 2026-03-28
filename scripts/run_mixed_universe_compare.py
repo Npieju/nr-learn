@@ -87,6 +87,13 @@ def _summary_from_local_lineage(payload: dict[str, object]) -> dict[str, object]
     return summary
 
 
+def _resolved_left_revision(payload: dict[str, object] | None) -> str | None:
+    if not isinstance(payload, dict):
+        return None
+    revision = payload.get("revision")
+    return str(revision) if revision is not None else None
+
+
 def _build_planned_payload(
     *,
     revision_slug: str,
@@ -102,6 +109,8 @@ def _build_planned_payload(
         "compare_kind": "mixed_universe_compare",
         "compare_mode": "pointer_only",
         "revision": revision_slug,
+        "requested_revision": revision_slug,
+        "resolved_left_revision": None,
         "left_universe": left_universe,
         "right_universe": right_universe,
         "right_reference": right_reference,
@@ -197,6 +206,8 @@ def main() -> int:
             "compare_kind": "mixed_universe_compare",
             "compare_mode": "pointer_only",
             "revision": revision_slug,
+            "requested_revision": revision_slug,
+            "resolved_left_revision": _resolved_left_revision(left_payload),
             "left_universe": left_universe,
             "right_universe": right_universe,
             "decision": "separate_lineage_required",
