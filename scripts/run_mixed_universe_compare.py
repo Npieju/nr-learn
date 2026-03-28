@@ -137,6 +137,41 @@ def _build_planned_payload(
     }
 
 
+def _planned_left_summary(*, left_universe: str) -> dict[str, object]:
+    return {
+        "status": "missing",
+        "revision": None,
+        "universe": left_universe,
+        "source_scope": None,
+        "readiness": None,
+        "promotion_summary": None,
+        "evaluation_summary": None,
+        "artifacts": None,
+    }
+
+
+def _planned_right_summary(*, right_universe: str, right_reference: str, right_public_doc_path: Path, right_reference_manifest_path: Path) -> dict[str, object]:
+    return {
+        "universe": right_universe,
+        "reference": right_reference,
+        "public_doc": artifact_display_path(right_public_doc_path, workspace_root=ROOT),
+        "reference_manifest": artifact_display_path(right_reference_manifest_path, workspace_root=ROOT),
+        "metrics": None,
+        "reading_role": "jra_latest_public_snapshot",
+    }
+
+
+def _planned_comparison_contract() -> dict[str, object]:
+    return {
+        "left_source_kind": None,
+        "right_source_kind": "jra_public_reference",
+        "notes": [
+            "this manifest is a pointer-only bridge, not a numeric promote gate",
+            "mixed-universe compare does not overwrite jra-only public snapshot",
+        ],
+    }
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--revision", default=None)
@@ -187,6 +222,21 @@ def main() -> int:
                 "public_doc": artifact_display_path(right_public_doc_path, workspace_root=ROOT),
                 "reference_manifest": artifact_display_path(right_reference_manifest_path, workspace_root=ROOT),
             }
+            payload["artifacts"].update(
+                {
+                    "left_public_snapshot": artifact_display_path(left_snapshot_path, workspace_root=ROOT),
+                    "left_lineage_manifest": artifact_display_path(left_lineage_path, workspace_root=ROOT),
+                    "right_reference_manifest": artifact_display_path(right_reference_manifest_path, workspace_root=ROOT),
+                }
+            )
+            payload["left_summary"] = _planned_left_summary(left_universe=left_universe)
+            payload["right_summary"] = _planned_right_summary(
+                right_universe=right_universe,
+                right_reference=args.right_reference,
+                right_public_doc_path=right_public_doc_path,
+                right_reference_manifest_path=right_reference_manifest_path,
+            )
+            payload["comparison_contract"] = _planned_comparison_contract()
             write_json(output_path, payload)
             print(f"[mixed-universe-compare] planned manifest saved: {artifact_display_path(output_path, workspace_root=ROOT)}", flush=True)
             return 0

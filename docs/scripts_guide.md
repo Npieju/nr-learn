@@ -233,7 +233,7 @@ netkeiba 系は lock 待機、収集、backfill、gate 実行の各段で heartb
 
 さらに `run_local_public_snapshot.py` を追加し、`local_revision_gate_<revision>.json` を起点に `local_public_snapshot_<revision>.json` を出せるようにした。public 向けに local-only を読むときは、この snapshot を先頭にして、必要な場合だけ lineage / promotion / revision / evaluation pointer の順へ降りる。mixed revision 名から alias で辿って生成した場合でも、snapshot payload 内の `compare_contract.local_only_public_snapshot` と `mixed_compare_manifest` は入力 alias ではなく resolved lineage revision と実 output path を基準に書く。
 
-mixed-universe 比較も `run_mixed_universe_compare.py` を追加して、`mixed_universe_compare_<left_universe>_vs_<right_universe>_<revision>.json` を最小 pointer manifest として出せるようにした。ここでは数値比較そのものではなく、left 側の local public snapshot または lineage と、right 側の JRA public reference を 1 本へ束ねる。
+mixed-universe 比較も `run_mixed_universe_compare.py` を追加して、`mixed_universe_compare_<left_universe>_vs_<right_universe>_<revision>.json` を最小 pointer manifest として出せるようにした。ここでは数値比較そのものではなく、left 側の local public snapshot または lineage と、right 側の JRA public reference を 1 本へ束ねる。planned / dry-run でも `left_summary`, `right_summary`, `comparison_contract` を返すので、pointer bridge 入口も completed payload と同じ shape で読める。
 
 `run_mixed_universe_compare.py` は、mixed revision 名と local public snapshot revision 名がズレる場合でも、`local_public_snapshot_*` / `local_revision_gate_*` と snapshot 内の `lineage_manifest` を辿って left input を自動解決する。
 

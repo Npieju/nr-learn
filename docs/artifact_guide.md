@@ -137,7 +137,7 @@ pointer-only compare の前には、`artifacts/reports/mixed_universe_readiness_
 3. left 側 evaluation の `stability_assessment` が `representative`
 4. right 側の public reference と public doc が存在する
 
-この readiness manifest が `status=ready` なら pointer-only compare へ進み、`status=not_ready` なら mixed compare ではなく left 側の readiness / evaluation を先に補う。
+この readiness manifest が `status=ready` なら pointer-only compare へ進み、`status=not_ready` なら mixed compare ではなく left 側の readiness / evaluation を先に補う。`mixed_universe_compare_<left>_vs_<right>_<revision>.json` は planned / dry-run でも `left_summary`, `right_summary`, `comparison_contract` を返して、left input 未生成の段階から pointer bridge の読み口を completed payload と揃える。
 
 compare 前提が揃った後は、`artifacts/reports/mixed_universe_schema_<left_universe>_vs_<right_universe>_<revision>.json` を見て comparison axes を固定する。最小の軸は次である。
 
