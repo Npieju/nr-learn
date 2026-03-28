@@ -190,6 +190,8 @@ serving 系の重い script は、smoke 本体、replay、bankroll sweep、dashb
   - snapshot / validation / feature gap / evaluation pointer を 1 本の orchestration manifest に束ねる入口。
 - [../scripts/run_local_revision_gate.py](../scripts/run_local_revision_gate.py)
   - benchmark gate、revision slug、evaluation pointer、promotion / revision artifact を 1 lineage manifest に束ねる入口。
+- [../scripts/run_local_public_snapshot.py](../scripts/run_local_public_snapshot.py)
+  - local revision lineage を public 向けの要約 manifest に潰し、local-only の読み順を固定する入口。
 - [../scripts/run_netkeiba_wait_then_cycle.py](../scripts/run_netkeiba_wait_then_cycle.py)
   - 待機と再試行を含む連続運転に使う。
 
@@ -206,6 +208,10 @@ netkeiba 系は lock 待機、収集、backfill、gate 実行の各段で heartb
 さらに `run_local_feasibility_manifest.py` を追加し、readiness snapshot、data integrity、feature gap、evaluation pointer を fail-fast で直列実行しつつ、`local_feasibility_manifest_local_nankan.json` から停止点と artifact lineage をまとめて読めるようにした。
 
 その次段として `run_local_revision_gate.py` も追加し、local benchmark gate の readiness 確認、`run_revision_gate.py` による suffixed train / evaluate / promotion、evaluation pointer の書き出しを、`local_revision_gate_<revision>.json` で 1 lineage として追えるようにした。
+
+さらに `run_local_public_snapshot.py` を追加し、`local_revision_gate_<revision>.json` を起点に `local_public_snapshot_<revision>.json` を出せるようにした。public 向けに local-only を読むときは、この snapshot を先頭にして、必要な場合だけ lineage / promotion / revision / evaluation pointer の順へ降りる。
+
+mixed-universe 比較はまだ別 CLI を置いていないが、artifact 名は先に `mixed_universe_compare_<left_universe>_vs_<right_universe>_<revision>.json` 系へ寄せる。これで JRA-only / local-only / mixed を名前だけで grep しやすくする。
 
 step 名も既存 gate の読み方に寄せてあり、snapshot 側は `load_config -> load_source_tables -> compute_alignment -> compute_coverage -> write_snapshot`、gate 側は `init_manifest -> run_snapshot -> validate_readiness -> run_train -> run_evaluate -> write_manifest` を基本系列として読める。
 

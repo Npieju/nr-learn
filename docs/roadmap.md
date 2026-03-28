@@ -425,6 +425,12 @@
 - 同 script は revision ごとの snapshot / benchmark manifest / wf summary / promotion report / revision manifest / evaluation pointer を `local_revision_gate_<revision>.json` からまとめて辿れるようにする。
 - これにより local-only future option は、単なる feasibility manifest 群ではなく、future local revision slug を起点に artifact lineage を追える段階へ進んだ。
 
+### M43. local public snapshot と mixed compare 命名を固定した
+
+- `run_local_public_snapshot.py` を追加し、`local_revision_gate_<revision>.json` から `local_public_snapshot_<revision>.json` を切り出せるようにした。
+- public 向けの local-only 読み順を `local_public_snapshot -> local_revision_gate -> promotion_gate -> revision_gate -> evaluation_pointer` に固定した。
+- mixed-universe compare の artifact 名を `mixed_universe_compare_<left_universe>_vs_<right_universe>_<revision>.json` 系で統一し、JRA-only / local-only / mixed の lineage を名前だけで分離できるようにした。
+
 ## 6. 実行中の優先事項
 
 `current_tighter_policy_search_candidate_2025_latest` の `0.03/80` formalization は M17 で完了した。続いて seasonal / recent-heavy の運用境界整理、latest compare artifact map、actual-date compare 再開導線の同期監査、地方競馬 feasibility の設計チェックリスト・artifact 方針・benchmark 完了条件・payload schema・CLI 引数契約・step/failure taxonomy の具体化、既存 `netkeiba_*` snapshot / gate への universe-aware 契約実装、local-only snapshot / gate 雛形の追加、local-only integrity / feature gap / evaluation 入口の追加、local-only orchestration manifest の追加、および local-only revision lineage の追加まで完了した。
@@ -452,7 +458,7 @@
 ### N1. 地方競馬データ拡張の feasibility 深掘り
 
 - universe slug を config / artifact / revision にどう通すかを、必要なら実装前提まで下ろす。
-- local-only revision lineage から先に進めるなら、next は local promotion / public snapshot / mixed-universe 比較の読み筋を docs と artifact 名で固定する。
+- local public snapshot までは入ったので、next は mixed-universe compare の最小 CLI か pointer manifest を置き、docs の命名規則を実 artifact まで揃える。
 
 ### N2. docs の定期点検
 
