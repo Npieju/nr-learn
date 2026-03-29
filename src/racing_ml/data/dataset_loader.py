@@ -360,12 +360,14 @@ def _display_path(path: Path, base_dir: Path | None) -> str:
 
 def _select_table_columns(frame: pd.DataFrame, keep_columns: list[str], join_on: list[str]) -> pd.DataFrame:
     if not keep_columns:
-        return frame.copy()
+        return frame
 
     selected = [column for column in keep_columns if column in frame.columns]
     selected = list(dict.fromkeys([*join_on, *selected]))
     if not selected:
-        return frame.copy()
+        return frame
+    if selected == list(frame.columns):
+        return frame
     return frame[selected].copy()
 
 

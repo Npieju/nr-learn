@@ -7,7 +7,13 @@ from unittest import mock
 
 import pandas as pd
 
-from racing_ml.data.dataset_loader import _normalize_columns, _read_csv_tail, load_training_table, materialize_supplemental_table
+from racing_ml.data.dataset_loader import (
+    _normalize_columns,
+    _read_csv_tail,
+    _select_table_columns,
+    load_training_table,
+    materialize_supplemental_table,
+)
 
 
 class DatasetLoaderTailReadTest(unittest.TestCase):
@@ -93,6 +99,13 @@ class DatasetLoaderTailReadTest(unittest.TestCase):
             materialized = pd.read_csv(output_path)
             self.assertEqual(materialized["gate_no"].tolist(), [1, 2, 3])
             self.assertEqual(materialized["corner_4_position"].tolist(), [3, 2, 1])
+
+    def test_select_table_columns_reuses_frame_for_noop_selection(self) -> None:
+        frame = pd.DataFrame({"race_id": [101], "horse_id": ["h1"], "horse_key": ["k1"]})
+
+        selected = _select_table_columns(frame, keep_columns=["race_id", "horse_id", "horse_key"], join_on=["race_id", "horse_id"])
+
+        self.assertIs(selected, frame)
 
     def test_load_training_table_prefers_materialized_supplemental_file(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
