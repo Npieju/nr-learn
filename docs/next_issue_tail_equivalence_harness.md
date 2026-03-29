@@ -17,6 +17,7 @@ tail loader の候補最適化を、selected rows / downstream summary / manifes
 - old/new tail path を同一 input で比較できる test / utility を整備する
 - row identity だけでなく normalized frame / key columns / downstream smoke summary まで比較できるようにする
 - unsafe optimization を再度 landing すること自体は goal にしない
+- downstream reduced-smoke summary compare を JSON manifest と non-zero exit で再利用できるようにする
 
 ## Non-Goals
 
