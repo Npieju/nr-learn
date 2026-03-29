@@ -16,11 +16,16 @@ from racing_ml.common.artifacts import display_path as artifact_display_path
 from racing_ml.common.artifacts import ensure_output_file_path as artifact_ensure_output_file_path
 from racing_ml.common.artifacts import read_json, utc_now_iso, write_json
 from racing_ml.common.mixed_artifacts import prefer_existing_path
+from racing_ml.common.progress import Heartbeat, ProgressBar
 
 
 DEFAULT_LEFT_UNIVERSE = "local_nankan"
 DEFAULT_RIGHT_UNIVERSE = "jra"
 DEFAULT_RIGHT_REFERENCE = "current_recommended_serving_2025_latest"
+
+
+def log_progress(message: str) -> None:
+    print(message, flush=True)
 
 
 def _resolve_path(path_text: str | Path) -> Path:
@@ -282,6 +287,13 @@ def main() -> int:
 
     try:
         artifact_ensure_output_file_path(output_path, label="output", workspace_root=ROOT)
+        progress = ProgressBar(total=4, prefix="[mixed-universe-schema]", logger=log_progress, min_interval_sec=0.0)
+        progress.start(
+            message=(
+                f"starting revision={revision_slug} left={left_universe} right={right_universe} "
+                f"dry_run={'yes' if args.dry_run else 'no'}"
+            )
+        )
 
         if args.dry_run and not readiness_path.exists() and not compare_path.exists():
             blocking_context = {
@@ -325,15 +337,22 @@ def main() -> int:
                     blocking_context=blocking_context,
                 ),
             }
-            write_json(output_path, payload)
+            progress.update(message="preparing planned schema manifest")
+            with Heartbeat("[mixed-universe-schema]", "writing planned schema manifest", logger=log_progress):
+                write_json(output_path, payload)
+            progress.complete(message=f"planned manifest saved path={artifact_display_path(output_path, workspace_root=ROOT)}")
             print(f"[mixed-universe-schema] planned manifest saved: {artifact_display_path(output_path, workspace_root=ROOT)}", flush=True)
             return 0
 
-        readiness_payload = _read_required_payload(readiness_path, label="mixed readiness manifest")
-        compare_payload = _read_required_payload(compare_path, label="mixed compare manifest")
-        promotion_payload, revision_payload, evaluation_pointer_payload = _extract_left_payloads(compare_payload)
+        with Heartbeat("[mixed-universe-schema]", "loading readiness and compare manifests", logger=log_progress):
+            readiness_payload = _read_required_payload(readiness_path, label="mixed readiness manifest")
+            compare_payload = _read_required_payload(compare_path, label="mixed compare manifest")
+            promotion_payload, revision_payload, evaluation_pointer_payload = _extract_left_payloads(compare_payload)
+        progress.update(message="upstream manifests loaded")
 
-        metric_rows = _build_metric_rows(promotion_payload, revision_payload, evaluation_pointer_payload)
+        with Heartbeat("[mixed-universe-schema]", "building schema metric rows", logger=log_progress):
+            metric_rows = _build_metric_rows(promotion_payload, revision_payload, evaluation_pointer_payload)
+        progress.update(message=f"schema metric rows built count={len(metric_rows)}")
         readiness_status = str(readiness_payload.get("status") or "unknown")
         schema_status = "schema_ready" if readiness_status == "ready" else "schema_blocked"
         blocking_context = {
@@ -381,7 +400,10 @@ def main() -> int:
                 blocking_context=blocking_context,
             ),
         }
-        write_json(output_path, payload)
+        progress.update(message=f"schema payload prepared status={schema_status}")
+        with Heartbeat("[mixed-universe-schema]", "writing schema manifest", logger=log_progress):
+            write_json(output_path, payload)
+        progress.complete(message=f"saved path={artifact_display_path(output_path, workspace_root=ROOT)} status={schema_status}")
         print(f"[mixed-universe-schema] saved: {artifact_display_path(output_path, workspace_root=ROOT)}", flush=True)
         return 0 if schema_status == "schema_ready" else 2
     except KeyboardInterrupt:

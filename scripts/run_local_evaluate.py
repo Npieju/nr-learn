@@ -14,6 +14,7 @@ if str(SRC) not in sys.path:
 from racing_ml.common.artifacts import display_path as artifact_display_path
 from racing_ml.common.artifacts import ensure_output_file_path as artifact_ensure_output_file_path
 from racing_ml.common.artifacts import read_json, utc_now_iso, write_json
+from racing_ml.common.progress import Heartbeat, ProgressBar
 
 
 DEFAULT_CONFIG = "configs/model_local_baseline.yaml"
@@ -23,6 +24,10 @@ DEFAULT_POINTER_OUTPUT = "artifacts/reports/evaluation_local_nankan_pointer.json
 DEFAULT_UNIVERSE = "local_nankan"
 DEFAULT_SOURCE_SCOPE = "local_only"
 DEFAULT_BASELINE_REFERENCE = "current_recommended_serving_2025_latest"
+
+
+def log_progress(message: str) -> None:
+    print(message, flush=True)
 
 
 def _resolve_path(path_text: str) -> Path:
@@ -46,6 +51,13 @@ def main() -> int:
     parser.add_argument("--source-scope", default=DEFAULT_SOURCE_SCOPE)
     parser.add_argument("--baseline-reference", default=DEFAULT_BASELINE_REFERENCE)
     args = parser.parse_args()
+    progress = ProgressBar(total=3, prefix="[local-evaluate]", logger=log_progress, min_interval_sec=0.0)
+    progress.start(
+        message=(
+            f"starting config={args.config} data_config={args.data_config} "
+            f"max_rows={args.max_rows} wf_mode={args.wf_mode}"
+        )
+    )
 
     command = [
         sys.executable,
@@ -70,8 +82,11 @@ def main() -> int:
     if args.model_artifact_suffix:
         command.extend(["--model-artifact-suffix", args.model_artifact_suffix])
 
+    progress.update(message="launching delegated evaluate command")
     print(f"[local-evaluate] running: {' '.join(command)}", flush=True)
-    result = subprocess.run(command, cwd=ROOT, check=False)
+    with Heartbeat("[local-evaluate]", "evaluate child command", logger=log_progress):
+        result = subprocess.run(command, cwd=ROOT, check=False)
+    progress.update(message=f"evaluate command finished exit_code={int(result.returncode)}")
 
     pointer_path = _resolve_path(args.output)
     artifact_ensure_output_file_path(pointer_path, label="output", workspace_root=ROOT)
@@ -110,7 +125,9 @@ def main() -> int:
     if summary_path.exists():
         payload["latest_summary"] = artifact_display_path(summary_path, workspace_root=ROOT)
 
-    write_json(pointer_path, payload)
+    with Heartbeat("[local-evaluate]", "writing local evaluation pointer", logger=log_progress):
+        write_json(pointer_path, payload)
+    progress.complete(message=f"pointer saved path={artifact_display_path(pointer_path, workspace_root=ROOT)}")
     print(f"[local-evaluate] pointer saved: {pointer_path}", flush=True)
     return int(result.returncode)
 

@@ -17,12 +17,17 @@ from racing_ml.common.artifacts import ensure_output_file_path as artifact_ensur
 from racing_ml.common.artifacts import read_json, utc_now_iso, write_json
 from racing_ml.common.mixed_artifacts import read_optional_json_path
 from racing_ml.common.mixed_artifacts import resolve_local_snapshot_and_lineage_paths
+from racing_ml.common.progress import Heartbeat, ProgressBar
 
 
 DEFAULT_LEFT_UNIVERSE = "local_nankan"
 DEFAULT_RIGHT_UNIVERSE = "jra"
 DEFAULT_RIGHT_REFERENCE = "current_recommended_serving_2025_latest"
 DEFAULT_RIGHT_REFERENCE_MANIFEST = "artifacts/reports/public_benchmark_reference_current_recommended_serving_2025_latest.json"
+
+
+def log_progress(message: str) -> None:
+    print(message, flush=True)
 
 
 def _resolve_path(path_text: str | Path) -> Path:
@@ -243,8 +248,16 @@ def main() -> int:
 
     try:
         artifact_ensure_output_file_path(output_path, label="output", workspace_root=ROOT)
+        progress = ProgressBar(total=3, prefix="[mixed-universe-compare]", logger=log_progress, min_interval_sec=0.0)
+        progress.start(
+            message=(
+                f"starting revision={revision_slug} left={left_universe} right={right_universe} "
+                f"dry_run={'yes' if args.dry_run else 'no'}"
+            )
+        )
 
         if args.dry_run and not left_snapshot_path.exists() and not left_lineage_path.exists():
+            progress.update(message="preparing planned compare manifest")
             payload = _build_planned_payload(
                 revision_slug=revision_slug,
                 left_universe=left_universe,
@@ -285,27 +298,33 @@ def main() -> int:
                 left_summary=planned_left_summary,
                 right_summary=planned_right_summary,
             )
-            write_json(output_path, payload)
+            with Heartbeat("[mixed-universe-compare]", "writing planned compare manifest", logger=log_progress):
+                write_json(output_path, payload)
+            progress.complete(message=f"planned manifest saved path={artifact_display_path(output_path, workspace_root=ROOT)}")
             print(f"[mixed-universe-compare] planned manifest saved: {artifact_display_path(output_path, workspace_root=ROOT)}", flush=True)
             return 0
 
         left_payload: dict[str, object] | None = None
         left_source_kind = None
-        if left_snapshot_path.exists():
-            left_payload = _read_required_payload(left_snapshot_path, label="left public snapshot")
-            left_source_kind = "local_public_snapshot"
-        elif left_lineage_path.exists():
-            left_payload = _read_required_payload(left_lineage_path, label="left lineage manifest")
-            left_source_kind = "local_revision_gate"
-        else:
-            raise FileNotFoundError(
-                "left input not found: provide --left-public-snapshot or --left-lineage-manifest, "
-                f"or generate {artifact_display_path(left_snapshot_path, workspace_root=ROOT)} first"
-            )
+        with Heartbeat("[mixed-universe-compare]", "loading left-side input", logger=log_progress):
+            if left_snapshot_path.exists():
+                left_payload = _read_required_payload(left_snapshot_path, label="left public snapshot")
+                left_source_kind = "local_public_snapshot"
+            elif left_lineage_path.exists():
+                left_payload = _read_required_payload(left_lineage_path, label="left lineage manifest")
+                left_source_kind = "local_revision_gate"
+            else:
+                raise FileNotFoundError(
+                    "left input not found: provide --left-public-snapshot or --left-lineage-manifest, "
+                    f"or generate {artifact_display_path(left_snapshot_path, workspace_root=ROOT)} first"
+                )
+        progress.update(message=f"left-side input loaded source_kind={left_source_kind}")
 
         if not right_public_doc_path.exists():
             raise FileNotFoundError(f"right public doc not found: {artifact_display_path(right_public_doc_path, workspace_root=ROOT)}")
-        right_reference_payload = _read_optional_payload(artifact_display_path(right_reference_manifest_path, workspace_root=ROOT))
+        with Heartbeat("[mixed-universe-compare]", "loading right-side reference", logger=log_progress):
+            right_reference_payload = _read_optional_payload(artifact_display_path(right_reference_manifest_path, workspace_root=ROOT))
+        progress.update(message=f"right-side reference prepared reference={args.right_reference}")
 
         payload: dict[str, object] = {
             "started_at": utc_now_iso(),
@@ -369,7 +388,9 @@ def main() -> int:
             left_summary=payload["left_summary"],
             right_summary=payload["right_summary"],
         )
-        write_json(output_path, payload)
+        with Heartbeat("[mixed-universe-compare]", "writing compare manifest", logger=log_progress):
+            write_json(output_path, payload)
+        progress.complete(message=f"saved path={artifact_display_path(output_path, workspace_root=ROOT)} source_kind={left_source_kind}")
         print(f"[mixed-universe-compare] saved: {artifact_display_path(output_path, workspace_root=ROOT)}", flush=True)
         return 0
     except KeyboardInterrupt:

@@ -14,6 +14,7 @@ if str(SRC) not in sys.path:
 from racing_ml.common.artifacts import display_path as artifact_display_path
 from racing_ml.common.artifacts import ensure_output_file_path as artifact_ensure_output_file_path
 from racing_ml.common.artifacts import read_json, utc_now_iso, write_json
+from racing_ml.common.progress import Heartbeat, ProgressBar
 
 
 DEFAULT_REFERENCE = "current_recommended_serving_2025_latest"
@@ -31,6 +32,10 @@ DEFAULT_EVALUATION_SUMMARY = (
     "model_r20260325_current_recommended_serving_2025_latest_benchmark_refresh.json"
 )
 DEFAULT_PUBLIC_DOC = "docs/public_benchmark_snapshot.md"
+
+
+def log_progress(message: str) -> None:
+    print(message, flush=True)
 
 
 def _resolve_path(path_text: str | Path) -> Path:
@@ -167,15 +172,20 @@ def main() -> int:
 
     try:
         artifact_ensure_output_file_path(output_path, label="output", workspace_root=ROOT)
-        promotion_payload = _read_required_payload(promotion_path, label="promotion manifest")
-        revision_payload = _read_required_payload(revision_path, label="revision manifest")
-        evaluation_manifest_payload = _read_required_payload(evaluation_manifest_path, label="evaluation manifest")
-        evaluation_summary_payload = _read_required_payload(evaluation_summary_path, label="evaluation summary")
+        progress = ProgressBar(total=4, prefix="[public-benchmark-reference]", logger=log_progress, min_interval_sec=0.0)
+        progress.start(message=f"starting reference={args.reference} revision={args.revision}")
+        with Heartbeat("[public-benchmark-reference]", "loading benchmark reference inputs", logger=log_progress):
+            promotion_payload = _read_required_payload(promotion_path, label="promotion manifest")
+            revision_payload = _read_required_payload(revision_path, label="revision manifest")
+            evaluation_manifest_payload = _read_required_payload(evaluation_manifest_path, label="evaluation manifest")
+            evaluation_summary_payload = _read_required_payload(evaluation_summary_path, label="evaluation summary")
+        progress.update(message="benchmark reference inputs loaded")
         metrics = _extract_metric(evaluation_summary_payload, promotion_payload)
         recommended_action = _recommended_action(
             promotion_payload=promotion_payload,
             evaluation_manifest_payload=evaluation_manifest_payload,
         )
+        progress.update(message=f"reference metrics prepared decision={metrics.get('decision')}")
 
         payload = {
             "started_at": utc_now_iso(),
@@ -230,7 +240,9 @@ def main() -> int:
                 recommended_action=recommended_action,
             ),
         }
-        write_json(output_path, payload)
+        with Heartbeat("[public-benchmark-reference]", "writing public benchmark reference manifest", logger=log_progress):
+            write_json(output_path, payload)
+        progress.complete(message=f"saved path={artifact_display_path(output_path, workspace_root=ROOT)}")
         print(f"[public-benchmark-reference] saved: {artifact_display_path(output_path, workspace_root=ROOT)}", flush=True)
         return 0
     except KeyboardInterrupt:

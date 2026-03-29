@@ -15,10 +15,15 @@ if str(SRC) not in sys.path:
 from racing_ml.common.artifacts import display_path as artifact_display_path
 from racing_ml.common.artifacts import ensure_output_file_path as artifact_ensure_output_file_path
 from racing_ml.common.artifacts import read_json, utc_now_iso, write_json
+from racing_ml.common.progress import Heartbeat, ProgressBar
 
 
 DEFAULT_LEFT_UNIVERSE = "local_nankan"
 DEFAULT_RIGHT_UNIVERSE = "jra"
+
+
+def log_progress(message: str) -> None:
+    print(message, flush=True)
 
 
 def _resolve_path(path_text: str | Path) -> Path:
@@ -244,6 +249,13 @@ def main() -> int:
 
     try:
         artifact_ensure_output_file_path(output_path, label="output", workspace_root=ROOT)
+        progress = ProgressBar(total=3, prefix="[mixed-universe-numeric-summary]", logger=log_progress, min_interval_sec=0.0)
+        progress.start(
+            message=(
+                f"starting revision={revision_slug} left={left_universe} right={right_universe} "
+                f"dry_run={'yes' if args.dry_run else 'no'}"
+            )
+        )
 
         if args.dry_run and not compare_path.exists():
             promote_safe_summary = _planned_promote_safe_summary(requested_revision=revision_slug)
@@ -283,12 +295,19 @@ def main() -> int:
                     promote_safe_summary=promote_safe_summary,
                 ),
             }
-            write_json(output_path, payload)
+            progress.update(message="preparing planned numeric summary manifest")
+            with Heartbeat("[mixed-universe-numeric-summary]", "writing planned numeric summary manifest", logger=log_progress):
+                write_json(output_path, payload)
+            progress.complete(message=f"planned manifest saved path={artifact_display_path(output_path, workspace_root=ROOT)}")
             print(f"[mixed-universe-numeric-summary] planned manifest saved: {artifact_display_path(output_path, workspace_root=ROOT)}", flush=True)
             return 0
 
-        compare_payload = _read_required_payload(compare_path, label="numeric compare manifest")
-        promote_safe_summary = _promote_safe_summary(compare_payload)
+        with Heartbeat("[mixed-universe-numeric-summary]", "loading numeric compare manifest", logger=log_progress):
+            compare_payload = _read_required_payload(compare_path, label="numeric compare manifest")
+        progress.update(message=f"numeric compare manifest loaded path={artifact_display_path(compare_path, workspace_root=ROOT)}")
+        with Heartbeat("[mixed-universe-numeric-summary]", "building promote-safe summary", logger=log_progress):
+            promote_safe_summary = _promote_safe_summary(compare_payload)
+        progress.update(message=f"promote-safe summary built verdict={promote_safe_summary.get('verdict')}")
         compare_status = str(compare_payload.get("status") or "unknown")
         summary_status = "completed" if compare_status == "completed" else "partial"
         recommended_action = compare_payload.get("recommended_action")
@@ -329,7 +348,9 @@ def main() -> int:
                 promote_safe_summary=promote_safe_summary,
             ),
         }
-        write_json(output_path, payload)
+        with Heartbeat("[mixed-universe-numeric-summary]", "writing numeric summary manifest", logger=log_progress):
+            write_json(output_path, payload)
+        progress.complete(message=f"saved path={artifact_display_path(output_path, workspace_root=ROOT)} status={summary_status}")
         print(f"[mixed-universe-numeric-summary] saved: {artifact_display_path(output_path, workspace_root=ROOT)}", flush=True)
         return 0 if summary_status == "completed" else 2
     except KeyboardInterrupt:

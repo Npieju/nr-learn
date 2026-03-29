@@ -1,12 +1,17 @@
 from __future__ import annotations
 
 import argparse
+import json
 from pathlib import Path
 import subprocess
 import sys
 
-
 ROOT = Path(__file__).resolve().parents[1]
+SRC = ROOT / "src"
+if str(SRC) not in sys.path:
+    sys.path.insert(0, str(SRC))
+
+from racing_ml.common.progress import Heartbeat, ProgressBar
 
 DEFAULT_DATA_CONFIG = "configs/data_local_nankan.yaml"
 DEFAULT_MODEL_CONFIG = "configs/model_local_baseline.yaml"
@@ -24,9 +29,25 @@ DEFAULT_PREFLIGHT_OUTPUT = "artifacts/reports/data_preflight_local_nankan.json"
 DEFAULT_PRIMARY_MATERIALIZE_MANIFEST = "artifacts/reports/local_nankan_primary_materialize_manifest.json"
 
 
+def log_progress(message: str) -> None:
+    print(message, flush=True)
+
+
 def _run_command(*, label: str, command: list[str]) -> subprocess.CompletedProcess[bytes]:
     print(f"[local-benchmark-gate] running {label}: {' '.join(command)}", flush=True)
-    return subprocess.run(command, cwd=ROOT, check=False)
+    with Heartbeat("[local-benchmark-gate]", f"{label} child command", logger=log_progress):
+        return subprocess.run(command, cwd=ROOT, check=False)
+
+
+def _load_generated_files(manifest_file: str) -> dict[str, str]:
+    manifest_path = Path(manifest_file)
+    if not manifest_path.is_absolute():
+        manifest_path = ROOT / manifest_path
+    if not manifest_path.exists():
+        return {}
+    payload = json.loads(manifest_path.read_text())
+    generated_files = payload.get("generated_files")
+    return generated_files if isinstance(generated_files, dict) else {}
 
 
 def main() -> int:
@@ -55,6 +76,13 @@ def main() -> int:
     parser.add_argument("--skip-train", action="store_true")
     parser.add_argument("--skip-evaluate", action="store_true")
     args = parser.parse_args()
+    progress = ProgressBar(total=3, prefix="[local-benchmark-gate]", logger=log_progress, min_interval_sec=0.0)
+    progress.start(
+        message=(
+            f"starting data_config={args.data_config} model_config={args.model_config} "
+            f"feature_config={args.feature_config}"
+        )
+    )
 
     if args.materialize_primary_before_gate:
         materialize_command = [
@@ -74,6 +102,7 @@ def main() -> int:
         if args.materialize_output_file:
             materialize_command.extend(["--output-file", args.materialize_output_file])
         materialize_result = _run_command(label="primary_materialize", command=materialize_command)
+        progress.update(message=f"primary materialize finished exit_code={int(materialize_result.returncode)}")
         if int(materialize_result.returncode) not in {0, 2}:
             return int(materialize_result.returncode)
         if int(materialize_result.returncode) == 2:
@@ -81,6 +110,17 @@ def main() -> int:
                 "[local-benchmark-gate] primary materialize not ready; continuing to benchmark gate so preflight can emit the formal blocker",
                 flush=True,
             )
+
+    race_card_path = args.race_card_path
+    pedigree_path = args.pedigree_path
+    if args.materialize_primary_before_gate:
+        with Heartbeat("[local-benchmark-gate]", "loading generated primary files", logger=log_progress):
+            generated_files = _load_generated_files(args.materialize_manifest_file)
+        progress.update(message="resolved generated primary file paths")
+        race_card_path = str(generated_files.get("local_nankan_race_card") or race_card_path)
+        pedigree_path = str(generated_files.get("local_nankan_pedigree") or pedigree_path)
+    else:
+        progress.update(message="primary materialize skipped")
 
     command = [
         sys.executable,
@@ -114,9 +154,9 @@ def main() -> int:
         "--race-result-path",
         args.race_result_path,
         "--race-card-path",
-        args.race_card_path,
+        race_card_path,
         "--pedigree-path",
-        args.pedigree_path,
+        pedigree_path,
         "--preflight-output",
         args.preflight_output,
     ]
@@ -128,6 +168,7 @@ def main() -> int:
         command.append("--skip-evaluate")
 
     result = _run_command(label="benchmark_gate", command=command)
+    progress.complete(message=f"benchmark gate finished exit_code={int(result.returncode)} manifest={args.manifest_output}")
     return int(result.returncode)
 
 

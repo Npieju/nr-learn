@@ -18,10 +18,15 @@ from racing_ml.common.artifacts import ensure_output_file_path as artifact_ensur
 from racing_ml.common.artifacts import read_json, utc_now_iso, write_json
 from racing_ml.common.mixed_artifacts import latest_matching_path
 from racing_ml.common.mixed_artifacts import read_optional_json_path
+from racing_ml.common.progress import Heartbeat, ProgressBar
 
 
 DEFAULT_LEFT_UNIVERSE = "local_nankan"
 DEFAULT_RIGHT_UNIVERSE = "jra"
+
+
+def log_progress(message: str) -> None:
+    print(message, flush=True)
 
 
 def _resolve_path(path_text: str | Path) -> Path:
@@ -668,7 +673,8 @@ def _run_command(step: dict[str, object]) -> dict[str, object]:
     command = [str(part) for part in _list_payload(step.get("command"))]
     started_at = utc_now_iso()
     print(f"[mixed-universe-recovery] running {step.get('name')}: {' '.join(command)}", flush=True)
-    result = subprocess.run(command, cwd=ROOT, check=False)
+    with Heartbeat("[mixed-universe-recovery]", f"step={step.get('name')} child command", logger=log_progress):
+        result = subprocess.run(command, cwd=ROOT, check=False)
     finished_at = utc_now_iso()
     return {
         "name": step.get("name"),
@@ -709,9 +715,20 @@ def main() -> int:
 
     try:
         artifact_ensure_output_file_path(output_path, label="output", workspace_root=ROOT)
+        progress = ProgressBar(total=4, prefix="[mixed-universe-recovery]", logger=log_progress, min_interval_sec=0.0)
+        progress.start(
+            message=(
+                f"starting revision={revision_slug} left={left_universe} right={right_universe} "
+                f"dry_run={'yes' if args.dry_run else 'no'}"
+            )
+        )
 
-        board_payload = _read_required_payload(board_path, label="mixed status board")
-        steps, artifact_map, resolved_left_revision, resolved_left_source_kind, resolved_left_artifact = _build_recovery_steps(board_payload=board_payload, board_path=board_path)
+        with Heartbeat("[mixed-universe-recovery]", "loading source status board", logger=log_progress):
+            board_payload = _read_required_payload(board_path, label="mixed status board")
+        progress.update(message=f"source status board loaded path={_path_arg(board_path)}")
+        with Heartbeat("[mixed-universe-recovery]", "building recovery steps", logger=log_progress):
+            steps, artifact_map, resolved_left_revision, resolved_left_source_kind, resolved_left_artifact = _build_recovery_steps(board_payload=board_payload, board_path=board_path)
+        progress.update(message=f"recovery steps built count={len(steps)}")
         payload: dict[str, object] = {
             "started_at": utc_now_iso(),
             "finished_at": None,
@@ -742,7 +759,8 @@ def main() -> int:
             },
             "steps": steps if args.dry_run else [],
         }
-        write_json(output_path, payload)
+        with Heartbeat("[mixed-universe-recovery]", "writing initial recovery manifest", logger=log_progress):
+            write_json(output_path, payload)
 
         if args.dry_run:
             payload["refreshed_board_status"] = board_payload.get("status")
@@ -750,12 +768,21 @@ def main() -> int:
             payload["refreshed_next_action_source"] = board_payload.get("next_action_source")
             payload["refreshed_highlights"] = board_payload.get("highlights")
             payload["finished_at"] = utc_now_iso()
-            write_json(output_path, payload)
+            with Heartbeat("[mixed-universe-recovery]", "writing dry-run recovery manifest", logger=log_progress):
+                write_json(output_path, payload)
+            progress.complete(message=f"planned manifest saved path={_path_arg(output_path)}")
             print(f"[mixed-universe-recovery] planned manifest saved: {_path_arg(output_path)}", flush=True)
             return 0
 
         executed_steps: list[dict[str, object]] = []
         overall_exit_code = 0
+        step_progress = ProgressBar(
+            total=max(len(steps), 1),
+            prefix="[mixed-universe-recovery:steps]",
+            logger=log_progress,
+            min_interval_sec=0.0,
+        )
+        step_progress.start(message="executing recovery steps")
         for step in steps:
             result = _run_command(step)
             executed_steps.append(result)
@@ -766,12 +793,19 @@ def main() -> int:
                 overall_exit_code = exit_code
             elif exit_code == 2 and overall_exit_code == 0:
                 overall_exit_code = 2
-            write_json(output_path, payload)
+            with Heartbeat("[mixed-universe-recovery]", f"writing manifest after step={step.get('name')}", logger=log_progress):
+                write_json(output_path, payload)
+            step_progress.update(
+                current=len(executed_steps),
+                message=f"step={step.get('name')} status={result.get('status')} exit_code={exit_code}",
+            )
+        step_progress.complete(message=f"recovery steps finished overall_exit_code={overall_exit_code}")
 
         payload["finished_at"] = utc_now_iso()
         payload["status"] = "completed" if overall_exit_code == 0 else ("partial" if overall_exit_code == 2 else "failed")
 
-        refreshed_board_payload = _read_optional_payload(_dict_payload(payload.get("artifacts")).get("status_board_manifest"))
+        with Heartbeat("[mixed-universe-recovery]", "reloading refreshed status board", logger=log_progress):
+            refreshed_board_payload = _read_optional_payload(_dict_payload(payload.get("artifacts")).get("status_board_manifest"))
         if isinstance(refreshed_board_payload, dict):
             payload["recommended_action"] = refreshed_board_payload.get("recommended_action")
             payload["current_phase"] = refreshed_board_payload.get("current_phase")
@@ -790,7 +824,10 @@ def main() -> int:
                 payload["resolved_left_source_kind"] = refreshed_board_payload.get("resolved_left_source_kind")
             if payload.get("resolved_left_artifact") is None:
                 payload["resolved_left_artifact"] = refreshed_board_payload.get("resolved_left_artifact")
-        write_json(output_path, payload)
+        progress.update(message=f"recovery run completed status={payload['status']}")
+        with Heartbeat("[mixed-universe-recovery]", "writing final recovery manifest", logger=log_progress):
+            write_json(output_path, payload)
+        progress.complete(message=f"manifest saved path={_path_arg(output_path)} status={payload['status']}")
         print(f"[mixed-universe-recovery] manifest saved: {_path_arg(output_path)}", flush=True)
         return overall_exit_code
     except KeyboardInterrupt:

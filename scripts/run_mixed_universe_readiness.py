@@ -17,12 +17,17 @@ from racing_ml.common.artifacts import ensure_output_file_path as artifact_ensur
 from racing_ml.common.artifacts import read_json, utc_now_iso, write_json
 from racing_ml.common.mixed_artifacts import read_optional_json_path
 from racing_ml.common.mixed_artifacts import resolve_local_snapshot_and_lineage_paths
+from racing_ml.common.progress import Heartbeat, ProgressBar
 
 
 DEFAULT_LEFT_UNIVERSE = "local_nankan"
 DEFAULT_RIGHT_UNIVERSE = "jra"
 DEFAULT_RIGHT_REFERENCE = "current_recommended_serving_2025_latest"
 DEFAULT_RIGHT_REFERENCE_MANIFEST = "artifacts/reports/public_benchmark_reference_current_recommended_serving_2025_latest.json"
+
+
+def log_progress(message: str) -> None:
+    print(message, flush=True)
 
 
 def _resolve_path(path_text: str | Path) -> Path:
@@ -394,6 +399,13 @@ def main() -> int:
 
     try:
         artifact_ensure_output_file_path(output_path, label="output", workspace_root=ROOT)
+        progress = ProgressBar(total=4, prefix="[mixed-universe-readiness]", logger=log_progress, min_interval_sec=0.0)
+        progress.start(
+            message=(
+                f"starting revision={revision_slug} left={left_universe} right={right_universe} "
+                f"dry_run={'yes' if args.dry_run else 'no'}"
+            )
+        )
 
         payload: dict[str, object] = {
             "started_at": utc_now_iso(),
@@ -474,12 +486,16 @@ def main() -> int:
                     ),
                 }
             )
-            write_json(output_path, payload)
+            progress.update(message="preparing planned readiness manifest")
+            with Heartbeat("[mixed-universe-readiness]", "writing planned readiness manifest", logger=log_progress):
+                write_json(output_path, payload)
+            progress.complete(message=f"planned manifest saved path={artifact_display_path(output_path, workspace_root=ROOT)}")
             print(f"[mixed-universe-readiness] planned manifest saved: {artifact_display_path(output_path, workspace_root=ROOT)}", flush=True)
             return 0
 
         payload["completed_step"] = "inspect_left_inputs"
-        left_payload, left_source_kind = _extract_left_payload(left_snapshot_path, left_lineage_path)
+        with Heartbeat("[mixed-universe-readiness]", "inspecting left-side inputs", logger=log_progress):
+            left_payload, left_source_kind = _extract_left_payload(left_snapshot_path, left_lineage_path)
         payload["left_source_kind"] = left_source_kind
         payload["resolved_left_revision"] = _resolved_left_revision(left_payload)
         payload["resolved_left_source_kind"] = left_source_kind
@@ -488,17 +504,19 @@ def main() -> int:
             left_snapshot_path=left_snapshot_path,
             left_lineage_path=left_lineage_path,
         )
+        progress.update(message=f"left-side inputs resolved source_kind={left_source_kind}")
 
         payload["completed_step"] = "evaluate_requirements"
-        checks, status, error_code, recommended_action = _evaluate_requirements(
-            left_payload=left_payload,
-            left_source_kind=left_source_kind,
-            left_universe=left_universe,
-            right_public_doc_path=right_public_doc_path,
-            right_reference=args.right_reference,
-            right_reference_manifest_path=right_reference_manifest_path,
-        )
-        pointer_payload = _extract_evaluation_pointer(left_payload)
+        with Heartbeat("[mixed-universe-readiness]", "evaluating compare prerequisites", logger=log_progress):
+            checks, status, error_code, recommended_action = _evaluate_requirements(
+                left_payload=left_payload,
+                left_source_kind=left_source_kind,
+                left_universe=left_universe,
+                right_public_doc_path=right_public_doc_path,
+                right_reference=args.right_reference,
+                right_reference_manifest_path=right_reference_manifest_path,
+            )
+            pointer_payload = _extract_evaluation_pointer(left_payload)
         payload["checks"] = checks
         payload["left_summary"] = {
             "status": left_payload.get("status"),
@@ -519,6 +537,7 @@ def main() -> int:
             left_snapshot_path=left_snapshot_path,
             left_lineage_path=left_lineage_path,
         )
+        progress.update(message=f"prerequisites evaluated status={status} error_code={error_code or 'none'}")
 
         payload["status"] = status
         payload["error_code"] = None if status == "ready" else error_code
@@ -533,7 +552,9 @@ def main() -> int:
         )
         payload["completed_step"] = "completed"
         payload["finished_at"] = utc_now_iso()
-        write_json(output_path, payload)
+        with Heartbeat("[mixed-universe-readiness]", "writing readiness manifest", logger=log_progress):
+            write_json(output_path, payload)
+        progress.complete(message=f"saved path={artifact_display_path(output_path, workspace_root=ROOT)} status={status}")
         print(f"[mixed-universe-readiness] saved: {artifact_display_path(output_path, workspace_root=ROOT)}", flush=True)
         return 0 if status == "ready" else 2
     except KeyboardInterrupt:

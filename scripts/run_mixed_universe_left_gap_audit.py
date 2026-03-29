@@ -16,10 +16,15 @@ from racing_ml.common.artifacts import display_path as artifact_display_path
 from racing_ml.common.artifacts import ensure_output_file_path as artifact_ensure_output_file_path
 from racing_ml.common.artifacts import read_json, utc_now_iso, write_json
 from racing_ml.common.mixed_artifacts import resolve_local_lineage_path
+from racing_ml.common.progress import Heartbeat, ProgressBar
 
 
 DEFAULT_LEFT_UNIVERSE = "local_nankan"
 DEFAULT_RIGHT_UNIVERSE = "jra"
+
+
+def log_progress(message: str) -> None:
+    print(message, flush=True)
 
 
 def _resolve_path(path_text: str | Path) -> Path:
@@ -399,6 +404,13 @@ def main() -> int:
 
     try:
         artifact_ensure_output_file_path(output_path, label="output", workspace_root=ROOT)
+        progress = ProgressBar(total=4, prefix="[mixed-universe-left-gap-audit]", logger=log_progress, min_interval_sec=0.0)
+        progress.start(
+            message=(
+                f"starting revision={revision_slug} left={left_universe} right={right_universe} "
+                f"dry_run={'yes' if args.dry_run else 'no'}"
+            )
+        )
 
         if args.dry_run and not compare_path.exists() and not lineage_path.exists():
             recommended_action = "generate_numeric_compare_and_lineage_manifests"
@@ -439,13 +451,20 @@ def main() -> int:
                 ),
                 "gap_rows": [],
             }
-            write_json(output_path, payload)
+            progress.update(message="preparing planned gap audit manifest")
+            with Heartbeat("[mixed-universe-left-gap-audit]", "writing planned gap audit manifest", logger=log_progress):
+                write_json(output_path, payload)
+            progress.complete(message=f"planned manifest saved path={artifact_display_path(output_path, workspace_root=ROOT)}")
             print(f"[mixed-universe-left-gap-audit] planned manifest saved: {artifact_display_path(output_path, workspace_root=ROOT)}", flush=True)
             return 0
 
-        numeric_compare_payload = _read_required_payload(compare_path, label="numeric compare manifest")
-        lineage_payload = _read_required_payload(lineage_path, label="left lineage manifest")
-        gap_rows = _build_gap_rows(numeric_compare_payload=numeric_compare_payload, lineage_payload=lineage_payload)
+        with Heartbeat("[mixed-universe-left-gap-audit]", "loading numeric compare and lineage manifests", logger=log_progress):
+            numeric_compare_payload = _read_required_payload(compare_path, label="numeric compare manifest")
+            lineage_payload = _read_required_payload(lineage_path, label="left lineage manifest")
+        progress.update(message="upstream manifests loaded")
+        with Heartbeat("[mixed-universe-left-gap-audit]", "building missing-left gap rows", logger=log_progress):
+            gap_rows = _build_gap_rows(numeric_compare_payload=numeric_compare_payload, lineage_payload=lineage_payload)
+        progress.update(message=f"gap rows built count={len(gap_rows)}")
         requested_revision = str(numeric_compare_payload.get("requested_revision") or numeric_compare_payload.get("revision") or revision_slug)
         resolved_left_revision = str(numeric_compare_payload.get("resolved_left_revision") or lineage_payload.get("revision") or "") or None
         resolved_left_source_kind = str(numeric_compare_payload.get("resolved_left_source_kind") or "local_revision_gate")
@@ -495,7 +514,10 @@ def main() -> int:
             ),
             "gap_rows": gap_rows,
         }
-        write_json(output_path, payload)
+        progress.update(message=f"gap audit payload prepared status={status}")
+        with Heartbeat("[mixed-universe-left-gap-audit]", "writing gap audit manifest", logger=log_progress):
+            write_json(output_path, payload)
+        progress.complete(message=f"saved path={artifact_display_path(output_path, workspace_root=ROOT)} status={status}")
         print(f"[mixed-universe-left-gap-audit] saved: {artifact_display_path(output_path, workspace_root=ROOT)}", flush=True)
         return 0 if status == "completed" else 2
     except KeyboardInterrupt:

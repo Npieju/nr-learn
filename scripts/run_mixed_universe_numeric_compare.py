@@ -17,12 +17,17 @@ from racing_ml.common.artifacts import display_path as artifact_display_path
 from racing_ml.common.artifacts import ensure_output_file_path as artifact_ensure_output_file_path
 from racing_ml.common.artifacts import read_json, utc_now_iso, write_json
 from racing_ml.common.mixed_artifacts import prefer_existing_path
+from racing_ml.common.progress import Heartbeat, ProgressBar
 
 
 DEFAULT_LEFT_UNIVERSE = "local_nankan"
 DEFAULT_RIGHT_UNIVERSE = "jra"
 DEFAULT_RIGHT_REFERENCE = "current_recommended_serving_2025_latest"
 DEFAULT_RIGHT_REFERENCE_MANIFEST = "artifacts/reports/public_benchmark_reference_current_recommended_serving_2025_latest.json"
+
+
+def log_progress(message: str) -> None:
+    print(message, flush=True)
 
 
 def _resolve_path(path_text: str | Path) -> Path:
@@ -365,6 +370,13 @@ def main() -> int:
     try:
         artifact_ensure_output_file_path(output_path, label="output", workspace_root=ROOT)
         artifact_ensure_output_file_path(csv_output_path, label="csv output", workspace_root=ROOT)
+        progress = ProgressBar(total=4, prefix="[mixed-universe-numeric-compare]", logger=log_progress, min_interval_sec=0.0)
+        progress.start(
+            message=(
+                f"starting revision={revision_slug} left={left_universe} right={right_universe} "
+                f"dry_run={'yes' if args.dry_run else 'no'}"
+            )
+        )
 
         if args.dry_run and not readiness_path.exists() and not compare_path.exists() and not schema_path.exists():
             readiness_status = "missing"
@@ -423,22 +435,29 @@ def main() -> int:
                 ),
                 "row_results": [],
             }
-            write_json(output_path, payload)
+            progress.update(message="preparing planned numeric compare manifest")
+            with Heartbeat("[mixed-universe-numeric-compare]", "writing planned numeric compare manifest", logger=log_progress):
+                write_json(output_path, payload)
+            progress.complete(message=f"planned manifest saved path={artifact_display_path(output_path, workspace_root=ROOT)}")
             print(f"[mixed-universe-numeric-compare] planned manifest saved: {artifact_display_path(output_path, workspace_root=ROOT)}", flush=True)
             return 0
 
-        readiness_payload = _read_required_payload(readiness_path, label="mixed readiness manifest")
-        compare_payload = _read_required_payload(compare_path, label="mixed compare manifest")
-        schema_payload = _read_required_payload(schema_path, label="mixed schema manifest")
-        right_reference_payload = _read_required_payload(right_reference_manifest_path, label="right reference manifest")
+        with Heartbeat("[mixed-universe-numeric-compare]", "loading required manifests", logger=log_progress):
+            readiness_payload = _read_required_payload(readiness_path, label="mixed readiness manifest")
+            compare_payload = _read_required_payload(compare_path, label="mixed compare manifest")
+            schema_payload = _read_required_payload(schema_path, label="mixed schema manifest")
+            right_reference_payload = _read_required_payload(right_reference_manifest_path, label="right reference manifest")
+        progress.update(message="required manifests loaded")
 
-        left_sources = _extract_left_sources(compare_payload)
-        metric_rows = schema_payload.get("metric_rows") if isinstance(schema_payload.get("metric_rows"), list) else []
-        row_results = [
-            _build_row_result(row, left_sources, right_reference_payload)
-            for row in metric_rows
-            if isinstance(row, dict)
-        ]
+        with Heartbeat("[mixed-universe-numeric-compare]", "building numeric row results", logger=log_progress):
+            left_sources = _extract_left_sources(compare_payload)
+            metric_rows = schema_payload.get("metric_rows") if isinstance(schema_payload.get("metric_rows"), list) else []
+            row_results = [
+                _build_row_result(row, left_sources, right_reference_payload)
+                for row in metric_rows
+                if isinstance(row, dict)
+            ]
+        progress.update(message=f"row results built count={len(row_results)}")
 
         readiness_status = str(readiness_payload.get("status") or "unknown")
         schema_status = str(schema_payload.get("status") or "unknown")
@@ -506,8 +525,11 @@ def main() -> int:
             ),
             "row_results": row_results,
         }
-        _write_compare_csv(csv_output_path, row_results)
-        write_json(output_path, payload)
+        progress.update(message=f"numeric compare prepared status={compare_status}")
+        with Heartbeat("[mixed-universe-numeric-compare]", "writing numeric compare outputs", logger=log_progress):
+            _write_compare_csv(csv_output_path, row_results)
+            write_json(output_path, payload)
+        progress.complete(message=f"saved path={artifact_display_path(output_path, workspace_root=ROOT)} status={compare_status}")
         print(f"[mixed-universe-numeric-compare] saved: {artifact_display_path(output_path, workspace_root=ROOT)}", flush=True)
         return 0 if compare_status == "completed" else 2
     except KeyboardInterrupt:

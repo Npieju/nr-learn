@@ -5,8 +5,12 @@ from pathlib import Path
 import subprocess
 import sys
 
-
 ROOT = Path(__file__).resolve().parents[1]
+SRC = ROOT / "src"
+if str(SRC) not in sys.path:
+    sys.path.insert(0, str(SRC))
+
+from racing_ml.common.progress import Heartbeat, ProgressBar
 
 DEFAULT_CONFIG = "configs/data_local_nankan.yaml"
 DEFAULT_FEATURE_CONFIG = "configs/features_local_baseline.yaml"
@@ -15,6 +19,10 @@ DEFAULT_TEMPLATE_CONFIG = "configs/data_local_nankan.yaml"
 DEFAULT_SUMMARY_OUTPUT = "artifacts/reports/feature_gap_summary_local_nankan.json"
 DEFAULT_FEATURE_OUTPUT = "artifacts/reports/feature_gap_feature_coverage_local_nankan.csv"
 DEFAULT_RAW_OUTPUT = "artifacts/reports/feature_gap_raw_column_coverage_local_nankan.csv"
+
+
+def log_progress(message: str) -> None:
+    print(message, flush=True)
 
 
 def main() -> int:
@@ -29,6 +37,13 @@ def main() -> int:
     parser.add_argument("--feature-output", default=DEFAULT_FEATURE_OUTPUT)
     parser.add_argument("--raw-output", default=DEFAULT_RAW_OUTPUT)
     args = parser.parse_args()
+    progress = ProgressBar(total=2, prefix="[local-feature-gap]", logger=log_progress, min_interval_sec=0.0)
+    progress.start(
+        message=(
+            f"starting config={args.config} feature_config={args.feature_config} "
+            f"max_rows={args.max_rows}"
+        )
+    )
 
     command = [
         sys.executable,
@@ -52,8 +67,11 @@ def main() -> int:
         "--raw-output",
         args.raw_output,
     ]
+    progress.update(message="launching delegated feature gap report")
     print(f"[local-feature-gap] running: {' '.join(command)}", flush=True)
-    result = subprocess.run(command, cwd=ROOT, check=False)
+    with Heartbeat("[local-feature-gap]", "feature gap child command", logger=log_progress):
+        result = subprocess.run(command, cwd=ROOT, check=False)
+    progress.complete(message=f"child command finished exit_code={int(result.returncode)}")
     return int(result.returncode)
 
 

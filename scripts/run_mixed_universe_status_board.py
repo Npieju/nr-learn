@@ -15,6 +15,7 @@ if str(SRC) not in sys.path:
 from racing_ml.common.artifacts import display_path as artifact_display_path
 from racing_ml.common.artifacts import ensure_output_file_path as artifact_ensure_output_file_path
 from racing_ml.common.artifacts import read_json, utc_now_iso, write_json
+from racing_ml.common.progress import Heartbeat, ProgressBar
 from racing_ml.common.mixed_artifacts import prefer_existing_path
 from racing_ml.common.mixed_artifacts import read_optional_json_path
 from racing_ml.common.mixed_artifacts import resolve_local_snapshot_and_lineage_paths
@@ -22,6 +23,10 @@ from racing_ml.common.mixed_artifacts import resolve_local_snapshot_and_lineage_
 
 DEFAULT_LEFT_UNIVERSE = "local_nankan"
 DEFAULT_RIGHT_UNIVERSE = "jra"
+
+
+def log_progress(message: str) -> None:
+    print(message, flush=True)
 
 
 def _resolve_path(path_text: str | Path) -> Path:
@@ -237,8 +242,16 @@ def main() -> int:
 
     try:
         artifact_ensure_output_file_path(output_path, label="output", workspace_root=ROOT)
+        progress = ProgressBar(total=3, prefix="[mixed-universe-status-board]", logger=log_progress, min_interval_sec=0.0)
+        progress.start(
+            message=(
+                f"starting revision={revision_slug} left={left_universe} right={right_universe} "
+                f"dry_run={'yes' if args.dry_run else 'no'}"
+            )
+        )
 
         if args.dry_run and not any(path.exists() for path in paths.values()):
+            progress.update(message="preparing planned manifest")
             planned_summaries = [
                 _artifact_summary("public_snapshot", paths["public_snapshot"], None, ["status", "lineage_status"], requested_revision=revision_slug),
                 _artifact_summary("readiness", paths["readiness"], None, ["status"], requested_revision=revision_slug),
@@ -293,11 +306,15 @@ def main() -> int:
                     "recovery_plan_step_count": None,
                 },
             }
-            write_json(output_path, payload)
+            with Heartbeat("[mixed-universe-status-board]", "writing planned manifest", logger=log_progress):
+                write_json(output_path, payload)
+            progress.complete(message=f"planned manifest saved path={artifact_display_path(output_path, workspace_root=ROOT)}")
             print(f"[mixed-universe-status-board] planned manifest saved: {artifact_display_path(output_path, workspace_root=ROOT)}", flush=True)
             return 0
 
-        payloads = {key: _read_optional_payload(path) for key, path in paths.items()}
+        with Heartbeat("[mixed-universe-status-board]", "loading linked manifests", logger=log_progress):
+            payloads = {key: _read_optional_payload(path) for key, path in paths.items()}
+        progress.update(message=f"linked manifests loaded count={len(payloads)}")
         numeric_summary_payload = _dict_payload(payloads.get("numeric_summary"))
         numeric_summary_summary = _dict_payload(numeric_summary_payload.get("promote_safe_summary"))
         gap_audit_payload = _dict_payload(payloads.get("left_gap_audit"))
@@ -333,6 +350,7 @@ def main() -> int:
         overall_status = "completed"
         if any(_summary_is_incomplete(item) for item in summaries):
             overall_status = "partial"
+        progress.update(message=f"status derived overall={overall_status} current_phase={current_phase}")
 
         payload = {
             "started_at": utc_now_iso(),
@@ -378,7 +396,9 @@ def main() -> int:
                 "recovery_plan_step_count": recovery_plan_summary.get("step_count"),
             },
         }
-        write_json(output_path, payload)
+        with Heartbeat("[mixed-universe-status-board]", "writing status board manifest", logger=log_progress):
+            write_json(output_path, payload)
+        progress.complete(message=f"saved path={artifact_display_path(output_path, workspace_root=ROOT)} status={overall_status}")
         print(f"[mixed-universe-status-board] saved: {artifact_display_path(output_path, workspace_root=ROOT)}", flush=True)
         return 0 if overall_status == "completed" else 2
     except KeyboardInterrupt:

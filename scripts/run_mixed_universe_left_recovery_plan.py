@@ -15,10 +15,15 @@ if str(SRC) not in sys.path:
 from racing_ml.common.artifacts import display_path as artifact_display_path
 from racing_ml.common.artifacts import ensure_output_file_path as artifact_ensure_output_file_path
 from racing_ml.common.artifacts import read_json, utc_now_iso, write_json
+from racing_ml.common.progress import Heartbeat, ProgressBar
 
 
 DEFAULT_LEFT_UNIVERSE = "local_nankan"
 DEFAULT_RIGHT_UNIVERSE = "jra"
+
+
+def log_progress(message: str) -> None:
+    print(message, flush=True)
 
 
 def _resolve_path(path_text: str | Path) -> Path:
@@ -323,6 +328,13 @@ def main() -> int:
 
     try:
         artifact_ensure_output_file_path(output_path, label="output", workspace_root=ROOT)
+        progress = ProgressBar(total=4, prefix="[mixed-universe-left-recovery-plan]", logger=log_progress, min_interval_sec=0.0)
+        progress.start(
+            message=(
+                f"starting revision={revision_slug} left={left_universe} right={right_universe} "
+                f"dry_run={'yes' if args.dry_run else 'no'}"
+            )
+        )
 
         if args.dry_run and not gap_audit_path.exists():
             summary = _planned_summary(requested_revision=revision_slug, left_universe=left_universe)
@@ -359,12 +371,19 @@ def main() -> int:
                 ),
                 "plan_steps": [],
             }
-            write_json(output_path, payload)
+            progress.update(message="preparing planned recovery plan manifest")
+            with Heartbeat("[mixed-universe-left-recovery-plan]", "writing planned recovery plan manifest", logger=log_progress):
+                write_json(output_path, payload)
+            progress.complete(message=f"planned manifest saved path={artifact_display_path(output_path, workspace_root=ROOT)}")
             print(f"[mixed-universe-left-recovery-plan] planned manifest saved: {artifact_display_path(output_path, workspace_root=ROOT)}", flush=True)
             return 0
 
-        gap_audit_payload = _read_required_payload(gap_audit_path, label="left gap audit manifest")
-        plan_steps = _build_plan_steps(gap_audit_payload)
+        with Heartbeat("[mixed-universe-left-recovery-plan]", "loading left gap audit manifest", logger=log_progress):
+            gap_audit_payload = _read_required_payload(gap_audit_path, label="left gap audit manifest")
+        progress.update(message=f"gap audit loaded path={artifact_display_path(gap_audit_path, workspace_root=ROOT)}")
+        with Heartbeat("[mixed-universe-left-recovery-plan]", "building recovery steps", logger=log_progress):
+            plan_steps = _build_plan_steps(gap_audit_payload)
+        progress.update(message=f"recovery steps built count={len(plan_steps)}")
         status = "completed" if not plan_steps else "partial"
         summary = _build_summary(plan_steps, gap_audit_payload)
         recommended_action = _recommended_action(plan_steps, gap_audit_payload)
@@ -400,7 +419,10 @@ def main() -> int:
             ),
             "plan_steps": plan_steps,
         }
-        write_json(output_path, payload)
+        progress.update(message=f"recovery plan payload prepared status={status}")
+        with Heartbeat("[mixed-universe-left-recovery-plan]", "writing recovery plan manifest", logger=log_progress):
+            write_json(output_path, payload)
+        progress.complete(message=f"saved path={artifact_display_path(output_path, workspace_root=ROOT)} status={status}")
         print(f"[mixed-universe-left-recovery-plan] saved: {artifact_display_path(output_path, workspace_root=ROOT)}", flush=True)
         return 0 if status == "completed" else 2
     except KeyboardInterrupt:

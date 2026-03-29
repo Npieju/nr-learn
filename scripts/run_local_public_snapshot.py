@@ -15,11 +15,16 @@ if str(SRC) not in sys.path:
 from racing_ml.common.artifacts import display_path as artifact_display_path
 from racing_ml.common.artifacts import ensure_output_file_path as artifact_ensure_output_file_path
 from racing_ml.common.artifacts import read_json, utc_now_iso, write_json
+from racing_ml.common.progress import Heartbeat, ProgressBar
 
 
 DEFAULT_UNIVERSE = "local_nankan"
 DEFAULT_SOURCE_SCOPE = "local_only"
 DEFAULT_BASELINE_REFERENCE = "current_recommended_serving_2025_latest"
+
+
+def log_progress(message: str) -> None:
+    print(message, flush=True)
 
 
 def _read_order(*, include_backfill_handoff: bool = False) -> list[str]:
@@ -393,8 +398,16 @@ def main() -> int:
 
     try:
         artifact_ensure_output_file_path(output_path, label="output", workspace_root=ROOT)
+        progress = ProgressBar(total=3, prefix="[local-public-snapshot]", logger=log_progress, min_interval_sec=0.0)
+        progress.start(
+            message=(
+                f"starting revision={revision_slug} universe={args.universe} "
+                f"dry_run={'yes' if args.dry_run else 'no'}"
+            )
+        )
 
         if args.dry_run and not lineage_path.exists():
+            progress.update(message="preparing planned snapshot manifest")
             payload = _build_planned_payload(
                 revision_slug=revision_slug,
                 universe=args.universe,
@@ -403,11 +416,15 @@ def main() -> int:
                 lineage_path=lineage_path,
                 output_path=output_path,
             )
-            write_json(output_path, payload)
+            with Heartbeat("[local-public-snapshot]", "writing planned snapshot manifest", logger=log_progress):
+                write_json(output_path, payload)
+            progress.complete(message=f"planned manifest saved path={artifact_display_path(output_path, workspace_root=ROOT)}")
             print(f"[local-public-snapshot] planned snapshot saved: {artifact_display_path(output_path, workspace_root=ROOT)}", flush=True)
             return 0
 
-        lineage_payload = _read_required_payload(lineage_path, label="local revision lineage")
+        with Heartbeat("[local-public-snapshot]", "loading lineage payload", logger=log_progress):
+            lineage_payload = _read_required_payload(lineage_path, label="local revision lineage")
+        progress.update(message=f"lineage payload loaded path={artifact_display_path(lineage_path, workspace_root=ROOT)}")
         artifacts = _dict_payload(lineage_payload.get("artifacts"))
         benchmark_payload = _dict_payload(lineage_payload.get("benchmark_gate_payload"))
         evaluation_pointer_payload = lineage_payload.get("evaluation_pointer_payload")
@@ -491,7 +508,10 @@ def main() -> int:
             backfill_handoff_summary=_dict_payload(payload.get("backfill_handoff_summary")) or None,
         )
 
-        write_json(output_path, payload)
+        progress.update(message=f"snapshot payload prepared status={payload['status']}")
+        with Heartbeat("[local-public-snapshot]", "writing snapshot manifest", logger=log_progress):
+            write_json(output_path, payload)
+        progress.complete(message=f"saved path={artifact_display_path(output_path, workspace_root=ROOT)} status={payload['status']}")
         print(f"[local-public-snapshot] saved: {artifact_display_path(output_path, workspace_root=ROOT)}", flush=True)
         return 0
     except KeyboardInterrupt:
