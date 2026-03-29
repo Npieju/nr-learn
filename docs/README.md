@@ -70,7 +70,7 @@ seasonal family の次 issue 下書きは [next_issue_sep_guard_secondary_family
 
 seasonal second-layer fallback の順位づけは [seasonal_secondary_fallback_standard.md](seasonal_secondary_fallback_standard.md) を使う。
 
-runtime 改善の次 issue 下書きは [next_issue_deque_trim_exact_safe_followup.md](next_issue_deque_trim_exact_safe_followup.md) を使う。
+runtime 改善の次 issue 下書きは [next_issue_training_table_load_residuals.md](next_issue_training_table_load_residuals.md) を使う。
 
 tail loader optimization の gate 運用は [tail_loader_equivalence_gate_standard.md](tail_loader_equivalence_gate_standard.md) を使う。
 
