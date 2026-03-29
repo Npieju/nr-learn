@@ -62,6 +62,8 @@ revision gate 前の確認には [revision_gate_candidate_checklist.md](revision
 
 promoted anchor に対する challenger 判定には [policy_challenger_decision_checklist.md](policy_challenger_decision_checklist.md) を使う。
 
+次の serving / seasonal 本線 issue 下書きは [next_issue_seasonal_derisk_long_horizon.md](next_issue_seasonal_derisk_long_horizon.md) を使う。
+
 ## 正本
 
 このプロジェクトの理解と運用に必要な中核文書は次の 8 本である。

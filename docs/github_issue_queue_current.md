@@ -17,6 +17,27 @@
 
 ## 3. Current Issue Set
 
+### 3.0 Current Queue After Kelly Family Close
+
+2026-03-29 時点で、Kelly runtime family (`#10`, `#11`, `#12`, `#13`) は close 済みで、current operational anchor は引き続き `r20260329_tighter_policy_ratio003_abs90` である。
+
+この時点の open issue は `#7` の runtime 改善だけであり、次の experiment 本線は `seasonal de-risk long-horizon formalization` へ移す。
+
+Primary next issue draft:
+
+- `docs/next_issue_seasonal_derisk_long_horizon.md`
+
+GitHub issue:
+
+- `#14`
+- <https://github.com/Npieju/nr-learn/issues/14>
+
+Primary next execution order:
+
+1. `seasonal de-risk long-horizon formalization`
+2. `#7 optimize_roi_strategy runtime reduction for nested challenger runs`
+3. その後に必要なら next challenger family を再選定する
+
 ### 3.1 [experiment] Tighter policy search frontier refinement
 
 GitHub issue:
