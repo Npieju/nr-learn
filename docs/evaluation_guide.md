@@ -17,6 +17,8 @@
 - 正式な採用判断は `run_evaluate.py` と `run_promotion_gate.py` を通した revision 単位で行う。
 - 単発の高 ROI や短い比較結果を、そのまま benchmark の代表値や昇格根拠には使わない。
 
+`ROI > 1.20` を目指す revision の KPI 読みは [roi120_kpi_definition.md](roi120_kpi_definition.md) を参照する。
+
 latest 2025 の判断を再開するときも、formal artifact から先に読むのではなく、まず `serving_validation_guide.md` の dashboard summary JSON 一覧で actual-date role を確認し、必要なときだけこの文書の evaluate / promotion gate artifact に降りる。
 
 ## 3. `run_evaluate.py` の役割
@@ -220,6 +222,7 @@ evaluation / promotion gate で判断するもの:
 - revision の採否
 - representative な根拠の有無
 - feasible fold の十分性
+- `ROI > 1.20` に近づく primary KPI 改善が support と guardrail を伴っているか
 
 evaluation だけでは決めないもの:
 

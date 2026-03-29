@@ -1,0 +1,95 @@
+name: Model Experiment
+description: JRA/NAR のモデル改善や policy 仮説を 1 件ずつ検証する issue
+title: "[experiment] "
+labels:
+  - experiment
+body:
+  - type: dropdown
+    id: universe
+    attributes:
+      label: Universe
+      options:
+        - JRA
+        - NAR
+        - Mixed
+    validations:
+      required: true
+  - type: dropdown
+    id: category
+    attributes:
+      label: Category
+      options:
+        - Feature
+        - Model
+        - Policy
+        - Evaluation
+        - Data Quality
+    validations:
+      required: true
+  - type: textarea
+    id: objective
+    attributes:
+      label: Objective
+      description: 何を良くしたいかを 2-3 文で書く
+      placeholder: JRA formal candidate の長期 ROI を改善したい
+    validations:
+      required: true
+  - type: textarea
+    id: hypothesis
+    attributes:
+      label: Hypothesis
+      description: 1 issue 1 hypothesis で書く
+      placeholder: liquidity guardrail を tightening すると drawdown を抑えながら ROI を改善できる
+    validations:
+      required: true
+  - type: textarea
+    id: scope
+    attributes:
+      label: In-Scope Surface
+      description: 触るファイル、pipeline、profile、config
+    validations:
+      required: true
+  - type: textarea
+    id: non_goals
+    attributes:
+      label: Non-Goals
+      description: 今回やらないことを明示する
+      placeholder: NAR benchmark 昇格は今回の対象外
+    validations:
+      required: true
+  - type: textarea
+    id: metrics
+    attributes:
+      label: Success Metrics
+      description: 主要指標と許容下限
+      placeholder: weighted ROI, feasible folds, max drawdown, bets
+    validations:
+      required: true
+  - type: textarea
+    id: eval_plan
+    attributes:
+      label: Eval Plan
+      description: smoke と formal gate を分けて書く
+    validations:
+      required: true
+  - type: textarea
+    id: validation_commands
+    attributes:
+      label: Validation Commands
+      description: 実行予定の test / script / compare command
+      placeholder: pytest ... / python scripts/run_...
+    validations:
+      required: true
+  - type: textarea
+    id: artifacts
+    attributes:
+      label: Expected Artifacts
+      description: 出力パスや report 名
+      placeholder: artifacts/reports/...
+  - type: textarea
+    id: stop_condition
+    attributes:
+      label: Stop Condition
+      description: どの条件なら打ち切るか
+    validations:
+      required: true

@@ -14,6 +14,8 @@ formal な evaluation 導線は、[evaluation_guide.md](evaluation_guide.md) を
 2. どの数値を目標とするか。
 3. どの条件を満たしたら採用するか。
 
+`ROI > 1.20` を目指す north-star KPI の定義は [roi120_kpi_definition.md](roi120_kpi_definition.md) を正本とする。
+
 ## 2. 基本姿勢
 
 - 単発の高 ROI は、そのまま採用根拠にしない。
@@ -49,6 +51,16 @@ formal な evaluation 導線は、[evaluation_guide.md](evaluation_guide.md) を
 予測の並び順品質と、市場オッズに対する追加情報の有無を見る。
 
 - AUC は予測順位の良さを見る。
+
+## 4. ROI>1.20 の正式な読み方
+
+`ROI > 1.20` は、この文書だけで局所的に解釈せず、[roi120_kpi_definition.md](roi120_kpi_definition.md) の hierarchy で読む。
+
+要点は次の 3 行で十分である。
+
+- primary KPI は formal forward ROI
+- support KPI は representative assessment と feasible folds
+- drawdown / bankroll / bets を壊した高 ROI は採用しない
 ## 5. 現在の benchmark の読み方
 
 引き継ぎ時は、まず「何が current baseline で、何が候補か」をここで確認する。

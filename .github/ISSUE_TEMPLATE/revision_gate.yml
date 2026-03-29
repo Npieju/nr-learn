@@ -1,0 +1,54 @@
+name: Revision Gate
+description: promising candidate を formal gate に載せるための issue
+title: "[revision] "
+labels:
+  - revision
+body:
+  - type: input
+    id: candidate_profile
+    attributes:
+      label: Candidate Profile
+      placeholder: current_tighter_policy_search_candidate_2025_latest
+    validations:
+      required: true
+  - type: input
+    id: revision
+    attributes:
+      label: Revision ID
+      placeholder: r20260329_xxx
+    validations:
+      required: true
+  - type: textarea
+    id: promotion_question
+    attributes:
+      label: Promotion Question
+      description: 何を formal に判定したいのか
+    validations:
+      required: true
+  - type: textarea
+    id: gating_metrics
+    attributes:
+      label: Gating Metrics
+      description: representative / ROI / feasible folds / drawdown など
+    validations:
+      required: true
+  - type: textarea
+    id: commands
+    attributes:
+      label: Planned Commands
+      description: 実行予定 CLI
+      placeholder: scripts/run_revision_gate.py ...
+    validations:
+      required: true
+  - type: textarea
+    id: artifacts
+    attributes:
+      label: Result Artifacts
+      description: 実行後に promotion gate / evaluation summary / compare dashboard を追記する
+    validations:
+      required: true
+  - type: textarea
+    id: decision
+    attributes:
+      label: Decision Summary
+      description: promote / candidate keep / reject を最後に追記する
