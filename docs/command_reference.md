@@ -14,6 +14,16 @@ CLI の基本挙動:
 - 想定内の失敗は concise な `failed: ...` で返し、unexpected exception のときだけ traceback を出す。
 - `output file` を受ける引数には file path を渡し、`output dir` を受ける引数には directory path を渡す。
 
+tail loader の aggressive 最適化を試す前の equivalence 確認には、次を使う。
+
+```bash
+/workspaces/nr-learn/.venv/bin/python scripts/run_tail_loader_equivalence.py \
+  --raw-dir data/raw \
+  --tail-rows 10000 \
+  --left-reader current \
+  --right-reader deque_trim
+```
+
 ## 2. Git 管理
 
 Git の運用方針そのものは [development_flow.md](development_flow.md) を正本とし、ここでは日常作業で実際に使う入口だけをまとめる。
