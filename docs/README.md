@@ -70,7 +70,7 @@ seasonal family の次 issue 下書きは [next_issue_sep_guard_secondary_family
 
 seasonal second-layer fallback の順位づけは [seasonal_secondary_fallback_standard.md](seasonal_secondary_fallback_standard.md) を使う。
 
-runtime 改善の次 issue 下書きは [next_issue_feature_builder_runtime.md](next_issue_feature_builder_runtime.md) を使う。
+runtime 改善の次 issue 下書きは [next_issue_tail_loader_runtime.md](next_issue_tail_loader_runtime.md) を使う。
 
 ## 正本
 
