@@ -140,8 +140,11 @@ def _resolve_column_aliases(extra_aliases: dict[str, Any] | None = None) -> dict
 
 
 def _normalize_columns(frame: pd.DataFrame, extra_aliases: dict[str, Any] | None = None) -> pd.DataFrame:
-    frame = frame.copy()
-    frame.columns = [str(column).strip().lower() for column in frame.columns]
+    normalized_columns = [str(column).strip().lower() for column in frame.columns]
+    columns_changed = list(frame.columns) != normalized_columns
+    if columns_changed:
+        frame = frame.copy()
+        frame.columns = normalized_columns
 
     for canonical, aliases in _resolve_column_aliases(extra_aliases).items():
         if canonical in frame.columns:
@@ -149,6 +152,9 @@ def _normalize_columns(frame: pd.DataFrame, extra_aliases: dict[str, Any] | None
         for alias in aliases:
             alias = alias.lower()
             if alias in frame.columns:
+                if not columns_changed:
+                    frame = frame.copy()
+                    columns_changed = True
                 frame = frame.rename(columns={alias: canonical})
                 break
 

@@ -7,10 +7,17 @@ from unittest import mock
 
 import pandas as pd
 
-from racing_ml.data.dataset_loader import _read_csv_tail, load_training_table, materialize_supplemental_table
+from racing_ml.data.dataset_loader import _normalize_columns, _read_csv_tail, load_training_table, materialize_supplemental_table
 
 
 class DatasetLoaderTailReadTest(unittest.TestCase):
+    def test_normalize_columns_reuses_frame_when_already_normalized(self) -> None:
+        frame = pd.DataFrame({"date": ["2025-01-01"], "race_id": [1]})
+
+        normalized = _normalize_columns(frame)
+
+        self.assertIs(normalized, frame)
+
     def test_read_csv_tail_returns_requested_tail_and_total_rows(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             csv_path = Path(tmpdir) / "sample.csv"
