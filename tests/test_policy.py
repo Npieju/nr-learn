@@ -5,7 +5,12 @@ import unittest
 
 import pandas as pd
 
-from racing_ml.evaluation.policy import _is_winning_rank, simulate_ev_portfolio
+from racing_ml.evaluation.policy import (
+    StrategyCandidate,
+    _is_winning_rank,
+    _pick_flat_candidate,
+    simulate_ev_portfolio,
+)
 
 
 class PolicyRankSafetyTest(unittest.TestCase):
@@ -38,6 +43,36 @@ class PolicyRankSafetyTest(unittest.TestCase):
         self.assertEqual(metrics["portfolio_bets"], 2)
         self.assertEqual(metrics["portfolio_hit_rate"], 0.5)
         self.assertTrue(math.isfinite(float(metrics["portfolio_roi"])))
+
+    def test_pick_flat_candidate_uses_max_without_sorting(self) -> None:
+        group = pd.DataFrame(
+            {
+                "race_id": [1, 1, 1],
+                "score": [0.25, 0.40, 0.35],
+                "odds": [5.0, 3.0, 7.0],
+                "expected_value": [1.25, 1.20, 2.45],
+                "edge": [0.05, 0.10, 0.08],
+            },
+            index=[10, 11, 12],
+        )
+
+        top1 = _pick_flat_candidate(group, StrategyCandidate(strategy="top1"), score_col="score", odds_col="odds")
+        ev = _pick_flat_candidate(
+            group,
+            StrategyCandidate(strategy="ev", threshold=1.0, odds_min=1.0, odds_max=10.0),
+            score_col="score",
+            odds_col="odds",
+        )
+        edge = _pick_flat_candidate(
+            group,
+            StrategyCandidate(strategy="edge", threshold=0.01, odds_min=1.0, odds_max=10.0),
+            score_col="score",
+            odds_col="odds",
+        )
+
+        self.assertEqual(int(top1.name), 11)
+        self.assertEqual(int(ev.name), 12)
+        self.assertEqual(int(edge.name), 11)
 
 
 if __name__ == "__main__":

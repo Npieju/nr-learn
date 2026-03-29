@@ -153,10 +153,16 @@ def _pick_flat_candidate(
     odds_col: str,
 ) -> pd.Series | None:
     if candidate.strategy == "top1":
-        return group.sort_values(score_col, ascending=False).iloc[0]
+        score_values = pd.to_numeric(group[score_col], errors="coerce")
+        if score_values.isna().all():
+            return None
+        return group.loc[score_values.idxmax()]
 
     if candidate.strategy == "top1_filtered":
-        pick = group.sort_values(score_col, ascending=False).iloc[0]
+        score_values = pd.to_numeric(group[score_col], errors="coerce")
+        if score_values.isna().all():
+            return None
+        pick = group.loc[score_values.idxmax()]
         score_value = pd.to_numeric(pd.Series([pick.get(score_col)]), errors="coerce").iloc[0]
         odds_value = pd.to_numeric(pd.Series([pick.get(odds_col)]), errors="coerce").iloc[0]
         if pd.isna(score_value) or pd.isna(odds_value):
@@ -175,7 +181,10 @@ def _pick_flat_candidate(
         ]
         if candidates.empty:
             return None
-        return candidates.sort_values("expected_value", ascending=False).iloc[0]
+        expected_values = pd.to_numeric(candidates["expected_value"], errors="coerce")
+        if expected_values.isna().all():
+            return None
+        return candidates.loc[expected_values.idxmax()]
 
     if candidate.strategy == "edge":
         candidates = group[
@@ -185,7 +194,10 @@ def _pick_flat_candidate(
         ]
         if candidates.empty:
             return None
-        return candidates.sort_values("edge", ascending=False).iloc[0]
+        edge_values = pd.to_numeric(candidates["edge"], errors="coerce")
+        if edge_values.isna().all():
+            return None
+        return candidates.loc[edge_values.idxmax()]
 
     raise ValueError(f"Unsupported strategy mode: {candidate.strategy}")
 
