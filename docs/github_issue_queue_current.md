@@ -19,27 +19,27 @@
 
 ### 3.0 Current Queue After Feature Builder Runtime Pass
 
-2026-03-29 時点で、Kelly runtime family (`#10`, `#11`, `#12`, `#13`)、seasonal ordering (`#14`, `#15`)、runtime broad reduction (`#7`)、supplemental materialization (`#16`) は close 済みで、`#17` の feature-builder runtime pass も wrap-up 済みである。current operational anchor は引き続き `r20260329_tighter_policy_ratio003_abs90` である。
+2026-03-29 時点で、Kelly runtime family (`#10`, `#11`, `#12`, `#13`)、seasonal ordering (`#14`, `#15`)、runtime broad reduction (`#7`)、supplemental materialization (`#16`)、feature-builder runtime (`#17`) は close 済みである。loader runtime の small safe cuts を進めた `#18` も wrap-up 段階にあり、current operational anchor は引き続き `r20260329_tighter_policy_ratio003_abs90` である。
 
-この時点の next active issue は `#18` の tail loader runtime 改善である。
+この時点の next active issue は `#19` の tail loader equivalence harness である。
 
 Primary active issue:
 
-- `#18`
-- <https://github.com/Npieju/nr-learn/issues/18>
+- `#19`
+- <https://github.com/Npieju/nr-learn/issues/19>
 
 Primary issue draft:
 
-- `docs/next_issue_tail_loader_runtime.md`
+- `docs/next_issue_tail_equivalence_harness.md`
 
 GitHub issue:
 
-- `#18`
-- <https://github.com/Npieju/nr-learn/issues/18>
+- `#19`
+- <https://github.com/Npieju/nr-learn/issues/19>
 
 Primary next execution order:
 
-1. `#18 reduce tail loader runtime for evaluation pre-feature path`
+1. `#19 add tail loader equivalence harness for aggressive runtime optimization`
 2. その後に next challenger family / next loader/build reduction を再選定する
 
 ### 3.1 [experiment] Tighter policy search frontier refinement
