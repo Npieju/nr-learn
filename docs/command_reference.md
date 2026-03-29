@@ -247,7 +247,7 @@ profile 一覧:
 
 - `run_revision_gate.py` は train、evaluate、promotion gate の各段階を progress 付きで出力する。
 - 現在の `run_revision_gate.py` は evaluate の後に matching `wf_feasibility_diag` も自動実行するので、promotion gate に必要な WF summary を別途手で作らなくてよい。
-- `--dry-run` を付けると、重い train / evaluate を実行せずに planned command と revision manifest だけを確認できる。
+- `--dry-run` を付けると、重い train / evaluate を実行せずに planned command と revision manifest だけを確認できる。planned manifest には `read_order`, `current_phase`, `recommended_action`, `highlights` も入る。
 - `--train-max-train-rows` と `--train-max-valid-rows` を使うと、real run でも lightweight smoke を組める。
 - `--skip-train` と `--evaluate-model-artifact-suffix` を組み合わせると、設定だけ変えた threshold-only revision を既存学習済み model artifact に対して formal 評価できる。
 
@@ -505,6 +505,337 @@ backfill:
 
 - netkeiba 系の `run_prepare_netkeiba_ids.py`、`run_collect_netkeiba.py`、`run_backfill_netkeiba.py`、`run_netkeiba_benchmark_gate.py` は、いずれも進捗または heartbeat を出す。
 - 重い latest / backfill 系 evaluate では `run_netkeiba_latest_revision_gate.py --evaluate-pre-feature-max-rows 300000`、または `run_netkeiba_benchmark_gate.py --pre-feature-max-rows 300000` を使うと、feature build 前に row 数を抑えられる。
+
+local_nankan ID 準備の初期 smoke:
+
+```bash
+/workspaces/nr-learn/.venv/bin/python scripts/run_prepare_local_nankan_ids.py \
+  --crawl-config configs/crawl_local_nankan_template.yaml \
+  --race-id-source race_list \
+  --target race_result \
+  --start-date 2026-03-25 \
+  --end-date 2026-03-27 \
+  --limit 50
+```
+
+seed CSV を使う従来 smoke:
+
+```bash
+/workspaces/nr-learn/.venv/bin/python scripts/run_prepare_local_nankan_ids.py \
+  --crawl-config configs/crawl_local_nankan_template.yaml \
+  --seed-file data/external/local_nankan/seeds/local_nankan_seed.csv \
+  --target race_result \
+  --start-date 2024-01-01 \
+  --end-date 2024-01-07 \
+  --limit 50
+```
+
+補足:
+
+- `run_prepare_local_nankan_ids.py` は provider crawler 実装前の入口として、operator が用意した seed CSV から `race_ids.csv` と `horse_keys.csv` を生成する。
+- `--race-id-source race_list` を使うと、`calendar/<quarter>.do` と `program/<meeting_id>.do` から date range 内の `race_id` を直接 discovery できる。
+- 初期 smoke では `race_result` または `race_card` から始め、pedigree は seed に `horse_key` 列が揃ってから有効化する。
+
+local_nankan collect planning の初期 smoke:
+
+```bash
+/workspaces/nr-learn/.venv/bin/python scripts/run_collect_local_nankan.py \
+  --config configs/crawl_local_nankan_template.yaml \
+  --target race_result \
+  --limit 50 \
+  --dry-run
+```
+
+補足:
+
+- `run_collect_local_nankan.py --dry-run` は target ごとの ID 件数、output path、manifest path を planned shape で書き出す。
+- provider fetch 本体はまだ未実装なので、`--dry-run` なしの実行は blocked manifest を返し、次アクションを `implement_source_provider` として残す。
+
+local_nankan backfill planning の初期 smoke:
+
+```bash
+/workspaces/nr-learn/.venv/bin/python scripts/run_backfill_local_nankan.py \
+  --crawl-config configs/crawl_local_nankan_template.yaml \
+  --seed-file data/external/local_nankan/seeds/local_nankan_seed.csv \
+  --start-date 2024-01-01 \
+  --end-date 2024-01-07 \
+  --limit 50 \
+  --dry-run
+```
+
+補足:
+
+- `run_backfill_local_nankan.py --dry-run` は 1 cycle 分の `prepare -> collect` を planned shape で manifest 化する。
+- provider 実装前の通常実行は blocked manifest を返すが、後で fetch 実装を差し込む場所を backfill 単位で固定できる。
+
+local_nankan を 6 か月ずつ順送りで backfill する長期取得:
+
+```bash
+/workspaces/nr-learn/.venv/bin/python scripts/run_backfill_local_nankan.py \
+  --crawl-config configs/crawl_local_nankan_template.yaml \
+  --data-config configs/data_local_nankan.yaml \
+  --race-id-source race_list \
+  --start-date 2006-03-29 \
+  --end-date 2026-03-28 \
+  --date-order asc \
+  --chunk-months 6 \
+  --max-date-windows 1 \
+  --sleep-sec-between-windows 2.0 \
+  --manifest-file artifacts/reports/local_nankan_backfill_20y_windowed.json \
+  --materialize-after-collect
+```
+
+補足:
+
+- `--chunk-months 6` を付けると、指定した全 date range を 6 か月ごとの window に分割して順に実行する。
+- `2006-03-29 .. 2026-03-28` は 40 window に分割されるので、`--max-date-windows 1` なら 1 回の起動で 6 か月分だけ進む。
+- `local_nankan` crawl config の既定 `delay_sec` は 0.05 秒まで下げてある。大規模 backfill を前提にしているので、明示的に上げない限り低 delay のまま回る。
+- `run_collect_local_nankan.py` と `run_backfill_local_nankan.py` は `--delay-sec`, `--timeout-sec`, `--retry-count`, `--retry-backoff-sec`, `--overwrite/--no-overwrite` で request 設定を runtime override できる。config を編集せず、その場の回収条件だけ切り替えたいときに使う。
+- aggregate manifest には `requested_window_count`, `executed_window_count`, `window_reports[]` が入り、各 window の個別 manifest も `..._windowNNN_YYYYMMDD_YYYYMMDD.json` として残る。
+- 同じ aggregate manifest path で再実行すると、既に `status=completed` になっている window は自動で skip され、次の未完了 window から再開する。
+- 実行中の aggregate manifest も逐次更新され、`active_window`, `active_window_date_window`, `completed_window_count`, `current_phase`, `last_updated_at` から現在位置を確認できる。window 内の個別 manifest も cycle ごとに `running` 更新される。
+- 少しずつ取得したい場合は `--date-order asc` を基本にして古い window から順送りにする。新しい側から埋めたいときだけ `desc` を使う。
+- `--materialize-after-collect` を併用すると、各 window 後に primary raw materialize まで進められる。collect 出力は累積しつつ、window ごとの materialize manifest も残る。
+- 標準出力でも window 開始・完了・sleep が出るが、長時間実行では manifest を見るほうが確実である。
+- さらに cycle ごとに `phase=prepare_ids_completed` と `phase=collect_completed` の要約が出る。`pending_breakdown=horse_keys=8, race_ids=0` のように残件の内訳が見えるので、何がボトルネックかを terminal だけでも追いやすい。
+- `--target race_result` または `--target race_card` を使うと、長期 backfill を race 系だけ先に進められる。pedigree が長く残る場合は、先に race 系を回収してから `--target pedigree` を別運用にするのが扱いやすい。
+
+local_nankan を 6 か月ずつ回しつつ window 単位で GitHub 向け archive を作る入口:
+
+```bash
+/workspaces/nr-learn/.venv/bin/python scripts/run_archive_local_nankan_window.py \
+  --crawl-config configs/crawl_local_nankan_template.yaml \
+  --data-config configs/data_local_nankan.yaml \
+  --race-id-source race_list \
+  --target race_result \
+  --start-date 2006-03-29 \
+  --end-date 2026-03-28 \
+  --date-order asc \
+  --chunk-months 6 \
+  --max-date-windows 1 \
+  --manifest-file artifacts/reports/local_nankan_backfill_race_result_20y.json \
+  --archive-root artifacts/archives/local_nankan \
+  --archive-index artifacts/archives/local_nankan/archive_index.json
+```
+
+補足:
+
+- `run_archive_local_nankan_window.py` は先に `run_backfill_local_nankan.py` を 1 window ぶん実行し、その run で新規または更新された window だけを archive 化する。
+- archive 本体は `artifacts/archives/local_nankan/windowNNN_YYYYMMDD_YYYYMMDD/` に出し、同内容の `tar.gz` も `artifacts/archives/local_nankan/tarballs/` に作る。
+- race 系 CSV は累積 output から当該 6 か月 window の `date` で slice して保存する。pedigree はその window の race rows で参照された `horse_key` だけを抜き出す。
+- `artifacts/archives/local_nankan/archive_index.json` は積み上げ index で、各 half-year archive の window slug、期間、row count、tarball path を 1 本で追える。
+- GitHub へ残す単位は、基本的に window directory、tarball、archive index の 3 つでよい。run ごとの orchestration は `artifacts/reports/local_nankan_archive_run.json` を見れば足りる。
+- まず command 解決だけ確認したいときは `--dry-run` を付ける。backfill も archive も planned shape で止まり、tarball は作らない。
+
+race 系だけを優先して 6 か月ずつ進める例:
+
+```bash
+/workspaces/nr-learn/.venv/bin/python scripts/run_backfill_local_nankan.py \
+  --crawl-config configs/crawl_local_nankan_template.yaml \
+  --race-id-source race_list \
+  --target race_result \
+  --start-date 2006-03-29 \
+  --end-date 2026-03-28 \
+  --date-order asc \
+  --chunk-months 6 \
+  --max-date-windows 1 \
+  --limit 64 \
+  --manifest-file artifacts/reports/local_nankan_backfill_race_result_20y.json
+```
+
+local_nankan backfill から primary raw materialize まで一続きで確認する smoke:
+
+```bash
+/workspaces/nr-learn/.venv/bin/python scripts/run_backfill_local_nankan.py \
+  --crawl-config configs/crawl_local_nankan_template.yaml \
+  --data-config artifacts/tmp/local_nankan_smoke/data_local_nankan_smoke.yaml \
+  --seed-file data/external/local_nankan/seeds/local_nankan_seed.csv \
+  --start-date 2024-01-01 \
+  --end-date 2024-01-07 \
+  --limit 50 \
+  --materialize-after-collect \
+  --race-result-path artifacts/tmp/local_nankan_smoke/results/local_race_result.csv \
+  --race-card-path artifacts/tmp/local_nankan_smoke/racecard/local_racecard.csv \
+  --pedigree-path artifacts/tmp/local_nankan_smoke/pedigree/local_pedigree.csv \
+  --materialize-manifest-file artifacts/tmp/local_nankan_smoke/local_nankan_backfill_materialize.json
+```
+
+補足:
+
+- `--materialize-after-collect` を付けると、backfill は各 cycle の `collect_summary` の後に `materialize_summary` も残す。
+- provider 未実装で collect が blocked でも、既存 external outputs から primary raw が materialize できれば backfill manifest は `status=partial`, `current_phase=materialized_primary_raw`, `recommended_action=run_local_preflight` を返す。
+
+local_nankan backfill から benchmark まで一続きで handoff する smoke:
+
+```bash
+/workspaces/nr-learn/.venv/bin/python scripts/run_local_backfill_then_benchmark.py \
+  --crawl-config configs/crawl_local_nankan_template.yaml \
+  --data-config artifacts/tmp/local_nankan_smoke/data_local_nankan_smoke.yaml \
+  --seed-file data/external/local_nankan/seeds/local_nankan_seed.csv \
+  --start-date 2024-01-01 \
+  --end-date 2024-01-07 \
+  --limit 50 \
+  --race-result-path artifacts/tmp/local_nankan_smoke/results/local_race_result.csv \
+  --race-card-path artifacts/tmp/local_nankan_smoke/racecard/local_racecard.csv \
+  --pedigree-path artifacts/tmp/local_nankan_smoke/pedigree/local_pedigree.csv \
+  --wrapper-manifest-output artifacts/tmp/local_nankan_smoke/local_backfill_then_benchmark_manifest.json \
+  --backfill-manifest-output artifacts/tmp/local_nankan_smoke/local_nankan_backfill_handoff_manifest.json \
+  --materialize-manifest-output artifacts/tmp/local_nankan_smoke/local_nankan_primary_handoff_manifest.json \
+  --preflight-output artifacts/tmp/local_nankan_smoke/data_preflight_handoff.json \
+  --benchmark-manifest-output artifacts/tmp/local_nankan_smoke/benchmark_gate_handoff.json \
+  --snapshot-output artifacts/tmp/local_nankan_smoke/coverage_snapshot_handoff.json \
+  --skip-train \
+  --skip-evaluate
+```
+
+補足:
+
+- `run_local_backfill_then_benchmark.py` は backfill を `--materialize-after-collect` 付きで実行し、`current_phase=materialized_primary_raw` に到達したらそのまま local benchmark gate を起動する。
+- wrapper manifest も `read_order`, `current_phase`, `recommended_action`, `highlights` を持つので、backfill 側で止まったのか benchmark 側で止まったのかを 1 本で追える。
+
+local_nankan primary raw materialize の初期 smoke:
+
+```bash
+/workspaces/nr-learn/.venv/bin/python scripts/run_materialize_local_nankan_primary.py \
+  --data-config configs/data_local_nankan.yaml \
+  --race-result-path artifacts/tmp/local_nankan_smoke/results/local_race_result.csv \
+  --race-card-path artifacts/tmp/local_nankan_smoke/racecard/local_racecard.csv \
+  --pedigree-path artifacts/tmp/local_nankan_smoke/pedigree/local_pedigree.csv \
+  --output-file artifacts/tmp/local_nankan_smoke/raw/local_nankan_primary.csv
+```
+
+補足:
+
+- `run_materialize_local_nankan_primary.py` は external outputs から `data/local_nankan/raw` 相当の primary CSV を組み立てる bridge である。
+- `race_result` が無い場合は `status=not_ready` で止まり、`recommended_action=populate_external_results` を返す。
+- `race_card` と `pedigree` は optional enrichment として扱い、存在すれば fill する。
+
+local_nankan benchmark gate で primary raw materialize を先に差し込む smoke:
+
+```bash
+/workspaces/nr-learn/.venv/bin/python scripts/run_local_benchmark_gate.py \
+  --data-config artifacts/tmp/local_nankan_smoke/data_local_nankan_smoke.yaml \
+  --race-result-path artifacts/tmp/local_nankan_smoke/results/local_race_result.csv \
+  --race-card-path artifacts/tmp/local_nankan_smoke/racecard/local_racecard.csv \
+  --pedigree-path artifacts/tmp/local_nankan_smoke/pedigree/local_pedigree.csv \
+  --materialize-primary-before-gate \
+  --materialize-manifest-file artifacts/tmp/local_nankan_smoke/local_nankan_primary_from_gate.json \
+  --manifest-output artifacts/tmp/local_nankan_smoke/benchmark_gate_local_nankan.json \
+  --preflight-output artifacts/tmp/local_nankan_smoke/data_preflight_local_nankan.json \
+  --skip-train \
+  --skip-evaluate
+```
+
+補足:
+
+- `--materialize-primary-before-gate` を付けると、benchmark gate wrapper は preflight 前に `run_materialize_local_nankan_primary.py` を呼ぶ。
+- materialize が `status=not_ready` でも wrapper は benchmark gate を続行し、最終的な blocker は通常どおり preflight manifest と benchmark manifest に残す。
+
+local_nankan revision gate で backfill handoff を先に差し込む dry-run smoke:
+
+```bash
+/workspaces/nr-learn/.venv/bin/python scripts/run_local_revision_gate.py \
+  --revision local_nankan_handoff_smoke \
+  --crawl-config configs/crawl_local_nankan_template.yaml \
+  --data-config artifacts/tmp/local_nankan_smoke/data_local_nankan_smoke.yaml \
+  --model-config configs/model_local_baseline.yaml \
+  --feature-config configs/features_local_baseline.yaml \
+  --seed-file data/external/local_nankan/seeds/local_nankan_seed.csv \
+  --start-date 2024-01-01 \
+  --end-date 2024-01-07 \
+  --limit 50 \
+  --backfill-before-benchmark \
+  --race-result-path artifacts/tmp/local_nankan_smoke/results/local_race_result.csv \
+  --race-card-path artifacts/tmp/local_nankan_smoke/racecard/local_racecard.csv \
+  --pedigree-path artifacts/tmp/local_nankan_smoke/pedigree/local_pedigree.csv \
+  --lineage-output artifacts/tmp/local_nankan_smoke/local_revision_gate_handoff_dry.json \
+  --backfill-wrapper-output artifacts/tmp/local_nankan_smoke/local_backfill_then_benchmark_for_revision_dry.json \
+  --backfill-manifest-output artifacts/tmp/local_nankan_smoke/local_nankan_backfill_for_revision_dry.json \
+  --materialize-manifest-output artifacts/tmp/local_nankan_smoke/local_nankan_primary_for_revision_dry.json \
+  --benchmark-manifest-output artifacts/tmp/local_nankan_smoke/benchmark_gate_for_revision_dry.json \
+  --data-preflight-output artifacts/tmp/local_nankan_smoke/data_preflight_for_revision_dry.json \
+  --snapshot-output artifacts/tmp/local_nankan_smoke/coverage_snapshot_for_revision_dry.json \
+  --dry-run
+```
+
+補足:
+
+- `--backfill-before-benchmark` を付けると、revision lineage は benchmark gate の直前で `run_local_backfill_then_benchmark.py` を planned/real path に含める。
+- そのため lineage manifest からも `backfill_wrapper_manifest`, `backfill_manifest`, `primary_materialize_manifest`, `benchmark_manifest` を 1 本の read_order で追える。
+
+mixed readiness / status board で local handoff blocker を読む smoke:
+
+```bash
+/workspaces/nr-learn/.venv/bin/python scripts/run_mixed_universe_readiness.py \
+  --revision local_nankan_handoff_smoke \
+  --left-public-snapshot artifacts/tmp/local_nankan_smoke/local_public_snapshot_handoff_from_dry.json \
+  --output artifacts/tmp/local_nankan_smoke/mixed_universe_readiness_handoff_from_dry.json
+
+/workspaces/nr-learn/.venv/bin/python scripts/run_mixed_universe_status_board.py \
+  --revision local_nankan_handoff_smoke \
+  --left-universe local_nankan \
+  --right-universe jra \
+  --public-snapshot artifacts/tmp/local_nankan_smoke/local_public_snapshot_handoff_from_dry.json \
+  --readiness-manifest artifacts/tmp/local_nankan_smoke/mixed_universe_readiness_handoff_from_dry.json \
+  --output artifacts/tmp/local_nankan_smoke/mixed_universe_status_board_handoff_from_dry.json
+```
+
+補足:
+
+- readiness は `left_readiness_blocked` の highlights に upstream `backfill_handoff_summary` の `status`, `current_phase`, `recommended_action` も出す。
+- status board は explicit path 指定を使うと tmp smoke artifact をそのまま読める。public snapshot が `status=completed` でも `current_phase=lineage_planned` を持つ場合、board は `status=partial`, `current_phase=public_snapshot` で止まる。
+
+mixed gap audit / recovery plan で upstream handoff blocker を first step にする smoke:
+
+```bash
+/workspaces/nr-learn/.venv/bin/python scripts/run_mixed_universe_left_gap_audit.py \
+  --revision local_nankan_handoff_smoke \
+  --left-universe local_nankan \
+  --right-universe jra \
+  --numeric-compare-manifest artifacts/tmp/local_nankan_smoke/mixed_universe_numeric_compare_handoff_from_dry.json \
+  --left-lineage-manifest artifacts/tmp/local_nankan_smoke/local_revision_gate_handoff_dry.json \
+  --output artifacts/tmp/local_nankan_smoke/mixed_universe_left_gap_audit_handoff_from_dry.json
+
+/workspaces/nr-learn/.venv/bin/python scripts/run_mixed_universe_left_recovery_plan.py \
+  --revision local_nankan_handoff_smoke \
+  --left-universe local_nankan \
+  --right-universe jra \
+  --gap-audit-manifest artifacts/tmp/local_nankan_smoke/mixed_universe_left_gap_audit_handoff_from_dry.json \
+  --output artifacts/tmp/local_nankan_smoke/mixed_universe_left_recovery_plan_handoff_from_dry.json
+```
+
+補足:
+
+- gap audit は local revision lineage に `backfill_handoff_payload` が残っていると、`current_phase=local_backfill_then_benchmark`, `recommended_action=run_local_backfill_then_benchmark` を返す。
+- recovery plan もその blocker を manual first step として先頭へ並べ、`plan_steps[0].step=run_local_backfill_then_benchmark` を返す。
+
+mixed recovery wrapper でも upstream handoff blocker を first step にする dry-run smoke:
+
+```bash
+/workspaces/nr-learn/.venv/bin/python scripts/run_mixed_universe_status_board.py \
+  --revision local_nankan_handoff_smoke \
+  --left-universe local_nankan \
+  --right-universe jra \
+  --public-snapshot artifacts/tmp/local_nankan_smoke/local_public_snapshot_handoff_from_dry.json \
+  --readiness-manifest artifacts/tmp/local_nankan_smoke/mixed_universe_readiness_handoff_from_dry.json \
+  --numeric-compare-manifest artifacts/tmp/local_nankan_smoke/mixed_universe_numeric_compare_handoff_from_dry.json \
+  --left-gap-audit-manifest artifacts/tmp/local_nankan_smoke/mixed_universe_left_gap_audit_handoff_from_dry.json \
+  --left-recovery-plan-manifest artifacts/tmp/local_nankan_smoke/mixed_universe_left_recovery_plan_handoff_from_dry.json \
+  --output artifacts/tmp/local_nankan_smoke/mixed_universe_status_board_handoff_from_dry_v2.json
+
+/workspaces/nr-learn/.venv/bin/python scripts/run_mixed_universe_recovery.py \
+  --revision local_nankan_handoff_smoke \
+  --left-universe local_nankan \
+  --right-universe jra \
+  --status-board-manifest artifacts/tmp/local_nankan_smoke/mixed_universe_status_board_handoff_from_dry_v2.json \
+  --output artifacts/tmp/local_nankan_smoke/mixed_universe_recovery_handoff_from_dry_v3.json \
+  --dry-run
+```
+
+補足:
+
+- explicit tmp board が `recommended_action=run_local_backfill_then_benchmark` を返している場合、recovery wrapper も first step を `local_backfill_then_benchmark` に切り替える。
+- その後段で local revision lineage と mixed downstream manifests を同じ anchor から再生成する planned steps を続ける。
 
 ## 7. 補助コマンド
 

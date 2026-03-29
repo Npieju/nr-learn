@@ -1,0 +1,236 @@
+{
+  "started_at": "2026-03-29T04:51:49Z",
+  "finished_at": "2026-03-29T05:21:17Z",
+  "status": "completed",
+  "current_phase": "archived_windows",
+  "recommended_action": "commit_archive_to_github",
+  "configs": {
+    "crawl_config": "configs/crawl_local_nankan_template.yaml",
+    "data_config": "configs/data_local_nankan.yaml",
+    "seed_file": null,
+    "race_id_source": "race_list",
+    "target": "race_result",
+    "start_date": "2006-03-29",
+    "end_date": "2026-03-28",
+    "date_order": "asc",
+    "limit": null,
+    "max_cycles": 1,
+    "chunk_months": 6,
+    "max_date_windows": 5,
+    "sleep_sec_between_windows": 0.0,
+    "materialize_after_collect": false,
+    "skip_backfill_run": false,
+    "dry_run": false
+  },
+  "artifacts": {
+    "aggregate_manifest": "artifacts/reports/local_nankan_backfill_race_result_20y.json",
+    "archive_root": "artifacts/archives/local_nankan",
+    "archive_index": "artifacts/archives/local_nankan/archive_index.json",
+    "run_manifest": "artifacts/reports/local_nankan_archive_run.json"
+  },
+  "archive_reports": [
+    {
+      "created_at": "2026-03-29T05:21:12Z",
+      "status": "completed",
+      "window_index": 7,
+      "window_slug": "window007_20090329_20090928",
+      "date_window": {
+        "start": "2009-03-29",
+        "end": "2009-09-28"
+      },
+      "backfill_status": "completed",
+      "backfill_phase": "crawl_completed",
+      "backfill_recommended_action": "run_local_materialize",
+      "source_manifests": {
+        "aggregate_window_manifest": "artifacts/reports/local_nankan_backfill_race_result_20y_window007_20090329_20090928.json",
+        "materialize_manifest": null
+      },
+      "archive_paths": {
+        "archive_dir": "artifacts/archives/local_nankan/window007_20090329_20090928",
+        "tarball": "artifacts/archives/local_nankan/tarballs/window007_20090329_20090928.tar.gz",
+        "archive_index": "artifacts/archives/local_nankan/archive_index.json"
+      },
+      "slice_counts": {
+        "race_result_rows": 17531,
+        "race_card_rows": 0,
+        "pedigree_rows": 0,
+        "horse_key_count": 3571
+      },
+      "git_commit_targets": [
+        "artifacts/archives/local_nankan/window007_20090329_20090928",
+        "artifacts/archives/local_nankan/tarballs/window007_20090329_20090928.tar.gz",
+        "artifacts/archives/local_nankan/archive_index.json"
+      ],
+      "tarball_size_bytes": 744150
+    },
+    {
+      "created_at": "2026-03-29T05:21:13Z",
+      "status": "completed",
+      "window_index": 8,
+      "window_slug": "window008_20090929_20100328",
+      "date_window": {
+        "start": "2009-09-29",
+        "end": "2010-03-28"
+      },
+      "backfill_status": "completed",
+      "backfill_phase": "crawl_completed",
+      "backfill_recommended_action": "run_local_materialize",
+      "source_manifests": {
+        "aggregate_window_manifest": "artifacts/reports/local_nankan_backfill_race_result_20y_window008_20090929_20100328.json",
+        "materialize_manifest": null
+      },
+      "archive_paths": {
+        "archive_dir": "artifacts/archives/local_nankan/window008_20090929_20100328",
+        "tarball": "artifacts/archives/local_nankan/tarballs/window008_20090929_20100328.tar.gz",
+        "archive_index": "artifacts/archives/local_nankan/archive_index.json"
+      },
+      "slice_counts": {
+        "race_result_rows": 18176,
+        "race_card_rows": 0,
+        "pedigree_rows": 0,
+        "horse_key_count": 3768
+      },
+      "git_commit_targets": [
+        "artifacts/archives/local_nankan/window008_20090929_20100328",
+        "artifacts/archives/local_nankan/tarballs/window008_20090929_20100328.tar.gz",
+        "artifacts/archives/local_nankan/archive_index.json"
+      ],
+      "tarball_size_bytes": 770705
+    },
+    {
+      "created_at": "2026-03-29T05:21:14Z",
+      "status": "completed",
+      "window_index": 9,
+      "window_slug": "window009_20100329_20100928",
+      "date_window": {
+        "start": "2010-03-29",
+        "end": "2010-09-28"
+      },
+      "backfill_status": "completed",
+      "backfill_phase": "crawl_completed",
+      "backfill_recommended_action": "run_local_materialize",
+      "source_manifests": {
+        "aggregate_window_manifest": "artifacts/reports/local_nankan_backfill_race_result_20y_window009_20100329_20100928.json",
+        "materialize_manifest": null
+      },
+      "archive_paths": {
+        "archive_dir": "artifacts/archives/local_nankan/window009_20100329_20100928",
+        "tarball": "artifacts/archives/local_nankan/tarballs/window009_20100329_20100928.tar.gz",
+        "archive_index": "artifacts/archives/local_nankan/archive_index.json"
+      },
+      "slice_counts": {
+        "race_result_rows": 17854,
+        "race_card_rows": 0,
+        "pedigree_rows": 0,
+        "horse_key_count": 3604
+      },
+      "git_commit_targets": [
+        "artifacts/archives/local_nankan/window009_20100329_20100928",
+        "artifacts/archives/local_nankan/tarballs/window009_20100329_20100928.tar.gz",
+        "artifacts/archives/local_nankan/archive_index.json"
+      ],
+      "tarball_size_bytes": 758321
+    },
+    {
+      "created_at": "2026-03-29T05:21:15Z",
+      "status": "completed",
+      "window_index": 10,
+      "window_slug": "window010_20100929_20110328",
+      "date_window": {
+        "start": "2010-09-29",
+        "end": "2011-03-28"
+      },
+      "backfill_status": "completed",
+      "backfill_phase": "crawl_completed",
+      "backfill_recommended_action": "run_local_materialize",
+      "source_manifests": {
+        "aggregate_window_manifest": "artifacts/reports/local_nankan_backfill_race_result_20y_window010_20100929_20110328.json",
+        "materialize_manifest": null
+      },
+      "archive_paths": {
+        "archive_dir": "artifacts/archives/local_nankan/window010_20100929_20110328",
+        "tarball": "artifacts/archives/local_nankan/tarballs/window010_20100929_20110328.tar.gz",
+        "archive_index": "artifacts/archives/local_nankan/archive_index.json"
+      },
+      "slice_counts": {
+        "race_result_rows": 16775,
+        "race_card_rows": 0,
+        "pedigree_rows": 0,
+        "horse_key_count": 3760
+      },
+      "git_commit_targets": [
+        "artifacts/archives/local_nankan/window010_20100929_20110328",
+        "artifacts/archives/local_nankan/tarballs/window010_20100929_20110328.tar.gz",
+        "artifacts/archives/local_nankan/archive_index.json"
+      ],
+      "tarball_size_bytes": 711322
+    },
+    {
+      "created_at": "2026-03-29T05:21:16Z",
+      "status": "completed",
+      "window_index": 11,
+      "window_slug": "window011_20110329_20110928",
+      "date_window": {
+        "start": "2011-03-29",
+        "end": "2011-09-28"
+      },
+      "backfill_status": "completed",
+      "backfill_phase": "crawl_completed",
+      "backfill_recommended_action": "run_local_materialize",
+      "source_manifests": {
+        "aggregate_window_manifest": "artifacts/reports/local_nankan_backfill_race_result_20y_window011_20110329_20110928.json",
+        "materialize_manifest": null
+      },
+      "archive_paths": {
+        "archive_dir": "artifacts/archives/local_nankan/window011_20110329_20110928",
+        "tarball": "artifacts/archives/local_nankan/tarballs/window011_20110329_20110928.tar.gz",
+        "archive_index": "artifacts/archives/local_nankan/archive_index.json"
+      },
+      "slice_counts": {
+        "race_result_rows": 16898,
+        "race_card_rows": 0,
+        "pedigree_rows": 0,
+        "horse_key_count": 3626
+      },
+      "git_commit_targets": [
+        "artifacts/archives/local_nankan/window011_20110329_20110928",
+        "artifacts/archives/local_nankan/tarballs/window011_20110329_20110928.tar.gz",
+        "artifacts/archives/local_nankan/archive_index.json"
+      ],
+      "tarball_size_bytes": 710137
+    }
+  ],
+  "backfill_command": [
+    "/workspaces/nr-learn/.venv/bin/python",
+    "/workspaces/nr-learn/scripts/run_backfill_local_nankan.py",
+    "--crawl-config",
+    "configs/crawl_local_nankan_template.yaml",
+    "--data-config",
+    "configs/data_local_nankan.yaml",
+    "--race-id-source",
+    "race_list",
+    "--target",
+    "race_result",
+    "--start-date",
+    "2006-03-29",
+    "--end-date",
+    "2026-03-28",
+    "--date-order",
+    "asc",
+    "--max-cycles",
+    "1",
+    "--chunk-months",
+    "6",
+    "--max-date-windows",
+    "5",
+    "--sleep-sec-between-windows",
+    "0.0",
+    "--manifest-file",
+    "artifacts/reports/local_nankan_backfill_race_result_20y.json"
+  ],
+  "backfill_exit_code": 0,
+  "archive_index_preview": {
+    "archive_count": 11,
+    "updated_at": "2026-03-29T05:21:17Z"
+  }
+}

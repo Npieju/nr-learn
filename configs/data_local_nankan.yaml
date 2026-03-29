@@ -24,6 +24,7 @@ dataset:
       optional: true
       search_dirs:
         - "data/external/local_nankan/results"
+        - "data/external/local_nankan/racecard"
       pattern: "**/*.csv"
       join_on:
         - "race_id"
@@ -37,6 +38,7 @@ dataset:
         - "horse_id"
         - "horse_key"
         - "owner_name"
+        - "breeder_name"
       dedupe_on:
         - "race_id"
         - "horse_id"
@@ -61,15 +63,21 @@ dataset:
         - "distance"
         - "weather"
         - "ground_condition"
+        - "odds"
+        - "popularity"
         - "horse_key"
         - "frame_no"
         - "gate_no"
         - "horse_name"
         - "sex"
         - "age"
+        - "carried_weight"
         - "weight"
+        - "weight_change"
         - "jockey_id"
         - "trainer_id"
+        - "owner_name"
+        - "breeder_name"
       dedupe_on:
         - "race_id"
         - "horse_id"

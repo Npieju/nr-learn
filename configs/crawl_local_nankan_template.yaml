@@ -1,0 +1,40 @@
+crawl:
+  provider: "nankankeiba"
+  base_url: "https://www.nankankeiba.com"
+  user_agent: "nr-learn-local-nankan-crawler/0.1"
+  timeout_sec: 20
+  delay_sec: 0.05
+  retry_count: 3
+  retry_backoff_sec: 2.0
+  overwrite: false
+  raw_html_dir: "data/external/local_nankan/raw_html"
+  manifest_file: "artifacts/reports/local_nankan_crawl_manifest.json"
+  seed_file: "data/external/local_nankan/seeds/local_nankan_seed.csv"
+  seed_columns:
+    race_id: "race_id"
+    date: "date"
+    horse_key: "horse_key"
+  targets:
+    race_result:
+      enabled: true
+      id_file: "data/external/local_nankan/ids/race_ids.csv"
+      id_column: "race_id"
+      output_file: "data/external/local_nankan/results/local_race_result.csv"
+      dedupe_on:
+        - "race_id"
+        - "horse_id"
+    race_card:
+      enabled: true
+      id_file: "data/external/local_nankan/ids/race_ids.csv"
+      id_column: "race_id"
+      output_file: "data/external/local_nankan/racecard/local_racecard.csv"
+      dedupe_on:
+        - "race_id"
+        - "horse_id"
+    pedigree:
+      enabled: true
+      id_file: "data/external/local_nankan/ids/horse_keys.csv"
+      id_column: "horse_key"
+      output_file: "data/external/local_nankan/pedigree/local_pedigree.csv"
+      dedupe_on:
+        - "horse_key"
