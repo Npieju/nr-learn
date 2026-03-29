@@ -5,6 +5,8 @@ import unittest
 import pandas as pd
 
 from racing_ml.features.builder import (
+    _build_early_corner_position,
+    _build_surface_series,
     _entity_race_shifted_rolling_mean,
     _entity_race_shifted_rolling_mean_many,
     _group_shifted_rolling_mean,
@@ -13,6 +15,31 @@ from racing_ml.features.builder import (
 
 
 class FeatureBuilderRollingReuseTest(unittest.TestCase):
+    def test_build_surface_series_prefers_first_non_empty_surface(self) -> None:
+        frame = pd.DataFrame(
+            {
+                "芝・ダート区分": ["芝", None, "", None],
+                "芝・ダート区分2": [None, "ダート", "芝", None],
+            }
+        )
+
+        actual = _build_surface_series(frame)
+        expected = pd.Series(["芝", "ダート", "芝", pd.NA], dtype="string")
+        pd.testing.assert_series_equal(actual, expected, check_names=False)
+
+    def test_build_early_corner_position_prefers_corner_2_then_fallbacks(self) -> None:
+        frame = pd.DataFrame(
+            {
+                "corner_2_position": [2, None, None, 5],
+                "corner_1_position": [1, 4, None, 6],
+                "corner_3_position": [3, 7, 8, 9],
+            }
+        )
+
+        actual = _build_early_corner_position(frame)
+        expected = pd.Series([2.0, 4.0, 8.0, 5.0], dtype=float)
+        pd.testing.assert_series_equal(actual, expected, check_names=False)
+
     def test_group_shifted_rolling_mean_many_matches_single_column_helper(self) -> None:
         frame = pd.DataFrame(
             {

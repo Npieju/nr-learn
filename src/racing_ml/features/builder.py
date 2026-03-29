@@ -137,6 +137,23 @@ def _build_horse_name_history_key(frame: pd.DataFrame) -> pd.Series | None:
     return (horse_name + "|sex=" + sex).where(horse_name.notna())
 
 
+def _coalesce_columns(frame: pd.DataFrame, columns: list[str], *, numeric: bool = False) -> pd.Series | None:
+    available = [column for column in columns if column in frame.columns]
+    if not available:
+        return None
+
+    if numeric:
+        result = pd.to_numeric(frame[available[0]], errors="coerce")
+        for column in available[1:]:
+            result = result.fillna(pd.to_numeric(frame[column], errors="coerce"))
+        return result.astype(float)
+
+    result = _clean_group_series(frame, available[0])
+    for column in available[1:]:
+        result = result.fillna(_clean_group_series(frame, column))
+    return result.astype("string")
+
+
 def _entity_race_shifted_rolling_mean(
     frame: pd.DataFrame,
     group_col: str,
@@ -293,14 +310,11 @@ def _build_horse_history_key(frame: pd.DataFrame) -> tuple[pd.Series | None, pd.
 
 
 def _build_early_corner_position(frame: pd.DataFrame) -> pd.Series | None:
-    corner_columns = [
-        column
-        for column in ["corner_2_position", "corner_1_position", "corner_3_position"]
-        if column in frame.columns
-    ]
-    if not corner_columns:
-        return None
-    return frame[corner_columns].bfill(axis=1).iloc[:, 0].astype(float)
+    return _coalesce_columns(
+        frame,
+        ["corner_2_position", "corner_1_position", "corner_3_position"],
+        numeric=True,
+    )
 
 
 def _group_shift(frame: pd.DataFrame, group_col: str, value_col: str) -> pd.Series:
@@ -311,15 +325,7 @@ def _group_shift(frame: pd.DataFrame, group_col: str, value_col: str) -> pd.Seri
 
 
 def _build_surface_series(frame: pd.DataFrame) -> pd.Series | None:
-    surface_columns = [column for column in ["芝・ダート区分", "芝・ダート区分2"] if column in frame.columns]
-    if not surface_columns:
-        return None
-
-    surface_frame = pd.DataFrame(
-        {column: _clean_group_series(frame, column) for column in surface_columns},
-        index=frame.index,
-    )
-    return surface_frame.bfill(axis=1).iloc[:, 0].astype("string")
+    return _coalesce_columns(frame, ["芝・ダート区分", "芝・ダート区分2"])
 
 
 def _build_race_class_score(frame: pd.DataFrame) -> pd.Series | None:
