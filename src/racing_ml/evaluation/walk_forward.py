@@ -423,7 +423,7 @@ def optimize_roi_strategy(
     n_races = int(valid_df["race_id"].nunique())
     total_trials = (
         len(blend_candidates) * len(edge_candidates) * len(min_prob_candidates) * len(odds_min_candidates) * len(odds_max_candidates) * len(kelly_frac_candidates) * len(max_frac_candidates)
-        + len(blend_candidates) * len(edge_candidates) * len(min_prob_candidates) * len(odds_min_candidates) * len(odds_max_candidates) * len(top_k_candidates) * len(min_ev_candidates)
+        + len(blend_candidates) * len(min_prob_candidates) * len(odds_min_candidates) * len(odds_max_candidates) * len(top_k_candidates) * len(min_ev_candidates)
     )
     completed = 0
     started_at = time.perf_counter()
@@ -534,30 +534,33 @@ def optimize_roi_strategy(
                                 )
                                 maybe_log_progress()
 
-                        for top_k in top_k_candidates:
-                            for min_ev in min_ev_candidates:
-                                params = {
-                                    "strategy_kind": "portfolio",
-                                    "blend_weight": float(blend_weight),
-                                    "min_prob": float(min_prob),
-                                    "odds_min": float(odds_min),
-                                    "odds_max": float(odds_max),
-                                    "top_k": float(top_k),
-                                    "min_expected_value": float(min_ev),
-                                }
-                                metrics = run_policy_strategy(valid_df, prob_col="blend_prob", odds_col=odds_col, params=params)
-                                completed += 1
-                                update_candidate(
-                                    params,
-                                    metrics,
-                                    roi_key="portfolio_roi",
-                                    bets_key="portfolio_bets",
-                                    hit_key="portfolio_hit_rate",
-                                    bankroll_key="portfolio_final_bankroll",
-                                    drawdown_key="portfolio_max_drawdown",
-                                    hit_weight=0.20,
-                                )
-                                maybe_log_progress()
+        for min_prob in min_prob_candidates:
+            for odds_min in odds_min_candidates:
+                for odds_max in odds_max_candidates:
+                    for top_k in top_k_candidates:
+                        for min_ev in min_ev_candidates:
+                            params = {
+                                "strategy_kind": "portfolio",
+                                "blend_weight": float(blend_weight),
+                                "min_prob": float(min_prob),
+                                "odds_min": float(odds_min),
+                                "odds_max": float(odds_max),
+                                "top_k": float(top_k),
+                                "min_expected_value": float(min_ev),
+                            }
+                            metrics = run_policy_strategy(valid_df, prob_col="blend_prob", odds_col=odds_col, params=params)
+                            completed += 1
+                            update_candidate(
+                                params,
+                                metrics,
+                                roi_key="portfolio_roi",
+                                bets_key="portfolio_bets",
+                                hit_key="portfolio_hit_rate",
+                                bankroll_key="portfolio_final_bankroll",
+                                drawdown_key="portfolio_max_drawdown",
+                                hit_weight=0.20,
+                            )
+                            maybe_log_progress()
 
     if best_score == float("-inf"):
         selection_mode = constraints.selection_mode.strip().lower()
