@@ -23,6 +23,7 @@ dataset:
     - name: "local_nankan_race_result_keys"
       optional: true
       search_dirs:
+        - "data/local_nankan/raw"
         - "data/external/local_nankan/results"
         - "data/external/local_nankan/racecard"
       pattern: "**/*.csv"
@@ -46,6 +47,7 @@ dataset:
     - name: "local_nankan_race_card"
       optional: true
       search_dirs:
+        - "data/local_nankan/raw"
         - "data/external/local_nankan/racecard"
       pattern: "**/*.csv"
       join_on:
@@ -85,6 +87,7 @@ dataset:
     - name: "local_nankan_pedigree"
       optional: true
       search_dirs:
+        - "data/local_nankan/raw"
         - "data/external/local_nankan/pedigree"
       pattern: "**/*.csv"
       join_on:

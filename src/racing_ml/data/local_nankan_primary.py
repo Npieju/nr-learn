@@ -9,6 +9,7 @@ from racing_ml.common.artifacts import display_path, utc_now_iso, write_csv_file
 
 
 RESULT_REQUIRED_COLUMNS = ["date", "race_id", "horse_id"]
+RESULT_KEY_COLUMNS = ["race_id", "horse_id", "horse_key", "owner_name", "breeder_name"]
 RESULT_CANONICAL_COLUMNS = [
     "date",
     "race_id",
@@ -66,6 +67,11 @@ CARD_FILL_COLUMNS = [
     "breeder_name",
 ]
 PEDIGREE_FILL_COLUMNS = ["sire_name", "dam_name", "damsire_name", "owner_name", "breeder_name"]
+SUPPLEMENTAL_OUTPUT_FILENAMES = {
+    "local_nankan_race_result_keys": "local_nankan_race_result_keys.csv",
+    "local_nankan_race_card": "local_nankan_race_card.csv",
+    "local_nankan_pedigree": "local_nankan_pedigree.csv",
+}
 
 
 def _resolve_path(raw_path: str | Path, base_dir: Path) -> Path:
@@ -172,6 +178,18 @@ def _ensure_core_columns(frame: pd.DataFrame) -> pd.DataFrame:
     return output
 
 
+def _build_supplemental_frame(frame: pd.DataFrame, *, columns: list[str], dedupe_on: list[str]) -> pd.DataFrame:
+    available_columns = [column for column in columns if column in frame.columns]
+    if not available_columns:
+        return pd.DataFrame(columns=columns)
+    output = frame[available_columns].copy()
+    dedupe_subset = [column for column in dedupe_on if column in output.columns]
+    if dedupe_subset:
+        output = output.drop_duplicates(subset=dedupe_subset, keep="last")
+    ordered_columns = available_columns + [column for column in columns if column not in available_columns]
+    return output.reindex(columns=ordered_columns)
+
+
 def _build_manifest(
     *,
     base_dir: Path,
@@ -188,6 +206,7 @@ def _build_manifest(
     dry_run: bool,
     error_code: str | None = None,
     error_message: str | None = None,
+    generated_files: dict[str, str] | None = None,
 ) -> dict[str, Any]:
     highlights = [
         f"row_count={row_count}",
@@ -198,8 +217,10 @@ def _build_manifest(
         highlights.append("race_result source is missing")
     elif card_path is None or pedigree_path is None:
         highlights.append("optional enrichments are partially missing; primary raw can still be materialized")
+    if generated_files:
+        highlights.append(f"generated_files={len(generated_files)}")
 
-    return {
+    payload = {
         "started_at": utc_now_iso(),
         "finished_at": utc_now_iso(),
         "status": status,
@@ -218,6 +239,9 @@ def _build_manifest(
         "columns": columns,
         "highlights": highlights,
     }
+    if generated_files:
+        payload["generated_files"] = generated_files
+    return payload
 
 
 def materialize_local_nankan_primary_from_config(
@@ -303,8 +327,38 @@ def materialize_local_nankan_primary_from_config(
     remaining_columns = [column for column in primary_frame.columns if column not in ordered_columns]
     primary_frame = primary_frame[ordered_columns + remaining_columns].copy()
 
+    supplemental_frames = {
+        "local_nankan_race_result_keys": _build_supplemental_frame(
+            primary_frame,
+            columns=RESULT_KEY_COLUMNS,
+            dedupe_on=["race_id", "horse_id"],
+        ),
+        "local_nankan_race_card": _build_supplemental_frame(
+            primary_frame,
+            columns=["race_id", "horse_id"] + CARD_FILL_COLUMNS,
+            dedupe_on=["race_id", "horse_id"],
+        ),
+        "local_nankan_pedigree": _build_supplemental_frame(
+            primary_frame,
+            columns=["horse_key"] + PEDIGREE_FILL_COLUMNS,
+            dedupe_on=["horse_key"],
+        ),
+    }
+
+    generated_files = {
+        name: _display(raw_dir / filename, base_dir)
+        for name, filename in SUPPLEMENTAL_OUTPUT_FILENAMES.items()
+    }
+
     if not dry_run:
         write_csv_file(output_path, primary_frame, index=False, label="local_nankan primary raw")
+        for name, filename in SUPPLEMENTAL_OUTPUT_FILENAMES.items():
+            write_csv_file(
+                raw_dir / filename,
+                supplemental_frames[name],
+                index=False,
+                label=f"{name} supplemental raw",
+            )
 
     summary = _build_manifest(
         base_dir=base_dir,
@@ -319,6 +373,7 @@ def materialize_local_nankan_primary_from_config(
         row_count=int(len(primary_frame)),
         columns=[str(column) for column in primary_frame.columns],
         dry_run=dry_run,
+        generated_files=generated_files,
     )
     write_json(manifest_path, summary)
     return summary

@@ -163,13 +163,22 @@ def _read_json(path: Path) -> dict[str, object] | None:
         return None
 
 
+def _dict_payload(value: object) -> dict[str, object]:
+    return value if isinstance(value, dict) else {}
+
+
 def _optional_int(value: object) -> int | None:
     if value is None:
         return None
     try:
-        return int(value)
+        return int(str(value))
     except (TypeError, ValueError):
         return None
+
+
+def _safe_int(value: object, default: int = 0) -> int:
+    parsed = _optional_int(value)
+    return default if parsed is None else parsed
 
 
 def _pid_is_running(pid: int) -> bool:
@@ -196,12 +205,20 @@ def _build_crawl_lock_state(path: Path) -> dict[str, object]:
     }
 
 
-def _build_target_state(path: Path) -> dict[str, object]:
+def _build_target_state(path: Path, *, output_path: Path, output_frame: pd.DataFrame, key_column: str) -> dict[str, object]:
     payload = _read_json(path)
+    output_exists = output_path.exists()
+    output_rows = int(len(output_frame))
+    unique_key_count = int(output_frame[key_column].nunique(dropna=True)) if not output_frame.empty and key_column in output_frame.columns else 0
     if not payload:
+        inferred_status = "missing"
+        if output_rows > 0:
+            inferred_status = "completed_untracked"
+        elif output_exists:
+            inferred_status = "empty_output"
         return {
             "present": False,
-            "status": "missing",
+            "status": inferred_status,
             "requested_ids": None,
             "processed_ids": None,
             "parsed_ids": None,
@@ -212,6 +229,12 @@ def _build_target_state(path: Path) -> dict[str, object]:
             "pid": None,
             "lock_file": None,
             "stale_reason": None,
+            "manifest_path": str(path),
+            "output_path": str(output_path),
+            "output_exists": output_exists,
+            "output_rows": output_rows,
+            f"unique_{key_column}": unique_key_count,
+            "inferred_from_output": output_rows > 0 or output_exists,
         }
     status = str(payload.get("status", "unknown"))
     pid = _optional_int(payload.get("pid"))
@@ -238,6 +261,12 @@ def _build_target_state(path: Path) -> dict[str, object]:
         "pid": pid,
         "lock_file": str(lock_path),
         "stale_reason": stale_reason,
+        "manifest_path": str(path),
+        "output_path": str(output_path),
+        "output_exists": output_exists,
+        "output_rows": output_rows,
+        f"unique_{key_column}": unique_key_count,
+        "inferred_from_output": False,
     }
 
 
@@ -247,6 +276,87 @@ def _summarize_external(frame: pd.DataFrame, key_column: str) -> dict[str, objec
     return {
         "rows": int(len(frame)),
         f"unique_{key_column}": int(frame[key_column].nunique(dropna=True)),
+    }
+
+
+def _is_completed_like(status: str) -> bool:
+    return status in {"completed", "completed_untracked"}
+
+
+def _build_progress_summary(
+    *,
+    target_states: dict[str, dict[str, object]],
+    external_outputs: dict[str, dict[str, object]],
+    alignment: dict[str, object],
+    readiness: dict[str, object],
+) -> dict[str, object]:
+    status_counts = {
+        "completed": 0,
+        "planned": 0,
+        "running": 0,
+        "partial": 0,
+        "failed": 0,
+        "missing": 0,
+        "stale": 0,
+        "empty_output": 0,
+        "other": 0,
+    }
+    completed_targets: list[str] = []
+    incomplete_targets: list[str] = []
+    failed_targets: list[str] = []
+
+    for target_name, target_state in target_states.items():
+        status = str(target_state.get("status") or "missing")
+        if _is_completed_like(status):
+            status_counts["completed"] += 1
+            completed_targets.append(target_name)
+            continue
+        if status == "running":
+            status_counts["running"] += 1
+        elif status == "planned":
+            status_counts["planned"] += 1
+        elif status == "partial":
+            status_counts["partial"] += 1
+        elif status == "failed":
+            status_counts["failed"] += 1
+            failed_targets.append(target_name)
+        elif status == "missing":
+            status_counts["missing"] += 1
+        elif status == "stale":
+            status_counts["stale"] += 1
+            failed_targets.append(target_name)
+        elif status == "empty_output":
+            status_counts["empty_output"] += 1
+        else:
+            status_counts["other"] += 1
+        incomplete_targets.append(target_name)
+
+    race_result_races = _safe_int(alignment.get("race_result_races"))
+    race_card_races = _safe_int(alignment.get("race_card_races"))
+    pedigree_rows = _safe_int(_dict_payload(external_outputs.get("pedigree")).get("rows"))
+    race_card_coverage_ratio = round(race_card_races / race_result_races, 6) if race_result_races > 0 else None
+
+    if not _is_completed_like(str(target_states.get("race_result", {}).get("status") or "")):
+        current_stage = "race_result_collection"
+    elif race_card_races < race_result_races or not _is_completed_like(str(target_states.get("race_card", {}).get("status") or "")):
+        current_stage = "race_card_collection"
+    elif not bool(readiness.get("snapshot_consistent")):
+        current_stage = "alignment_validation"
+    elif not bool(readiness.get("benchmark_rerun_ready")):
+        current_stage = "benchmark_readiness_validation"
+    else:
+        current_stage = "ready_for_benchmark"
+
+    return {
+        "current_stage": current_stage,
+        "target_status_counts": status_counts,
+        "completed_targets": completed_targets,
+        "incomplete_targets": incomplete_targets,
+        "failed_targets": failed_targets,
+        "target_completion_ratio": round(len(completed_targets) / max(len(target_states), 1), 6),
+        "race_card_race_coverage_ratio_vs_result": race_card_coverage_ratio,
+        "pedigree_rows": pedigree_rows,
+        "recommended_action": readiness.get("recommended_action"),
     }
 
 
@@ -347,11 +457,11 @@ def _build_readiness(
         for name in ("race_result", "race_card")
     )
     no_unpaired_races = (
-        int(alignment.get("race_result_only_races", 0)) == 0
-        and int(alignment.get("race_card_only_races", 0)) == 0
+        _safe_int(alignment.get("race_result_only_races")) == 0
+        and _safe_int(alignment.get("race_card_only_races")) == 0
     )
-    paired_result_coverage_ok = int(alignment.get("paired_negative_diff_races", 0)) == 0
-    paired_result_odds_ok = int(result_integrity.get("all_odds_missing_races") or 0) == 0
+    paired_result_coverage_ok = _safe_int(alignment.get("paired_negative_diff_races")) == 0
+    paired_result_odds_ok = _safe_int(result_integrity.get("all_odds_missing_races")) == 0
     pedigree_stable = target_states.get("pedigree", {}).get("status") not in {"running", "stale"}
 
     snapshot_consistent = race_targets_complete and paired_result_coverage_ok and no_unpaired_races and paired_result_odds_ok
@@ -496,8 +606,24 @@ def main() -> int:
             race_card = _read_external(race_card_path)
             pedigree = _read_external(pedigree_path)
         target_states = {
-            target_name: _build_target_state(path)
-            for target_name, path in target_manifest_paths.items()
+            "race_result": _build_target_state(
+                target_manifest_paths["race_result"],
+                output_path=race_result_path,
+                output_frame=race_result,
+                key_column="race_id",
+            ),
+            "race_card": _build_target_state(
+                target_manifest_paths["race_card"],
+                output_path=race_card_path,
+                output_frame=race_card,
+                key_column="race_id",
+            ),
+            "pedigree": _build_target_state(
+                target_manifest_paths["pedigree"],
+                output_path=pedigree_path,
+                output_frame=pedigree,
+                key_column="horse_key",
+            ),
         }
         progress.update(message="external outputs loaded")
 
@@ -523,6 +649,18 @@ def main() -> int:
             "latest_tail": _build_coverage(tail_frame, list(args.columns)),
             "paired_race_subset": _build_coverage(collected_subset, list(args.columns)),
         }
+        external_outputs = {
+            "race_result": _summarize_external(race_result, "race_id"),
+            "race_card": _summarize_external(race_card, "race_id"),
+            "pedigree": _summarize_external(pedigree, "horse_key"),
+        }
+        readiness = _build_readiness(target_states, alignment, result_integrity["external_race_result"])
+        progress_summary = _build_progress_summary(
+            target_states=target_states,
+            external_outputs=external_outputs,
+            alignment=alignment,
+            readiness=readiness,
+        )
         payload.update({
             "run_context": {
                 "config": args.config,
@@ -545,11 +683,7 @@ def main() -> int:
                 "crawl_lock_path": artifact_display_path(crawl_lock_path, workspace_root=ROOT),
             },
             "crawl_lock": _build_crawl_lock_state(crawl_lock_path),
-            "external_outputs": {
-                "race_result": _summarize_external(race_result, "race_id"),
-                "race_card": _summarize_external(race_card, "race_id"),
-                "pedigree": _summarize_external(pedigree, "horse_key"),
-            },
+            "external_outputs": external_outputs,
             "target_states": target_states,
             "alignment": alignment,
             "result_integrity": result_integrity,
@@ -558,7 +692,8 @@ def main() -> int:
                 "rows": int(len(collected_subset)),
                 "races": int(len(paired_race_ids)),
             },
-            "readiness": _build_readiness(target_states, alignment, result_integrity["external_race_result"]),
+            "readiness": readiness,
+            "progress": progress_summary,
             "coverage_summary": {
                 "latest_tail_horse_key_ratio": coverage["latest_tail"].get("horse_key", {}).get("non_null_ratio"),
                 "latest_tail_breeder_ratio": coverage["latest_tail"].get("breeder_name", {}).get("non_null_ratio"),
@@ -582,19 +717,27 @@ def main() -> int:
 
         print(f"[netkeiba-snapshot] output={output_path}")
         print(f"[netkeiba-snapshot] alignment={payload['alignment']}")
-        readiness = payload["readiness"]
-        reason_text = "; ".join(readiness["reasons"]) if readiness["reasons"] else "none"
+        readiness_payload = _dict_payload(payload.get("readiness"))
+        readiness_reasons_raw = readiness_payload.get("reasons")
+        readiness_reasons: list[str] = []
+        if isinstance(readiness_reasons_raw, list):
+            readiness_reasons = [str(reason) for reason in readiness_reasons_raw]
+        reason_text = "; ".join(readiness_reasons) if readiness_reasons else "none"
         print(
             "[netkeiba-snapshot] "
-            f"readiness action={readiness['recommended_action']} "
-            f"snapshot_consistent={readiness['snapshot_consistent']} "
-            f"benchmark_rerun_ready={readiness['benchmark_rerun_ready']} "
+            f"readiness action={readiness_payload.get('recommended_action')} "
+            f"snapshot_consistent={readiness_payload.get('snapshot_consistent')} "
+            f"benchmark_rerun_ready={readiness_payload.get('benchmark_rerun_ready')} "
             f"reasons={reason_text}"
         )
-        for scope_name, scope_payload in payload["coverage"].items():
+        coverage_payload = _dict_payload(payload.get("coverage"))
+        for scope_name, scope_payload in coverage_payload.items():
+            if not isinstance(scope_payload, dict):
+                continue
             summary = ", ".join(
                 f"{column}={metrics['non_null_ratio']}"
                 for column, metrics in scope_payload.items()
+                if isinstance(metrics, dict)
             )
             print(f"[netkeiba-snapshot] {scope_name}: {summary}")
         progress.complete(message="snapshot completed")

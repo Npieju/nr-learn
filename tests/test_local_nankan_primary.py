@@ -18,6 +18,9 @@ class LocalNankanPrimaryMaterializeTest(unittest.TestCase):
             pedigree_path = base_dir / "data/external/local_nankan/pedigree/local_pedigree.csv"
             output_path = base_dir / "data/local_nankan/raw/local_nankan_primary.csv"
             manifest_path = base_dir / "artifacts/reports/local_nankan_primary_materialize_manifest.json"
+            result_keys_path = base_dir / "data/local_nankan/raw/local_nankan_race_result_keys.csv"
+            race_card_output_path = base_dir / "data/local_nankan/raw/local_nankan_race_card.csv"
+            pedigree_output_path = base_dir / "data/local_nankan/raw/local_nankan_pedigree.csv"
 
             result_path.parent.mkdir(parents=True, exist_ok=True)
             card_path.parent.mkdir(parents=True, exist_ok=True)
@@ -93,6 +96,7 @@ class LocalNankanPrimaryMaterializeTest(unittest.TestCase):
             )
 
             self.assertEqual(summary["status"], "completed")
+            self.assertIn("generated_files", summary)
 
             frame = pd.read_csv(output_path)
             row = frame.iloc[0]
@@ -105,6 +109,14 @@ class LocalNankanPrimaryMaterializeTest(unittest.TestCase):
             self.assertEqual(str(row["breeder_name"]), "Breeder A")
             self.assertEqual(str(row["sire_name"]), "Sire A")
             self.assertEqual(int(str(row["is_win"])), 1)
+
+            result_keys = pd.read_csv(result_keys_path)
+            race_card_output = pd.read_csv(race_card_output_path)
+            pedigree_output = pd.read_csv(pedigree_output_path)
+
+            self.assertEqual(str(result_keys.loc[0, "horse_key"]), "horse001")
+            self.assertEqual(str(race_card_output.loc[0, "horse_id"]), "nar001:1")
+            self.assertEqual(str(pedigree_output.loc[0, "sire_name"]), "Sire A")
 
 
 if __name__ == "__main__":
