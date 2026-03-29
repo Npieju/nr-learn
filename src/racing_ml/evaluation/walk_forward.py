@@ -214,9 +214,14 @@ def fit_platt(train_scores: np.ndarray, train_labels: np.ndarray, test_scores: n
     return model.predict_proba(test_scores.reshape(-1, 1))[:, 1]
 
 
-def fit_isotonic(train_scores: np.ndarray, train_labels: np.ndarray, test_scores: np.ndarray) -> np.ndarray:
+def fit_isotonic_model(train_scores: np.ndarray, train_labels: np.ndarray) -> IsotonicRegression:
     model = IsotonicRegression(out_of_bounds="clip")
     model.fit(train_scores, train_labels)
+    return model
+
+
+def fit_isotonic(train_scores: np.ndarray, train_labels: np.ndarray, test_scores: np.ndarray) -> np.ndarray:
+    model = fit_isotonic_model(train_scores, train_labels)
     return model.transform(test_scores)
 
 
@@ -260,16 +265,11 @@ def optimize_roi_strategy(
     train_scores = train_df["score"].to_numpy()
     train_labels = train_df[label_col].astype(int).to_numpy()
 
-    train_df = train_df.copy()
     valid_df = valid_df.copy()
-    train_df["iso_prob"] = fit_isotonic(train_scores, train_labels, train_scores)
-    valid_df["iso_prob"] = fit_isotonic(train_scores, train_labels, valid_df["score"].to_numpy())
-    train_df["market_prob"] = compute_market_prob(train_df, odds_col=odds_col)
+    isotonic_model = fit_isotonic_model(train_scores, train_labels)
+    valid_df["iso_prob"] = isotonic_model.transform(valid_df["score"].to_numpy())
     valid_df["market_prob"] = compute_market_prob(valid_df, odds_col=odds_col)
-    train_df["_policy_odds_num"] = pd.to_numeric(train_df[odds_col], errors="coerce")
     valid_df["_policy_odds_num"] = pd.to_numeric(valid_df[odds_col], errors="coerce")
-    if "rank" in train_df.columns:
-        train_df["_policy_rank_num"] = pd.to_numeric(train_df["rank"], errors="coerce")
     if "rank" in valid_df.columns:
         valid_df["_policy_rank_num"] = pd.to_numeric(valid_df["rank"], errors="coerce")
 
