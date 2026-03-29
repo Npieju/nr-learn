@@ -2,13 +2,14 @@ from __future__ import annotations
 
 from collections import deque
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any, Callable, Literal
 
 import pandas as pd
 
 from racing_ml.data.dataset_loader import _normalize_columns, _read_csv_tail
 
 TailReader = Callable[[Path, int], tuple[pd.DataFrame, int]]
+TailComparisonGate = Literal["exact", "canonical", "value"]
 
 
 def _series_value_diff_mask(left: pd.Series, right: pd.Series) -> pd.Series:
@@ -232,3 +233,14 @@ def compare_tail_readers(
             "normalized": normalized_comparison,
         },
     }
+
+
+def comparison_passes_gate(comparison: dict[str, Any], gate: TailComparisonGate) -> bool:
+    raw = comparison["comparison"]["raw"]
+    if gate == "exact":
+        return bool(raw["exact_equal"])
+    if gate == "canonical":
+        return bool(raw["exact_equal"] or raw["canonical_dtype_only_difference"])
+    if gate == "value":
+        return bool(raw["value_equal"])
+    raise ValueError(f"unsupported tail comparison gate: {gate}")

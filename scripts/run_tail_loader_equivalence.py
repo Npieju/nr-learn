@@ -17,7 +17,7 @@ from racing_ml.common.artifacts import ensure_output_file_path as artifact_ensur
 from racing_ml.common.artifacts import write_json
 from racing_ml.common.progress import Heartbeat, ProgressBar
 from racing_ml.data.dataset_loader import _pick_dataset
-from racing_ml.data.tail_equivalence import TAIL_READER_CANDIDATES, compare_tail_readers
+from racing_ml.data.tail_equivalence import TAIL_READER_CANDIDATES, compare_tail_readers, comparison_passes_gate
 
 
 def log_progress(message: str) -> None:
@@ -34,6 +34,7 @@ def main() -> int:
     parser.add_argument("--right-reader", choices=sorted(TAIL_READER_CANDIDATES.keys()), default="deque_trim")
     parser.add_argument("--manifest-file", default="artifacts/reports/tail_loader_equivalence.json")
     parser.add_argument("--fail-on-diff", action="store_true")
+    parser.add_argument("--fail-gate", choices=["exact", "canonical", "value"], default="exact")
     args = parser.parse_args()
 
     try:
@@ -56,16 +57,22 @@ def main() -> int:
         normalized_exact_equal = comparison["comparison"]["normalized"]["exact_equal"]
         raw_canonical_dtype_only = comparison["comparison"]["raw"]["canonical_dtype_only_difference"]
         normalized_canonical_dtype_only = comparison["comparison"]["normalized"]["canonical_dtype_only_difference"]
+        gate_passed = comparison_passes_gate(comparison, args.fail_gate)
         progress.update(
             message=(
                 "comparison complete "
                 f"raw_exact_equal={raw_exact_equal} "
                 f"normalized_exact_equal={normalized_exact_equal} "
                 f"raw_canonical_dtype_only={raw_canonical_dtype_only} "
-                f"normalized_canonical_dtype_only={normalized_canonical_dtype_only}"
+                f"normalized_canonical_dtype_only={normalized_canonical_dtype_only} "
+                f"gate={args.fail_gate} gate_passed={gate_passed}"
             )
         )
         comparison["manifest_file"] = artifact_display_path(manifest_path, workspace_root=ROOT)
+        comparison["gate"] = {
+            "mode": args.fail_gate,
+            "passed": bool(gate_passed),
+        }
         write_json(manifest_path, comparison)
         progress.update(message=f"manifest written path={artifact_display_path(manifest_path, workspace_root=ROOT)}")
         print(
@@ -74,11 +81,12 @@ def main() -> int:
             f"raw_exact_equal={raw_exact_equal} "
             f"normalized_exact_equal={normalized_exact_equal} "
             f"raw_canonical_dtype_only={raw_canonical_dtype_only} "
-            f"normalized_canonical_dtype_only={normalized_canonical_dtype_only}",
+            f"normalized_canonical_dtype_only={normalized_canonical_dtype_only} "
+            f"gate={args.fail_gate} gate_passed={gate_passed}",
             flush=True,
         )
         progress.complete(message="tail equivalence completed")
-        if args.fail_on_diff and not raw_exact_equal:
+        if args.fail_on_diff and not gate_passed:
             return 2
         return 0
     except KeyboardInterrupt:

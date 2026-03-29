@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pandas as pd
 
-from racing_ml.data.tail_equivalence import compare_tail_readers
+from racing_ml.data.tail_equivalence import compare_tail_readers, comparison_passes_gate
 
 
 class TailEquivalenceTest(unittest.TestCase):
@@ -132,3 +132,18 @@ class TailEquivalenceTest(unittest.TestCase):
                 result["comparison"]["raw"]["dtype_difference_categories"][0]["classification"],
                 "all_null",
             )
+
+    def test_comparison_passes_gate_modes(self) -> None:
+        comparison = {
+            "comparison": {
+                "raw": {
+                    "exact_equal": False,
+                    "value_equal": True,
+                    "canonical_dtype_only_difference": True,
+                }
+            }
+        }
+
+        self.assertFalse(comparison_passes_gate(comparison, "exact"))
+        self.assertTrue(comparison_passes_gate(comparison, "canonical"))
+        self.assertTrue(comparison_passes_gate(comparison, "value"))
