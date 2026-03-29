@@ -66,6 +66,8 @@ promoted anchor に対する challenger 判定には [policy_challenger_decision
 
 seasonal de-risk の判断標準は [seasonal_derisk_decision_standard.md](seasonal_derisk_decision_standard.md) を使う。
 
+seasonal family の次 issue 下書きは [next_issue_sep_guard_secondary_family.md](next_issue_sep_guard_secondary_family.md) を使う。
+
 ## 正本
 
 このプロジェクトの理解と運用に必要な中核文書は次の 8 本である。
