@@ -110,11 +110,13 @@ def _fill_history_defaults(
     group_col: str,
     values: pd.Series,
     fill_value: float | int | None,
+    valid_group_mask: pd.Series | None = None,
 ) -> pd.Series:
     if pd.isna(fill_value) or group_col not in frame.columns:
         return values
 
-    valid_group_mask = _clean_group_series(frame, group_col).notna()
+    if valid_group_mask is None:
+        valid_group_mask = _clean_group_series(frame, group_col).notna()
     if not valid_group_mask.any():
         return values
 
@@ -141,13 +143,16 @@ def _entity_race_shifted_rolling_mean(
     value_col: str,
     window: int,
     min_periods: int = 1,
+    clean_group: pd.Series | None = None,
 ) -> pd.Series:
     required = {"race_id", group_col, value_col}
     if not required.issubset(frame.columns):
         return pd.Series(np.nan, index=frame.index, dtype=float)
 
     work = frame[["race_id", group_col, value_col]].copy()
-    work[group_col] = _clean_group_series(work, group_col)
+    if clean_group is None:
+        clean_group = _clean_group_series(frame, group_col)
+    work[group_col] = clean_group
     work[value_col] = pd.to_numeric(work[value_col], errors="coerce")
     work["_row_order"] = np.arange(len(work), dtype=int)
     work = work.dropna(subset=[group_col])
@@ -184,6 +189,7 @@ def _entity_race_shifted_rolling_mean_many(
     value_cols: list[str],
     window: int,
     min_periods: int = 1,
+    clean_group: pd.Series | None = None,
 ) -> pd.DataFrame:
     required = {"race_id", group_col}
     available_cols = [column for column in value_cols if column in frame.columns]
@@ -191,7 +197,9 @@ def _entity_race_shifted_rolling_mean_many(
         return pd.DataFrame(index=frame.index)
 
     work = frame[["race_id", group_col, *available_cols]].copy()
-    work[group_col] = _clean_group_series(work, group_col)
+    if clean_group is None:
+        clean_group = _clean_group_series(frame, group_col)
+    work[group_col] = clean_group
     for column in available_cols:
         work[column] = pd.to_numeric(work[column], errors="coerce")
     work["_row_order"] = np.arange(len(work), dtype=int)
@@ -363,6 +371,27 @@ def _bucketize_gate_ratio(gate_ratio: pd.Series) -> pd.Series:
 
 def build_features(frame: pd.DataFrame) -> pd.DataFrame:
     data = frame.copy()
+    clean_group_cache: dict[str, pd.Series] = {}
+    valid_group_mask_cache: dict[str, pd.Series] = {}
+
+    def _get_clean_group(group_col: str) -> pd.Series | None:
+        if group_col not in data.columns:
+            return None
+        cached = clean_group_cache.get(group_col)
+        if cached is None:
+            cached = _clean_group_series(data, group_col)
+            clean_group_cache[group_col] = cached
+        return cached
+
+    def _get_valid_group_mask(group_col: str) -> pd.Series | None:
+        if group_col not in data.columns:
+            return None
+        cached = valid_group_mask_cache.get(group_col)
+        if cached is None:
+            clean_group = _get_clean_group(group_col)
+            cached = clean_group.notna() if clean_group is not None else pd.Series(False, index=data.index, dtype=bool)
+            valid_group_mask_cache[group_col] = cached
+        return cached
 
     date_series = None
     if "date" in data.columns:
@@ -604,6 +633,7 @@ def build_features(frame: pd.DataFrame) -> pd.DataFrame:
             "jockey_id",
             ["is_win", "corner_gain_2_to_4", "closing_time_3f"],
             window=30,
+            clean_group=_get_clean_group("jockey_id"),
         )
     if "is_win" in jockey_window30.columns:
         data["jockey_last_30_win_rate"] = jockey_window30["is_win"].fillna(0.0)
@@ -615,6 +645,7 @@ def build_features(frame: pd.DataFrame) -> pd.DataFrame:
             "trainer_id",
             ["is_win", "corner_gain_2_to_4", "closing_time_3f"],
             window=30,
+            clean_group=_get_clean_group("trainer_id"),
         )
     if "is_win" in trainer_window30.columns:
         data["trainer_last_30_win_rate"] = trainer_window30["is_win"].fillna(0.0)
@@ -653,8 +684,15 @@ def build_features(frame: pd.DataFrame) -> pd.DataFrame:
                 value_col,
                 window=window,
                 min_periods=min_periods,
+                clean_group=_get_clean_group(group_col),
             )
-            history_values = _fill_history_defaults(data, group_col, history_values, fill_value)
+            history_values = _fill_history_defaults(
+                data,
+                group_col,
+                history_values,
+                fill_value,
+                valid_group_mask=_get_valid_group_mask(group_col),
+            )
             data[output_col] = history_values
 
     jockey_trainer_style_specs = [
@@ -698,8 +736,15 @@ def build_features(frame: pd.DataFrame) -> pd.DataFrame:
                 value_col,
                 window=window,
                 min_periods=min_periods,
+                clean_group=_get_clean_group(group_col),
             )
-            history_values = _fill_history_defaults(data, group_col, history_values, fill_value)
+            history_values = _fill_history_defaults(
+                data,
+                group_col,
+                history_values,
+                fill_value,
+                valid_group_mask=_get_valid_group_mask(group_col),
+            )
             data[output_col] = history_values
 
     gate_bias_history_specs = [
@@ -721,8 +766,15 @@ def build_features(frame: pd.DataFrame) -> pd.DataFrame:
                 value_col,
                 window=window,
                 min_periods=min_periods,
+                clean_group=_get_clean_group(group_col),
             )
-            history_values = _fill_history_defaults(data, group_col, history_values, fill_value)
+            history_values = _fill_history_defaults(
+                data,
+                group_col,
+                history_values,
+                fill_value,
+                valid_group_mask=_get_valid_group_mask(group_col),
+            )
             data[output_col] = history_values
 
     pedigree_history_specs = [
@@ -740,8 +792,15 @@ def build_features(frame: pd.DataFrame) -> pd.DataFrame:
                 value_col,
                 window=window,
                 min_periods=min_periods,
+                clean_group=_get_clean_group(group_col),
             )
-            history_values = _fill_history_defaults(data, group_col, history_values, fill_value)
+            history_values = _fill_history_defaults(
+                data,
+                group_col,
+                history_values,
+                fill_value,
+                valid_group_mask=_get_valid_group_mask(group_col),
+            )
             data[output_col] = history_values
 
     if {"sire_name", "track", "distance"}.issubset(data.columns):
@@ -758,12 +817,14 @@ def build_features(frame: pd.DataFrame) -> pd.DataFrame:
             "is_win",
             window=80,
             min_periods=3,
+            clean_group=_get_clean_group("sire_track_distance_key"),
         )
         data["sire_track_distance_last_80_win_rate"] = _fill_history_defaults(
             data,
             "sire_track_distance_key",
             history_values,
             0.0,
+            valid_group_mask=_get_valid_group_mask("sire_track_distance_key"),
         )
 
     if {"horse_last_3_avg_corner_gain_2_to_4", "course_baseline_race_pace_balance_3f"}.issubset(data.columns):
