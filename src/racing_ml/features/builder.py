@@ -21,6 +21,28 @@ def _group_shifted_rolling_mean(
     return rolled.astype(float)
 
 
+def _group_shifted_rolling_mean_many(
+    frame: pd.DataFrame,
+    group_col: str,
+    value_cols: list[str],
+    window: int,
+    min_periods: int = 1,
+) -> pd.DataFrame:
+    available_cols = [column for column in value_cols if column in frame.columns]
+    if group_col not in frame.columns or not available_cols:
+        return pd.DataFrame(index=frame.index)
+
+    numeric = frame[available_cols].apply(pd.to_numeric, errors="coerce")
+    shifted = numeric.groupby(frame[group_col], sort=False).shift(1)
+    rolled = (
+        shifted.groupby(frame[group_col], sort=False)
+        .rolling(window=window, min_periods=min_periods)
+        .mean()
+        .reset_index(level=0, drop=True)
+    )
+    return rolled.astype(float)
+
+
 def _race_level_shifted_rolling_mean(
     frame: pd.DataFrame,
     group_col: str,
@@ -462,10 +484,40 @@ def build_features(frame: pd.DataFrame) -> pd.DataFrame:
         data["horse_is_class_down"] = class_down.where(data["horse_class_change"].notna(), np.nan)
 
     if horse_history_key is not None and {"rank"}.issubset(data.columns):
-        data["horse_last_3_avg_rank"] = _group_shifted_rolling_mean(data, "horse_history_key", "rank", window=3).fillna(data["rank"].median())
+        horse_history_window3 = _group_shifted_rolling_mean_many(
+            data,
+            "horse_history_key",
+            [
+                "rank",
+                "time_per_1000m",
+                "time_margin_sec",
+                "closing_time_3f",
+                "corner_2_position",
+                "corner_2_ratio",
+                "corner_4_position",
+                "corner_4_ratio",
+                "corner_gain_2_to_4",
+                "race_pace_front3f",
+                "race_pace_back3f",
+                "race_pace_balance_3f",
+                "field_size",
+            ],
+            window=3,
+        )
+        data["horse_last_3_avg_rank"] = horse_history_window3.get("rank", pd.Series(np.nan, index=data.index)).fillna(data["rank"].median())
+    else:
+        horse_history_window3 = pd.DataFrame(index=data.index)
 
     if horse_history_key is not None and {"is_win"}.issubset(data.columns):
-        data["horse_last_5_win_rate"] = _group_shifted_rolling_mean(data, "horse_history_key", "is_win", window=5).fillna(0.0)
+        horse_history_window5 = _group_shifted_rolling_mean_many(
+            data,
+            "horse_history_key",
+            ["is_win", "time_deviation"],
+            window=5,
+        )
+        data["horse_last_5_win_rate"] = horse_history_window5.get("is_win", pd.Series(np.nan, index=data.index)).fillna(0.0)
+    else:
+        horse_history_window5 = pd.DataFrame(index=data.index)
     if horse_history_key is not None and {"track", "distance"}.issubset(data.columns):
         _compose_key(
             data,
@@ -491,13 +543,9 @@ def build_features(frame: pd.DataFrame) -> pd.DataFrame:
     ]
     if horse_history_key is not None:
         for source_col, output_col, window in history_specs:
-            if source_col in data.columns:
-                data[output_col] = _group_shifted_rolling_mean(
-                    data,
-                    "horse_history_key",
-                    source_col,
-                    window=window,
-                )
+            history_frame = horse_history_window3 if window == 3 else horse_history_window5
+            if source_col in history_frame.columns:
+                data[output_col] = history_frame[source_col]
 
     if horse_key_source is not None:
         data["horse_history_key_source"] = horse_key_source
