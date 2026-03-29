@@ -413,10 +413,10 @@ def _read_csv_tail(csv_path: Path, tail_rows: int) -> tuple[pd.DataFrame, int]:
     if not chunks:
         return pd.DataFrame(), 0
 
-    tail_frame = pd.concat(chunks, ignore_index=True)
-    if len(tail_frame) <= int(tail_rows):
+    tail_frame = chunks[0] if len(chunks) == 1 else pd.concat(chunks, ignore_index=True)
+    if len(tail_frame) <= max_kept_rows:
         return tail_frame.reset_index(drop=True), total_rows
-    return tail_frame.tail(int(tail_rows)).reset_index(drop=True), total_rows
+    return tail_frame.tail(max_kept_rows).reset_index(drop=True), total_rows
 
 
 def _resolve_recent_date_floor(frame: pd.DataFrame) -> pd.Timestamp | None:
