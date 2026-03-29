@@ -17,31 +17,30 @@
 
 ## 3. Current Issue Set
 
-### 3.0 Current Queue After Seasonal Ordering Close
+### 3.0 Current Queue After Supplemental Materialization Promotion
 
-2026-03-29 時点で、Kelly runtime family (`#10`, `#11`, `#12`, `#13`) と seasonal ordering (`#14`, `#15`) は close 済みで、current operational anchor は引き続き `r20260329_tighter_policy_ratio003_abs90` である。
+2026-03-29 時点で、Kelly runtime family (`#10`, `#11`, `#12`, `#13`)、seasonal ordering (`#14`, `#15`)、runtime broad reduction (`#7`)、supplemental materialization (`#16`) は close 済みで、current operational anchor は引き続き `r20260329_tighter_policy_ratio003_abs90` である。
 
-この時点の open issue は `#7` の runtime 改善と、その follow-up である `#16` の materialized supplemental path である。
+この時点の open issue は `#17` の feature-builder runtime 改善である。
 
 Primary active issue:
 
-- `#7`
-- <https://github.com/Npieju/nr-learn/issues/7>
+- `#17`
+- <https://github.com/Npieju/nr-learn/issues/17>
 
-Follow-up execution issue draft:
+Primary issue draft:
 
-- `docs/next_issue_materialized_supplementals.md`
+- `docs/next_issue_feature_builder_runtime.md`
 
 GitHub issue:
 
-- `#16`
-- <https://github.com/Npieju/nr-learn/issues/16>
+- `#17`
+- <https://github.com/Npieju/nr-learn/issues/17>
 
 Primary next execution order:
 
-1. `#7 optimize_roi_strategy runtime reduction for nested challenger runs`
-2. `#16 materialize supplemental tables for faster evaluation loads`
-3. その後に next challenger family / next data-loading reduction を再選定する
+1. `#17 reduce feature-builder history rolling cost`
+2. その後に next challenger family / next loader/build reduction を再選定する
 
 ### 3.1 [experiment] Tighter policy search frontier refinement
 
