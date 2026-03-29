@@ -1,3 +1,5 @@
+- M103. local revision gate に top-level 停止点要約を足した
+- M102. local public snapshot に top-level 停止点要約を足した
 # 開発ロードマップ
 
 ## 1. この文書の役割
@@ -626,6 +628,193 @@
 - `run_mixed_universe_recovery.py --dry-run` は step 一覧だけでなく、source board 由来の `recommended_action`, `refreshed_board_status`, `refreshed_current_phase`, `refreshed_next_action_source`, `refreshed_highlights` も planned payload に含めるようにした。
 - これにより recovery 入口でも、operator は実行前の段階から「いまどこで止まっているか」を recovery manifest 単体で読める。
 
+### M80. local revision lineage の dry-run も completed shape へ寄せた
+
+- `run_local_revision_gate.py --dry-run` は top-level を `status=planned` のまま閉じ、`read_order` と `highlights` を含む planned lineage manifest を返すようにした。
+- 同時に `benchmark_gate_payload`, `data_preflight_payload`, `revision_manifest_payload`, `promotion_payload`, `evaluation_pointer_payload` の planned preview も残すようにして、local raw data 未配置や revision gate 未実行の段階でも downstream artifact path と停止候補を completed payload に近い shape で読めるようにした。
+
+### M81. local feasibility の dry-run も completed shape へ寄せた
+
+- `run_local_feasibility_manifest.py --dry-run` は top-level を `status=planned` のまま閉じ、`read_order` と `highlights` を含む planned feasibility manifest を返すようにした。
+- 同時に `snapshot_payload`, `validation_payload`, `feature_gap_payload`, `evaluation_payload` の planned preview も残すようにして、snapshot / validation / feature gap / evaluation 未実行の段階でも downstream artifact path と読み順を completed payload に近い shape で読めるようにした。
+
+### M82. revision gate 本体の dry-run も planned 契約へ揃えた
+
+- `run_revision_gate.py --dry-run` は `status=dry_run` ではなく `status=planned` を返すようにし、`read_order`, `current_phase`, `recommended_action`, `highlights` も持つ planned manifest に揃えた。
+- step preview には train artifact suffix、evaluation manifest/summary、WF summary、promotion report の output preview も残すようにして、wrapper を介さない formal revision gate 入口でも downstream artifact を同じ読み口で追えるようにした。
+
+### M83. latest revision gate wrapper の dry-run も planned 契約へ揃えた
+
+- `run_netkeiba_latest_revision_gate.py --dry-run` は readiness snapshot を実行せず、top-level を `status=planned` のまま閉じる wrapper manifest を返すようにした。
+- 同時に `read_order`, `current_phase`, `recommended_action`, `highlights`, readiness preview, revision gate preview, `revision_gate_artifacts` の planned path を残すようにして、2025 latest wrapper 入口でも readiness と downstream formal artifacts を completed payload に近い shape で読めるようにした。
+
+### M84. local public snapshot の dry-run も summary preview 付きに揃えた
+
+- `run_local_public_snapshot.py --dry-run` は `compare_contract` だけでなく `readiness`, `promotion_summary`, `benchmark_gate_summary`, `evaluation_summary`, `highlights` も含む planned payload を返すようにした。
+- これにより lineage 未生成の段階でも、public-facing local bridge 入口だけで readiness と downstream mixed compare anchor を completed payload に近い shape で読めるようにした。
+
+### M85. mixed recovery の dry-run に read_order と board preview を足した
+
+- `run_mixed_universe_recovery.py --dry-run` は source board 由来の `refreshed_*` を写すだけでなく、recovery 自身の `read_order`, `current_phase`, `next_action_source`, `status_board_preview`, `highlights` も返すようにした。
+- これにより recovery 入口でも、operator は source board の停止点だけでなく「この recovery がどの順で何を再生成するか」を planned manifest 単体で completed payload に近い shape で読めるようにした。
+
+### M86. mixed readiness の payload に current_phase と highlights を足した
+
+- `run_mixed_universe_readiness.py` は planned / completed の両方で `current_phase` と `highlights` を返すようにした。
+- これにより mixed compare 前の入口でも、operator は不足 check の列挙だけでなく「いま何が blocker で、次に何をすべきか」を readiness manifest 単体で completed payload に近い shape で読めるようにした。
+
+### M87. mixed compare の payload に current_phase と highlights を足した
+
+- `run_mixed_universe_compare.py` は planned / completed の両方で `current_phase` と `highlights` を返すようにした。
+- これにより pointer bridge 入口でも、operator は left/right summary だけでなく「いま compare がどの anchor を読んでいて、次に何をすべきか」を compare manifest 単体で completed payload に近い shape で読めるようにした。
+
+### M88. status board の phase 行にも blocker 要約を写した
+
+- `run_mixed_universe_status_board.py` は各 `phase_summaries` 行に `current_phase`, `error_code`, `highlights` も写すようにした。
+- これにより board 入口でも、operator は下流 manifest を個別に開かなくても各 phase の blocker 要約を同じ一覧のまま追えるようにした。
+
+### M89. schema の payload に current_phase と highlights を足した
+
+- `run_mixed_universe_schema.py` は planned / completed の両方で `current_phase` と `highlights` を返すようにした。
+- これにより schema 入口でも、operator は comparison axes だけでなく readiness blocker と次アクションを manifest 単体で completed payload に近い shape で読めるようにした。
+
+### M90. numeric compare の payload に current_phase と highlights を足した
+
+- `run_mixed_universe_numeric_compare.py` は planned / completed の両方で `current_phase` と `highlights` を返すようにした。
+- これにより numeric compare 入口でも、operator は row summary だけでなく readiness/schema blocker と次アクションを manifest 単体で completed payload に近い shape で読めるようにした。
+
+### M91. left gap audit の payload に current_phase と highlights を足した
+
+- `run_mixed_universe_left_gap_audit.py` は planned / completed の両方で `current_phase` と `highlights` を返すようにした。
+- これにより gap audit 入口でも、operator は missing-left row 要約だけでなく lineage blocker と次アクションを manifest 単体で completed payload に近い shape で読めるようにした。
+
+### M92. numeric summary の payload に current_phase と highlights を足した
+
+- `run_mixed_universe_numeric_summary.py` は planned / completed の両方で `current_phase` と `highlights` を返すようにした。
+- これにより numeric summary 入口でも、operator は promote-safe summary だけでなく readiness/schema blocker と次アクションを manifest 単体で completed payload に近い shape で読めるようにした。
+
+### M93. left recovery plan の payload に current_phase と highlights を足した
+
+- `run_mixed_universe_left_recovery_plan.py` は planned / completed の両方で `current_phase` と `highlights` を返すようにした。
+- これにより recovery plan 入口でも、operator は deduplicated steps だけでなく upstream blocker と次アクションを manifest 単体で completed payload に近い shape で読めるようにした。
+
+### M94. public benchmark reference に top-level blocker summary を足した
+
+- `run_public_benchmark_reference.py` は `read_order`, `current_phase`, `recommended_action`, `blocker_summary`, `highlights` を返すようにした。
+- これにより right-side baseline 入口でも、operator は promotion / evaluation artifact を個別に開かなくても decision, stability, blocking reasons を manifest 単体で読めるようにした。
+
+### M95. local feasibility の全状態 payload に current_phase を足した
+
+- `run_local_feasibility_manifest.py` は dry-run だけでなく completed / failed でも `current_phase` と `highlights` を返すようにした。
+- これにより local-only feasibility 入口でも、operator は snapshot / validation / feature gap / evaluation のどこで止まったかを top-level だけで読めるようにした。
+
+### M96. serving profile compare に top-level 停止点要約を足した
+
+- `run_serving_profile_compare.py` は compare manifest に `read_order`, `current_phase`, `recommended_action`, `highlights` を返すようにした。
+- これにより serving compare 入口でも、operator は left/right smoke, compare, bankroll sweep, dashboard のどこで止まったかを manifest 単体で読めるようにした。
+
+### M97. netkeiba benchmark gate に top-level 停止点要約を足した
+
+- `run_netkeiba_benchmark_gate.py` は gate manifest に `read_order`, `current_phase`, `highlights` を返すようにした。
+- これにより netkeiba / universe-aware benchmark gate 入口でも、operator は preflight not-ready、snapshot blocker、train/evaluate failure、completed のどこで止まったかを manifest 単体で読めるようにした。
+
+### M98. netkeiba wait-then-cycle に top-level 停止点要約を足した
+
+- `run_netkeiba_wait_then_cycle.py` は wait manifest に `read_order`, `current_phase`, `recommended_action`, `highlights` を返すようにした。
+- これにより lock 待機、timeout、handoff backfill failure、post-cycle gate not-ready/failed のどこで止まったかを wait manifest 単体で読めるようにした。
+
+### M99. promotion gate に top-level 停止点要約を足した
+
+- `run_promotion_gate.py` は gate report に `read_order`, `current_phase`, `recommended_action`, `highlights` を返すようにした。
+- これにより formal promotion decision 入口でも、pass/promote、block/hold、入力不備の hard failure のどれでも report 単体で現在地を読めるようにした。
+
+### M100. serving compare dashboard summary に top-level 停止点要約を足した
+
+- `run_serving_compare_dashboard.py` は summary JSON に `status`, `read_order`, `current_phase`, `recommended_action`, `highlights` を返すようにした。
+- これにより serving validation の dashboard 入口でも、completed と入力不備の hard failure のどちらでも summary 単体で現在地を読めるようにした。
+
+### M101. serving compare aggregate summary に top-level 停止点要約を足した
+
+- `run_serving_compare_aggregate.py` は aggregate summary JSON に `status`, `read_order`, `current_phase`, `recommended_action`, `highlights` を返すようにした。
+- これにより window 横断の serving validation 入口でも、completed と入力不備の hard failure のどちらでも aggregate summary 単体で現在地を読めるようにした。
+
+### M102. local_nankan ID 準備の seed 入口を追加した
+
+- `configs/crawl_local_nankan_template.yaml` を追加し、local crawler の出力先、seed file、target ごとの ID/output 契約を初版として固定した。
+- `run_prepare_local_nankan_ids.py` を追加し、operator が用意した seed CSV から `race_ids.csv` と `horse_keys.csv` を生成できるようにした。
+- project の `.venv` で最小 smoke を通し、`data/external/local_nankan/ids/race_ids.csv` と `horse_keys.csv` の生成導線を確認した。
+
+### M103. local_nankan collect の planned/blocked 入口を追加した
+
+- `src/racing_ml/data/local_nankan_collect.py` と `run_collect_local_nankan.py` を追加し、target ごとの ID 件数、output path、manifest path を planned shape で出せるようにした。
+- provider 未実装の段階では blocked manifest を返し、次アクションを `implement_source_provider` として残すようにした。
+- これにより Phase 0 は `prepare ids -> collect plan` まで既存 netkeiba crawler に近い骨格で進められるようになった。
+
+### M104. local_nankan backfill の planned/blocked 入口を追加した
+
+- `src/racing_ml/data/local_nankan_id_prep.py` へ seed ベースの ID 準備ロジックを移し、`run_prepare_local_nankan_ids.py` は薄い CLI へ整理した。
+- `src/racing_ml/data/local_nankan_backfill.py` と `run_backfill_local_nankan.py` を追加し、1 cycle 分の `prepare -> collect` を backfill manifest にまとめられるようにした。
+- provider 実装前でも Phase 0 は `prepare ids -> collect plan -> backfill plan` まで一通り manifest 化できる状態になった。
+
+### M105. local_nankan primary raw 昇格の bridge を追加した
+
+- `src/racing_ml/data/local_nankan_primary.py` と `run_materialize_local_nankan_primary.py` を追加し、external の `race_result/racecard/pedigree` から `data/local_nankan/raw` 向け primary CSV を組み立てられるようにした。
+- `race_result` を必須 source、`race_card` と `pedigree` を optional enrichment として扱い、source 欠落時は `status=not_ready` と `recommended_action=populate_external_results` を返すようにした。
+- これにより Phase 0 は crawler/provider 実装と独立に、benchmark preflight の `primary_dataset_missing` を解消する raw materialize 工程まで明示的に持てるようになった。
+
+### M106. local benchmark/revision から primary raw materialize を呼べるようにした
+
+- `run_local_benchmark_gate.py` に `--materialize-primary-before-gate` を追加し、preflight の前に `run_materialize_local_nankan_primary.py` を呼べるようにした。
+- materialize が `status=not_ready` を返した場合でも wrapper は benchmark gate を続行し、最終的な blocker は従来どおり preflight / benchmark manifest に残すようにした。
+- `run_local_revision_gate.py` からも同フラグと source path / materialize manifest path を渡せるようにし、lineage 側でも primary raw 昇格の試行結果を artifact と planned payload に含められるようにした。
+
+### M107. local_nankan の race_result_keys 補助表に racecard fallback を追加した
+
+- `configs/data_local_nankan.yaml` と smoke 用 config の `local_nankan_race_result_keys` に racecard search dir を追加し、results 側が `horse_key` 欠落で invalid schema でも racecard 側の join key から補助表を解決できるようにした。
+- これにより primary raw 昇格を hook した benchmark preflight は `primary_dataset_missing` の次で止まるのではなく、実際の補助列不足か readiness 本体まで段階を進めやすくなった。
+
+### M108. local_nankan backfill から primary raw materialize を追えるようにした
+
+- `run_backfill_local_nankan.py` と `src/racing_ml/data/local_nankan_backfill.py` に `--materialize-after-collect` を追加し、backfill cycle ごとに `materialize_summary` を残せるようにした。
+- provider 未実装で collect が blocked の段階でも、既存 external outputs から primary raw を materialize できた場合は backfill manifest を `status=partial`, `current_phase=materialized_primary_raw`, `recommended_action=run_local_preflight` として返すようにした。
+- これにより Phase 0 の 4 工程は gate wrapper だけでなく backfill 入口からも 1 本の manifest で追えるようになった。
+
+### M109. local_nankan backfill から benchmark までの handoff wrapper を追加した
+
+- `run_local_backfill_then_benchmark.py` を追加し、backfill を `--materialize-after-collect` 付きで回した後、`current_phase=materialized_primary_raw` に到達した場合のみ local benchmark gate へ handoff する wrapper を作った。
+- wrapper manifest は `read_order`, `current_phase`, `recommended_action`, `highlights` を持ち、backfill 側で止まったのか benchmark 側で止まったのかを 1 本で読めるようにした。
+- smoke local_nankan config では `prepare -> collect -> materialize -> preflight -> snapshot -> benchmark` が 1 コマンドで completed まで進むことを確認した。
+
+### M110. local revision lineage から backfill handoff を呼べるようにした
+
+- `run_local_revision_gate.py` に `--backfill-before-benchmark` を追加し、benchmark 前段で `run_local_backfill_then_benchmark.py` を使えるようにした。
+- lineage manifest は `backfill_wrapper_manifest` と `backfill_manifest` を artifacts に含め、`backfill_handoff_payload` / `backfill_summary_payload` も保持できるようにした。
+- dry-run では revision lineage 側でも `prepare -> collect -> materialize -> benchmark -> revision -> evaluation_pointer` の planned shape を 1 本で確認できるようになった。
+
+### M111. local public snapshot でも backfill handoff を要約できるようにした
+
+- `run_local_public_snapshot.py` に `backfill_handoff_summary` の抽出を追加し、local revision lineage が `--backfill-before-benchmark` を使っている場合は public snapshot 側でも handoff 状態を要約できるようにした。
+- public snapshot の `current_phase` と `recommended_action` も upstream lineage の planned / blocked / failed に追従するようにし、`lineage_planned` のような停止点を top-level から読めるようにした。
+- smoke では、planned local revision lineage から生成した public snapshot が `current_phase=lineage_planned`, `recommended_action=run_local_revision_gate`, `backfill_handoff_summary.status=planned` を返すことを確認した。
+
+### M112. mixed readiness / status board でも local handoff blocker を読めるようにした
+
+- `run_mixed_universe_readiness.py` が left public snapshot の `backfill_handoff_summary` を `left_summary` と highlights に反映するようにした。
+- `run_mixed_universe_status_board.py` は public snapshot の non-terminal `current_phase` を incomplete と見なすようにし、さらに explicit artifact path 指定も受けられるようにした。
+- smoke では、planned local public snapshot を left input にすると readiness が `left_readiness_blocked` を返し、highlights に upstream handoff `status=planned, phase=planned` を出し、status board も `status=partial`, `current_phase=public_snapshot` で止まることを確認した。
+
+### M113. mixed gap audit / recovery plan でも local handoff blocker を first step にした
+
+- `run_mixed_universe_left_gap_audit.py` は local revision lineage に `backfill_handoff_payload` がある場合、benchmark/preflight blocker より先に upstream handoff blocker を `lineage_blocker` へ採用するようにした。
+- `run_mixed_universe_left_recovery_plan.py` も、その blocker を downstream command preview より前の manual first step として並べ、top-level `recommended_action` も `run_local_backfill_then_benchmark` を返すようにした。
+- synthetic smoke では gap audit が `current_phase=local_backfill_then_benchmark`, `recommended_action=run_local_backfill_then_benchmark` を返し、recovery plan も `plan_steps[0].step=run_local_backfill_then_benchmark` を返すことを確認した。
+
+### M114. mixed recovery wrapper でも local handoff blocker を first step にした
+
+- `run_mixed_universe_recovery.py` は source board が handoff-aware recovery plan を指している場合、local revision lineage の前に `local_backfill_then_benchmark` step を明示的に差し込むようにした。
+- これにより recovery manifest 自体の highlights も、単なる lineage rerun ではなく upstream local handoff から再開することを top-level で読めるようになった。
+- synthetic smoke では explicit tmp board が `recommended_action=run_local_backfill_then_benchmark` を返すとき、recovery dry-run も first step を `local_backfill_then_benchmark` に切り替えることを確認した。
+
 ## 6. 実行中の優先事項
 
 `current_tighter_policy_search_candidate_2025_latest` の `0.03/80` formalization は M17 で完了した。続いて seasonal / recent-heavy の運用境界整理、latest compare artifact map、actual-date compare 再開導線の同期監査、地方競馬 feasibility の設計チェックリスト・artifact 方針・benchmark 完了条件・payload schema・CLI 引数契約・step/failure taxonomy の具体化、既存 `netkeiba_*` snapshot / gate への universe-aware 契約実装、local-only snapshot / gate 雛形の追加、local-only integrity / feature gap / evaluation 入口の追加、local-only orchestration manifest の追加、および local-only revision lineage の追加まで完了した。
@@ -654,6 +843,10 @@
 
 - universe slug を config / artifact / revision にどう通すかを、必要なら実装前提まで下ろす。
 - status board までは入ったので、next は left formal metrics が埋まった時に row 欠損がどこまで解消されるかを追う。
+- local データ導入時の選択肢を `local-only / mixed / ensemble` の 3 段で整理し、ensemble を許す条件と rollback 境界を docs 上で固定した。
+- これにより、地方データが ROI 向上へ効く可能性を見た場合でも、JRA-only 正本を維持したまま段階的に pilot を切る判断基準を持てる。
+- [local_nankan_introduction_plan.md](local_nankan_introduction_plan.md) に、source bootstrap から ensemble pilot までの段階導入計画、判断ゲート、停止条件をまとめた。
+- [local_nankan_crawler_design.md](local_nankan_crawler_design.md) に、local crawler の config、CLI、manifest、small backfill smoke までの設計を追加した。
 
 ### N2. docs の定期点検
 

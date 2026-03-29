@@ -22,6 +22,17 @@ DEFAULT_SOURCE_SCOPE = "local_only"
 DEFAULT_BASELINE_REFERENCE = "current_recommended_serving_2025_latest"
 
 
+def _read_order(*, include_backfill_handoff: bool = False) -> list[str]:
+    return [
+        "local_public_snapshot",
+        "local_revision_gate",
+        *( ["local_backfill_then_benchmark", "backfill", "materialize"] if include_backfill_handoff else []),
+        "promotion_gate",
+        "revision_gate",
+        "evaluation_pointer",
+    ]
+
+
 def _resolve_path(path_text: str | Path) -> Path:
     path = Path(path_text)
     return path if path.is_absolute() else (ROOT / path)
@@ -56,6 +67,10 @@ def _read_optional_payload(path_text: object) -> dict[str, object] | None:
     return payload if isinstance(payload, dict) else None
 
 
+def _dict_payload(value: object) -> dict[str, object]:
+    return value if isinstance(value, dict) else {}
+
+
 def _extract_readiness(payload: dict[str, object]) -> dict[str, object]:
     readiness = payload.get("readiness")
     if isinstance(readiness, dict):
@@ -83,6 +98,229 @@ def _extract_promotion_summary(payload: dict[str, object]) -> dict[str, object]:
     return summary
 
 
+def _extract_backfill_handoff_summary(payload: dict[str, object]) -> dict[str, object]:
+    handoff_payload = payload.get("backfill_handoff_payload") if isinstance(payload.get("backfill_handoff_payload"), dict) else None
+    backfill_summary_payload = payload.get("backfill_summary_payload") if isinstance(payload.get("backfill_summary_payload"), dict) else None
+    if handoff_payload is None and backfill_summary_payload is None:
+        return {}
+
+    artifacts = payload.get("artifacts") if isinstance(payload.get("artifacts"), dict) else {}
+    summary: dict[str, object] = {}
+    if isinstance(handoff_payload, dict):
+        for key in ("status", "current_phase", "recommended_action", "highlights"):
+            if key in handoff_payload:
+                summary[key] = handoff_payload.get(key)
+    if isinstance(backfill_summary_payload, dict):
+        for key in ("status", "current_phase", "recommended_action", "stopped_reason", "highlights"):
+            summary.setdefault(key, backfill_summary_payload.get(key))
+    if isinstance(artifacts, dict):
+        if artifacts.get("backfill_wrapper_manifest") is not None:
+            summary["wrapper_manifest"] = artifacts.get("backfill_wrapper_manifest")
+        if artifacts.get("backfill_manifest") is not None:
+            summary["backfill_manifest"] = artifacts.get("backfill_manifest")
+        if artifacts.get("primary_materialize_manifest") is not None:
+            summary["materialize_manifest"] = artifacts.get("primary_materialize_manifest")
+    return summary
+
+
+def _planned_readiness(*, lineage_path: Path) -> dict[str, object]:
+    return {
+        "benchmark_rerun_ready": False,
+        "recommended_action": "run_local_revision_gate",
+        "reasons": [
+            f"local public snapshot requires a lineage manifest at {artifact_display_path(lineage_path, workspace_root=ROOT)} before readiness and promotion state can be summarized.",
+        ],
+    }
+
+
+def _planned_promotion_summary() -> dict[str, object]:
+    return {
+        "status": "planned",
+        "decision": "not_run",
+        "recommended_action": "run_local_revision_gate",
+        "feasible_folds": None,
+        "weighted_test_roi": None,
+    }
+
+
+def _planned_evaluation_summary() -> dict[str, object]:
+    return {
+        "status": "planned",
+        "latest_manifest": "artifacts/reports/evaluation_manifest.json",
+        "latest_summary": "artifacts/reports/evaluation_summary.json",
+        "output_files": None,
+    }
+
+
+def _planned_benchmark_gate_summary() -> dict[str, object]:
+    return {
+        "status": "planned",
+        "completed_step": "planned",
+        "error_code": None,
+        "recommended_action": "run_local_revision_gate",
+    }
+
+
+def _planned_backfill_handoff_summary() -> dict[str, object]:
+    return {
+        "status": "planned",
+        "current_phase": "planned",
+        "recommended_action": "run_local_revision_gate",
+    }
+
+
+def _current_phase(*, status: str, lineage_status: object = None, lineage_completed_step: object = None) -> str:
+    if status == "planned":
+        return "planned"
+    if status == "failed":
+        if isinstance(lineage_completed_step, str) and lineage_completed_step.strip():
+            return f"lineage_{lineage_completed_step.strip()}"
+        if isinstance(lineage_status, str) and lineage_status.strip():
+            return f"lineage_{lineage_status.strip()}"
+        return "snapshot_failed"
+    if isinstance(lineage_completed_step, str) and lineage_completed_step.strip() and lineage_completed_step != "completed":
+        return f"lineage_{lineage_completed_step.strip()}"
+    if isinstance(lineage_status, str) and lineage_status.strip() and lineage_status != "completed":
+        return f"lineage_{lineage_status.strip()}"
+    return "completed"
+
+
+def _recommended_action(*, status: str, lineage_status: object = None, lineage_completed_step: object = None) -> str:
+    if status == "planned":
+        return "run_local_revision_gate"
+    if lineage_status == "missing" or lineage_completed_step == "missing":
+        return "run_local_revision_gate"
+    if lineage_status == "planned" or lineage_completed_step == "planned":
+        return "run_local_revision_gate"
+    if lineage_status in {"backfill_handoff_blocked", "backfill_handoff_failed", "benchmark_gate_blocked", "benchmark_gate_failed", "revision_gate_failed", "failed", "interrupted"}:
+        return "inspect_local_revision_lineage"
+    if isinstance(lineage_completed_step, str) and lineage_completed_step.strip() and lineage_completed_step != "completed":
+        return "inspect_local_revision_lineage"
+    if status == "failed":
+        return "inspect_local_public_snapshot_inputs"
+    return "review_public_snapshot"
+
+
+def _lineage_failure_action(lineage_payload: dict[str, object]) -> str | None:
+    action = lineage_payload.get("recommended_action")
+    return str(action) if isinstance(action, str) and action.strip() else None
+
+
+def _highlights(
+    *,
+    status: str,
+    revision: str,
+    lineage_manifest: str,
+    recommended_action: str,
+    lineage_status: str | None = None,
+    lineage_completed_step: str | None = None,
+    readiness: dict[str, object] | None = None,
+    promotion_summary: dict[str, object] | None = None,
+    backfill_handoff_summary: dict[str, object] | None = None,
+    error_message: str | None = None,
+) -> list[str]:
+    readiness = readiness or {}
+    promotion_summary = promotion_summary or {}
+    backfill_handoff_summary = backfill_handoff_summary or {}
+    highlights = [f"public snapshot revision={revision} status={status}"]
+    if lineage_status:
+        if lineage_completed_step:
+            highlights.append(f"lineage status={lineage_status}, completed_step={lineage_completed_step}")
+        else:
+            highlights.append(f"lineage status={lineage_status}")
+    benchmark_ready = readiness.get("benchmark_rerun_ready")
+    if benchmark_ready is not None:
+        highlights.append(f"benchmark_rerun_ready={benchmark_ready}")
+    promotion_decision = promotion_summary.get("decision")
+    promotion_status = promotion_summary.get("status")
+    if promotion_decision is not None or promotion_status is not None:
+        highlights.append(
+            "promotion summary: "
+            f"status={promotion_status if promotion_status is not None else 'unknown'}, "
+            f"decision={promotion_decision if promotion_decision is not None else 'unknown'}"
+        )
+    handoff_status = backfill_handoff_summary.get("status")
+    handoff_phase = backfill_handoff_summary.get("current_phase")
+    if handoff_status is not None or handoff_phase is not None:
+        highlights.append(
+            f"backfill handoff: status={handoff_status if handoff_status is not None else 'unknown'}, "
+            f"phase={handoff_phase if handoff_phase is not None else 'unknown'}"
+        )
+    highlights.append(f"lineage manifest: {lineage_manifest}")
+    if error_message:
+        highlights.append(error_message)
+    highlights.append(f"next operator action: {recommended_action}")
+    return highlights
+
+
+def _build_failure_payload(
+    *,
+    revision: str,
+    universe: str,
+    source_scope: str,
+    baseline_reference: str,
+    lineage_path: Path,
+    output_path: Path,
+    error_message: str,
+    lineage_status: object = None,
+    lineage_completed_step: object = None,
+) -> dict[str, object]:
+    status = "failed"
+    normalized_lineage_status = lineage_status
+    normalized_lineage_completed_step = lineage_completed_step
+    if "local revision lineage not found" in error_message:
+        normalized_lineage_status = "missing"
+        normalized_lineage_completed_step = "missing"
+    recommended_action = _recommended_action(
+        status=status,
+        lineage_status=normalized_lineage_status,
+        lineage_completed_step=normalized_lineage_completed_step,
+    )
+    payload = {
+        "started_at": utc_now_iso(),
+        "finished_at": utc_now_iso(),
+        "status": status,
+        "snapshot_kind": "local_public_snapshot",
+        "revision": revision,
+        "universe": universe,
+        "source_scope": source_scope,
+        "baseline_reference": baseline_reference,
+        "lineage_status": normalized_lineage_status,
+        "lineage_completed_step": normalized_lineage_completed_step,
+        "lineage_manifest": artifact_display_path(lineage_path, workspace_root=ROOT),
+        "error_message": error_message,
+        "read_order": _read_order(),
+        "current_phase": _current_phase(
+            status=status,
+            lineage_status=normalized_lineage_status,
+            lineage_completed_step=normalized_lineage_completed_step,
+        ),
+        "recommended_action": recommended_action,
+        "artifacts": {
+            "public_snapshot": artifact_display_path(output_path, workspace_root=ROOT),
+            "lineage_manifest": artifact_display_path(lineage_path, workspace_root=ROOT),
+        },
+        "highlights": _highlights(
+            status=status,
+            revision=revision,
+            lineage_manifest=artifact_display_path(lineage_path, workspace_root=ROOT),
+            recommended_action=recommended_action,
+            lineage_status=str(normalized_lineage_status) if normalized_lineage_status is not None else None,
+            lineage_completed_step=str(normalized_lineage_completed_step) if normalized_lineage_completed_step is not None else None,
+            error_message=error_message,
+        ),
+    }
+    return payload
+
+
+def _planned_highlights(*, lineage_path: Path) -> list[str]:
+    return [
+        "public snapshot is the operator-facing entrypoint for local-only status and downstream mixed compare anchoring",
+        f"the snapshot will summarize readiness, promotion, and evaluation after lineage becomes available at {artifact_display_path(lineage_path, workspace_root=ROOT)}",
+        "compare_contract already points at the final public snapshot path so mixed compare can use the same contract once lineage exists",
+    ]
+
+
 def _build_planned_payload(
     *,
     revision_slug: str,
@@ -92,6 +330,7 @@ def _build_planned_payload(
     lineage_path: Path,
     output_path: Path,
 ) -> dict[str, object]:
+    recommended_action = _recommended_action(status="planned")
     return {
         "started_at": utc_now_iso(),
         "finished_at": utc_now_iso(),
@@ -102,17 +341,22 @@ def _build_planned_payload(
         "source_scope": source_scope,
         "baseline_reference": baseline_reference,
         "lineage_status": "planned",
-        "read_order": [
-            "local_public_snapshot",
-            "local_revision_gate",
-            "promotion_gate",
-            "revision_gate",
-            "evaluation_pointer",
-        ],
+        "lineage_completed_step": "planned",
+        "lineage_manifest": artifact_display_path(lineage_path, workspace_root=ROOT),
+        "read_order": _read_order(),
+        "current_phase": _current_phase(status="planned"),
+        "recommended_action": recommended_action,
         "artifacts": {
             "public_snapshot": artifact_display_path(output_path, workspace_root=ROOT),
             "lineage_manifest": artifact_display_path(lineage_path, workspace_root=ROOT),
         },
+        "readiness": _planned_readiness(lineage_path=lineage_path),
+        "promotion_summary": _planned_promotion_summary(),
+        "backfill_handoff_summary": _planned_backfill_handoff_summary(),
+        "benchmark_gate_summary": _planned_benchmark_gate_summary(),
+        "evaluation_summary": _planned_evaluation_summary(),
+        "highlights": _planned_highlights(lineage_path=lineage_path)
+        + [f"next operator action: {recommended_action}"],
         "compare_contract": _build_compare_contract(
             snapshot_path=output_path,
             universe=universe,
@@ -164,8 +408,8 @@ def main() -> int:
             return 0
 
         lineage_payload = _read_required_payload(lineage_path, label="local revision lineage")
-        artifacts = dict(lineage_payload.get("artifacts", {})) if isinstance(lineage_payload.get("artifacts"), dict) else {}
-        benchmark_payload = lineage_payload.get("benchmark_gate_payload") if isinstance(lineage_payload.get("benchmark_gate_payload"), dict) else None
+        artifacts = _dict_payload(lineage_payload.get("artifacts"))
+        benchmark_payload = _dict_payload(lineage_payload.get("benchmark_gate_payload"))
         evaluation_pointer_payload = lineage_payload.get("evaluation_pointer_payload")
         if not isinstance(evaluation_pointer_payload, dict):
             evaluation_pointer_payload = _read_optional_payload(artifacts.get("evaluation_pointer"))
@@ -173,6 +417,16 @@ def main() -> int:
         resolved_universe = str(lineage_payload.get("universe") or args.universe)
         resolved_source_scope = str(lineage_payload.get("source_scope") or args.source_scope)
         resolved_baseline_reference = str(lineage_payload.get("baseline_reference") or args.baseline_reference)
+        lineage_status = lineage_payload.get("status")
+        lineage_completed_step = lineage_payload.get("completed_step")
+        backfill_handoff_summary = _extract_backfill_handoff_summary(lineage_payload)
+        recommended_action = _recommended_action(
+            status="completed",
+            lineage_status=lineage_status,
+            lineage_completed_step=lineage_completed_step,
+        )
+        if str(lineage_status or "") in {"revision_gate_failed", "failed", "interrupted"}:
+            recommended_action = _lineage_failure_action(lineage_payload) or recommended_action
 
         payload: dict[str, object] = {
             "started_at": utc_now_iso(),
@@ -183,29 +437,30 @@ def main() -> int:
             "universe": resolved_universe,
             "source_scope": resolved_source_scope,
             "baseline_reference": resolved_baseline_reference,
-            "lineage_status": str(lineage_payload.get("status") or "unknown"),
-            "lineage_completed_step": str(lineage_payload.get("completed_step") or "unknown"),
+            "lineage_status": str(lineage_status or "unknown"),
+            "lineage_completed_step": str(lineage_completed_step or "unknown"),
             "lineage_manifest": artifact_display_path(lineage_path, workspace_root=ROOT),
-            "read_order": [
-                "local_public_snapshot",
-                "local_revision_gate",
-                "promotion_gate",
-                "revision_gate",
-                "evaluation_pointer",
-            ],
+            "read_order": _read_order(include_backfill_handoff=bool(backfill_handoff_summary)),
+            "current_phase": _current_phase(
+                status="completed",
+                lineage_status=lineage_status,
+                lineage_completed_step=lineage_completed_step,
+            ),
+            "recommended_action": recommended_action,
             "artifacts": {
                 "public_snapshot": artifact_display_path(output_path, workspace_root=ROOT),
                 **artifacts,
             },
             "readiness": _extract_readiness(lineage_payload),
             "promotion_summary": _extract_promotion_summary(lineage_payload),
+            "backfill_handoff_summary": backfill_handoff_summary,
             "compare_contract": _build_compare_contract(
                 snapshot_path=output_path,
                 universe=resolved_universe,
                 revision=resolved_revision,
             ),
         }
-        if benchmark_payload is not None:
+        if benchmark_payload:
             payload["benchmark_gate_summary"] = {
                 "status": benchmark_payload.get("status"),
                 "completed_step": benchmark_payload.get("completed_step"),
@@ -219,6 +474,22 @@ def main() -> int:
                 "latest_summary": evaluation_pointer_payload.get("latest_summary"),
                 "output_files": evaluation_pointer_payload.get("output_files"),
             }
+        if isinstance(lineage_payload.get("error_code"), str):
+            payload["lineage_error_code"] = lineage_payload.get("error_code")
+        if isinstance(lineage_payload.get("error_message"), str):
+            payload["lineage_error_message"] = lineage_payload.get("error_message")
+
+        payload["highlights"] = _highlights(
+            status=str(payload["status"]),
+            revision=resolved_revision,
+            lineage_manifest=artifact_display_path(lineage_path, workspace_root=ROOT),
+            recommended_action=recommended_action,
+            lineage_status=str(lineage_status) if lineage_status is not None else None,
+            lineage_completed_step=str(lineage_completed_step) if lineage_completed_step is not None else None,
+            readiness=_dict_payload(payload.get("readiness")) or None,
+            promotion_summary=_dict_payload(payload.get("promotion_summary")) or None,
+            backfill_handoff_summary=_dict_payload(payload.get("backfill_handoff_summary")) or None,
+        )
 
         write_json(output_path, payload)
         print(f"[local-public-snapshot] saved: {artifact_display_path(output_path, workspace_root=ROOT)}", flush=True)
@@ -227,9 +498,29 @@ def main() -> int:
         print("[local-public-snapshot] interrupted by user", flush=True)
         return 130
     except (ValueError, FileNotFoundError, IsADirectoryError) as error:
+        failure_payload = _build_failure_payload(
+            revision=revision_slug,
+            universe=args.universe,
+            source_scope=args.source_scope,
+            baseline_reference=args.baseline_reference,
+            lineage_path=lineage_path,
+            output_path=output_path,
+            error_message=str(error),
+        )
+        write_json(output_path, failure_payload)
         print(f"[local-public-snapshot] failed: {error}", flush=True)
         return 1
     except Exception as error:
+        failure_payload = _build_failure_payload(
+            revision=revision_slug,
+            universe=args.universe,
+            source_scope=args.source_scope,
+            baseline_reference=args.baseline_reference,
+            lineage_path=lineage_path,
+            output_path=output_path,
+            error_message=str(error),
+        )
+        write_json(output_path, failure_payload)
         print(f"[local-public-snapshot] failed: {error}", flush=True)
         traceback.print_exc()
         return 1

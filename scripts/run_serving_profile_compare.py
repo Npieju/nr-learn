@@ -168,6 +168,122 @@ def _dashboard_command(
     ]
 
 
+def _read_order(*, run_bankroll_sweep: bool, run_dashboard: bool) -> list[str]:
+    order = [
+        "serving_smoke_profile_compare",
+        "left_smoke",
+        "right_smoke",
+        "compare",
+    ]
+    if run_bankroll_sweep:
+        order.append("bankroll_sweep")
+    if run_dashboard:
+        order.append("dashboard")
+    return order
+
+
+def _expected_step_names(*, run_bankroll_sweep: bool, run_dashboard: bool) -> list[str]:
+    names = ["left_smoke", "right_smoke", "compare"]
+    if run_bankroll_sweep:
+        names.append("bankroll_sweep")
+    if run_dashboard:
+        names.append("dashboard")
+    return names
+
+
+def _current_phase(
+    *,
+    status: str,
+    executed_steps: list[dict[str, object]],
+    run_bankroll_sweep: bool,
+    run_dashboard: bool,
+) -> str:
+    expected_steps = _expected_step_names(
+        run_bankroll_sweep=run_bankroll_sweep,
+        run_dashboard=run_dashboard,
+    )
+    completed_names = [str(step.get("name") or "") for step in executed_steps]
+
+    if status == "completed":
+        for step_name in expected_steps:
+            if step_name not in completed_names:
+                return step_name
+        return "completed"
+
+    for step in reversed(executed_steps):
+        if str(step.get("status") or "") == "failed":
+            return str(step.get("name") or "failed")
+
+    for step_name in expected_steps:
+        if step_name not in completed_names:
+            return step_name
+    return "failed"
+
+
+def _failed_step(executed_steps: list[dict[str, object]]) -> dict[str, object] | None:
+    for step in reversed(executed_steps):
+        if str(step.get("status") or "") == "failed":
+            return step
+    return None
+
+
+def _recommended_action(*, current_phase: str, status: str) -> str:
+    if current_phase == "left_smoke":
+        return "inspect_left_smoke"
+    if current_phase == "right_smoke":
+        return "inspect_right_smoke"
+    if current_phase == "compare":
+        return "inspect_compare_outputs"
+    if current_phase == "bankroll_sweep":
+        return "inspect_bankroll_sweep"
+    if current_phase == "dashboard":
+        return "inspect_compare_dashboard"
+    if status == "completed":
+        return "review_compare_outputs"
+    return "inspect_compare_manifest"
+
+
+def _highlights(
+    *,
+    status: str,
+    current_phase: str,
+    recommended_action: str,
+    left_profile: str,
+    right_profile: str,
+    dates: list[str],
+    compare_json_output: Path,
+    run_bankroll_sweep: bool,
+    run_dashboard: bool,
+    executed_steps: list[dict[str, object]],
+) -> list[str]:
+    failed_step = _failed_step(executed_steps)
+    if failed_step is not None:
+        return [
+            f"serving compare stopped during {current_phase} for {left_profile} vs {right_profile}",
+            f"{current_phase} returned non-zero exit code={int(failed_step.get('return_code') or 1)}",
+            f"next operator action: {recommended_action}",
+        ]
+
+    if status == "completed" and current_phase != "completed":
+        return [
+            f"serving compare is ready to continue into {current_phase}",
+            f"compare outputs are already written for {len(dates)} date(s)",
+            f"next operator action: {recommended_action}",
+        ]
+
+    highlights = [
+        f"serving compare completed for {left_profile} vs {right_profile} across {len(dates)} date(s)",
+        f"compare json saved to {artifact_display_path(compare_json_output, workspace_root=ROOT)}",
+    ]
+    if run_dashboard:
+        highlights.append("dashboard outputs are available for operator review")
+    elif run_bankroll_sweep:
+        highlights.append("bankroll sweep outputs are available alongside compare outputs")
+    else:
+        highlights.append(f"next operator action: {recommended_action}")
+    return highlights
+
+
 def _build_manifest_payload(
     *,
     started_at: str,
@@ -193,14 +309,28 @@ def _build_manifest_payload(
     run_dashboard: bool,
     executed_steps: list[dict[str, object]],
 ) -> dict[str, object]:
+    current_phase = _current_phase(
+        status=status,
+        executed_steps=executed_steps,
+        run_bankroll_sweep=run_bankroll_sweep,
+        run_dashboard=run_dashboard,
+    )
+    recommended_action = _recommended_action(current_phase=current_phase, status=status)
     return {
         "created_at": utc_now_iso(),
         "started_at": started_at,
+        "finished_at": utc_now_iso(),
         "status": status,
         "decision": decision,
         "window_label": window_label,
         "dates": dates,
         "prediction_backend": prediction_backend,
+        "read_order": _read_order(
+            run_bankroll_sweep=run_bankroll_sweep,
+            run_dashboard=run_dashboard,
+        ),
+        "current_phase": current_phase,
+        "recommended_action": recommended_action,
         "left": {
             "profile": left_profile,
             "artifact_suffix": left_suffix,
@@ -221,6 +351,18 @@ def _build_manifest_payload(
             "dashboard_chart": artifact_display_path(dashboard_chart_output, workspace_root=ROOT) if run_dashboard else None,
             "dashboard_csv": artifact_display_path(dashboard_csv_output, workspace_root=ROOT) if run_dashboard else None,
         },
+        "highlights": _highlights(
+            status=status,
+            current_phase=current_phase,
+            recommended_action=recommended_action,
+            left_profile=left_profile,
+            right_profile=right_profile,
+            dates=dates,
+            compare_json_output=compare_json_output,
+            run_bankroll_sweep=run_bankroll_sweep,
+            run_dashboard=run_dashboard,
+            executed_steps=executed_steps,
+        ),
     }
 
 

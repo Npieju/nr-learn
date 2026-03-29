@@ -182,6 +182,132 @@ def _build_case_rows(
     return pd.DataFrame(records)
 
 
+def _read_order() -> list[str]:
+    return [
+        "serving_compare_dashboard_summary",
+        "compare_manifest",
+        "compare_json",
+        "bankroll_sweep_json",
+        "left_summary",
+        "right_summary",
+    ]
+
+
+def _current_phase(status: str) -> str:
+    normalized = str(status or "")
+    if normalized == "completed":
+        return "completed"
+    if normalized == "failed":
+        return "dashboard_failed"
+    return "building_dashboard"
+
+
+def _recommended_action(status: str) -> str:
+    normalized = str(status or "")
+    if normalized == "completed":
+        return "review_dashboard_summary"
+    if normalized == "failed":
+        return "inspect_dashboard_inputs"
+    return "inspect_dashboard_progress"
+
+
+def _highlights(
+    *,
+    status: str,
+    recommended_action: str,
+    window_label: str | None,
+    manifest_status: str | None,
+    net_delta: float | None,
+    bankroll_delta: float | None,
+    error_message: str | None,
+) -> list[str]:
+    label = str(window_label or "unknown_window")
+    if status == "completed":
+        return [
+            f"serving compare dashboard assembled for window={label}",
+            f"manifest_status={manifest_status}, net_delta_right_minus_left={net_delta}, pure_bankroll_delta_right_minus_left={bankroll_delta}",
+            f"next operator action: {recommended_action}",
+        ]
+    if status == "failed":
+        return [
+            f"serving compare dashboard failed for window={label}",
+            str(error_message or "dashboard generation failed"),
+            f"next operator action: {recommended_action}",
+        ]
+    return [
+        f"serving compare dashboard is in progress for window={label}",
+        f"next operator action: {recommended_action}",
+    ]
+
+
+def _build_failure_summary(
+    *,
+    manifest_path: Path | None,
+    compare_path: Path | None,
+    bankroll_path: Path | None,
+    output_summary: Path | None,
+    error_message: str,
+) -> dict[str, Any]:
+    status = "failed"
+    recommended_action = _recommended_action(status)
+    payload: dict[str, Any] = {
+        "manifest_file": artifact_display_path(manifest_path, workspace_root=ROOT) if manifest_path else None,
+        "manifest_status": None,
+        "manifest_decision": None,
+        "compare_json": artifact_display_path(compare_path, workspace_root=ROOT) if compare_path else None,
+        "bankroll_sweep_json": artifact_display_path(bankroll_path, workspace_root=ROOT) if bankroll_path else None,
+        "window_label": None,
+        "prediction_backend": None,
+        "date_count": 0,
+        "dates": [],
+        "left": {
+            "profile": None,
+            "artifact_suffix": None,
+            "summary_file": None,
+            "pure_path_final_bankroll": None,
+        },
+        "right": {
+            "profile": None,
+            "artifact_suffix": None,
+            "summary_file": None,
+            "pure_path_final_bankroll": None,
+        },
+        "compare": {
+            "shared_ok_dates": [],
+            "left_total_policy_bets": None,
+            "right_total_policy_bets": None,
+            "left_total_policy_net": None,
+            "right_total_policy_net": None,
+            "right_minus_left_total_policy_net": None,
+            "left_mean_policy_roi": None,
+            "right_mean_policy_roi": None,
+            "differing_policy_dates": [],
+        },
+        "bankroll": {
+            "baseline_only": None,
+            "best_result": None,
+            "right_minus_left_pure_final_bankroll": None,
+        },
+        "status": status,
+        "error_message": error_message,
+        "read_order": _read_order(),
+        "current_phase": _current_phase(status),
+        "recommended_action": recommended_action,
+        "highlights": _highlights(
+            status=status,
+            recommended_action=recommended_action,
+            window_label=None,
+            manifest_status=None,
+            net_delta=None,
+            bankroll_delta=None,
+            error_message=error_message,
+        ),
+    }
+    if output_summary is not None:
+        payload["summary_file"] = artifact_display_path(output_summary, workspace_root=ROOT)
+    return payload
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--manifest-file", default=None)
@@ -192,6 +318,10 @@ def main() -> int:
     parser.add_argument("--output-csv", default=None)
     args = parser.parse_args()
     progress = ProgressBar(total=4, prefix="[serving-compare-dashboard]", logger=log_progress, min_interval_sec=0.0)
+    manifest_path: Path | None = None
+    compare_path: Path | None = None
+    bankroll_path: Path | None = None
+    output_summary: Path | None = None
 
     try:
         report_dir = ROOT / "artifacts" / "reports"
@@ -289,6 +419,19 @@ def main() -> int:
                 ),
             },
         }
+        summary_payload["status"] = "completed"
+        summary_payload["read_order"] = _read_order()
+        summary_payload["current_phase"] = _current_phase("completed")
+        summary_payload["recommended_action"] = _recommended_action("completed")
+        summary_payload["highlights"] = _highlights(
+            status="completed",
+            recommended_action=str(summary_payload.get("recommended_action") or "review_dashboard_summary"),
+            window_label=summary_payload.get("window_label"),
+            manifest_status=summary_payload.get("manifest_status"),
+            net_delta=summary_payload.get("compare", {}).get("right_minus_left_total_policy_net") if isinstance(summary_payload.get("compare"), dict) else None,
+            bankroll_delta=summary_payload.get("bankroll", {}).get("right_minus_left_pure_final_bankroll") if isinstance(summary_payload.get("bankroll"), dict) else None,
+            error_message=None,
+        )
         progress.update(message=f"summary assembled rows={len(case_df)}")
 
         with Heartbeat("[serving-compare-dashboard]", "writing dashboard outputs", logger=log_progress):
@@ -333,9 +476,31 @@ def main() -> int:
         print("[serving-compare-dashboard] interrupted by user")
         return 130
     except (ValueError, FileNotFoundError, IsADirectoryError) as error:
+        if output_summary is not None:
+            write_json(
+                output_summary,
+                _build_failure_summary(
+                    manifest_path=manifest_path,
+                    compare_path=compare_path,
+                    bankroll_path=bankroll_path,
+                    output_summary=output_summary,
+                    error_message=str(error),
+                ),
+            )
         print(f"[serving-compare-dashboard] failed: {error}")
         return 1
     except Exception as error:
+        if output_summary is not None:
+            write_json(
+                output_summary,
+                _build_failure_summary(
+                    manifest_path=manifest_path,
+                    compare_path=compare_path,
+                    bankroll_path=bankroll_path,
+                    output_summary=output_summary,
+                    error_message=str(error),
+                ),
+            )
         print(f"[serving-compare-dashboard] failed: {error}")
         traceback.print_exc()
         return 1

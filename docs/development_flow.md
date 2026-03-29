@@ -128,7 +128,7 @@ evaluation と promotion gate の具体的な読み方は [evaluation_guide.md](
 - `benchmark_rerun_ready=true` を確認する。
 - `current_best_eval_2025_latest` を使って revision gate を起動する。
 
-まず command 解決だけ確認したいときは `--dry-run` を付ける。pedigree crawl の完了待ちも同じ入口で行いたいときは `--wait-timeout-seconds` を付ける。
+まず command 解決だけ確認したいときは `--dry-run` を付ける。このとき wrapper は readiness snapshot を実行せず、`status=planned` の manifest に `read_order`, `current_phase`, `recommended_action`, `highlights`, readiness preview, revision gate preview を残す。pedigree crawl の完了待ちも同じ入口で行いたいときは `--wait-timeout-seconds` を付ける。
 
 2025 latest の evaluate は full table feature build だと OOM になりやすいため、この wrapper は `--evaluate-pre-feature-max-rows` を既定で `300000` にしている。必要なら明示的に上書きする。
 

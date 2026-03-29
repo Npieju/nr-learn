@@ -90,6 +90,16 @@ def _extract_promotion_decision(left_payload: dict[str, object]) -> str | None:
     return None
 
 
+def _extract_backfill_handoff_summary(left_payload: dict[str, object]) -> dict[str, object]:
+    handoff_summary = left_payload.get("backfill_handoff_summary")
+    return dict(handoff_summary) if isinstance(handoff_summary, dict) else {}
+
+
+def _extract_left_failure_action(left_payload: dict[str, object]) -> str | None:
+    action = left_payload.get("recommended_action")
+    return str(action) if isinstance(action, str) and action.strip() else None
+
+
 def _extract_stability_assessment(pointer_payload: dict[str, object] | None) -> str | None:
     if not isinstance(pointer_payload, dict):
         return None
@@ -210,6 +220,66 @@ def _planned_checks(
     ]
 
 
+def _current_phase(*, status: str, error_code: str | None) -> str:
+    if status == "ready":
+        return "mixed_universe_compare"
+    if error_code == "left_input_missing":
+        return "left_input_missing"
+    if error_code == "left_readiness_blocked":
+        return "left_readiness"
+    if error_code == "left_evaluation_missing":
+        return "left_evaluation_pointer"
+    if error_code == "left_evaluation_not_representative":
+        return "left_evaluation_representativeness"
+    return "mixed_compare_prerequisites"
+
+
+def _readiness_highlights(
+    *,
+    status: str,
+    error_code: str | None,
+    recommended_action: str | None,
+    left_summary: dict[str, object],
+    checks: list[dict[str, object]],
+) -> list[str]:
+    highlights: list[str] = []
+    if status == "ready":
+        highlights.append("left-side public snapshot satisfies readiness, evaluation pointer, and representative-evaluation checks")
+        highlights.append("mixed-universe compare can be launched with the provided compare_command_preview")
+    else:
+        failed_checks = [str(check.get("name")) for check in checks if check.get("status") != "passed"]
+        if failed_checks:
+            highlights.append(f"readiness is currently blocked by: {', '.join(failed_checks)}")
+        if error_code == "left_input_missing":
+            highlights.append("no local public snapshot or lineage manifest is available yet, so readiness cannot resolve left-side inputs")
+        elif error_code == "left_readiness_blocked":
+            left_readiness = left_summary.get("readiness")
+            backfill_handoff = left_summary.get("backfill_handoff_summary")
+            if isinstance(left_readiness, dict) and left_readiness.get("recommended_action"):
+                highlights.append(
+                    f"left-side readiness recommends {left_readiness.get('recommended_action')} before mixed compare should proceed"
+                )
+            if isinstance(backfill_handoff, dict):
+                handoff_status = backfill_handoff.get("status")
+                handoff_phase = backfill_handoff.get("current_phase")
+                if handoff_status is not None or handoff_phase is not None:
+                    highlights.append(
+                        f"left-side upstream handoff is currently status={handoff_status if handoff_status is not None else 'unknown'}, "
+                        f"phase={handoff_phase if handoff_phase is not None else 'unknown'}"
+                    )
+                if backfill_handoff.get("recommended_action"):
+                    highlights.append(
+                        f"upstream handoff recommends {backfill_handoff.get('recommended_action')} before mixed compare should proceed"
+                    )
+        elif error_code == "left_evaluation_missing":
+            highlights.append("left-side lineage exists but no evaluation pointer was found for mixed compare readiness")
+        elif error_code == "left_evaluation_not_representative":
+            highlights.append("left-side evaluation exists but is not marked representative, so compare should not proceed yet")
+    if recommended_action:
+        highlights.append(f"next operator action: {recommended_action}")
+    return highlights
+
+
 def _evaluate_requirements(
     *,
     left_payload: dict[str, object],
@@ -223,6 +293,7 @@ def _evaluate_requirements(
     readiness = _extract_readiness(left_payload)
     stability_assessment = _extract_stability_assessment(pointer_payload)
     promotion_decision = _extract_promotion_decision(left_payload)
+    left_failure_action = _extract_left_failure_action(left_payload)
 
     checks: list[dict[str, object]] = []
     checks.append(
@@ -282,11 +353,11 @@ def _evaluate_requirements(
     if not failed_checks:
         return checks, "ready", "mixed_compare_ready", "run_mixed_universe_compare"
     if "left_readiness_ready" in failed_checks:
-        return checks, "not_ready", "left_readiness_blocked", "complete_local_readiness"
+        return checks, "not_ready", "left_readiness_blocked", left_failure_action or "complete_local_readiness"
     if "left_representative_evaluation" in failed_checks:
-        return checks, "not_ready", "left_evaluation_not_representative", "rerun_local_evaluation_representative"
+        return checks, "not_ready", "left_evaluation_not_representative", left_failure_action or "rerun_local_evaluation_representative"
     if "left_evaluation_pointer_present" in failed_checks:
-        return checks, "not_ready", "left_evaluation_missing", "generate_local_evaluation_pointer"
+        return checks, "not_ready", "left_evaluation_missing", left_failure_action or "generate_local_evaluation_pointer"
     return checks, "not_ready", "mixed_compare_prerequisites_missing", "inspect_mixed_compare_inputs"
 
 
@@ -339,6 +410,7 @@ def main() -> int:
             "right_universe": right_universe,
             "right_reference": args.right_reference,
             "error_code": None,
+            "current_phase": "inspect_left_inputs",
             "recommended_action": None,
             "artifacts": {
                 "readiness_manifest": artifact_display_path(output_path, workspace_root=ROOT),
@@ -357,28 +429,32 @@ def main() -> int:
         }
 
         if args.dry_run and not left_snapshot_path.exists() and not left_lineage_path.exists():
+            planned_checks = _planned_checks(
+                left_snapshot_path=left_snapshot_path,
+                left_lineage_path=left_lineage_path,
+                right_public_doc_path=right_public_doc_path,
+                right_reference=args.right_reference,
+                right_reference_manifest_path=right_reference_manifest_path,
+            )
+            planned_left_summary = {
+                "status": "missing",
+                "revision": None,
+                "universe": left_universe,
+                "readiness": None,
+                "backfill_handoff_summary": None,
+                "promotion_decision": None,
+                "evaluation_stability_assessment": None,
+            }
             payload.update(
                 {
                     "status": "planned",
                     "completed_step": "planned",
                     "finished_at": utc_now_iso(),
                     "error_code": "left_input_missing",
+                    "current_phase": _current_phase(status="planned", error_code="left_input_missing"),
                     "recommended_action": "generate_local_public_snapshot_or_lineage",
-                    "checks": _planned_checks(
-                        left_snapshot_path=left_snapshot_path,
-                        left_lineage_path=left_lineage_path,
-                        right_public_doc_path=right_public_doc_path,
-                        right_reference=args.right_reference,
-                        right_reference_manifest_path=right_reference_manifest_path,
-                    ),
-                    "left_summary": {
-                        "status": "missing",
-                        "revision": None,
-                        "universe": left_universe,
-                        "readiness": None,
-                        "promotion_decision": None,
-                        "evaluation_stability_assessment": None,
-                    },
+                    "checks": planned_checks,
+                    "left_summary": planned_left_summary,
                     "compare_command_preview": _compare_command_preview(
                         revision_slug=revision_slug,
                         left_universe=left_universe,
@@ -388,6 +464,13 @@ def main() -> int:
                         left_source_kind=None,
                         left_snapshot_path=left_snapshot_path,
                         left_lineage_path=left_lineage_path,
+                    ),
+                    "highlights": _readiness_highlights(
+                        status="planned",
+                        error_code="left_input_missing",
+                        recommended_action="generate_local_public_snapshot_or_lineage",
+                        left_summary=planned_left_summary,
+                        checks=planned_checks,
                     ),
                 }
             )
@@ -422,6 +505,7 @@ def main() -> int:
             "revision": left_payload.get("revision"),
             "universe": left_payload.get("universe"),
             "readiness": _extract_readiness(left_payload),
+            "backfill_handoff_summary": _extract_backfill_handoff_summary(left_payload),
             "promotion_decision": _extract_promotion_decision(left_payload),
             "evaluation_stability_assessment": _extract_stability_assessment(pointer_payload),
         }
@@ -438,7 +522,15 @@ def main() -> int:
 
         payload["status"] = status
         payload["error_code"] = None if status == "ready" else error_code
+        payload["current_phase"] = _current_phase(status=status, error_code=None if status == "ready" else error_code)
         payload["recommended_action"] = recommended_action
+        payload["highlights"] = _readiness_highlights(
+            status=status,
+            error_code=None if status == "ready" else error_code,
+            recommended_action=recommended_action,
+            left_summary=payload["left_summary"],
+            checks=checks,
+        )
         payload["completed_step"] = "completed"
         payload["finished_at"] = utc_now_iso()
         write_json(output_path, payload)

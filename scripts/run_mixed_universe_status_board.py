@@ -43,6 +43,10 @@ def _read_optional_payload(path: Path) -> dict[str, object] | None:
     return read_optional_json_path(path, workspace_root=ROOT)
 
 
+def _dict_payload(value: object) -> dict[str, object]:
+    return value if isinstance(value, dict) else {}
+
+
 def _phase_status(payload: dict[str, object] | None, status_keys: list[str]) -> str:
     if not isinstance(payload, dict):
         return "missing"
@@ -73,12 +77,26 @@ def _artifact_summary(
         "path": artifact_display_path(path, workspace_root=ROOT),
         "exists": path.exists(),
         "status": _phase_status(payload, status_keys),
+        "current_phase": payload.get("current_phase") if isinstance(payload, dict) else None,
+        "error_code": payload.get("error_code") if isinstance(payload, dict) else None,
         "recommended_action": payload.get("recommended_action") if isinstance(payload, dict) else None,
+        "highlights": payload.get("highlights") if isinstance(payload, dict) else None,
         "requested_revision": payload_requested_revision if payload_requested_revision is not None else requested_revision,
         "resolved_left_revision": payload_resolved_left_revision if payload_resolved_left_revision is not None else resolved_left_revision,
         "resolved_left_source_kind": payload_resolved_left_source_kind if payload_resolved_left_source_kind is not None else resolved_left_source_kind,
         "resolved_left_artifact": payload_resolved_left_artifact if payload_resolved_left_artifact is not None else resolved_left_artifact,
+        "backfill_handoff_summary": payload.get("backfill_handoff_summary") if isinstance(payload, dict) else None,
     }
+
+
+def _summary_is_incomplete(item: dict[str, object]) -> bool:
+    status = str(item.get("status") or "unknown")
+    if status in {"missing", "planned", "partial", "schema_blocked", "not_ready"}:
+        return True
+    current_phase = item.get("current_phase")
+    if isinstance(current_phase, str) and current_phase.strip() and current_phase != "completed":
+        return True
+    return False
 
 
 def _derive_current_phase(summaries: list[dict[str, object]]) -> str:
@@ -98,9 +116,8 @@ def _derive_current_phase(summaries: list[dict[str, object]]) -> str:
         item = summary_by_label.get(label)
         if not isinstance(item, dict):
             break
-        status = str(item.get("status") or "unknown")
         current = label
-        if status in {"missing", "planned", "partial", "schema_blocked", "not_ready"}:
+        if _summary_is_incomplete(item):
             break
     return current
 
@@ -154,6 +171,14 @@ def main() -> int:
     parser.add_argument("--revision", default=None)
     parser.add_argument("--left-universe", default=DEFAULT_LEFT_UNIVERSE)
     parser.add_argument("--right-universe", default=DEFAULT_RIGHT_UNIVERSE)
+    parser.add_argument("--public-snapshot", default=None)
+    parser.add_argument("--readiness-manifest", default=None)
+    parser.add_argument("--compare-manifest", default=None)
+    parser.add_argument("--schema-manifest", default=None)
+    parser.add_argument("--numeric-compare-manifest", default=None)
+    parser.add_argument("--numeric-summary-manifest", default=None)
+    parser.add_argument("--left-gap-audit-manifest", default=None)
+    parser.add_argument("--left-recovery-plan-manifest", default=None)
     parser.add_argument("--output", default=None)
     parser.add_argument("--dry-run", action="store_true")
     args = parser.parse_args()
@@ -166,42 +191,43 @@ def main() -> int:
 
     public_snapshot_path, _ = resolve_local_snapshot_and_lineage_paths(
         workspace_root=ROOT,
+        explicit_snapshot=args.public_snapshot,
         revision_slug=revision_slug,
         left_universe=left_universe,
     )
     paths = {
         "public_snapshot": public_snapshot_path,
-        "readiness": prefer_existing_path(
+        "readiness": _resolve_path(args.readiness_manifest) if args.readiness_manifest else prefer_existing_path(
             workspace_root=ROOT,
             expected_path=f"artifacts/reports/mixed_universe_readiness_{left_universe}_vs_{right_universe}_{revision_slug}.json",
             fallback_pattern=f"artifacts/reports/mixed_universe_readiness_{left_universe}_vs_{right_universe}_*.json",
         ),
-        "compare": prefer_existing_path(
+        "compare": _resolve_path(args.compare_manifest) if args.compare_manifest else prefer_existing_path(
             workspace_root=ROOT,
             expected_path=f"artifacts/reports/mixed_universe_compare_{left_universe}_vs_{right_universe}_{revision_slug}.json",
             fallback_pattern=f"artifacts/reports/mixed_universe_compare_{left_universe}_vs_{right_universe}_*.json",
         ),
-        "schema": prefer_existing_path(
+        "schema": _resolve_path(args.schema_manifest) if args.schema_manifest else prefer_existing_path(
             workspace_root=ROOT,
             expected_path=f"artifacts/reports/mixed_universe_schema_{left_universe}_vs_{right_universe}_{revision_slug}.json",
             fallback_pattern=f"artifacts/reports/mixed_universe_schema_{left_universe}_vs_{right_universe}_*.json",
         ),
-        "numeric_compare": prefer_existing_path(
+        "numeric_compare": _resolve_path(args.numeric_compare_manifest) if args.numeric_compare_manifest else prefer_existing_path(
             workspace_root=ROOT,
             expected_path=f"artifacts/reports/mixed_universe_numeric_compare_{left_universe}_vs_{right_universe}_{revision_slug}.json",
             fallback_pattern=f"artifacts/reports/mixed_universe_numeric_compare_{left_universe}_vs_{right_universe}_*.json",
         ),
-        "numeric_summary": prefer_existing_path(
+        "numeric_summary": _resolve_path(args.numeric_summary_manifest) if args.numeric_summary_manifest else prefer_existing_path(
             workspace_root=ROOT,
             expected_path=f"artifacts/reports/mixed_universe_numeric_summary_{left_universe}_vs_{right_universe}_{revision_slug}.json",
             fallback_pattern=f"artifacts/reports/mixed_universe_numeric_summary_{left_universe}_vs_{right_universe}_*.json",
         ),
-        "left_gap_audit": prefer_existing_path(
+        "left_gap_audit": _resolve_path(args.left_gap_audit_manifest) if args.left_gap_audit_manifest else prefer_existing_path(
             workspace_root=ROOT,
             expected_path=f"artifacts/reports/mixed_universe_left_gap_audit_{left_universe}_vs_{right_universe}_{revision_slug}.json",
             fallback_pattern=f"artifacts/reports/mixed_universe_left_gap_audit_{left_universe}_vs_{right_universe}_*.json",
         ),
-        "left_recovery_plan": prefer_existing_path(
+        "left_recovery_plan": _resolve_path(args.left_recovery_plan_manifest) if args.left_recovery_plan_manifest else prefer_existing_path(
             workspace_root=ROOT,
             expected_path=f"artifacts/reports/mixed_universe_left_recovery_plan_{left_universe}_vs_{right_universe}_{revision_slug}.json",
             fallback_pattern=f"artifacts/reports/mixed_universe_left_recovery_plan_{left_universe}_vs_{right_universe}_*.json",
@@ -272,6 +298,13 @@ def main() -> int:
             return 0
 
         payloads = {key: _read_optional_payload(path) for key, path in paths.items()}
+        numeric_summary_payload = _dict_payload(payloads.get("numeric_summary"))
+        numeric_summary_summary = _dict_payload(numeric_summary_payload.get("promote_safe_summary"))
+        gap_audit_payload = _dict_payload(payloads.get("left_gap_audit"))
+        gap_audit_summary = _dict_payload(gap_audit_payload.get("summary"))
+        gap_audit_blocker = _dict_payload(gap_audit_payload.get("lineage_blocker"))
+        recovery_plan_payload = _dict_payload(payloads.get("left_recovery_plan"))
+        recovery_plan_summary = _dict_payload(recovery_plan_payload.get("summary"))
         resolved_left_revision = (payloads.get("public_snapshot") or {}).get("revision") if isinstance(payloads.get("public_snapshot"), dict) else None
         resolved_left_source_kind = _resolved_left_source_kind(payloads)
         resolved_left_artifact = _resolved_left_artifact(paths["public_snapshot"], payloads.get("public_snapshot"))
@@ -298,7 +331,7 @@ def main() -> int:
         current_phase = _derive_current_phase(summaries)
         next_action_source, next_action = _derive_next_action(payloads)
         overall_status = "completed"
-        if any(str(item.get("status") or "") in {"missing", "planned", "partial", "schema_blocked", "not_ready"} for item in summaries):
+        if any(_summary_is_incomplete(item) for item in summaries):
             overall_status = "partial"
 
         payload = {
@@ -337,12 +370,12 @@ def main() -> int:
                 "resolved_left_revision": resolved_left_revision,
                 "resolved_left_source_kind": resolved_left_source_kind,
                 "resolved_left_artifact": resolved_left_artifact,
-                "numeric_summary_verdict": ((payloads.get("numeric_summary") or {}).get("promote_safe_summary", {}) or {}).get("verdict") if isinstance(payloads.get("numeric_summary"), dict) else None,
-                "numeric_summary_severity": ((payloads.get("numeric_summary") or {}).get("promote_safe_summary", {}) or {}).get("severity") if isinstance(payloads.get("numeric_summary"), dict) else None,
-                "gap_audit_severity": ((payloads.get("left_gap_audit") or {}).get("summary", {}) or {}).get("severity") if isinstance(payloads.get("left_gap_audit"), dict) else None,
-                "gap_audit_blocking_action": ((payloads.get("left_gap_audit") or {}).get("lineage_blocker", {}) or {}).get("recommended_action") if isinstance(payloads.get("left_gap_audit"), dict) else None,
-                "gap_audit_blocking_error_code": ((payloads.get("left_gap_audit") or {}).get("lineage_blocker", {}) or {}).get("error_code") if isinstance(payloads.get("left_gap_audit"), dict) else None,
-                "recovery_plan_step_count": ((payloads.get("left_recovery_plan") or {}).get("summary", {}) or {}).get("step_count") if isinstance(payloads.get("left_recovery_plan"), dict) else None,
+                "numeric_summary_verdict": numeric_summary_summary.get("verdict"),
+                "numeric_summary_severity": numeric_summary_summary.get("severity"),
+                "gap_audit_severity": gap_audit_summary.get("severity"),
+                "gap_audit_blocking_action": gap_audit_blocker.get("recommended_action"),
+                "gap_audit_blocking_error_code": gap_audit_blocker.get("error_code"),
+                "recovery_plan_step_count": recovery_plan_summary.get("step_count"),
             },
         }
         write_json(output_path, payload)

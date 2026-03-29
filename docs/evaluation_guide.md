@@ -206,7 +206,7 @@ threshold-only revision 例:
 - `artifacts/reports/promotion_gate_<revision>.json`
 - `artifacts/reports/revision_gate_<revision>.json`
 
-`--dry-run` のときは `revision_gate_<revision>.json` に planned command と `status=dry_run` が保存される。
+`--dry-run` のときは `revision_gate_<revision>.json` に planned command と `status=planned` が保存される。あわせて `read_order`, `current_phase`, `recommended_action`, `highlights` も入り、train / evaluate / WF / promotion の planned 出力先を通常 manifest に近い shape で先に確認できる。
 
 `--skip-train` を使う場合でも、現在の `run_revision_gate.py` は evaluate の後に matching `run_wf_feasibility_diag.py` を自動で走らせる。したがって promotion gate が必要とする matching WF summary は別コマンドで手動生成しなくてよい。
 

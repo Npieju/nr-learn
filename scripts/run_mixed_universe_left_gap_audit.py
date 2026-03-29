@@ -53,13 +53,98 @@ def _read_required_payload(path: Path, *, label: str) -> dict[str, object]:
     return payload
 
 
+def _dict_payload(value: object) -> dict[str, object]:
+    return value if isinstance(value, dict) else {}
+
+
+def _list_payload(value: object) -> list[object]:
+    return value if isinstance(value, list) else []
+
+
+def _int_value(value: object, default: int = 0) -> int:
+    try:
+        if isinstance(value, bool):
+            return int(value)
+        if isinstance(value, int):
+            return value
+        if isinstance(value, float):
+            return int(value)
+        if isinstance(value, str):
+            return int(value)
+        return default
+    except (TypeError, ValueError):
+        return default
+
+
 def _artifact_exists(path_text: object) -> bool:
     if not isinstance(path_text, str) or not path_text.strip():
         return False
     return _resolve_path(path_text).exists()
 
 
+def _backfill_handoff_blocker(lineage_payload: dict[str, object]) -> dict[str, object] | None:
+    handoff_payload = _dict_payload(lineage_payload.get("backfill_handoff_payload"))
+    backfill_summary_payload = _dict_payload(lineage_payload.get("backfill_summary_payload"))
+    if not handoff_payload and not backfill_summary_payload:
+        return None
+
+    handoff_status = str(handoff_payload.get("status") or "")
+    summary_status = str(backfill_summary_payload.get("status") or "")
+    summary_phase = str(backfill_summary_payload.get("current_phase") or "")
+    if handoff_status in {"", "completed"} and summary_status in {"", "completed", "partial"} and summary_phase in {"", "materialized_primary_raw"}:
+        return None
+
+    artifacts = lineage_payload.get("artifacts") if isinstance(lineage_payload.get("artifacts"), dict) else {}
+    return {
+        "source": "backfill_handoff",
+        "status": handoff_status or summary_status or "unknown",
+        "current_phase": handoff_payload.get("current_phase") or backfill_summary_payload.get("current_phase"),
+        "error_code": handoff_payload.get("error_code") or backfill_summary_payload.get("stopped_reason"),
+        "error_message": handoff_payload.get("error_message") or backfill_summary_payload.get("stopped_reason"),
+        "recommended_action": handoff_payload.get("recommended_action") or backfill_summary_payload.get("recommended_action"),
+        "artifact_path": (artifacts.get("backfill_wrapper_manifest") if isinstance(artifacts, dict) else None),
+        "artifact_paths": [
+            path
+            for path in [
+                artifacts.get("backfill_wrapper_manifest") if isinstance(artifacts, dict) else None,
+                artifacts.get("backfill_manifest") if isinstance(artifacts, dict) else None,
+                artifacts.get("primary_materialize_manifest") if isinstance(artifacts, dict) else None,
+            ]
+            if isinstance(path, str) and path.strip()
+        ],
+        "reasons": handoff_payload.get("highlights") or backfill_summary_payload.get("highlights"),
+    }
+
+
 def _lineage_blocker(lineage_payload: dict[str, object]) -> dict[str, object] | None:
+    handoff_blocker = _backfill_handoff_blocker(lineage_payload)
+    if handoff_blocker is not None:
+        return handoff_blocker
+
+    lineage_status = str(lineage_payload.get("status") or "")
+    if lineage_status and lineage_status not in {"", "completed", "pass", "ready"}:
+        artifacts = lineage_payload.get("artifacts") if isinstance(lineage_payload.get("artifacts"), dict) else {}
+        return {
+            "source": "local_revision_gate",
+            "status": lineage_status,
+            "current_phase": lineage_payload.get("current_phase"),
+            "error_code": lineage_payload.get("error_code"),
+            "error_message": lineage_payload.get("error_message"),
+            "recommended_action": lineage_payload.get("recommended_action"),
+            "artifact_path": artifacts.get("revision_manifest") if isinstance(artifacts, dict) else None,
+            "artifact_paths": [
+                path
+                for path in [
+                    artifacts.get("revision_manifest") if isinstance(artifacts, dict) else None,
+                    artifacts.get("promotion_output") if isinstance(artifacts, dict) else None,
+                    artifacts.get("evaluation_pointer") if isinstance(artifacts, dict) else None,
+                    artifacts.get("wf_summary") if isinstance(artifacts, dict) else None,
+                ]
+                if isinstance(path, str) and path.strip()
+            ],
+            "reasons": lineage_payload.get("highlights"),
+        }
+
     data_preflight = lineage_payload.get("data_preflight_payload") if isinstance(lineage_payload.get("data_preflight_payload"), dict) else None
     benchmark_gate = lineage_payload.get("benchmark_gate_payload") if isinstance(lineage_payload.get("benchmark_gate_payload"), dict) else None
 
@@ -73,11 +158,13 @@ def _lineage_blocker(lineage_payload: dict[str, object]) -> dict[str, object] | 
 
     artifacts = candidate.get("artifacts") if isinstance(candidate.get("artifacts"), dict) else {}
     return {
+        "source": "benchmark_or_preflight",
         "status": status,
         "error_code": candidate.get("error_code"),
         "error_message": candidate.get("error_message"),
         "recommended_action": candidate.get("recommended_action"),
         "artifact_path": artifacts.get("preflight_manifest") if isinstance(artifacts, dict) else None,
+        "artifact_paths": [artifacts.get("preflight_manifest")] if isinstance(artifacts, dict) and isinstance(artifacts.get("preflight_manifest"), str) else [],
         "reasons": ((candidate.get("readiness") or {}).get("reasons") if isinstance(candidate.get("readiness"), dict) else None),
     }
 
@@ -103,8 +190,8 @@ def _build_gap_rows(
     numeric_compare_payload: dict[str, object],
     lineage_payload: dict[str, object],
 ) -> list[dict[str, object]]:
-    row_results = [row for row in (numeric_compare_payload.get("row_results") or []) if isinstance(row, dict)]
-    lineage_artifacts = lineage_payload.get("artifacts") if isinstance(lineage_payload.get("artifacts"), dict) else {}
+    row_results = [row for row in _list_payload(numeric_compare_payload.get("row_results")) if isinstance(row, dict)]
+    lineage_artifacts = _dict_payload(lineage_payload.get("artifacts"))
     lineage_blocker = _lineage_blocker(lineage_payload)
 
     gap_rows: list[dict[str, object]] = []
@@ -115,6 +202,7 @@ def _build_gap_rows(
         required_sources = _required_sources_for_row(row_name)
         source_checks = []
         for source in required_sources:
+            command_payload = _dict_payload(lineage_payload.get(source["command_key"]))
             artifact_path = lineage_artifacts.get(source["artifact_key"]) if isinstance(lineage_artifacts, dict) else None
             source_checks.append(
                 {
@@ -122,12 +210,15 @@ def _build_gap_rows(
                     "label": source["label"],
                     "artifact_path": artifact_path,
                     "exists": _artifact_exists(artifact_path),
-                    "command_preview": ((lineage_payload.get(source["command_key"]) or {}).get("command") if isinstance(lineage_payload.get(source["command_key"]), dict) else None),
-                    "command_status": ((lineage_payload.get(source["command_key"]) or {}).get("status") if isinstance(lineage_payload.get(source["command_key"]), dict) else None),
+                    "command_preview": command_payload.get("command"),
+                    "command_status": command_payload.get("status"),
                     "blocking_action": (lineage_blocker or {}).get("recommended_action"),
                     "blocking_error_code": (lineage_blocker or {}).get("error_code"),
                     "blocking_error_message": (lineage_blocker or {}).get("error_message"),
+                    "blocking_source": (lineage_blocker or {}).get("source"),
+                    "blocking_phase": (lineage_blocker or {}).get("current_phase"),
                     "blocking_artifact_path": (lineage_blocker or {}).get("artifact_path"),
+                    "blocking_artifact_paths": (lineage_blocker or {}).get("artifact_paths"),
                     "blocking_reasons": (lineage_blocker or {}).get("reasons"),
                 }
             )
@@ -155,7 +246,7 @@ def _audit_summary(
     rows_with_planned_commands = []
     rows_with_blocking_action = []
     for row in gap_rows:
-        required_sources = row.get("required_sources") if isinstance(row.get("required_sources"), list) else []
+        required_sources = [source for source in _list_payload(row.get("required_sources")) if isinstance(source, dict)]
         if required_sources and all(not bool(source.get("exists")) for source in required_sources if isinstance(source, dict)):
             rows_missing_all_sources.append(row.get("name"))
         if any(str(source.get("command_status") or "") == "planned" for source in required_sources if isinstance(source, dict)):
@@ -225,6 +316,59 @@ def _planned_lineage_blocker(*, left_universe: str) -> dict[str, object]:
     }
 
 
+def _current_phase(*, status: str, lineage_blocker: dict[str, object] | None) -> str:
+    if status == "planned":
+        return "mixed_universe_numeric_compare"
+    blocker_status = str((lineage_blocker or {}).get("status") or "")
+    if blocker_status and blocker_status not in {"completed", "pass", "ready"}:
+        blocker_source = str((lineage_blocker or {}).get("source") or "")
+        if blocker_source == "backfill_handoff":
+            return "local_backfill_then_benchmark"
+        return "local_revision_gate"
+    if status == "completed":
+        return "mixed_universe_left_gap_audit_completed"
+    return "mixed_universe_left_gap_audit_partial"
+
+
+def _highlights(
+    *,
+    status: str,
+    recommended_action: object,
+    summary: dict[str, object],
+    lineage_blocker: dict[str, object] | None,
+) -> list[str]:
+    highlights: list[str] = []
+    blocker = lineage_blocker or {}
+    blocker_error_code = str(blocker.get("error_code") or "")
+    blocker_action = str(blocker.get("recommended_action") or recommended_action or "review_gap_rows")
+
+    if status == "planned":
+        highlights.append("gap audit is waiting for numeric compare and local revision lineage")
+        highlights.append(f"next operator action: {blocker_action}")
+        return highlights
+
+    row_count = _int_value(summary.get("row_count"), default=0)
+    missing_all_sources = _list_payload(summary.get("rows_missing_all_sources"))
+    blocking_rows = _list_payload(summary.get("rows_with_blocking_action"))
+
+    highlights.append(f"gap audit tracks {row_count} missing-left row(s)")
+    if missing_all_sources:
+        highlights.append(f"{len(missing_all_sources)} row(s) still lack every required left-side source artifact")
+    if blocker_error_code:
+        highlights.append(f"upstream local lineage is blocked with error_code={blocker_error_code}")
+        blocker_source = str(blocker.get("source") or "")
+        blocker_phase = str(blocker.get("current_phase") or "")
+        if blocker_source == "backfill_handoff":
+            highlights.append(
+                f"upstream blocker is currently in local handoff phase={blocker_phase if blocker_phase else 'unknown'}"
+            )
+    elif blocking_rows:
+        highlights.append(f"{len(blocking_rows)} row(s) are gated by an upstream local readiness action")
+    if len(highlights) < 4:
+        highlights.append(f"next operator action: {blocker_action}")
+    return highlights
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--revision", default=None)
@@ -257,10 +401,14 @@ def main() -> int:
         artifact_ensure_output_file_path(output_path, label="output", workspace_root=ROOT)
 
         if args.dry_run and not compare_path.exists() and not lineage_path.exists():
+            recommended_action = "generate_numeric_compare_and_lineage_manifests"
+            summary = _planned_audit_summary(requested_revision=revision_slug, left_universe=left_universe)
+            lineage_blocker = _planned_lineage_blocker(left_universe=left_universe)
+            status = "planned"
             payload = {
                 "started_at": utc_now_iso(),
                 "finished_at": utc_now_iso(),
-                "status": "planned",
+                "status": status,
                 "audit_kind": "mixed_universe_left_gap_audit",
                 "revision": revision_slug,
                 "requested_revision": revision_slug,
@@ -269,7 +417,8 @@ def main() -> int:
                 "resolved_left_artifact": None,
                 "left_universe": left_universe,
                 "right_universe": right_universe,
-                "recommended_action": "generate_numeric_compare_and_lineage_manifests",
+                "current_phase": _current_phase(status=status, lineage_blocker=lineage_blocker),
+                "recommended_action": recommended_action,
                 "artifacts": {
                     "gap_audit_manifest": artifact_display_path(output_path, workspace_root=ROOT),
                     "numeric_compare_manifest": artifact_display_path(compare_path, workspace_root=ROOT),
@@ -280,8 +429,14 @@ def main() -> int:
                     "local_revision_gate",
                     "mixed_universe_left_gap_audit",
                 ],
-                "summary": _planned_audit_summary(requested_revision=revision_slug, left_universe=left_universe),
-                "lineage_blocker": _planned_lineage_blocker(left_universe=left_universe),
+                "summary": summary,
+                "lineage_blocker": lineage_blocker,
+                "highlights": _highlights(
+                    status=status,
+                    recommended_action=recommended_action,
+                    summary=summary,
+                    lineage_blocker=lineage_blocker,
+                ),
                 "gap_rows": [],
             }
             write_json(output_path, payload)
@@ -303,6 +458,8 @@ def main() -> int:
             resolved_left_artifact=resolved_left_artifact,
         )
         status = "completed" if not gap_rows else "partial"
+        lineage_blocker = _lineage_blocker(lineage_payload)
+        recommended_action = (lineage_blocker or {}).get("recommended_action") or numeric_compare_payload.get("recommended_action")
 
         payload = {
             "started_at": utc_now_iso(),
@@ -316,7 +473,8 @@ def main() -> int:
             "resolved_left_artifact": resolved_left_artifact,
             "left_universe": left_universe,
             "right_universe": right_universe,
-            "recommended_action": numeric_compare_payload.get("recommended_action"),
+            "current_phase": _current_phase(status=status, lineage_blocker=lineage_blocker),
+            "recommended_action": recommended_action,
             "artifacts": {
                 "gap_audit_manifest": artifact_display_path(output_path, workspace_root=ROOT),
                 "numeric_compare_manifest": artifact_display_path(compare_path, workspace_root=ROOT),
@@ -328,7 +486,13 @@ def main() -> int:
                 "mixed_universe_left_gap_audit",
             ],
             "summary": audit_summary,
-            "lineage_blocker": _lineage_blocker(lineage_payload),
+            "lineage_blocker": lineage_blocker,
+            "highlights": _highlights(
+                status=status,
+                recommended_action=recommended_action,
+                summary=audit_summary,
+                lineage_blocker=lineage_blocker,
+            ),
             "gap_rows": gap_rows,
         }
         write_json(output_path, payload)

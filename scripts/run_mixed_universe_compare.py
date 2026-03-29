@@ -172,6 +172,44 @@ def _planned_comparison_contract() -> dict[str, object]:
     }
 
 
+def _current_phase(*, status: str, left_source_kind: str | None) -> str:
+    if status == "planned":
+        return "left_input_missing"
+    if left_source_kind == "local_public_snapshot":
+        return "left_public_snapshot"
+    if left_source_kind == "local_revision_gate":
+        return "left_lineage_manifest"
+    return "mixed_universe_compare"
+
+
+def _compare_highlights(
+    *,
+    status: str,
+    recommended_action: str | None,
+    left_source_kind: str | None,
+    left_summary: dict[str, object],
+    right_summary: dict[str, object],
+) -> list[str]:
+    highlights: list[str] = []
+    if status == "planned":
+        highlights.append("pointer-only compare still lacks a left-side public snapshot or lineage manifest")
+        highlights.append("the right-side JRA public reference is already fixed, so left-side lineage is the remaining bridge input")
+    else:
+        if left_source_kind == "local_public_snapshot":
+            highlights.append("pointer-only compare is anchored to the resolved local public snapshot and preserves its compare contract")
+        elif left_source_kind == "local_revision_gate":
+            highlights.append("pointer-only compare is anchored directly to the local revision lineage because no public snapshot was supplied")
+        readiness = left_summary.get("readiness")
+        if isinstance(readiness, dict) and readiness.get("recommended_action"):
+            highlights.append(f"left-side readiness currently recommends {readiness.get('recommended_action')}")
+        metrics = right_summary.get("metrics")
+        if isinstance(metrics, dict) and metrics.get("decision") is not None:
+            highlights.append(f"right-side public reference decision is {metrics.get('decision')}")
+    if recommended_action:
+        highlights.append(f"next operator action: {recommended_action}")
+    return highlights
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--revision", default=None)
@@ -214,6 +252,13 @@ def main() -> int:
                 right_reference=args.right_reference,
                 output_path=output_path,
             )
+            planned_left_summary = _planned_left_summary(left_universe=left_universe)
+            planned_right_summary = _planned_right_summary(
+                right_universe=right_universe,
+                right_reference=args.right_reference,
+                right_public_doc_path=right_public_doc_path,
+                right_reference_manifest_path=right_reference_manifest_path,
+            )
             payload["left_inputs"] = {
                 "public_snapshot": artifact_display_path(left_snapshot_path, workspace_root=ROOT),
                 "lineage_manifest": artifact_display_path(left_lineage_path, workspace_root=ROOT),
@@ -229,14 +274,17 @@ def main() -> int:
                     "right_reference_manifest": artifact_display_path(right_reference_manifest_path, workspace_root=ROOT),
                 }
             )
-            payload["left_summary"] = _planned_left_summary(left_universe=left_universe)
-            payload["right_summary"] = _planned_right_summary(
-                right_universe=right_universe,
-                right_reference=args.right_reference,
-                right_public_doc_path=right_public_doc_path,
-                right_reference_manifest_path=right_reference_manifest_path,
-            )
+            payload["left_summary"] = planned_left_summary
+            payload["right_summary"] = planned_right_summary
             payload["comparison_contract"] = _planned_comparison_contract()
+            payload["current_phase"] = _current_phase(status="planned", left_source_kind=None)
+            payload["highlights"] = _compare_highlights(
+                status="planned",
+                recommended_action=str(payload.get("recommended_action") or ""),
+                left_source_kind=None,
+                left_summary=planned_left_summary,
+                right_summary=planned_right_summary,
+            )
             write_json(output_path, payload)
             print(f"[mixed-universe-compare] planned manifest saved: {artifact_display_path(output_path, workspace_root=ROOT)}", flush=True)
             return 0
@@ -277,6 +325,7 @@ def main() -> int:
             "left_universe": left_universe,
             "right_universe": right_universe,
             "decision": "separate_lineage_required",
+            "current_phase": _current_phase(status="completed", left_source_kind=left_source_kind),
             "recommended_action": "read_left_then_right_public_reference",
             "read_order": [
                 "mixed_universe_compare",
@@ -313,6 +362,13 @@ def main() -> int:
             compare_contract = left_payload.get("compare_contract")
         if isinstance(compare_contract, dict):
             payload["left_compare_contract"] = compare_contract
+        payload["highlights"] = _compare_highlights(
+            status="completed",
+            recommended_action=str(payload.get("recommended_action") or ""),
+            left_source_kind=left_source_kind,
+            left_summary=payload["left_summary"],
+            right_summary=payload["right_summary"],
+        )
         write_json(output_path, payload)
         print(f"[mixed-universe-compare] saved: {artifact_display_path(output_path, workspace_root=ROOT)}", flush=True)
         return 0

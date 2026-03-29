@@ -255,6 +255,34 @@ mixed compare に進む前の前提条件も、この 5 段の延長で固定し
 3. right 側は JRA public reference として別 artifact / doc から参照し、同一 gate manifest に混ぜないこと。
 4. mixed compare の最初の artifact は promote 判定ではなく readiness / pointer manifest に留めること。
 
+local データを使った改善案として、最初から mixed 学習や一体化だけを前提にしない。検討順は次の 3 段が安全である。
+
+1. local-only
+  - まず地方 source 単体で readiness、feature coverage、representative evaluation、benchmark gate を完了させる。
+  - この段階では「地方だけで再現可能な benchmark があるか」を確認する。
+2. mixed
+  - 次に JRA-only baseline を固定したまま、地方を含む mixed 学習または mixed compare を差分として評価する。
+  - ここでも採否は JRA-only baseline 差分で判断し、single merged lineage を正本にしない。
+3. ensemble
+  - 最後に、JRA-only と local-only を別 lineage のまま保持しつつ、推論段での選択・重み付け・stacking を検討する。
+  - ensemble は mixed 学習より保守的な選択肢として使ってよいが、source ごとの失敗理由と rollout 境界を読めることが前提になる。
+
+ensemble を許容してよい条件も先に固定しておく。
+
+1. JRA-only baseline が現行の運用正本として維持されていること。
+2. local-only 側が `stability_assessment=representative` を満たし、JRA と独立に benchmark 完了していること。
+3. mixed compare または numeric compare で、地方側の優位が特定の regime、date bucket、course 群などへ偏っていると説明できること。
+4. ensemble 後の意思決定を artifact で追跡できること。少なくとも「どの universe を採用したか」「fallback したか」「重みをどう決めたか」を記録できること。
+5. ensemble 導入後も、JRA-only 単独運用へ戻せる rollback 境界を保つこと。
+
+逆に、次の状態では ensemble を採らない。
+
+- local-only 側が readiness または representative evaluation の段階で止まっている。
+- mixed compare で優位性は見えるが、どの条件で効いたかを説明できない。
+- JRA-only baseline を置き換えたくなっているだけで、source ごとの failure mode を分けて読めない。
+
+したがって、地方データが ROI 向上に効く可能性を見たとしても、推奨順序は `local-only -> mixed compare -> ensemble pilot -> production decision` である。最初の production 候補をいきなり full mixed 学習へ寄せるより、JRA-only 正本を残したまま ensemble pilot を別 lineage で評価するほうが安全である。
+
 その次段の comparison schema も先に固定しておく。
 
 1. promotion 軸では `decision` だけを比較し、baseline 置換可否と混同しない。

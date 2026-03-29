@@ -223,6 +223,107 @@ def _classify_window_tradeoff(row: dict[str, Any]) -> str:
     return f"{net_direction}_net_{bankroll_direction}_bankroll"
 
 
+def _read_order() -> list[str]:
+    return [
+        "serving_compare_aggregate_summary",
+        "dashboard_summaries_or_compare_manifests",
+        "aggregate_rows",
+    ]
+
+
+def _current_phase(status: str) -> str:
+    normalized = str(status or "")
+    if normalized == "completed":
+        return "completed"
+    if normalized == "failed":
+        return "aggregate_failed"
+    return "building_aggregate"
+
+
+def _recommended_action(status: str) -> str:
+    normalized = str(status or "")
+    if normalized == "completed":
+        return "review_aggregate_summary"
+    if normalized == "failed":
+        return "inspect_aggregate_inputs"
+    return "inspect_aggregate_progress"
+
+
+def _highlights(
+    *,
+    status: str,
+    recommended_action: str,
+    input_kind: str | None,
+    window_count: int | None,
+    mean_net_delta: float | None,
+    mean_bankroll_delta: float | None,
+    error_message: str | None,
+) -> list[str]:
+    kind = str(input_kind or "unknown_inputs")
+    if status == "completed":
+        return [
+            f"serving compare aggregate assembled from {kind}",
+            f"window_count={window_count}, mean_net_delta_right_minus_left={mean_net_delta}, mean_pure_bankroll_delta_right_minus_left={mean_bankroll_delta}",
+            f"next operator action: {recommended_action}",
+        ]
+    if status == "failed":
+        return [
+            f"serving compare aggregate failed while reading {kind}",
+            str(error_message or "aggregate generation failed"),
+            f"next operator action: {recommended_action}",
+        ]
+    return [
+        f"serving compare aggregate is in progress for {kind}",
+        f"next operator action: {recommended_action}",
+    ]
+
+
+def _build_failure_summary(
+    *,
+    input_paths: list[Path],
+    input_kind: str | None,
+    output_summary: Path | None,
+    error_message: str,
+) -> dict[str, Any]:
+    status = "failed"
+    recommended_action = _recommended_action(status)
+    payload: dict[str, Any] = {
+        "input_files": [artifact_display_path(path, workspace_root=ROOT) for path in input_paths],
+        "input_kind": input_kind,
+        "window_count": 0,
+        "rows": [],
+        "summary": {
+            "manifest_status_counts": {},
+            "manifest_decision_counts": {},
+            "windows_with_positive_net_delta": [],
+            "windows_with_negative_net_delta": [],
+            "windows_with_positive_bankroll_delta": [],
+            "windows_with_negative_bankroll_delta": [],
+            "tradeoff_classification_counts": {},
+            "windows_by_tradeoff_classification": {},
+            "mean_net_delta_right_minus_left": None,
+            "mean_pure_bankroll_delta_right_minus_left": None,
+        },
+        "status": status,
+        "error_message": error_message,
+        "read_order": _read_order(),
+        "current_phase": _current_phase(status),
+        "recommended_action": recommended_action,
+        "highlights": _highlights(
+            status=status,
+            recommended_action=recommended_action,
+            input_kind=input_kind,
+            window_count=0,
+            mean_net_delta=None,
+            mean_bankroll_delta=None,
+            error_message=error_message,
+        ),
+    }
+    if output_summary is not None:
+        payload["summary_file"] = artifact_display_path(output_summary, workspace_root=ROOT)
+    return payload
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     input_group = parser.add_mutually_exclusive_group(required=True)
@@ -233,6 +334,9 @@ def main() -> int:
     parser.add_argument("--output-csv", default="artifacts/reports/dashboard/serving_compare_aggregate_summary.csv")
     args = parser.parse_args()
     progress = ProgressBar(total=4, prefix="[serving-compare-aggregate]", logger=log_progress, min_interval_sec=0.0)
+    input_paths: list[Path] = []
+    input_kind: str | None = None
+    output_summary: Path | None = None
 
     try:
         if args.dashboard_summaries:
@@ -294,6 +398,19 @@ def main() -> int:
                 "mean_pure_bankroll_delta_right_minus_left": float(frame["pure_bankroll_delta_right_minus_left"].dropna().mean()) if "pure_bankroll_delta_right_minus_left" in frame.columns and not frame["pure_bankroll_delta_right_minus_left"].dropna().empty else None,
             },
         }
+        aggregate_payload["status"] = "completed"
+        aggregate_payload["read_order"] = _read_order()
+        aggregate_payload["current_phase"] = _current_phase("completed")
+        aggregate_payload["recommended_action"] = _recommended_action("completed")
+        aggregate_payload["highlights"] = _highlights(
+            status="completed",
+            recommended_action=str(aggregate_payload.get("recommended_action") or "review_aggregate_summary"),
+            input_kind=str(aggregate_payload.get("input_kind") or input_kind or "unknown_inputs"),
+            window_count=int(aggregate_payload.get("window_count") or 0),
+            mean_net_delta=aggregate_payload.get("summary", {}).get("mean_net_delta_right_minus_left") if isinstance(aggregate_payload.get("summary"), dict) else None,
+            mean_bankroll_delta=aggregate_payload.get("summary", {}).get("mean_pure_bankroll_delta_right_minus_left") if isinstance(aggregate_payload.get("summary"), dict) else None,
+            error_message=None,
+        )
         progress.update(message=f"aggregate assembled windows={len(frame)}")
 
         with Heartbeat("[serving-compare-aggregate]", "writing aggregate outputs", logger=log_progress):
@@ -344,9 +461,29 @@ def main() -> int:
         print("[serving-compare-aggregate] interrupted by user")
         return 130
     except (ValueError, FileNotFoundError, IsADirectoryError) as error:
+        if output_summary is not None:
+            write_json(
+                output_summary,
+                _build_failure_summary(
+                    input_paths=input_paths,
+                    input_kind="dashboard_summaries" if args.dashboard_summaries else "compare_manifests",
+                    output_summary=output_summary,
+                    error_message=str(error),
+                ),
+            )
         print(f"[serving-compare-aggregate] failed: {error}")
         return 1
     except Exception as error:
+        if output_summary is not None:
+            write_json(
+                output_summary,
+                _build_failure_summary(
+                    input_paths=input_paths,
+                    input_kind="dashboard_summaries" if args.dashboard_summaries else "compare_manifests",
+                    output_summary=output_summary,
+                    error_message=str(error),
+                ),
+            )
         print(f"[serving-compare-aggregate] failed: {error}")
         traceback.print_exc()
         return 1

@@ -220,6 +220,130 @@ def _extract_last_post_cycle_exit_code(backfill_manifest_path: Path) -> int | No
     return int(exit_code) if exit_code is not None else None
 
 
+def _read_order() -> list[str]:
+    return [
+        "wait_then_cycle_manifest",
+        "wait_observation",
+        "handoff_backfill",
+        "benchmark_gate",
+    ]
+
+
+def _current_phase(payload: dict[str, Any]) -> str:
+    status = str(payload.get("status") or "")
+
+    if status == "waiting":
+        return "wait_lock_release"
+    if status == "running_backfill":
+        return "handoff_backfill"
+    if status == "backfill_failed":
+        return "handoff_backfill"
+    if status in {"gate_failed", "gate_not_ready"}:
+        return "benchmark_gate"
+    if status == "timeout":
+        return "wait_lock_release"
+    if status == "interrupted":
+        return "interrupted"
+    if status == "completed":
+        return "completed"
+    if status == "failed":
+        return "init_manifest"
+    return "init_manifest"
+
+
+def _recommended_action(payload: dict[str, Any]) -> str:
+    status = str(payload.get("status") or "")
+    if status == "waiting":
+        return "continue_waiting"
+    if status == "timeout":
+        return "inspect_wait_lock"
+    if status == "backfill_failed":
+        return "inspect_handoff_backfill"
+    if status == "gate_not_ready":
+        gate_summary = payload.get("gate_summary") if isinstance(payload.get("gate_summary"), dict) else {}
+        return str(gate_summary.get("recommended_action") or "inspect_benchmark_gate")
+    if status == "gate_failed":
+        return "inspect_benchmark_gate"
+    if status == "completed":
+        return "review_gate_manifest"
+    if status == "interrupted":
+        return "rerun_wait_then_cycle"
+    return "inspect_wait_cycle_inputs"
+
+
+def _highlights(payload: dict[str, Any]) -> list[str]:
+    status = str(payload.get("status") or "")
+    current_phase = str(payload.get("current_phase") or _current_phase(payload))
+    recommended_action = str(payload.get("recommended_action") or _recommended_action(payload))
+    wait_info = payload.get("wait") if isinstance(payload.get("wait"), dict) else {}
+    elapsed_seconds = wait_info.get("elapsed_seconds")
+    gate_summary = payload.get("gate_summary") if isinstance(payload.get("gate_summary"), dict) else {}
+    backfill_result = payload.get("backfill") if isinstance(payload.get("backfill"), dict) else {}
+
+    if status == "completed":
+        return [
+            "wait-then-cycle completed after lock handoff and post-cycle gate execution",
+            f"gate status={gate_summary.get('status') or 'completed'}",
+            f"next operator action: {recommended_action}",
+        ]
+
+    if status == "waiting":
+        wait_message = "wait-then-cycle is waiting for the active lock to clear"
+        if elapsed_seconds is not None:
+            wait_message = f"wait-then-cycle is waiting for the active lock to clear after {int(elapsed_seconds)}s"
+        return [
+            wait_message,
+            f"current phase: {current_phase}",
+            f"next operator action: {recommended_action}",
+        ]
+
+    if status == "timeout":
+        return [
+            "wait-then-cycle timed out before the active lock cleared",
+            str(payload.get("error") or "timeout while waiting for lock release"),
+            f"next operator action: {recommended_action}",
+        ]
+
+    if status == "backfill_failed":
+        exit_code = backfill_result.get("exit_code")
+        return [
+            "wait-then-cycle stopped during handoff_backfill",
+            f"handoff backfill returned non-zero exit code={exit_code}",
+            f"next operator action: {recommended_action}",
+        ]
+
+    if status in {"gate_failed", "gate_not_ready"}:
+        gate_status = gate_summary.get("status") or status
+        gate_action = gate_summary.get("recommended_action")
+        message = f"wait-then-cycle reached benchmark_gate with status={gate_status}"
+        details = gate_summary.get("error_message") or gate_summary.get("highlights") or gate_status
+        highlights = [message, str(details)]
+        if gate_action and status == "gate_not_ready":
+            highlights.append(f"next operator action: {gate_action}")
+        else:
+            highlights.append(f"next operator action: {recommended_action}")
+        return highlights
+
+    if status in {"failed", "interrupted"}:
+        return [
+            f"wait-then-cycle stopped during {current_phase}",
+            str(payload.get("error") or status),
+            f"next operator action: {recommended_action}",
+        ]
+
+    return [
+        f"wait-then-cycle is in progress at {current_phase}",
+        f"next operator action: {recommended_action}",
+    ]
+
+
+def _refresh_summary_fields(payload: dict[str, Any]) -> None:
+    payload["read_order"] = _read_order()
+    payload["current_phase"] = _current_phase(payload)
+    payload["recommended_action"] = _recommended_action(payload)
+    payload["highlights"] = _highlights(payload)
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--data-config", default="configs/data.yaml")
@@ -304,6 +428,7 @@ def main() -> int:
             "gate_manifest": artifact_display_path(gate_manifest_path, workspace_root=ROOT),
         },
     }
+    _refresh_summary_fields(payload)
 
     try:
         artifact_ensure_output_file_path(wait_manifest_path, label="wait manifest output", workspace_root=ROOT)
@@ -325,6 +450,7 @@ def main() -> int:
             "snapshot_output": artifact_display_path(snapshot_path, workspace_root=ROOT),
             "gate_manifest": artifact_display_path(gate_manifest_path, workspace_root=ROOT),
         }
+        _refresh_summary_fields(payload)
         _write_wait_manifest(wait_manifest_path, payload)
 
         progress = ProgressBar(total=4, prefix="[netkeiba-wait-cycle]", logger=log_progress, min_interval_sec=0.0)
@@ -340,6 +466,7 @@ def main() -> int:
                 wait_started_at=wait_started_at,
             )
             payload["wait"] = observation
+            _refresh_summary_fields(payload)
             _write_wait_manifest(wait_manifest_path, payload)
             progress.update(current=1, message=f"waiting elapsed={observation.get('elapsed_seconds')}s lock={observation.get('lock_exists')}", force=True)
 
@@ -380,6 +507,7 @@ def main() -> int:
         payload["status"] = "running_backfill"
         payload["gate_command"] = gate_command
         payload["backfill_command"] = backfill_command
+        _refresh_summary_fields(payload)
         _write_wait_manifest(wait_manifest_path, payload)
         progress.update(current=2, message="lock released; starting handoff backfill")
 
@@ -392,6 +520,7 @@ def main() -> int:
         if int(backfill_result.get("exit_code", 1)) != 0:
             payload["status"] = "backfill_failed"
             payload["finished_at"] = utc_now_iso()
+            _refresh_summary_fields(payload)
             _write_wait_manifest(wait_manifest_path, payload)
             return int(backfill_result.get("exit_code", 1)) or 1
         progress.update(current=3, message="handoff backfill completed")
@@ -403,11 +532,13 @@ def main() -> int:
                 gate_status = payload["gate_summary"].get("status")
             payload["status"] = "gate_failed" if gate_status != "not_ready" else "gate_not_ready"
             payload["finished_at"] = utc_now_iso()
+            _refresh_summary_fields(payload)
             _write_wait_manifest(wait_manifest_path, payload)
             return int(post_cycle_exit_code)
 
         payload["status"] = "completed"
         payload["finished_at"] = utc_now_iso()
+        _refresh_summary_fields(payload)
         _write_wait_manifest(wait_manifest_path, payload)
         progress.complete(message="wait and handoff cycle completed")
         print("[netkeiba-wait-cycle] completed", flush=True)
@@ -415,6 +546,7 @@ def main() -> int:
     except KeyboardInterrupt:
         payload["status"] = "interrupted"
         payload["finished_at"] = utc_now_iso()
+        _refresh_summary_fields(payload)
         _write_wait_manifest(wait_manifest_path, payload)
         print("[netkeiba-wait-cycle] interrupted by user")
         return 130
@@ -422,6 +554,7 @@ def main() -> int:
         payload["status"] = "timeout"
         payload["finished_at"] = utc_now_iso()
         payload["error"] = str(error)
+        _refresh_summary_fields(payload)
         _write_wait_manifest(wait_manifest_path, payload)
         print(f"[netkeiba-wait-cycle] timeout: {error}")
         return 124
@@ -429,6 +562,7 @@ def main() -> int:
         payload["status"] = "failed"
         payload["finished_at"] = utc_now_iso()
         payload["error"] = str(error)
+        _refresh_summary_fields(payload)
         _write_wait_manifest(wait_manifest_path, payload)
         print(f"[netkeiba-wait-cycle] failed: {error}")
         return 1
@@ -436,6 +570,7 @@ def main() -> int:
         payload["status"] = "failed"
         payload["finished_at"] = utc_now_iso()
         payload["error"] = str(error)
+        _refresh_summary_fields(payload)
         _write_wait_manifest(wait_manifest_path, payload)
         print(f"[netkeiba-wait-cycle] failed: {error}")
         traceback.print_exc()

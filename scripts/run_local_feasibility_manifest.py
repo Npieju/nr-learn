@@ -94,6 +94,255 @@ def _read_optional_json(path: Path) -> dict[str, object] | None:
     return payload if isinstance(payload, dict) else None
 
 
+def _planned_command_step(*, label: str, command: list[str], output_path: Path | None = None) -> dict[str, object]:
+    payload: dict[str, object] = {
+        "label": label,
+        "command": command,
+        "status": "planned",
+    }
+    if output_path is not None:
+        payload["output"] = artifact_display_path(output_path, workspace_root=ROOT)
+    return payload
+
+
+def _planned_snapshot_payload(
+    *,
+    data_config_path: str,
+    tail_rows: int,
+    universe: str,
+    source_scope: str,
+    baseline_reference: str,
+    output_path: Path,
+) -> dict[str, object]:
+    return {
+        "status": "planned",
+        "completed_step": "planned",
+        "artifact_type": "coverage_snapshot",
+        "config": data_config_path,
+        "tail_rows": int(tail_rows),
+        "universe": universe,
+        "source_scope": source_scope,
+        "baseline_reference": baseline_reference,
+        "artifacts": {
+            "snapshot": artifact_display_path(output_path, workspace_root=ROOT),
+        },
+        "readiness": {
+            "benchmark_rerun_ready": False,
+            "recommended_action": "run_local_coverage_snapshot",
+            "reasons": [
+                "Source readiness and coverage summary will be determined when the local coverage snapshot runs.",
+            ],
+        },
+    }
+
+
+def _planned_validation_payload(*, config_path: str, output_path: Path) -> dict[str, object]:
+    return {
+        "status": "planned",
+        "config": config_path,
+        "primary_dataset": {
+            "status": "unknown",
+            "error": None,
+        },
+        "append_tables": [],
+        "supplemental_tables": [],
+        "artifacts": {
+            "validation_report": artifact_display_path(output_path, workspace_root=ROOT),
+        },
+    }
+
+
+def _planned_feature_gap_payload(
+    *,
+    data_config_path: str,
+    feature_config_path: str,
+    model_config_path: str,
+    max_rows: int,
+    coverage_threshold: float,
+    summary_output_path: Path,
+    feature_output_path: Path,
+    raw_output_path: Path,
+) -> dict[str, object]:
+    return {
+        "run_context": {
+            "data_config": data_config_path,
+            "feature_config": feature_config_path,
+            "model_config": model_config_path,
+            "template_config": data_config_path,
+            "max_rows": int(max_rows),
+            "primary_source_rows_total": None,
+            "coverage_threshold": float(coverage_threshold),
+            "rows_evaluated": None,
+            "feature_columns_total": None,
+            "selected_feature_count": None,
+            "categorical_feature_count": None,
+        },
+        "summary": {
+            "template_columns_total": None,
+            "template_columns_present": None,
+            "priority_missing_raw_columns": [],
+            "force_include_total": None,
+            "missing_force_include_features": [],
+            "empty_force_include_features": [],
+            "low_coverage_force_include_features": [],
+        },
+        "raw_columns": [],
+        "feature_coverage": [],
+        "artifacts": {
+            "summary": artifact_display_path(summary_output_path, workspace_root=ROOT),
+            "feature_csv": artifact_display_path(feature_output_path, workspace_root=ROOT),
+            "raw_csv": artifact_display_path(raw_output_path, workspace_root=ROOT),
+        },
+        "status": "planned",
+    }
+
+
+def _planned_evaluation_pointer_payload(
+    *,
+    config_path: str,
+    data_config_path: str,
+    feature_config_path: str,
+    max_rows: int,
+    start_date: str | None,
+    end_date: str | None,
+    wf_mode: str,
+    wf_scheme: str,
+    model_artifact_suffix: str | None,
+    universe: str,
+    source_scope: str,
+    baseline_reference: str,
+    evaluate_command: list[str],
+) -> dict[str, object]:
+    return {
+        "started_at": utc_now_iso(),
+        "status": "planned",
+        "universe": universe,
+        "source_scope": source_scope,
+        "baseline_reference": baseline_reference,
+        "run_context": {
+            "config": config_path,
+            "data_config": data_config_path,
+            "feature_config": feature_config_path,
+            "max_rows": int(max_rows),
+            "start_date": start_date,
+            "end_date": end_date,
+            "wf_mode": wf_mode,
+            "wf_scheme": wf_scheme,
+            "model_artifact_suffix": model_artifact_suffix,
+        },
+        "evaluate_command": evaluate_command,
+        "exit_code": None,
+        "finished_at": utc_now_iso(),
+        "latest_manifest": "artifacts/reports/evaluation_manifest.json",
+        "latest_summary": "artifacts/reports/evaluation_summary.json",
+        "output_files": None,
+    }
+
+
+def _planned_highlights(*, include_validation: bool, include_feature_gap: bool, include_evaluate: bool) -> list[str]:
+    highlights = [
+        "local coverage snapshot will establish readiness before downstream validation and feature checks",
+    ]
+    if include_validation:
+        highlights.append("data source validation will inspect primary, append, and supplemental table health")
+    if include_feature_gap:
+        highlights.append("feature gap report will expose missing raw columns and low-coverage force-include features")
+    if include_evaluate:
+        highlights.append("evaluation pointer will anchor downstream local-only and mixed manifests to the latest evaluation artifacts")
+    return highlights
+
+
+def _current_phase(payload: dict[str, object]) -> str:
+    status = str(payload.get("status") or "")
+    completed_step = str(payload.get("completed_step") or "")
+
+    if status == "planned":
+        return "planned"
+    if status == "running":
+        if completed_step in {"init", "run_snapshot"}:
+            return "snapshot"
+        if completed_step == "run_validation":
+            return "validation"
+        if completed_step == "run_feature_gap":
+            return "feature_gap"
+        if completed_step == "run_evaluate":
+            return "evaluation_pointer"
+        return "local_feasibility_manifest"
+    if status == "snapshot_failed":
+        return "snapshot"
+    if status == "validation_failed":
+        return "validation"
+    if status == "feature_gap_failed":
+        return "feature_gap"
+    if status == "evaluation_failed":
+        return "evaluation_pointer"
+    if status == "interrupted":
+        return completed_step or "local_feasibility_manifest"
+    if status == "failed":
+        return completed_step or "local_feasibility_manifest"
+    if status == "completed":
+        return "local_feasibility_manifest_completed"
+    return completed_step or "local_feasibility_manifest"
+
+
+def _completed_highlights(payload: dict[str, object]) -> list[str]:
+    highlights: list[str] = []
+    readiness = payload.get("readiness") if isinstance(payload.get("readiness"), dict) else None
+    if isinstance(readiness, dict):
+        benchmark_ready = readiness.get("benchmark_rerun_ready")
+        if benchmark_ready is not None:
+            highlights.append(f"local readiness reports benchmark_rerun_ready={benchmark_ready}")
+        recommended_action = readiness.get("recommended_action")
+        if recommended_action:
+            highlights.append(f"snapshot readiness recommends {recommended_action}")
+
+    for key, label in (
+        ("validation_payload", "validation"),
+        ("feature_gap_payload", "feature gap"),
+        ("evaluation_payload", "evaluation pointer"),
+    ):
+        if isinstance(payload.get(key), dict):
+            highlights.append(f"{label} payload is attached to the feasibility manifest")
+
+    if not highlights:
+        highlights.append("local feasibility completed without downstream payload attachments")
+
+    recommended_action = payload.get("recommended_action")
+    if recommended_action:
+        highlights.append(f"next operator action: {recommended_action}")
+    return highlights[:4]
+
+
+def _failure_highlights(payload: dict[str, object]) -> list[str]:
+    error_code = payload.get("error_code")
+    recommended_action = payload.get("recommended_action")
+    completed_step = str(payload.get("completed_step") or "local_feasibility_manifest")
+    highlights = [f"local feasibility stopped during {completed_step} with error_code={error_code}"]
+    error_message = payload.get("error_message")
+    if error_message:
+        highlights.append(str(error_message))
+    if recommended_action:
+        highlights.append(f"next operator action: {recommended_action}")
+    return highlights[:4]
+
+
+def _refresh_summary_fields(payload: dict[str, object]) -> None:
+    payload["current_phase"] = _current_phase(payload)
+    status = str(payload.get("status") or "")
+    if status == "planned":
+        payload["highlights"] = _planned_highlights(
+            include_validation=not bool((payload.get("run_context") or {}).get("skip_validation")),
+            include_feature_gap=not bool((payload.get("run_context") or {}).get("skip_feature_gap")),
+            include_evaluate=not bool((payload.get("run_context") or {}).get("skip_evaluate")),
+        )
+        return
+    if status == "completed":
+        payload["highlights"] = _completed_highlights(payload)
+        return
+    if status in {"snapshot_failed", "validation_failed", "feature_gap_failed", "evaluation_failed", "interrupted", "failed"}:
+        payload["highlights"] = _failure_highlights(payload)
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--data-config", default=DEFAULT_DATA_CONFIG)
@@ -134,7 +383,7 @@ def main() -> int:
     payload: dict[str, object] = {
         "started_at": utc_now_iso(),
         "finished_at": None,
-        "status": "running",
+        "status": "planned" if args.dry_run else "running",
         "completed_step": "init",
         "universe": args.universe,
         "source_scope": args.source_scope,
@@ -167,7 +416,15 @@ def main() -> int:
             "feature_gap_raw": artifact_display_path(feature_gap_raw_path, workspace_root=ROOT),
             "evaluation_pointer": artifact_display_path(evaluation_path, workspace_root=ROOT),
         },
+        "read_order": [
+            "local_feasibility_manifest",
+            "snapshot",
+            "validation",
+            "feature_gap",
+            "evaluation_pointer",
+        ],
     }
+    _refresh_summary_fields(payload)
 
     try:
         artifact_ensure_output_file_path(manifest_path, label="manifest output", workspace_root=ROOT)
@@ -194,10 +451,18 @@ def main() -> int:
             args.baseline_reference,
         ]
         _set_step(payload, "run_snapshot")
-        payload["snapshot"] = {"command": snapshot_command}
+        payload["snapshot"] = _planned_command_step(label="snapshot", command=snapshot_command, output_path=snapshot_path)
         _safe_write_manifest(manifest_path, payload)
         if args.dry_run:
-            payload["snapshot"]["status"] = "planned"
+            payload["snapshot_payload"] = _planned_snapshot_payload(
+                data_config_path=args.data_config,
+                tail_rows=args.tail_rows,
+                universe=args.universe,
+                source_scope=args.source_scope,
+                baseline_reference=args.baseline_reference,
+                output_path=snapshot_path,
+            )
+            payload["readiness"] = dict(payload["snapshot_payload"].get("readiness", {}))
         else:
             with Heartbeat("[local-feasibility]", "running snapshot", logger=log_progress):
                 snapshot_result = _run_command(snapshot_command, label="snapshot")
@@ -216,6 +481,7 @@ def main() -> int:
                     error_message="local snapshot command returned non-zero exit code",
                     recommended_action="inspect_local_snapshot",
                 )
+                _refresh_summary_fields(payload)
                 _safe_write_manifest(manifest_path, payload)
                 return int(snapshot_result["exit_code"]) or 1
         progress.update(message="snapshot handled")
@@ -230,10 +496,13 @@ def main() -> int:
                 args.validation_output,
             ]
             _set_step(payload, "run_validation")
-            payload["validation"] = {"command": validation_command}
+            payload["validation"] = _planned_command_step(label="validation", command=validation_command, output_path=validation_path)
             _safe_write_manifest(manifest_path, payload)
             if args.dry_run:
-                payload["validation"]["status"] = "planned"
+                payload["validation_payload"] = _planned_validation_payload(
+                    config_path=args.data_config,
+                    output_path=validation_path,
+                )
             else:
                 with Heartbeat("[local-feasibility]", "running validation", logger=log_progress):
                     validation_result = _run_command(validation_command, label="validation")
@@ -249,6 +518,7 @@ def main() -> int:
                         error_message="local data validation returned non-zero exit code",
                         recommended_action="inspect_local_data_validation",
                     )
+                    _refresh_summary_fields(payload)
                     _safe_write_manifest(manifest_path, payload)
                     return int(validation_result["exit_code"]) or 1
             progress.update(message="validation handled")
@@ -277,10 +547,23 @@ def main() -> int:
                 args.feature_gap_raw_output,
             ]
             _set_step(payload, "run_feature_gap")
-            payload["feature_gap"] = {"command": feature_gap_command}
+            payload["feature_gap"] = _planned_command_step(
+                label="feature_gap",
+                command=feature_gap_command,
+                output_path=feature_gap_summary_path,
+            )
             _safe_write_manifest(manifest_path, payload)
             if args.dry_run:
-                payload["feature_gap"]["status"] = "planned"
+                payload["feature_gap_payload"] = _planned_feature_gap_payload(
+                    data_config_path=args.data_config,
+                    feature_config_path=args.feature_config,
+                    model_config_path=args.model_config,
+                    max_rows=args.max_rows,
+                    coverage_threshold=args.coverage_threshold,
+                    summary_output_path=feature_gap_summary_path,
+                    feature_output_path=feature_gap_feature_path,
+                    raw_output_path=feature_gap_raw_path,
+                )
             else:
                 with Heartbeat("[local-feasibility]", "running feature gap", logger=log_progress):
                     feature_gap_result = _run_command(feature_gap_command, label="feature_gap")
@@ -296,6 +579,7 @@ def main() -> int:
                         error_message="local feature gap returned non-zero exit code",
                         recommended_action="inspect_local_feature_gap",
                     )
+                    _refresh_summary_fields(payload)
                     _safe_write_manifest(manifest_path, payload)
                     return int(feature_gap_result["exit_code"]) or 1
             progress.update(message="feature gap handled")
@@ -332,10 +616,24 @@ def main() -> int:
             if args.model_artifact_suffix:
                 evaluate_command.extend(["--model-artifact-suffix", args.model_artifact_suffix])
             _set_step(payload, "run_evaluate")
-            payload["evaluation"] = {"command": evaluate_command}
+            payload["evaluation"] = _planned_command_step(label="evaluation", command=evaluate_command, output_path=evaluation_path)
             _safe_write_manifest(manifest_path, payload)
             if args.dry_run:
-                payload["evaluation"]["status"] = "planned"
+                payload["evaluation_payload"] = _planned_evaluation_pointer_payload(
+                    config_path=args.model_config,
+                    data_config_path=args.data_config,
+                    feature_config_path=args.feature_config,
+                    max_rows=args.max_rows,
+                    start_date=args.start_date,
+                    end_date=args.end_date,
+                    wf_mode=args.wf_mode,
+                    wf_scheme=args.wf_scheme,
+                    model_artifact_suffix=args.model_artifact_suffix,
+                    universe=args.universe,
+                    source_scope=args.source_scope,
+                    baseline_reference=args.baseline_reference,
+                    evaluate_command=evaluate_command,
+                )
             else:
                 with Heartbeat("[local-feasibility]", "running evaluate", logger=log_progress):
                     evaluation_result = _run_command(evaluate_command, label="evaluation")
@@ -351,13 +649,26 @@ def main() -> int:
                         error_message="local evaluate returned non-zero exit code",
                         recommended_action="inspect_local_evaluation",
                     )
+                    _refresh_summary_fields(payload)
                     _safe_write_manifest(manifest_path, payload)
                     return int(evaluation_result["exit_code"]) or 1
             progress.update(message="evaluation handled")
 
+        if args.dry_run:
+            _set_step(payload, "planned")
+            payload["status"] = "planned"
+            payload["finished_at"] = utc_now_iso()
+            payload["recommended_action"] = "run_local_feasibility"
+            _refresh_summary_fields(payload)
+            _safe_write_manifest(manifest_path, payload)
+            progress.complete(message="dry-run plan prepared")
+            print(f"[local-feasibility] planned manifest saved: {manifest_path}", flush=True)
+            return 0
+
         _set_step(payload, "completed")
         payload["status"] = "completed"
         payload["finished_at"] = utc_now_iso()
+        _refresh_summary_fields(payload)
         _safe_write_manifest(manifest_path, payload)
         progress.complete(message="local feasibility manifest completed")
         print(f"[local-feasibility] manifest saved: {manifest_path}", flush=True)
@@ -370,6 +681,7 @@ def main() -> int:
             error_message="interrupted by user",
             recommended_action="rerun_local_feasibility",
         )
+        _refresh_summary_fields(payload)
         _safe_write_manifest(manifest_path, payload)
         print("[local-feasibility] interrupted by user", flush=True)
         return 130
@@ -381,6 +693,7 @@ def main() -> int:
             error_message=str(error),
             recommended_action="inspect_local_feasibility_inputs",
         )
+        _refresh_summary_fields(payload)
         _safe_write_manifest(manifest_path, payload)
         print(f"[local-feasibility] failed: {error}", flush=True)
         return 1
@@ -392,6 +705,7 @@ def main() -> int:
             error_message=str(error),
             recommended_action="inspect_local_feasibility_traceback",
         )
+        _refresh_summary_fields(payload)
         _safe_write_manifest(manifest_path, payload)
         print(f"[local-feasibility] failed: {error}", flush=True)
         traceback.print_exc()

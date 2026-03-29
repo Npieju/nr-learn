@@ -236,6 +236,94 @@ def _summarize_formal_benchmark(folds: list[dict[str, Any]]) -> dict[str, Any]:
     }
 
 
+def _read_order() -> list[str]:
+    return [
+        "promotion_gate_report",
+        "evaluation_manifest",
+        "evaluation_summary",
+        "wf_summary",
+    ]
+
+
+def _current_phase(status: str) -> str:
+    normalized = str(status or "")
+    if normalized == "pass":
+        return "completed"
+    if normalized == "block":
+        return "gate_blocked"
+    if normalized == "failed":
+        return "gate_failed"
+    return "evaluating_gate_checks"
+
+
+def _recommended_action(*, status: str, blocking_reasons: list[str], warnings: list[str]) -> str:
+    normalized = str(status or "")
+    if normalized == "pass":
+        return "promote_candidate"
+    if normalized == "block":
+        if any("Walk-forward feasible fold count is below threshold" in reason for reason in blocking_reasons):
+            return "improve_wf_support"
+        if any("Walk-forward feasibility summary is missing" in reason for reason in blocking_reasons):
+            return "generate_matching_wf_summary"
+        if any("Evaluation manifest validation failed" in reason for reason in blocking_reasons):
+            return "inspect_evaluation_manifest"
+        return "inspect_gate_checks"
+    if normalized == "failed":
+        return "inspect_promotion_gate_inputs"
+    if warnings:
+        return "review_gate_warnings"
+    return "inspect_gate_report"
+
+
+def _highlights(
+    *,
+    status: str,
+    decision: str,
+    recommended_action: str,
+    profile: str | None,
+    blocking_reasons: list[str],
+    warnings: list[str],
+    summary: dict[str, Any],
+) -> list[str]:
+    profile_label = str(profile or "unknown_profile")
+    if status == "pass":
+        feasible_fold_count = summary.get("wf_feasible_fold_count")
+        weighted_roi = summary.get("formal_benchmark_weighted_roi")
+        return [
+            f"promotion gate passed for profile={profile_label} with decision={decision}",
+            f"wf_feasible_fold_count={feasible_fold_count}, formal_benchmark_weighted_roi={weighted_roi}",
+            f"next operator action: {recommended_action}",
+        ]
+
+    if status == "block":
+        highlights = [
+            f"promotion gate blocked for profile={profile_label} with decision={decision}",
+            blocking_reasons[0] if blocking_reasons else "one or more gate checks failed",
+            f"next operator action: {recommended_action}",
+        ]
+        return highlights
+
+    if status == "failed":
+        message = blocking_reasons[0] if blocking_reasons else (warnings[0] if warnings else "promotion gate failed before producing a complete report")
+        return [
+            f"promotion gate failed for profile={profile_label}",
+            message,
+            f"next operator action: {recommended_action}",
+        ]
+
+    if warnings:
+        return [
+            f"promotion gate completed with warnings for profile={profile_label}",
+            warnings[0],
+            f"next operator action: {recommended_action}",
+        ]
+
+    return [
+        f"promotion gate is evaluating checks for profile={profile_label}",
+        f"next operator action: {recommended_action}",
+    ]
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--evaluation-manifest", default=DEFAULT_EVALUATION_MANIFEST)
@@ -440,6 +528,22 @@ def main() -> int:
                 "auto_resolved_wf_summary": bool(auto_resolved_wf_path),
             },
         }
+        output_payload["read_order"] = _read_order()
+        output_payload["current_phase"] = _current_phase(str(output_payload.get("status") or ""))
+        output_payload["recommended_action"] = _recommended_action(
+            status=str(output_payload.get("status") or ""),
+            blocking_reasons=blocking_reasons,
+            warnings=warnings,
+        )
+        output_payload["highlights"] = _highlights(
+            status=str(output_payload.get("status") or ""),
+            decision=str(output_payload.get("decision") or ""),
+            recommended_action=str(output_payload.get("recommended_action") or "inspect_gate_report"),
+            profile=output_payload.get("summary", {}).get("profile") if isinstance(output_payload.get("summary"), dict) else None,
+            blocking_reasons=blocking_reasons,
+            warnings=warnings,
+            summary=output_payload.get("summary", {}) if isinstance(output_payload.get("summary"), dict) else {},
+        )
 
         output_path = resolve_artifact_path(ROOT, args.output)
         if output_path is None:
@@ -462,9 +566,107 @@ def main() -> int:
         print("[promotion-gate] interrupted by user")
         return 130
     except (ValueError, FileNotFoundError, IsADirectoryError, RuntimeError) as error:
+        output_path = resolve_artifact_path(ROOT, args.output)
+        failure_payload = {
+            "status": "failed",
+            "decision": "hold",
+            "evaluation_manifest": display_artifact_path(ROOT, resolve_artifact_path(ROOT, args.evaluation_manifest)),
+            "evaluation_manifest_report": None,
+            "evaluation_summary": None,
+            "wf_summary": display_artifact_path(ROOT, resolve_artifact_path(ROOT, args.wf_summary)) if args.wf_summary else None,
+            "checks": [],
+            "blocking_reasons": [str(error)],
+            "warnings": [],
+            "wf_diagnostics": {},
+            "formal_benchmark": {},
+            "summary": {
+                "profile": None,
+                "config": None,
+                "evaluation_stability_assessment": None,
+                "evaluation_n_races": None,
+                "evaluation_n_dates": None,
+                "evaluation_ev_threshold_1_0_bets": None,
+                "wf_stability_assessment": None,
+                "wf_fold_count": 0,
+                "wf_feasible_fold_count": 0,
+                "wf_valid_probe_only_count": 0,
+                "wf_test_probe_only_count": 0,
+                "wf_dominant_failure_reason": None,
+                "wf_binding_min_bets_source_counts": {},
+                "wf_max_infeasible_bets_observed": 0,
+                "formal_benchmark_weighted_roi": None,
+                "formal_benchmark_bets_total": 0,
+                "formal_benchmark_feasible_fold_count": 0,
+                "auto_resolved_wf_summary": False,
+            },
+        }
+        failure_payload["read_order"] = _read_order()
+        failure_payload["current_phase"] = _current_phase("failed")
+        failure_payload["recommended_action"] = _recommended_action(status="failed", blocking_reasons=[str(error)], warnings=[])
+        failure_payload["highlights"] = _highlights(
+            status="failed",
+            decision="hold",
+            recommended_action=str(failure_payload.get("recommended_action") or "inspect_promotion_gate_inputs"),
+            profile=None,
+            blocking_reasons=[str(error)],
+            warnings=[],
+            summary=failure_payload["summary"],
+        )
+        if output_path is not None:
+            artifact_ensure_output_file_path(output_path, label="output", workspace_root=ROOT)
+            write_json(output_path, failure_payload)
         print(f"[promotion-gate] failed: {error}")
         return 1
     except Exception as error:
+        output_path = resolve_artifact_path(ROOT, args.output)
+        failure_payload = {
+            "status": "failed",
+            "decision": "hold",
+            "evaluation_manifest": display_artifact_path(ROOT, resolve_artifact_path(ROOT, args.evaluation_manifest)),
+            "evaluation_manifest_report": None,
+            "evaluation_summary": None,
+            "wf_summary": display_artifact_path(ROOT, resolve_artifact_path(ROOT, args.wf_summary)) if args.wf_summary else None,
+            "checks": [],
+            "blocking_reasons": [str(error)],
+            "warnings": [],
+            "wf_diagnostics": {},
+            "formal_benchmark": {},
+            "summary": {
+                "profile": None,
+                "config": None,
+                "evaluation_stability_assessment": None,
+                "evaluation_n_races": None,
+                "evaluation_n_dates": None,
+                "evaluation_ev_threshold_1_0_bets": None,
+                "wf_stability_assessment": None,
+                "wf_fold_count": 0,
+                "wf_feasible_fold_count": 0,
+                "wf_valid_probe_only_count": 0,
+                "wf_test_probe_only_count": 0,
+                "wf_dominant_failure_reason": None,
+                "wf_binding_min_bets_source_counts": {},
+                "wf_max_infeasible_bets_observed": 0,
+                "formal_benchmark_weighted_roi": None,
+                "formal_benchmark_bets_total": 0,
+                "formal_benchmark_feasible_fold_count": 0,
+                "auto_resolved_wf_summary": False,
+            },
+        }
+        failure_payload["read_order"] = _read_order()
+        failure_payload["current_phase"] = _current_phase("failed")
+        failure_payload["recommended_action"] = _recommended_action(status="failed", blocking_reasons=[str(error)], warnings=[])
+        failure_payload["highlights"] = _highlights(
+            status="failed",
+            decision="hold",
+            recommended_action=str(failure_payload.get("recommended_action") or "inspect_promotion_gate_inputs"),
+            profile=None,
+            blocking_reasons=[str(error)],
+            warnings=[],
+            summary=failure_payload["summary"],
+        )
+        if output_path is not None:
+            artifact_ensure_output_file_path(output_path, label="output", workspace_root=ROOT)
+            write_json(output_path, failure_payload)
         print(f"[promotion-gate] failed: {error}")
         traceback.print_exc()
         return 1

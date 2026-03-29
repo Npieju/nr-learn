@@ -176,6 +176,52 @@ def _planned_promote_safe_summary(*, requested_revision: str) -> dict[str, objec
     }
 
 
+def _current_phase(*, status: str, verdict: str, readiness_status: object, schema_status: object) -> str:
+    if status == "planned":
+        return "mixed_universe_numeric_compare"
+    if str(readiness_status or "") not in {"", "ready"}:
+        return "mixed_universe_readiness"
+    if str(schema_status or "") not in {"", "completed"}:
+        return "mixed_universe_schema"
+    if verdict == "evidence_incomplete":
+        return "mixed_universe_numeric_summary_incomplete"
+    if verdict == "categorical_difference_present":
+        return "mixed_universe_numeric_summary_categorical_review"
+    return "mixed_universe_numeric_summary_review_ready"
+
+
+def _highlights(*, status: str, recommended_action: object, promote_safe_summary: dict[str, object]) -> list[str]:
+    highlights: list[str] = []
+    verdict = str(promote_safe_summary.get("verdict") or "unknown")
+    readiness_status = str(promote_safe_summary.get("readiness_status") or "")
+    schema_status = str(promote_safe_summary.get("schema_status") or "")
+    missing_left_rows = promote_safe_summary.get("missing_left_rows") if isinstance(promote_safe_summary.get("missing_left_rows"), list) else []
+    missing_right_rows = promote_safe_summary.get("missing_right_rows") if isinstance(promote_safe_summary.get("missing_right_rows"), list) else []
+    negative_rows = ((promote_safe_summary.get("numeric_rows") or {}).get("negative_rows") if isinstance(promote_safe_summary.get("numeric_rows"), dict) else [])
+    negative_rows = negative_rows if isinstance(negative_rows, list) else []
+    action = str(recommended_action or promote_safe_summary.get("recommended_action") or "review_numeric_compare")
+
+    if status == "planned":
+        highlights.append("numeric summary is waiting for numeric compare")
+        highlights.append(f"next operator action: {action}")
+        return highlights
+
+    highlights.append(f"numeric summary verdict is {verdict}")
+    if readiness_status and readiness_status != "ready":
+        highlights.append(f"upstream mixed readiness is still {readiness_status}")
+    elif schema_status and schema_status != "completed":
+        highlights.append(f"upstream mixed schema is still {schema_status}")
+    elif missing_left_rows:
+        highlights.append(f"left-side metrics are still missing for {len(missing_left_rows)} row(s)")
+    elif missing_right_rows:
+        highlights.append(f"right-side reference is still missing for {len(missing_right_rows)} row(s)")
+    elif negative_rows:
+        highlights.append(f"negative numeric deltas remain in {len(negative_rows)} row(s)")
+    if len(highlights) < 4:
+        highlights.append(f"next operator action: {action}")
+    return highlights
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--revision", default=None)
@@ -200,10 +246,13 @@ def main() -> int:
         artifact_ensure_output_file_path(output_path, label="output", workspace_root=ROOT)
 
         if args.dry_run and not compare_path.exists():
+            promote_safe_summary = _planned_promote_safe_summary(requested_revision=revision_slug)
+            status = "planned"
+            recommended_action = "generate_numeric_compare_manifest"
             payload = {
                 "started_at": utc_now_iso(),
                 "finished_at": utc_now_iso(),
-                "status": "planned",
+                "status": status,
                 "summary_kind": "mixed_universe_numeric_summary",
                 "revision": revision_slug,
                 "requested_revision": revision_slug,
@@ -212,7 +261,13 @@ def main() -> int:
                 "resolved_left_artifact": None,
                 "left_universe": left_universe,
                 "right_universe": right_universe,
-                "recommended_action": "generate_numeric_compare_manifest",
+                "current_phase": _current_phase(
+                    status=status,
+                    verdict=str(promote_safe_summary.get("verdict") or "unknown"),
+                    readiness_status=promote_safe_summary.get("readiness_status"),
+                    schema_status=promote_safe_summary.get("schema_status"),
+                ),
+                "recommended_action": recommended_action,
                 "artifacts": {
                     "summary_manifest": artifact_display_path(output_path, workspace_root=ROOT),
                     "numeric_compare_manifest": artifact_display_path(compare_path, workspace_root=ROOT),
@@ -221,7 +276,12 @@ def main() -> int:
                     "mixed_universe_numeric_compare",
                     "mixed_universe_numeric_summary",
                 ],
-                "promote_safe_summary": _planned_promote_safe_summary(requested_revision=revision_slug),
+                "promote_safe_summary": promote_safe_summary,
+                "highlights": _highlights(
+                    status=status,
+                    recommended_action=recommended_action,
+                    promote_safe_summary=promote_safe_summary,
+                ),
             }
             write_json(output_path, payload)
             print(f"[mixed-universe-numeric-summary] planned manifest saved: {artifact_display_path(output_path, workspace_root=ROOT)}", flush=True)
@@ -231,6 +291,7 @@ def main() -> int:
         promote_safe_summary = _promote_safe_summary(compare_payload)
         compare_status = str(compare_payload.get("status") or "unknown")
         summary_status = "completed" if compare_status == "completed" else "partial"
+        recommended_action = compare_payload.get("recommended_action")
 
         payload = {
             "started_at": utc_now_iso(),
@@ -245,7 +306,13 @@ def main() -> int:
             "left_universe": compare_payload.get("left_universe") or left_universe,
             "right_universe": compare_payload.get("right_universe") or right_universe,
             "right_reference": compare_payload.get("right_reference"),
-            "recommended_action": compare_payload.get("recommended_action"),
+            "current_phase": _current_phase(
+                status=summary_status,
+                verdict=str(promote_safe_summary.get("verdict") or "unknown"),
+                readiness_status=promote_safe_summary.get("readiness_status"),
+                schema_status=promote_safe_summary.get("schema_status"),
+            ),
+            "recommended_action": recommended_action,
             "artifacts": {
                 "summary_manifest": artifact_display_path(output_path, workspace_root=ROOT),
                 "numeric_compare_manifest": artifact_display_path(compare_path, workspace_root=ROOT),
@@ -256,6 +323,11 @@ def main() -> int:
                 "mixed_universe_numeric_summary",
             ],
             "promote_safe_summary": promote_safe_summary,
+            "highlights": _highlights(
+                status=summary_status,
+                recommended_action=recommended_action,
+                promote_safe_summary=promote_safe_summary,
+            ),
         }
         write_json(output_path, payload)
         print(f"[mixed-universe-numeric-summary] saved: {artifact_display_path(output_path, workspace_root=ROOT)}", flush=True)

@@ -83,6 +83,60 @@ def _collect_revision_gate_artifacts(revision_slug: str) -> dict[str, object]:
     return payload
 
 
+def _read_order() -> list[str]:
+    return [
+        "netkeiba_latest_revision_gate",
+        "readiness_snapshot",
+        "revision_gate",
+        "promotion_gate",
+    ]
+
+
+def _planned_step(*, label: str, command: list[str], outputs: dict[str, object] | None = None) -> dict[str, object]:
+    payload: dict[str, object] = {
+        "label": label,
+        "command": command,
+        "status": "planned",
+    }
+    if outputs:
+        payload["outputs"] = outputs
+    return payload
+
+
+def _planned_readiness_preview(*, snapshot_output: Path, target_manifests: dict[str, str], crawl_lock_path: str) -> dict[str, object]:
+    return {
+        "status": "planned",
+        "benchmark_rerun_ready": False,
+        "recommended_action": "run_netkeiba_coverage_snapshot",
+        "reasons": [
+            "2025 latest readiness will be determined after the netkeiba coverage snapshot inspects the declared crawl manifests.",
+        ],
+        "snapshot_output": artifact_display_path(snapshot_output, workspace_root=ROOT),
+        "target_manifests": target_manifests,
+        "crawl_lock_path": crawl_lock_path,
+    }
+
+
+def _planned_revision_gate_artifacts(revision_slug: str) -> dict[str, object]:
+    report_dir = ROOT / "artifacts" / "reports"
+    revision_manifest_path = report_dir / f"revision_gate_{revision_slug}.json"
+    promotion_report_path = report_dir / f"promotion_gate_{revision_slug}.json"
+    return {
+        "revision_manifest": artifact_display_path(revision_manifest_path, workspace_root=ROOT),
+        "promotion_report": artifact_display_path(promotion_report_path, workspace_root=ROOT),
+        "revision_manifest_present": False,
+        "promotion_report_present": False,
+    }
+
+
+def _planned_highlights(*, revision_slug: str) -> list[str]:
+    return [
+        "wrapper will confirm 2025 latest snapshot readiness before invoking the revision gate",
+        f"revision gate for {revision_slug} will emit revision and promotion artifacts under artifacts/reports",
+        "if readiness is not yet satisfied, the wrapper should stop at the snapshot phase with the recommended action from readiness",
+    ]
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--profile", default="current_best_eval_2025_latest")
@@ -113,7 +167,7 @@ def main() -> int:
     payload: dict[str, object] = {
         "started_at": utc_now_iso(),
         "finished_at": None,
-        "status": "waiting_readiness",
+        "status": "planned" if args.dry_run else "waiting_readiness",
         "profile": args.profile,
         "revision": revision_slug,
         "evaluation": {
@@ -132,6 +186,7 @@ def main() -> int:
         },
         "crawl_lock_path": args.crawl_lock_path,
         "dry_run": bool(args.dry_run),
+        "read_order": _read_order(),
     }
 
     try:
@@ -160,6 +215,59 @@ def main() -> int:
             "--crawl-lock-path",
             args.crawl_lock_path,
         ]
+        revision_command = [
+            sys.executable,
+            str(ROOT / "scripts/run_revision_gate.py"),
+            "--profile",
+            args.profile,
+            "--revision",
+            revision_slug,
+            "--evaluate-max-rows",
+            str(args.evaluate_max_rows),
+            "--evaluate-wf-mode",
+            args.evaluate_wf_mode,
+            "--evaluate-wf-scheme",
+            args.evaluate_wf_scheme,
+            "--promotion-min-feasible-folds",
+            str(args.promotion_min_feasible_folds),
+        ]
+        if args.evaluate_pre_feature_max_rows is not None:
+            revision_command.extend(
+                ["--evaluate-pre-feature-max-rows", str(args.evaluate_pre_feature_max_rows)]
+            )
+        if args.dry_run:
+            revision_command.append("--dry-run")
+
+            payload["current_phase"] = "planned"
+            payload["recommended_action"] = "run_netkeiba_latest_revision_gate"
+            payload["highlights"] = _planned_highlights(revision_slug=revision_slug)
+            payload["snapshot"] = _planned_step(
+                label="snapshot",
+                command=snapshot_command,
+                outputs={"snapshot_output": artifact_display_path(snapshot_path, workspace_root=ROOT)},
+            )
+            payload["readiness"] = _planned_readiness_preview(
+                snapshot_output=snapshot_path,
+                target_manifests={
+                    "race_result": args.race_result_manifest,
+                    "race_card": args.race_card_manifest,
+                    "pedigree": args.pedigree_manifest,
+                },
+                crawl_lock_path=args.crawl_lock_path,
+            )
+            payload["revision_gate_command"] = revision_command
+            payload["revision_gate"] = _planned_step(
+                label="revision_gate",
+                command=revision_command,
+                outputs=_planned_revision_gate_artifacts(revision_slug),
+            )
+            payload["revision_gate_artifacts"] = _planned_revision_gate_artifacts(revision_slug)
+            payload["finished_at"] = utc_now_iso()
+            _safe_write_manifest(manifest_path, payload)
+            progress.complete(message="dry-run plan prepared")
+            print(f"[netkeiba-latest-gate] planned manifest saved: {manifest_path}", flush=True)
+            return 0
+
         deadline = time.monotonic() + args.wait_timeout_seconds if args.wait_timeout_seconds > 0 else None
 
         while True:
@@ -207,29 +315,6 @@ def main() -> int:
                 flush=True,
             )
             time.sleep(max(args.poll_seconds, 1))
-
-        revision_command = [
-            sys.executable,
-            str(ROOT / "scripts/run_revision_gate.py"),
-            "--profile",
-            args.profile,
-            "--revision",
-            revision_slug,
-            "--evaluate-max-rows",
-            str(args.evaluate_max_rows),
-            "--evaluate-wf-mode",
-            args.evaluate_wf_mode,
-            "--evaluate-wf-scheme",
-            args.evaluate_wf_scheme,
-            "--promotion-min-feasible-folds",
-            str(args.promotion_min_feasible_folds),
-        ]
-        if args.evaluate_pre_feature_max_rows is not None:
-            revision_command.extend(
-                ["--evaluate-pre-feature-max-rows", str(args.evaluate_pre_feature_max_rows)]
-            )
-        if args.dry_run:
-            revision_command.append("--dry-run")
 
         payload["status"] = "running_revision_gate"
         payload["revision_gate_command"] = revision_command

@@ -132,6 +132,13 @@ def _require_text(value: str, *, field_name: str, error_code: str) -> str:
     return normalized
 
 
+def _normalize_optional_text(value: object) -> str | None:
+    if value is None:
+        return None
+    normalized = str(value).strip()
+    return normalized or None
+
+
 def _set_failure(
     payload: dict[str, object],
     *,
@@ -145,6 +152,120 @@ def _set_failure(
     payload["error_code"] = error_code
     payload["error_message"] = error_message
     payload["recommended_action"] = recommended_action
+
+
+def _read_order(*, include_preflight: bool, include_train: bool, include_evaluate: bool) -> list[str]:
+    order = ["benchmark_gate_manifest"]
+    if include_preflight:
+        order.append("preflight")
+    order.append("snapshot")
+    if include_train:
+        order.append("train")
+    if include_evaluate:
+        order.append("evaluate")
+    return order
+
+
+def _current_phase(payload: dict[str, object]) -> str:
+    status = str(payload.get("status") or "")
+    completed_step = str(payload.get("completed_step") or "")
+
+    if status == "completed":
+        return "completed"
+
+    if status == "not_ready":
+        if completed_step == "preflight_sources":
+            return "preflight"
+        return "validate_readiness"
+
+    if status == "snapshot_failed":
+        return "snapshot"
+    if status == "train_failed":
+        return "train"
+    if status == "evaluate_failed":
+        return "evaluate"
+    if status == "interrupted":
+        return completed_step or "interrupted"
+    if status == "failed":
+        if completed_step in {"run_snapshot", "validate_readiness", "run_train", "run_evaluate", "preflight_sources"}:
+            phase_map = {
+                "preflight_sources": "preflight",
+                "run_snapshot": "snapshot",
+                "validate_readiness": "validate_readiness",
+                "run_train": "train",
+                "run_evaluate": "evaluate",
+            }
+            return phase_map.get(completed_step, completed_step)
+        return completed_step or "failed"
+
+    phase_map = {
+        "init": "init_manifest",
+        "init_manifest": "init_manifest",
+        "preflight_sources": "preflight",
+        "run_snapshot": "snapshot",
+        "validate_readiness": "validate_readiness",
+        "run_train": "train",
+        "run_evaluate": "evaluate",
+        "write_manifest": "write_manifest",
+    }
+    return phase_map.get(completed_step, completed_step or "init_manifest")
+
+
+def _highlights(payload: dict[str, object]) -> list[str]:
+    status = str(payload.get("status") or "")
+    current_phase = str(payload.get("current_phase") or _current_phase(payload))
+    recommended_action = str(payload.get("recommended_action") or "inspect_benchmark_gate_manifest")
+    error_code = str(payload.get("error_code") or "")
+    universe = str(payload.get("universe") or "unknown")
+    include_train = not bool(((payload.get("configs") or {}) if isinstance(payload.get("configs"), dict) else {}).get("skip_train"))
+    include_evaluate = not bool(((payload.get("configs") or {}) if isinstance(payload.get("configs"), dict) else {}).get("skip_evaluate"))
+
+    if status == "completed":
+        highlights = [
+            f"benchmark gate completed for universe={universe}",
+            "snapshot readiness reached benchmark_rerun_ready=true",
+        ]
+        if include_train and include_evaluate:
+            highlights.append("train and evaluate completed; downstream evaluation artifacts are ready")
+        elif include_train and not include_evaluate:
+            highlights.append("train completed and evaluate was skipped by configuration")
+        elif include_evaluate:
+            highlights.append("evaluate completed after readiness check while train was skipped by configuration")
+        else:
+            highlights.append("train and evaluate were skipped by configuration after readiness check")
+        return highlights
+
+    if status in {"not_ready", "snapshot_failed", "train_failed", "evaluate_failed", "failed", "interrupted"}:
+        message = str(payload.get("error_message") or status)
+        summary = f"benchmark gate stopped during {current_phase} for universe={universe}"
+        if status == "not_ready":
+            summary = f"benchmark gate is not ready during {current_phase} for universe={universe}"
+        highlights = [summary]
+        if error_code:
+            highlights.append(f"error_code={error_code}: {message}")
+        else:
+            highlights.append(message)
+        highlights.append(f"next operator action: {recommended_action}")
+        return highlights
+
+    return [
+        f"benchmark gate is in progress at {current_phase} for universe={universe}",
+        f"next operator action: {recommended_action}",
+    ]
+
+
+def _refresh_summary_fields(payload: dict[str, object]) -> None:
+    configs = payload.get("configs") if isinstance(payload.get("configs"), dict) else {}
+    include_preflight = bool(configs.get("preflight_output"))
+    include_train = not bool(configs.get("skip_train"))
+    include_evaluate = not bool(configs.get("skip_evaluate"))
+    payload["read_order"] = _read_order(
+        include_preflight=include_preflight,
+        include_train=include_train,
+        include_evaluate=include_evaluate,
+    )
+    payload["current_phase"] = _current_phase(payload)
+    payload["highlights"] = _highlights(payload)
 
 
 def log_progress(message: str) -> None:
@@ -241,12 +362,13 @@ def main() -> int:
             "preflight_output": artifact_display_path(preflight_path, workspace_root=ROOT) if preflight_path is not None else None,
         },
     }
+    _refresh_summary_fields(payload)
 
     try:
         universe = _require_text(args.universe, field_name="universe", error_code="missing_universe")
         source_scope = _require_text(args.source_scope, field_name="source_scope", error_code="missing_source_scope")
         schema_version = _require_text(args.schema_version, field_name="schema_version", error_code="missing_schema_version")
-        baseline_reference = str(args.baseline_reference).strip() or None
+        baseline_reference = _normalize_optional_text(args.baseline_reference)
         payload.update(
             {
                 "schema_version": schema_version,
@@ -255,11 +377,14 @@ def main() -> int:
                 "baseline_reference": baseline_reference,
             }
         )
+        _refresh_summary_fields(payload)
         _set_step(payload, "init_manifest")
+        _refresh_summary_fields(payload)
         artifact_ensure_output_file_path(manifest_path, label="manifest output", workspace_root=ROOT)
         artifact_ensure_output_file_path(snapshot_path, label="snapshot output", workspace_root=ROOT)
         if preflight_path is not None:
             artifact_ensure_output_file_path(preflight_path, label="preflight output", workspace_root=ROOT)
+        _refresh_summary_fields(payload)
         _safe_write_manifest(manifest_path, payload)
 
         total_steps = 3 + int(preflight_path is not None) + int(not args.skip_train) + int(not args.skip_evaluate)
@@ -302,6 +427,7 @@ def main() -> int:
                     error_message=str(preflight_error_message or "source preflight reported not ready"),
                     recommended_action=str(preflight_readiness.get("recommended_action") or "inspect_source_preflight"),
                 )
+                _refresh_summary_fields(payload)
                 _safe_write_manifest(manifest_path, payload)
                 progress.complete(message="source preflight says not ready")
                 print(
@@ -348,6 +474,7 @@ def main() -> int:
                 error_message="snapshot command returned non-zero exit code",
                 recommended_action="inspect_snapshot_manifest",
             )
+            _refresh_summary_fields(payload)
             _safe_write_manifest(manifest_path, payload)
             return int(snapshot_result["exit_code"]) or 1
         progress.update(message="snapshot completed")
@@ -373,6 +500,7 @@ def main() -> int:
                 error_message="snapshot readiness did not reach benchmark_rerun_ready",
                 recommended_action=str(readiness.get("recommended_action") or "inspect_snapshot_readiness"),
             )
+            _refresh_summary_fields(payload)
             _safe_write_manifest(manifest_path, payload)
             progress.complete(message="snapshot says not ready")
             print(
@@ -405,6 +533,7 @@ def main() -> int:
                     error_message="train command returned non-zero exit code",
                     recommended_action="inspect_train_logs",
                 )
+                _refresh_summary_fields(payload)
                 _safe_write_manifest(manifest_path, payload)
                 return int(train_result["exit_code"]) or 1
             progress.update(message="train completed")
@@ -440,6 +569,7 @@ def main() -> int:
                     error_message="evaluate command returned non-zero exit code",
                     recommended_action="inspect_evaluate_logs",
                 )
+                _refresh_summary_fields(payload)
                 _safe_write_manifest(manifest_path, payload)
                 return int(evaluate_result["exit_code"]) or 1
             progress.update(message="evaluate completed")
@@ -450,9 +580,11 @@ def main() -> int:
         payload["error_code"] = None
         payload["error_message"] = None
         payload["recommended_action"] = None
+        _refresh_summary_fields(payload)
         with Heartbeat("[netkeiba-benchmark-gate]", "writing gate manifest", logger=log_progress):
             _safe_write_manifest(manifest_path, payload)
         _set_step(payload, "completed")
+        _refresh_summary_fields(payload)
         _safe_write_manifest(manifest_path, payload)
         progress.complete(message="benchmark gate completed")
         print("[netkeiba-benchmark-gate] completed", flush=True)
@@ -465,6 +597,7 @@ def main() -> int:
             error_message="interrupted by user",
             recommended_action="rerun_benchmark_gate",
         )
+        _refresh_summary_fields(payload)
         _safe_write_manifest(manifest_path, payload)
         print("[netkeiba-benchmark-gate] interrupted by user")
         return 130
@@ -488,6 +621,7 @@ def main() -> int:
             error_message=message or error_text,
             recommended_action="inspect_gate_inputs",
         )
+        _refresh_summary_fields(payload)
         _safe_write_manifest(manifest_path, payload)
         print(f"[netkeiba-benchmark-gate] failed: {error}")
         return 1
@@ -499,6 +633,7 @@ def main() -> int:
             error_message=str(error),
             recommended_action="inspect_gate_traceback",
         )
+        _refresh_summary_fields(payload)
         _safe_write_manifest(manifest_path, payload)
         print(f"[netkeiba-benchmark-gate] failed: {error}")
         traceback.print_exc()

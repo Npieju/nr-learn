@@ -216,6 +216,38 @@ def _resolved_left_artifact(*, readiness_payload: dict[str, object], compare_pay
     return str(value) if value is not None else None
 
 
+def _current_phase(*, status: str, readiness_status: str | None) -> str:
+    if status == "planned":
+        return "missing_readiness_compare"
+    if readiness_status == "ready":
+        return "future_numeric_compare"
+    return "mixed_universe_readiness"
+
+
+def _schema_highlights(
+    *,
+    status: str,
+    readiness_status: str | None,
+    recommended_action: str | None,
+    blocking_context: dict[str, object],
+) -> list[str]:
+    highlights: list[str] = []
+    if status == "planned":
+        highlights.append("schema cannot be fixed until readiness and compare manifests exist")
+        highlights.append("comparison axes and metric rows are already scaffolded so downstream numeric compare has a stable contract")
+    elif readiness_status == "ready":
+        highlights.append("schema is ready and has fixed the comparison axes for downstream numeric compare")
+        highlights.append("metric rows now define where left-side values and right-side public reference values will be read")
+    else:
+        readiness_error_code = blocking_context.get("readiness_error_code")
+        highlights.append("schema is blocked until mixed readiness becomes ready")
+        if readiness_error_code:
+            highlights.append(f"upstream readiness is currently failing with error_code={readiness_error_code}")
+    if recommended_action:
+        highlights.append(f"next operator action: {recommended_action}")
+    return highlights
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--revision", default=None)
@@ -252,6 +284,11 @@ def main() -> int:
         artifact_ensure_output_file_path(output_path, label="output", workspace_root=ROOT)
 
         if args.dry_run and not readiness_path.exists() and not compare_path.exists():
+            blocking_context = {
+                "readiness_status": "missing",
+                "readiness_error_code": "readiness_manifest_missing",
+                "readiness_checks": None,
+            }
             payload = {
                 "started_at": utc_now_iso(),
                 "finished_at": utc_now_iso(),
@@ -265,6 +302,7 @@ def main() -> int:
                 "left_universe": left_universe,
                 "right_universe": right_universe,
                 "right_reference": args.right_reference,
+                "current_phase": _current_phase(status="planned", readiness_status="missing"),
                 "recommended_action": "generate_readiness_and_compare_manifests",
                 "artifacts": {
                     "schema_manifest": artifact_display_path(output_path, workspace_root=ROOT),
@@ -279,11 +317,13 @@ def main() -> int:
                 ],
                 "comparison_axes": _comparison_axes(),
                 "metric_rows": _build_metric_rows(None, None, None),
-                "blocking_context": {
-                    "readiness_status": "missing",
-                    "readiness_error_code": "readiness_manifest_missing",
-                    "readiness_checks": None,
-                },
+                "blocking_context": blocking_context,
+                "highlights": _schema_highlights(
+                    status="planned",
+                    readiness_status="missing",
+                    recommended_action="generate_readiness_and_compare_manifests",
+                    blocking_context=blocking_context,
+                ),
             }
             write_json(output_path, payload)
             print(f"[mixed-universe-schema] planned manifest saved: {artifact_display_path(output_path, workspace_root=ROOT)}", flush=True)
@@ -296,6 +336,14 @@ def main() -> int:
         metric_rows = _build_metric_rows(promotion_payload, revision_payload, evaluation_pointer_payload)
         readiness_status = str(readiness_payload.get("status") or "unknown")
         schema_status = "schema_ready" if readiness_status == "ready" else "schema_blocked"
+        blocking_context = {
+            "readiness_status": readiness_status,
+            "readiness_error_code": readiness_payload.get("error_code"),
+            "readiness_checks": readiness_payload.get("checks"),
+        }
+        recommended_action = "populate_numeric_compare" if readiness_status == "ready" else str(
+            readiness_payload.get("recommended_action") or "complete_mixed_readiness"
+        )
 
         payload = {
             "started_at": utc_now_iso(),
@@ -310,7 +358,8 @@ def main() -> int:
             "left_universe": left_universe,
             "right_universe": right_universe,
             "right_reference": args.right_reference,
-            "recommended_action": "populate_numeric_compare" if readiness_status == "ready" else str(readiness_payload.get("recommended_action") or "complete_mixed_readiness"),
+            "current_phase": _current_phase(status=schema_status, readiness_status=readiness_status),
+            "recommended_action": recommended_action,
             "artifacts": {
                 "schema_manifest": artifact_display_path(output_path, workspace_root=ROOT),
                 "readiness_manifest": artifact_display_path(readiness_path, workspace_root=ROOT),
@@ -324,11 +373,13 @@ def main() -> int:
             ],
             "comparison_axes": _comparison_axes(),
             "metric_rows": metric_rows,
-            "blocking_context": {
-                "readiness_status": readiness_status,
-                "readiness_error_code": readiness_payload.get("error_code"),
-                "readiness_checks": readiness_payload.get("checks"),
-            },
+            "blocking_context": blocking_context,
+            "highlights": _schema_highlights(
+                status=schema_status,
+                readiness_status=readiness_status,
+                recommended_action=recommended_action,
+                blocking_context=blocking_context,
+            ),
         }
         write_json(output_path, payload)
         print(f"[mixed-universe-schema] saved: {artifact_display_path(output_path, workspace_root=ROOT)}", flush=True)

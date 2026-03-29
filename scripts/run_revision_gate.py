@@ -102,11 +102,48 @@ def _run_command(command: list[str], *, label: str) -> None:
 
 def _run_command_result(command: list[str], *, label: str) -> subprocess.CompletedProcess[str]:
     log_progress(f"running {label}: {' '.join(command)}")
-    return subprocess.run(command, cwd=ROOT, check=False, text=True, capture_output=False)
+    result = subprocess.run(command, cwd=ROOT, check=False, text=True, capture_output=True)
+    if result.stdout:
+        print(result.stdout, end="")
+    if result.stderr:
+        print(result.stderr, end="", file=sys.stderr)
+    return result
 
 
-def _planned_step(name: str, command: list[str]) -> dict[str, object]:
-    return {"name": name, "command": command, "status": "planned"}
+def _planned_step(
+    name: str,
+    command: list[str],
+    *,
+    outputs: dict[str, object] | None = None,
+    note: str | None = None,
+) -> dict[str, object]:
+    payload: dict[str, object] = {"name": name, "command": command, "status": "planned"}
+    if outputs:
+        payload["outputs"] = outputs
+    if note:
+        payload["note"] = note
+    return payload
+
+
+def _read_order() -> list[str]:
+    return [
+        "revision_gate",
+        "train",
+        "evaluate",
+        "wf_feasibility",
+        "promotion_gate",
+    ]
+
+
+def _planned_highlights(*, revision_slug: str, skip_train: bool) -> list[str]:
+    highlights = []
+    if skip_train:
+        highlights.append(f"train step is marked skipped; revision {revision_slug} will reuse an existing model artifact")
+    else:
+        highlights.append(f"revision {revision_slug} will train a new artifact before evaluation and promotion gate")
+    highlights.append("evaluation step writes the canonical evaluation manifest and summary consumed by promotion gate")
+    highlights.append("matching wf feasibility summary is generated before promotion gate so benchmark support can be judged without a separate manual step")
+    return highlights
 
 
 def _read_json_dict(path: Path) -> dict[str, object] | None:
@@ -114,6 +151,140 @@ def _read_json_dict(path: Path) -> dict[str, object] | None:
         return None
     payload = read_json(path)
     return payload if isinstance(payload, dict) else None
+
+
+def _classify_step_failure(*, step_name: str, result: subprocess.CompletedProcess[str]) -> dict[str, object]:
+    combined_output = "\n".join(
+        part.strip()
+        for part in [result.stdout or "", result.stderr or ""]
+        if isinstance(part, str) and part.strip()
+    )
+
+    if (
+        step_name == "train"
+        and "Time split is empty. Dataset has too few dated samples." in combined_output
+        and (
+            "configured_train_window_has_no_rows" in combined_output
+            or "configured_valid_window_has_no_rows" in combined_output
+        )
+    ):
+        return {
+            "error_code": "insufficient_split_date_coverage",
+            "error_message": "revision gate training failed because the available local dates do not satisfy the configured train/valid split windows",
+            "recommended_action": "expand_local_date_window_or_align_split_window",
+            "current_phase": "train",
+            "highlights": [
+                "revision training could not populate the configured train/valid windows from the available local dates",
+                "expand the local seed/date window or align the split window before rerunning revision gate",
+            ],
+        }
+
+    if step_name == "train" and "Time split is empty. Dataset has too few dated samples." in combined_output:
+        return {
+            "error_code": "insufficient_dated_samples",
+            "error_message": "revision gate training failed because the dataset has too few dated samples for a time split",
+            "recommended_action": "expand_local_date_window",
+            "current_phase": "train",
+            "highlights": [
+                "revision training could not build a time split from the available local rows",
+                "expand the local seed/date window before rerunning revision gate",
+            ],
+        }
+
+    if step_name == "wf_feasibility" and (
+        "No nested walk-forward slices available for the requested window" in combined_output
+        or "No walk-forward slices available for the requested window" in combined_output
+    ):
+        return {
+            "error_code": "insufficient_wf_window_coverage",
+            "error_message": "revision gate walk-forward feasibility could not build slices from the available local date window",
+            "recommended_action": "expand_local_date_window_or_relax_wf_scheme",
+            "current_phase": "wf_feasibility",
+            "highlights": [
+                "walk-forward feasibility reached model inference but could not form enough chronological slices",
+                "expand the local date window or switch to a less demanding walk-forward scheme before rerunning revision gate",
+            ],
+        }
+
+    return {
+        "error_code": f"{step_name}_failed",
+        "error_message": f"revision gate {step_name} step returned non-zero exit code",
+        "recommended_action": "inspect_revision_gate_failure",
+        "current_phase": step_name,
+        "highlights": [
+            f"revision {step_name} step failed",
+            "inspect command output and generated manifests before retrying",
+        ],
+    }
+
+
+def _failure_highlights(failure_details: dict[str, object]) -> list[str]:
+    highlights = failure_details.get("highlights")
+    if not isinstance(highlights, list):
+        return []
+    return [str(item) for item in highlights if isinstance(item, str)]
+
+
+def _write_soft_block_wf_summary(
+    *,
+    wf_summary_output: Path,
+    config_path: str,
+    data_config_path: str,
+    feature_config_path: str,
+    artifact_suffix: str,
+    model_artifact_suffix: str | None,
+    start_date: str | None,
+    end_date: str | None,
+    wf_mode: str,
+    wf_scheme: str,
+    failure_details: dict[str, object],
+) -> dict[str, object]:
+    payload: dict[str, object] = {
+        "run_context": {
+            "config": config_path,
+            "data_config": data_config_path,
+            "feature_config": feature_config_path,
+            "loaded_rows": None,
+            "data_load_strategy": None,
+            "primary_source_rows_total": None,
+            "pre_feature_max_rows": None,
+            "pre_feature_rows": None,
+            "start_date": start_date,
+            "end_date": end_date,
+            "wf_mode": wf_mode,
+            "wf_scheme": wf_scheme,
+            "rows": None,
+            "races": None,
+            "feature_count": None,
+            "categorical_feature_count": None,
+            "artifact_suffix": artifact_suffix,
+            "model_artifact_suffix": model_artifact_suffix or artifact_suffix,
+            "model_path": None,
+        },
+        "policy_constraints": {},
+        "policy_search": {},
+        "stability_assessment": "probe_only",
+        "stability_guardrail": {
+            "assessment": "probe_only",
+            "is_representative": False,
+            "warnings": _failure_highlights(failure_details),
+            "failed_checks": [],
+            "skipped_checks": [],
+            "observed": {},
+            "thresholds": {},
+            "notes": [
+                "synthetic walk-forward summary was emitted because the requested date window could not form nested slices",
+            ],
+        },
+        "error_code": failure_details.get("error_code"),
+        "error_message": failure_details.get("error_message"),
+        "recommended_action": failure_details.get("recommended_action"),
+        "current_phase": failure_details.get("current_phase"),
+        "highlights": _failure_highlights(failure_details),
+        "folds": [],
+    }
+    write_json(wf_summary_output, payload)
+    return payload
 
 
 def _build_manifest_payload(
@@ -143,6 +314,11 @@ def _build_manifest_payload(
     manifest_output: Path,
     executed_steps: list[dict[str, object]],
     promotion_report: dict[str, object] | None = None,
+    error_code: str | None = None,
+    error_message: str | None = None,
+    recommended_action: str | None = None,
+    current_phase: str | None = None,
+    highlights: list[str] | None = None,
     dry_run: bool = False,
 ) -> dict[str, object]:
     payload: dict[str, object] = {
@@ -176,6 +352,7 @@ def _build_manifest_payload(
             "summary": (promotion_report or {}).get("summary") if isinstance(promotion_report, dict) else None,
             "formal_benchmark": (promotion_report or {}).get("formal_benchmark") if isinstance(promotion_report, dict) else None,
         },
+        "read_order": _read_order(),
         "steps": executed_steps,
         "artifacts": {
             "wf_summary": artifact_display_path(wf_summary_output, workspace_root=ROOT),
@@ -185,6 +362,16 @@ def _build_manifest_payload(
             "revision_manifest": artifact_display_path(manifest_output, workspace_root=ROOT),
         },
     }
+    if error_code is not None:
+        payload["error_code"] = error_code
+    if error_message is not None:
+        payload["error_message"] = error_message
+    if recommended_action is not None:
+        payload["recommended_action"] = recommended_action
+    if current_phase is not None:
+        payload["current_phase"] = current_phase
+    if highlights is not None:
+        payload["highlights"] = highlights
     if dry_run:
         payload["dry_run"] = True
     return payload
@@ -218,6 +405,7 @@ def main() -> int:
     parser.add_argument("--promotion-output", default=None)
     parser.add_argument("--wf-summary-output", default=None)
     parser.add_argument("--manifest-output", default=None)
+    parser.add_argument("--allow-wf-soft-block", action="store_true")
     parser.add_argument("--dry-run", action="store_true")
     args = parser.parse_args()
 
@@ -357,12 +545,32 @@ def main() -> int:
 
         if args.dry_run:
             executed_steps = [
-                _planned_step("train", train_command),
-                _planned_step("evaluate", evaluate_command),
-                _planned_step("wf_feasibility", wf_command),
-                _planned_step("promotion_gate", promotion_command),
+                _planned_step(
+                    "train",
+                    train_command,
+                    outputs={"artifact_suffix": train_artifact_suffix},
+                    note="train output artifact files are derived from the revision artifact suffix",
+                ),
+                _planned_step(
+                    "evaluate",
+                    evaluate_command,
+                    outputs={
+                        "evaluation_manifest": "artifacts/reports/evaluation_manifest.json",
+                        "evaluation_summary": "artifacts/reports/evaluation_summary.json",
+                    },
+                ),
+                _planned_step(
+                    "wf_feasibility",
+                    wf_command,
+                    outputs={"wf_summary": artifact_display_path(wf_summary_output, workspace_root=ROOT)},
+                ),
+                _planned_step(
+                    "promotion_gate",
+                    promotion_command,
+                    outputs={"promotion_report": artifact_display_path(promotion_output, workspace_root=ROOT)},
+                ),
             ]
-            status = "dry_run"
+            status = "planned"
             decision = "not_run"
             progress.update(message=f"planned train artifact_suffix={train_artifact_suffix}")
             progress.update(message="planned evaluation")
@@ -396,6 +604,12 @@ def main() -> int:
                 promotion_report=None,
                 dry_run=True,
             )
+            manifest_payload["recommended_action"] = "run_revision_gate"
+            manifest_payload["current_phase"] = "planned"
+            manifest_payload["highlights"] = _planned_highlights(
+                revision_slug=revision_slug,
+                skip_train=bool(args.skip_train),
+            )
             _write_manifest(manifest_output, manifest_payload, label="writing dry-run manifest")
             progress.complete(message="dry-run plan prepared")
             print(f"[revision-gate] dry-run manifest saved: {manifest_output}")
@@ -426,6 +640,7 @@ def main() -> int:
             if train_result.returncode != 0:
                 status = "failed"
                 decision = "error"
+                failure_details = _classify_step_failure(step_name="train", result=train_result)
                 manifest_payload = _build_manifest_payload(
                     revision_slug=revision_slug,
                     started_at=started_at,
@@ -446,11 +661,17 @@ def main() -> int:
                     evaluate_end_date=args.evaluate_end_date,
                     evaluate_wf_mode=args.evaluate_wf_mode,
                     evaluate_wf_scheme=args.evaluate_wf_scheme,
+                    wf_summary_output=wf_summary_output,
                     promotion_min_feasible_folds=args.promotion_min_feasible_folds,
                     promotion_output=promotion_output,
                     manifest_output=manifest_output,
                     executed_steps=executed_steps,
                     promotion_report=None,
+                    error_code=str(failure_details.get("error_code") or "train_failed"),
+                    error_message=str(failure_details.get("error_message") or "revision training failed"),
+                    recommended_action=str(failure_details.get("recommended_action") or "inspect_revision_gate_failure"),
+                    current_phase=str(failure_details.get("current_phase") or "train"),
+                    highlights=_failure_highlights(failure_details),
                 )
                 _write_manifest(manifest_output, manifest_payload, label="writing failed revision manifest")
                 print(f"[revision-gate] manifest saved: {manifest_output}")
@@ -468,6 +689,7 @@ def main() -> int:
         if evaluate_result.returncode != 0:
             status = "failed"
             decision = "error"
+            failure_details = _classify_step_failure(step_name="evaluate", result=evaluate_result)
             manifest_payload = _build_manifest_payload(
                 revision_slug=revision_slug,
                 started_at=started_at,
@@ -494,6 +716,11 @@ def main() -> int:
                 manifest_output=manifest_output,
                 executed_steps=executed_steps,
                 promotion_report=None,
+                error_code=str(failure_details.get("error_code") or "evaluate_failed"),
+                error_message=str(failure_details.get("error_message") or "revision evaluation failed"),
+                recommended_action=str(failure_details.get("recommended_action") or "inspect_revision_gate_failure"),
+                current_phase=str(failure_details.get("current_phase") or "evaluate"),
+                highlights=_failure_highlights(failure_details),
             )
             _write_manifest(manifest_output, manifest_payload, label="writing failed revision manifest")
             print(f"[revision-gate] manifest saved: {manifest_output}")
@@ -511,37 +738,63 @@ def main() -> int:
         if wf_result.returncode != 0:
             status = "failed"
             decision = "error"
-            manifest_payload = _build_manifest_payload(
-                revision_slug=revision_slug,
-                started_at=started_at,
-                status=status,
-                decision=decision,
-                resolved_profile=resolved_profile,
-                config_path=config_path,
-                data_config_path=data_config_path,
-                feature_config_path=feature_config_path,
-                train_artifact_suffix=train_artifact_suffix,
-                skip_train=bool(args.skip_train),
-                train_max_train_rows=args.train_max_train_rows,
-                train_max_valid_rows=args.train_max_valid_rows,
-                evaluate_model_artifact_suffix=args.evaluate_model_artifact_suffix,
-                evaluate_max_rows=args.evaluate_max_rows,
-                evaluate_pre_feature_max_rows=args.evaluate_pre_feature_max_rows,
-                evaluate_start_date=args.evaluate_start_date,
-                evaluate_end_date=args.evaluate_end_date,
-                evaluate_wf_mode=args.evaluate_wf_mode,
-                evaluate_wf_scheme=args.evaluate_wf_scheme,
-                wf_summary_output=wf_summary_output,
-                promotion_min_feasible_folds=args.promotion_min_feasible_folds,
-                promotion_output=promotion_output,
-                manifest_output=manifest_output,
-                executed_steps=executed_steps,
-                promotion_report=None,
-            )
-            _write_manifest(manifest_output, manifest_payload, label="writing failed revision manifest")
-            print(f"[revision-gate] manifest saved: {manifest_output}")
-            print("[revision-gate] decision: error")
-            return int(wf_result.returncode) or 1
+            failure_details = _classify_step_failure(step_name="wf_feasibility", result=wf_result)
+            if args.allow_wf_soft_block and str(failure_details.get("error_code") or "") == "insufficient_wf_window_coverage":
+                _write_soft_block_wf_summary(
+                    wf_summary_output=wf_summary_output,
+                    config_path=config_path,
+                    data_config_path=data_config_path,
+                    feature_config_path=feature_config_path,
+                    artifact_suffix=train_artifact_suffix,
+                    model_artifact_suffix=args.evaluate_model_artifact_suffix,
+                    start_date=args.evaluate_start_date,
+                    end_date=args.evaluate_end_date,
+                    wf_mode=args.evaluate_wf_mode,
+                    wf_scheme=args.evaluate_wf_scheme,
+                    failure_details=failure_details,
+                )
+                executed_steps[-1]["status"] = "soft_blocked"
+                executed_steps[-1]["note"] = "wf summary was synthesized so promotion gate can record a formal block"
+                status = "block"
+                decision = "hold"
+                progress.update(message="wf feasibility soft-blocked; synthesized probe-only summary")
+            else:
+                manifest_payload = _build_manifest_payload(
+                    revision_slug=revision_slug,
+                    started_at=started_at,
+                    status=status,
+                    decision=decision,
+                    resolved_profile=resolved_profile,
+                    config_path=config_path,
+                    data_config_path=data_config_path,
+                    feature_config_path=feature_config_path,
+                    train_artifact_suffix=train_artifact_suffix,
+                    skip_train=bool(args.skip_train),
+                    train_max_train_rows=args.train_max_train_rows,
+                    train_max_valid_rows=args.train_max_valid_rows,
+                    evaluate_model_artifact_suffix=args.evaluate_model_artifact_suffix,
+                    evaluate_max_rows=args.evaluate_max_rows,
+                    evaluate_pre_feature_max_rows=args.evaluate_pre_feature_max_rows,
+                    evaluate_start_date=args.evaluate_start_date,
+                    evaluate_end_date=args.evaluate_end_date,
+                    evaluate_wf_mode=args.evaluate_wf_mode,
+                    evaluate_wf_scheme=args.evaluate_wf_scheme,
+                    wf_summary_output=wf_summary_output,
+                    promotion_min_feasible_folds=args.promotion_min_feasible_folds,
+                    promotion_output=promotion_output,
+                    manifest_output=manifest_output,
+                    executed_steps=executed_steps,
+                    promotion_report=None,
+                    error_code=str(failure_details.get("error_code") or "wf_feasibility_failed"),
+                    error_message=str(failure_details.get("error_message") or "revision wf feasibility failed"),
+                    recommended_action=str(failure_details.get("recommended_action") or "inspect_revision_gate_failure"),
+                    current_phase=str(failure_details.get("current_phase") or "wf_feasibility"),
+                    highlights=_failure_highlights(failure_details),
+                )
+                _write_manifest(manifest_output, manifest_payload, label="writing failed revision manifest")
+                print(f"[revision-gate] manifest saved: {manifest_output}")
+                print("[revision-gate] decision: error")
+                return int(wf_result.returncode) or 1
         progress.update(message="wf feasibility completed")
 
         promotion_result = subprocess.run(promotion_command, cwd=ROOT, check=False)
@@ -587,6 +840,13 @@ def main() -> int:
             executed_steps=executed_steps,
             promotion_report=promotion_report,
         )
+        if isinstance(promotion_report, dict):
+            if promotion_report.get("recommended_action") is not None:
+                manifest_payload["recommended_action"] = promotion_report.get("recommended_action")
+            if promotion_report.get("current_phase") is not None:
+                manifest_payload["current_phase"] = promotion_report.get("current_phase")
+            if isinstance(promotion_report.get("highlights"), list):
+                manifest_payload["highlights"] = promotion_report.get("highlights")
         _write_manifest(manifest_output, manifest_payload, label="writing revision manifest")
         print(f"[revision-gate] manifest saved: {manifest_output}")
         print(f"[revision-gate] decision: {decision}")

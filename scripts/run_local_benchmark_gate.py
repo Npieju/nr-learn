@@ -21,6 +21,12 @@ DEFAULT_RACE_RESULT_PATH = "data/external/local_nankan/results/local_race_result
 DEFAULT_RACE_CARD_PATH = "data/external/local_nankan/racecard/local_racecard.csv"
 DEFAULT_PEDIGREE_PATH = "data/external/local_nankan/pedigree/local_pedigree.csv"
 DEFAULT_PREFLIGHT_OUTPUT = "artifacts/reports/data_preflight_local_nankan.json"
+DEFAULT_PRIMARY_MATERIALIZE_MANIFEST = "artifacts/reports/local_nankan_primary_materialize_manifest.json"
+
+
+def _run_command(*, label: str, command: list[str]) -> subprocess.CompletedProcess[bytes]:
+    print(f"[local-benchmark-gate] running {label}: {' '.join(command)}", flush=True)
+    return subprocess.run(command, cwd=ROOT, check=False)
 
 
 def main() -> int:
@@ -43,9 +49,38 @@ def main() -> int:
     parser.add_argument("--race-card-path", default=DEFAULT_RACE_CARD_PATH)
     parser.add_argument("--pedigree-path", default=DEFAULT_PEDIGREE_PATH)
     parser.add_argument("--preflight-output", default=DEFAULT_PREFLIGHT_OUTPUT)
+    parser.add_argument("--materialize-primary-before-gate", action="store_true")
+    parser.add_argument("--materialize-output-file", default=None)
+    parser.add_argument("--materialize-manifest-file", default=DEFAULT_PRIMARY_MATERIALIZE_MANIFEST)
     parser.add_argument("--skip-train", action="store_true")
     parser.add_argument("--skip-evaluate", action="store_true")
     args = parser.parse_args()
+
+    if args.materialize_primary_before_gate:
+        materialize_command = [
+            sys.executable,
+            str(ROOT / "scripts/run_materialize_local_nankan_primary.py"),
+            "--data-config",
+            args.data_config,
+            "--race-result-path",
+            args.race_result_path,
+            "--race-card-path",
+            args.race_card_path,
+            "--pedigree-path",
+            args.pedigree_path,
+            "--manifest-file",
+            args.materialize_manifest_file,
+        ]
+        if args.materialize_output_file:
+            materialize_command.extend(["--output-file", args.materialize_output_file])
+        materialize_result = _run_command(label="primary_materialize", command=materialize_command)
+        if int(materialize_result.returncode) not in {0, 2}:
+            return int(materialize_result.returncode)
+        if int(materialize_result.returncode) == 2:
+            print(
+                "[local-benchmark-gate] primary materialize not ready; continuing to benchmark gate so preflight can emit the formal blocker",
+                flush=True,
+            )
 
     command = [
         sys.executable,
@@ -92,8 +127,7 @@ def main() -> int:
     if args.skip_evaluate:
         command.append("--skip-evaluate")
 
-    print(f"[local-benchmark-gate] running: {' '.join(command)}", flush=True)
-    result = subprocess.run(command, cwd=ROOT, check=False)
+    result = _run_command(label="benchmark_gate", command=command)
     return int(result.returncode)
 
 

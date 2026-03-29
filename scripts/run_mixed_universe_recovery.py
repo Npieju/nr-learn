@@ -54,6 +54,29 @@ def _read_optional_payload(path_text: object) -> dict[str, object] | None:
     return read_optional_json_path(path_text, workspace_root=ROOT)
 
 
+def _dict_payload(value: object) -> dict[str, object]:
+    return value if isinstance(value, dict) else {}
+
+
+def _list_payload(value: object) -> list[object]:
+    return value if isinstance(value, list) else []
+
+
+def _int_value(value: object, default: int = 0) -> int:
+    try:
+        if isinstance(value, bool):
+            return int(value)
+        if isinstance(value, int):
+            return value
+        if isinstance(value, float):
+            return int(value)
+        if isinstance(value, str):
+            return int(value)
+        return default
+    except (TypeError, ValueError):
+        return default
+
+
 def _path_arg(path: Path) -> str:
     return artifact_display_path(path, workspace_root=ROOT)
 
@@ -128,8 +151,8 @@ def _build_local_revision_command(
     lineage_payload: dict[str, object],
     lineage_path: Path,
 ) -> list[str]:
-    run_context = lineage_payload.get("run_context") if isinstance(lineage_payload.get("run_context"), dict) else {}
-    artifacts = lineage_payload.get("artifacts") if isinstance(lineage_payload.get("artifacts"), dict) else {}
+    run_context = _dict_payload(lineage_payload.get("run_context"))
+    artifacts = _dict_payload(lineage_payload.get("artifacts"))
     revision_slug = str(lineage_payload.get("revision") or "").strip()
     universe = str(lineage_payload.get("universe") or DEFAULT_LEFT_UNIVERSE)
     source_scope = str(lineage_payload.get("source_scope") or "local_only")
@@ -143,6 +166,8 @@ def _build_local_revision_command(
         str(ROOT / "scripts/run_local_revision_gate.py"),
         "--revision",
         revision_slug,
+        "--crawl-config",
+        str(run_context.get("crawl_config") or "configs/crawl_local_nankan_template.yaml"),
         "--data-config",
         str(run_context.get("data_config") or "configs/data_local_nankan.yaml"),
         "--model-config",
@@ -165,10 +190,18 @@ def _build_local_revision_command(
         baseline_reference,
         "--lineage-output",
         _path_arg(lineage_path),
+        "--data-preflight-output",
+        str(artifacts.get("data_preflight") or f"artifacts/reports/data_preflight_{revision_slug}.json"),
         "--snapshot-output",
         str(artifacts.get("snapshot") or f"artifacts/reports/coverage_snapshot_{revision_slug}.json"),
         "--benchmark-manifest-output",
         str(artifacts.get("benchmark_manifest") or f"artifacts/reports/benchmark_gate_{revision_slug}.json"),
+        "--backfill-wrapper-output",
+        str(artifacts.get("backfill_wrapper_manifest") or f"artifacts/reports/local_backfill_then_benchmark_{revision_slug}.json"),
+        "--backfill-manifest-output",
+        str(artifacts.get("backfill_manifest") or f"artifacts/reports/local_nankan_backfill_{revision_slug}.json"),
+        "--materialize-manifest-output",
+        str(artifacts.get("primary_materialize_manifest") or f"artifacts/reports/local_nankan_primary_materialize_{revision_slug}.json"),
         "--evaluation-pointer-output",
         str(artifacts.get("evaluation_pointer") or f"artifacts/reports/evaluation_{revision_slug}_pointer.json"),
         "--promotion-output",
@@ -181,13 +214,143 @@ def _build_local_revision_command(
 
     if run_context.get("tail_rows") is not None:
         command.extend(["--tail-rows", str(run_context.get("tail_rows"))])
+    if run_context.get("seed_file"):
+        command.extend(["--seed-file", str(run_context.get("seed_file"))])
+    if run_context.get("start_date"):
+        command.extend(["--start-date", str(run_context.get("start_date"))])
+    if run_context.get("end_date"):
+        command.extend(["--end-date", str(run_context.get("end_date"))])
+    if run_context.get("date_order"):
+        command.extend(["--date-order", str(run_context.get("date_order"))])
+    if run_context.get("limit") is not None:
+        command.extend(["--limit", str(run_context.get("limit"))])
+    if run_context.get("max_cycles") is not None:
+        command.extend(["--max-cycles", str(run_context.get("max_cycles"))])
     if run_context.get("evaluate_pre_feature_max_rows") is not None:
         command.extend(["--evaluate-pre-feature-max-rows", str(run_context.get("evaluate_pre_feature_max_rows"))])
     if run_context.get("evaluate_start_date"):
         command.extend(["--evaluate-start-date", str(run_context.get("evaluate_start_date"))])
     if run_context.get("evaluate_end_date"):
         command.extend(["--evaluate-end-date", str(run_context.get("evaluate_end_date"))])
+    if run_context.get("race_result_path"):
+        command.extend(["--race-result-path", str(run_context.get("race_result_path"))])
+    if run_context.get("race_card_path"):
+        command.extend(["--race-card-path", str(run_context.get("race_card_path"))])
+    if run_context.get("pedigree_path"):
+        command.extend(["--pedigree-path", str(run_context.get("pedigree_path"))])
+    if run_context.get("materialize_output_file"):
+        command.extend(["--materialize-output-file", str(run_context.get("materialize_output_file"))])
+    if bool(run_context.get("materialize_primary_before_gate")):
+        command.append("--materialize-primary-before-gate")
+    if bool(run_context.get("backfill_before_benchmark")):
+        command.append("--backfill-before-benchmark")
+    if bool(run_context.get("allow_wf_soft_block")):
+        command.append("--allow-wf-soft-block")
     return command
+
+
+def _build_local_handoff_command(
+    *,
+    lineage_payload: dict[str, object],
+) -> tuple[list[str], Path]:
+    run_context = _dict_payload(lineage_payload.get("run_context"))
+    artifacts = _dict_payload(lineage_payload.get("artifacts"))
+    revision_slug = str(lineage_payload.get("revision") or "").strip()
+    universe = str(lineage_payload.get("universe") or DEFAULT_LEFT_UNIVERSE)
+    source_scope = str(lineage_payload.get("source_scope") or "local_only")
+    baseline_reference = str(lineage_payload.get("baseline_reference") or "current_recommended_serving_2025_latest")
+
+    if not revision_slug:
+        raise ValueError("left lineage payload is missing revision")
+
+    wrapper_manifest_path = _resolve_path(
+        str(artifacts.get("backfill_wrapper_manifest") or f"artifacts/reports/local_backfill_then_benchmark_{revision_slug}.json")
+    )
+    command = [
+        sys.executable,
+        str(ROOT / "scripts/run_local_backfill_then_benchmark.py"),
+        "--crawl-config",
+        str(run_context.get("crawl_config") or "configs/crawl_local_nankan_template.yaml"),
+        "--data-config",
+        str(run_context.get("data_config") or "configs/data_local_nankan.yaml"),
+        "--model-config",
+        str(run_context.get("model_config") or "configs/model_local_baseline.yaml"),
+        "--feature-config",
+        str(run_context.get("feature_config") or "configs/features_local_baseline.yaml"),
+        "--date-order",
+        str(run_context.get("date_order") or "desc"),
+        "--max-cycles",
+        str(run_context.get("max_cycles") or 1),
+        "--tail-rows",
+        str(run_context.get("tail_rows") or 5000),
+        "--max-rows",
+        str(run_context.get("evaluate_max_rows") or 120000),
+        "--wf-mode",
+        str(run_context.get("evaluate_wf_mode") or "fast"),
+        "--wf-scheme",
+        str(run_context.get("evaluate_wf_scheme") or "nested"),
+        "--universe",
+        universe,
+        "--source-scope",
+        source_scope,
+        "--baseline-reference",
+        baseline_reference,
+        "--race-result-path",
+        str(run_context.get("race_result_path") or "data/external/local_nankan/results/local_race_result.csv"),
+        "--race-card-path",
+        str(run_context.get("race_card_path") or "data/external/local_nankan/racecard/local_racecard.csv"),
+        "--pedigree-path",
+        str(run_context.get("pedigree_path") or "data/external/local_nankan/pedigree/local_pedigree.csv"),
+        "--wrapper-manifest-output",
+        _path_arg(wrapper_manifest_path),
+        "--backfill-manifest-output",
+        str(artifacts.get("backfill_manifest") or f"artifacts/reports/local_nankan_backfill_{revision_slug}.json"),
+        "--materialize-manifest-output",
+        str(artifacts.get("primary_materialize_manifest") or f"artifacts/reports/local_nankan_primary_materialize_{revision_slug}.json"),
+        "--preflight-output",
+        str(artifacts.get("data_preflight") or f"artifacts/reports/data_preflight_{revision_slug}.json"),
+        "--snapshot-output",
+        str(artifacts.get("snapshot") or f"artifacts/reports/coverage_snapshot_{revision_slug}.json"),
+        "--benchmark-manifest-output",
+        str(artifacts.get("benchmark_manifest") or f"artifacts/reports/benchmark_gate_{revision_slug}.json"),
+        "--skip-train",
+        "--skip-evaluate",
+    ]
+
+    if run_context.get("seed_file"):
+        command.extend(["--seed-file", str(run_context.get("seed_file"))])
+    if run_context.get("start_date"):
+        command.extend(["--start-date", str(run_context.get("start_date"))])
+    if run_context.get("end_date"):
+        command.extend(["--end-date", str(run_context.get("end_date"))])
+    if run_context.get("limit") is not None:
+        command.extend(["--limit", str(run_context.get("limit"))])
+    if run_context.get("evaluate_pre_feature_max_rows") is not None:
+        command.extend(["--pre-feature-max-rows", str(run_context.get("evaluate_pre_feature_max_rows"))])
+    if run_context.get("materialize_output_file"):
+        command.extend(["--materialize-output-file", str(run_context.get("materialize_output_file"))])
+    return command, wrapper_manifest_path
+
+
+def _explicit_handoff_step(
+    *,
+    recovery_plan_payload: dict[str, object] | None,
+    lineage_payload: dict[str, object],
+) -> dict[str, object] | None:
+    plan_payload = recovery_plan_payload or {}
+    plan_steps = [step for step in _list_payload(plan_payload.get("plan_steps")) if isinstance(step, dict)]
+    if not plan_steps:
+        return None
+    first_step = plan_steps[0]
+    if str(first_step.get("action_kind") or "") != "manual":
+        return None
+    if str(first_step.get("blocking_source") or "") != "backfill_handoff":
+        return None
+    if str(first_step.get("recommended_action") or "") != "run_local_backfill_then_benchmark":
+        return None
+
+    command, output_path = _build_local_handoff_command(lineage_payload=lineage_payload)
+    return _step("local_backfill_then_benchmark", command, output_path=output_path)
 
 
 def _step(name: str, command: list[str], *, output_path: Path | None = None) -> dict[str, object]:
@@ -195,6 +358,54 @@ def _step(name: str, command: list[str], *, output_path: Path | None = None) -> 
     if output_path is not None:
         payload["output_path"] = _path_arg(output_path)
     return payload
+
+
+def _read_order() -> list[str]:
+    return [
+        "mixed_universe_recovery",
+        "source_status_board",
+        "local_revision_gate",
+        "local_public_snapshot",
+        "mixed_universe_readiness",
+        "mixed_universe_compare",
+        "mixed_universe_schema",
+        "mixed_universe_numeric_compare",
+        "mixed_universe_numeric_summary",
+        "mixed_universe_left_gap_audit",
+        "mixed_universe_left_recovery_plan",
+        "mixed_universe_status_board",
+    ]
+
+
+def _status_board_preview(board_payload: dict[str, object]) -> dict[str, object]:
+    return {
+        "status": board_payload.get("status"),
+        "current_phase": board_payload.get("current_phase"),
+        "next_action_source": board_payload.get("next_action_source"),
+        "recommended_action": board_payload.get("recommended_action"),
+        "highlights": board_payload.get("highlights"),
+        "phase_summaries": board_payload.get("phase_summaries"),
+    }
+
+
+def _recovery_highlights(*, board_payload: dict[str, object], step_count: int, first_step_name: str | None) -> list[str]:
+    current_phase = board_payload.get("current_phase")
+    recommended_action = board_payload.get("recommended_action")
+    if first_step_name == "local_backfill_then_benchmark":
+        highlights = [
+            "recovery will run the upstream local handoff before rerunning the lineage and downstream mixed-universe manifests",
+            f"the current recovery plan contains {step_count} step(s) from local handoff through status board refresh",
+        ]
+    else:
+        highlights = [
+            "recovery reruns the local lineage bridge first and then refreshes downstream mixed-universe manifests from the same anchor",
+            f"the current recovery plan contains {step_count} step(s) from local revision gate through status board refresh",
+        ]
+    if isinstance(current_phase, str) and current_phase.strip():
+        highlights.append(f"source status board is currently stopped at phase={current_phase}")
+    if isinstance(recommended_action, str) and recommended_action.strip():
+        highlights.append(f"source status board recommends {recommended_action} before the mixed chain is considered healthy")
+    return highlights
 
 
 def _build_recovery_steps(
@@ -219,6 +430,7 @@ def _build_recovery_steps(
     readiness_payload = _read_optional_payload(_path_arg(readiness_path))
     compare_payload = _read_optional_payload(_path_arg(compare_path))
     numeric_compare_payload = _read_optional_payload(_path_arg(numeric_compare_path))
+    recovery_plan_payload = _read_optional_payload(_path_arg(recovery_plan_path))
 
     lineage_manifest_text = public_snapshot_payload.get("lineage_manifest")
     if not isinstance(lineage_manifest_text, str) or not lineage_manifest_text.strip():
@@ -398,11 +610,33 @@ def _build_recovery_steps(
         left_universe,
         "--right-universe",
         right_universe,
+        "--public-snapshot",
+        _path_arg(public_snapshot_path),
+        "--readiness-manifest",
+        _path_arg(readiness_path),
+        "--compare-manifest",
+        _path_arg(compare_path),
+        "--schema-manifest",
+        _path_arg(schema_path),
+        "--numeric-compare-manifest",
+        _path_arg(numeric_compare_path),
+        "--numeric-summary-manifest",
+        _path_arg(numeric_summary_path),
+        "--left-gap-audit-manifest",
+        _path_arg(gap_audit_path),
+        "--left-recovery-plan-manifest",
+        _path_arg(recovery_plan_path),
         "--output",
         _path_arg(board_path),
     ]
 
+    explicit_handoff_step = _explicit_handoff_step(
+        recovery_plan_payload=recovery_plan_payload,
+        lineage_payload=lineage_payload,
+    )
+
     steps = [
+        *( [explicit_handoff_step] if explicit_handoff_step is not None else []),
         _step("local_revision_gate", local_revision_command, output_path=lineage_path),
         _step("local_public_snapshot", public_snapshot_command, output_path=public_snapshot_path),
         _step("mixed_universe_readiness", readiness_command, output_path=readiness_path),
@@ -431,7 +665,7 @@ def _build_recovery_steps(
 
 
 def _run_command(step: dict[str, object]) -> dict[str, object]:
-    command = [str(part) for part in (step.get("command") or [])]
+    command = [str(part) for part in _list_payload(step.get("command"))]
     started_at = utc_now_iso()
     print(f"[mixed-universe-recovery] running {step.get('name')}: {' '.join(command)}", flush=True)
     result = subprocess.run(command, cwd=ROOT, check=False)
@@ -491,8 +725,17 @@ def main() -> int:
             "left_universe": str(board_payload.get("left_universe") or left_universe),
             "right_universe": str(board_payload.get("right_universe") or right_universe),
             "source_status_board": _path_arg(board_path),
+            "read_order": _read_order(),
             "completed_step": "plan_built",
+            "current_phase": board_payload.get("current_phase"),
+            "next_action_source": board_payload.get("next_action_source"),
             "recommended_action": board_payload.get("recommended_action"),
+            "status_board_preview": _status_board_preview(board_payload),
+            "highlights": _recovery_highlights(
+                board_payload=board_payload,
+                step_count=len(steps),
+                first_step_name=str(steps[0].get("name") or "") if steps else None,
+            ),
             "artifacts": {
                 "recovery_run_manifest": _path_arg(output_path),
                 **artifact_map,
@@ -518,18 +761,27 @@ def main() -> int:
             executed_steps.append(result)
             payload["steps"] = executed_steps
             payload["completed_step"] = str(step.get("name") or "unknown")
-            if int(result["exit_code"]) not in {0, 2} and overall_exit_code == 0:
-                overall_exit_code = int(result["exit_code"])
-            elif int(result["exit_code"]) == 2 and overall_exit_code == 0:
+            exit_code = _int_value(result.get("exit_code"), default=1)
+            if exit_code not in {0, 2} and overall_exit_code == 0:
+                overall_exit_code = exit_code
+            elif exit_code == 2 and overall_exit_code == 0:
                 overall_exit_code = 2
             write_json(output_path, payload)
 
         payload["finished_at"] = utc_now_iso()
         payload["status"] = "completed" if overall_exit_code == 0 else ("partial" if overall_exit_code == 2 else "failed")
 
-        refreshed_board_payload = _read_optional_payload(payload["artifacts"].get("status_board_manifest"))
+        refreshed_board_payload = _read_optional_payload(_dict_payload(payload.get("artifacts")).get("status_board_manifest"))
         if isinstance(refreshed_board_payload, dict):
             payload["recommended_action"] = refreshed_board_payload.get("recommended_action")
+            payload["current_phase"] = refreshed_board_payload.get("current_phase")
+            payload["next_action_source"] = refreshed_board_payload.get("next_action_source")
+            payload["status_board_preview"] = _status_board_preview(refreshed_board_payload)
+            payload["highlights"] = _recovery_highlights(
+                board_payload=refreshed_board_payload,
+                step_count=len(executed_steps),
+                first_step_name=str(executed_steps[0].get("name") or "") if executed_steps else None,
+            )
             payload["refreshed_board_status"] = refreshed_board_payload.get("status")
             payload["refreshed_current_phase"] = refreshed_board_payload.get("current_phase")
             payload["refreshed_next_action_source"] = refreshed_board_payload.get("next_action_source")

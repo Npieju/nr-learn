@@ -251,8 +251,21 @@ def _time_split(
 
     if train.empty or valid.empty:
         unique_dates = frame["date"].dropna().sort_values().unique()
+        observed_min = pd.to_datetime(unique_dates[0]).date().isoformat() if len(unique_dates) else "unknown"
+        observed_max = pd.to_datetime(unique_dates[-1]).date().isoformat() if len(unique_dates) else "unknown"
+        split_reasons = []
+        if train.empty:
+            split_reasons.append("configured_train_window_has_no_rows")
+        if valid.empty:
+            split_reasons.append("configured_valid_window_has_no_rows")
         if len(unique_dates) < 3:
-            raise ValueError("Time split is empty. Dataset has too few dated samples.")
+            raise ValueError(
+                "Time split is empty. Dataset has too few dated samples. "
+                f"observed_date_range={observed_min}..{observed_max} unique_dates={len(unique_dates)} "
+                f"configured_train_window={train_start or 'min'}..{train_end} "
+                f"configured_valid_window={valid_start}..{valid_end} "
+                f"split_reasons={','.join(split_reasons) or 'unknown'}"
+            )
 
         cutoff_index = max(int(len(unique_dates) * 0.8), 1)
         cutoff_date = pd.to_datetime(unique_dates[cutoff_index - 1])

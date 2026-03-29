@@ -233,6 +233,55 @@ def _planned_summary() -> dict[str, object]:
     }
 
 
+def _current_phase(*, readiness_status: str, schema_status: str, compare_status: str) -> str:
+    if readiness_status != "ready":
+        return "mixed_universe_readiness"
+    if schema_status != "completed":
+        return "mixed_universe_schema"
+    if compare_status == "completed":
+        return "mixed_universe_numeric_compare_completed"
+    return "mixed_universe_numeric_compare_partial"
+
+
+def _highlights(
+    *,
+    readiness_status: str,
+    schema_status: str,
+    compare_status: str,
+    recommended_action: str,
+    summary: dict[str, object],
+    readiness_error_code: object,
+) -> list[str]:
+    highlights: list[str] = []
+    if readiness_status != "ready":
+        error_code = str(readiness_error_code or "unknown")
+        highlights.append(f"numeric compare is blocked until mixed readiness becomes ready (error_code={error_code})")
+        highlights.append(f"next operator action: {recommended_action}")
+        return highlights
+    if schema_status != "completed":
+        highlights.append("numeric compare is blocked until mixed schema completes")
+        highlights.append(f"next operator action: {recommended_action}")
+        return highlights
+
+    numeric_rows = int(summary.get("numeric_compared_rows") or 0)
+    missing_left_rows = summary.get("missing_left_rows") if isinstance(summary.get("missing_left_rows"), list) else []
+    missing_right_rows = summary.get("missing_right_rows") if isinstance(summary.get("missing_right_rows"), list) else []
+    categorical_different_rows = int(summary.get("categorical_different_rows") or 0)
+
+    highlights.append(f"numeric compare evaluated {numeric_rows} numeric row(s)")
+    if missing_left_rows:
+        highlights.append(f"left-side values are still missing for {len(missing_left_rows)} row(s)")
+    if missing_right_rows:
+        highlights.append(f"right-side values are still missing for {len(missing_right_rows)} row(s)")
+    if categorical_different_rows:
+        highlights.append(f"categorical differences detected in {categorical_different_rows} row(s)")
+    if not missing_left_rows and not missing_right_rows:
+        highlights.append(f"next operator action: {recommended_action}")
+    elif len(highlights) < 4:
+        highlights.append(f"next operator action: {recommended_action}")
+    return highlights
+
+
 def _requested_revision(*, readiness_payload: dict[str, object], compare_payload: dict[str, object], schema_payload: dict[str, object], fallback: str) -> str:
     for payload in (schema_payload, compare_payload, readiness_payload):
         value = payload.get("requested_revision")
@@ -318,10 +367,15 @@ def main() -> int:
         artifact_ensure_output_file_path(csv_output_path, label="csv output", workspace_root=ROOT)
 
         if args.dry_run and not readiness_path.exists() and not compare_path.exists() and not schema_path.exists():
+            readiness_status = "missing"
+            schema_status = "missing"
+            compare_status = "planned"
+            recommended_action = "generate_readiness_compare_schema_manifests"
+            summary = _planned_summary()
             payload = {
                 "started_at": utc_now_iso(),
                 "finished_at": utc_now_iso(),
-                "status": "planned",
+                "status": compare_status,
                 "compare_kind": "mixed_universe_numeric_compare",
                 "compare_mode": "delta_rows",
                 "revision": revision_slug,
@@ -332,7 +386,12 @@ def main() -> int:
                 "left_universe": left_universe,
                 "right_universe": right_universe,
                 "right_reference": args.right_reference,
-                "recommended_action": "generate_readiness_compare_schema_manifests",
+                "current_phase": _current_phase(
+                    readiness_status=readiness_status,
+                    schema_status=schema_status,
+                    compare_status=compare_status,
+                ),
+                "recommended_action": recommended_action,
                 "artifacts": {
                     "numeric_compare_manifest": artifact_display_path(output_path, workspace_root=ROOT),
                     "numeric_compare_csv": artifact_display_path(csv_output_path, workspace_root=ROOT),
@@ -348,12 +407,20 @@ def main() -> int:
                     "mixed_universe_numeric_compare",
                 ],
                 "blocking_context": {
-                    "readiness_status": "missing",
-                    "schema_status": "missing",
+                    "readiness_status": readiness_status,
+                    "schema_status": schema_status,
                     "readiness_error_code": "readiness_manifest_missing",
                     "schema_recommended_action": "generate_readiness_and_compare_manifests",
                 },
-                "summary": _planned_summary(),
+                "summary": summary,
+                "highlights": _highlights(
+                    readiness_status=readiness_status,
+                    schema_status=schema_status,
+                    compare_status=compare_status,
+                    recommended_action=recommended_action,
+                    summary=summary,
+                    readiness_error_code="readiness_manifest_missing",
+                ),
                 "row_results": [],
             }
             write_json(output_path, payload)
@@ -386,6 +453,11 @@ def main() -> int:
             recommended_action = str(readiness_payload.get("recommended_action") or "complete_left_metrics")
         elif missing_right_rows:
             recommended_action = "complete_right_reference_metrics"
+        current_phase = _current_phase(
+            readiness_status=readiness_status,
+            schema_status=schema_status,
+            compare_status=compare_status,
+        )
 
         payload = {
             "started_at": utc_now_iso(),
@@ -401,6 +473,7 @@ def main() -> int:
             "left_universe": left_universe,
             "right_universe": right_universe,
             "right_reference": args.right_reference,
+            "current_phase": current_phase,
             "recommended_action": recommended_action,
             "artifacts": {
                 "numeric_compare_manifest": artifact_display_path(output_path, workspace_root=ROOT),
@@ -423,6 +496,14 @@ def main() -> int:
                 "schema_recommended_action": schema_payload.get("recommended_action"),
             },
             "summary": summary,
+            "highlights": _highlights(
+                readiness_status=readiness_status,
+                schema_status=schema_status,
+                compare_status=compare_status,
+                recommended_action=recommended_action,
+                summary=summary,
+                readiness_error_code=readiness_payload.get("error_code"),
+            ),
             "row_results": row_results,
         }
         _write_compare_csv(csv_output_path, row_results)

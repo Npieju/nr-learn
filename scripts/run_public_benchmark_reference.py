@@ -75,6 +75,76 @@ def _extract_metric(summary_payload: dict[str, object], promotion_payload: dict[
     }
 
 
+def _read_order() -> list[str]:
+    return [
+        "public_benchmark_reference",
+        "promotion_gate",
+        "revision_gate",
+        "evaluation_manifest",
+        "evaluation_summary",
+    ]
+
+
+def _current_phase(*, promotion_payload: dict[str, object], evaluation_manifest_payload: dict[str, object]) -> str:
+    promotion_status = str(promotion_payload.get("status") or "")
+    stability = str(evaluation_manifest_payload.get("stability_assessment") or "")
+    if promotion_status not in {"pass", "completed", "promote"}:
+        return "promotion_gate"
+    if stability and stability != "representative":
+        return "evaluation_stability_review"
+    return "public_benchmark_reference_ready"
+
+
+def _recommended_action(*, promotion_payload: dict[str, object], evaluation_manifest_payload: dict[str, object]) -> str:
+    blocking_reasons = promotion_payload.get("blocking_reasons")
+    if isinstance(blocking_reasons, list) and blocking_reasons:
+        return "resolve_public_benchmark_blockers"
+    stability = str(evaluation_manifest_payload.get("stability_assessment") or "")
+    if stability and stability != "representative":
+        return "review_public_benchmark_stability"
+    return "use_as_right_reference"
+
+
+def _blocker_summary(*, promotion_payload: dict[str, object], evaluation_manifest_payload: dict[str, object]) -> dict[str, object]:
+    blocking_reasons = promotion_payload.get("blocking_reasons") if isinstance(promotion_payload.get("blocking_reasons"), list) else []
+    warnings = promotion_payload.get("warnings") if isinstance(promotion_payload.get("warnings"), list) else []
+    stability = evaluation_manifest_payload.get("stability_assessment")
+    return {
+        "promotion_status": promotion_payload.get("status"),
+        "promotion_decision": promotion_payload.get("decision"),
+        "blocking_reasons": blocking_reasons,
+        "warnings": warnings,
+        "stability_assessment": stability,
+        "is_ready": not blocking_reasons and stability == "representative",
+    }
+
+
+def _highlights(
+    *,
+    metrics: dict[str, object],
+    promotion_payload: dict[str, object],
+    evaluation_manifest_payload: dict[str, object],
+    recommended_action: str,
+) -> list[str]:
+    highlights: list[str] = []
+    decision = metrics.get("decision")
+    stability = evaluation_manifest_payload.get("stability_assessment")
+    blocking_reasons = promotion_payload.get("blocking_reasons") if isinstance(promotion_payload.get("blocking_reasons"), list) else []
+    warnings = promotion_payload.get("warnings") if isinstance(promotion_payload.get("warnings"), list) else []
+
+    if decision is not None:
+        highlights.append(f"public benchmark promotion decision is {decision}")
+    if stability is not None:
+        highlights.append(f"evaluation stability assessment is {stability}")
+    if blocking_reasons:
+        highlights.append(f"promotion is blocked by {len(blocking_reasons)} reason(s)")
+    elif warnings:
+        highlights.append(f"promotion emitted {len(warnings)} warning(s)")
+    if len(highlights) < 4:
+        highlights.append(f"next operator action: {recommended_action}")
+    return highlights
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--reference", default=DEFAULT_REFERENCE)
@@ -101,6 +171,11 @@ def main() -> int:
         revision_payload = _read_required_payload(revision_path, label="revision manifest")
         evaluation_manifest_payload = _read_required_payload(evaluation_manifest_path, label="evaluation manifest")
         evaluation_summary_payload = _read_required_payload(evaluation_summary_path, label="evaluation summary")
+        metrics = _extract_metric(evaluation_summary_payload, promotion_payload)
+        recommended_action = _recommended_action(
+            promotion_payload=promotion_payload,
+            evaluation_manifest_payload=evaluation_manifest_payload,
+        )
 
         payload = {
             "started_at": utc_now_iso(),
@@ -112,6 +187,12 @@ def main() -> int:
             "universe": "jra",
             "source_scope": "jra_only",
             "public_doc": artifact_display_path(public_doc_path, workspace_root=ROOT),
+            "read_order": _read_order(),
+            "current_phase": _current_phase(
+                promotion_payload=promotion_payload,
+                evaluation_manifest_payload=evaluation_manifest_payload,
+            ),
+            "recommended_action": recommended_action,
             "artifacts": {
                 "reference_manifest": artifact_display_path(output_path, workspace_root=ROOT),
                 "promotion_manifest": artifact_display_path(promotion_path, workspace_root=ROOT),
@@ -119,7 +200,11 @@ def main() -> int:
                 "evaluation_manifest": artifact_display_path(evaluation_manifest_path, workspace_root=ROOT),
                 "evaluation_summary": artifact_display_path(evaluation_summary_path, workspace_root=ROOT),
             },
-            "metrics": _extract_metric(evaluation_summary_payload, promotion_payload),
+            "metrics": metrics,
+            "blocker_summary": _blocker_summary(
+                promotion_payload=promotion_payload,
+                evaluation_manifest_payload=evaluation_manifest_payload,
+            ),
             "promotion_summary": {
                 "decision": promotion_payload.get("decision"),
                 "status": promotion_payload.get("status"),
@@ -138,6 +223,12 @@ def main() -> int:
                 "status": revision_payload.get("status"),
                 "profile": revision_payload.get("profile"),
             },
+            "highlights": _highlights(
+                metrics=metrics,
+                promotion_payload=promotion_payload,
+                evaluation_manifest_payload=evaluation_manifest_payload,
+                recommended_action=recommended_action,
+            ),
         }
         write_json(output_path, payload)
         print(f"[public-benchmark-reference] saved: {artifact_display_path(output_path, workspace_root=ROOT)}", flush=True)
