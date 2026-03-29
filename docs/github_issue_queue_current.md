@@ -21,27 +21,27 @@
 
 2026-03-29 時点で、Kelly runtime family (`#10`, `#11`, `#12`, `#13`)、seasonal ordering (`#14`, `#15`)、runtime broad reduction (`#7`)、supplemental materialization (`#16`)、feature-builder runtime (`#17`) は close 済みである。loader runtime の small safe cuts を進めた `#18` も wrap-up 段階にあり、current operational anchor は引き続き `r20260329_tighter_policy_ratio003_abs90` である。
 
-この時点の next active issue は `#19` の tail loader equivalence harness である。
+この時点の next active issue は `#21` の exact-safe tail loader follow-up である。
 
 Primary active issue:
 
-- `#19`
-- <https://github.com/Npieju/nr-learn/issues/19>
+- `#21`
+- <https://github.com/Npieju/nr-learn/issues/21>
 
 Primary issue draft:
 
-- `docs/next_issue_tail_equivalence_harness.md`
+- `docs/next_issue_deque_trim_exact_safe_followup.md`
 - `docs/tail_loader_equivalence_gate_standard.md`
 
 GitHub issue:
 
-- `#19`
-- <https://github.com/Npieju/nr-learn/issues/19>
+- `#21`
+- <https://github.com/Npieju/nr-learn/issues/21>
 
 Primary next execution order:
 
-1. `#19 add tail loader equivalence harness for aggressive runtime optimization`
-2. その後に next challenger family / next loader/build reduction を再選定する
+1. `exact` gate を通る tail candidate を探索する
+2. その後に next loader/build reduction を再選定する
 
 ### 3.1 [experiment] Tighter policy search frontier refinement
 
