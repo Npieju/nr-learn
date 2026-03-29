@@ -17,36 +17,31 @@
 
 ## 3. Current Issue Set
 
-### 3.0 Current Queue After Kelly Family Close
+### 3.0 Current Queue After Seasonal Ordering Close
 
-2026-03-29 時点で、Kelly runtime family (`#10`, `#11`, `#12`, `#13`) は close 済みで、current operational anchor は引き続き `r20260329_tighter_policy_ratio003_abs90` である。
+2026-03-29 時点で、Kelly runtime family (`#10`, `#11`, `#12`, `#13`) と seasonal ordering (`#14`, `#15`) は close 済みで、current operational anchor は引き続き `r20260329_tighter_policy_ratio003_abs90` である。
 
-この時点の open issue は `#7` の runtime 改善だけであり、次の experiment 本線は `seasonal de-risk long-horizon formalization` へ移す。
+この時点の open issue は `#7` の runtime 改善と、その follow-up である `#16` の materialized supplemental path である。
 
-Primary next issue draft:
+Primary active issue:
 
-- `docs/next_issue_seasonal_derisk_long_horizon.md`
+- `#7`
+- <https://github.com/Npieju/nr-learn/issues/7>
 
-GitHub issue:
+Follow-up execution issue draft:
 
-- `#14`
-- <https://github.com/Npieju/nr-learn/issues/14>
-
-Secondary next issue draft:
-
-- `docs/next_issue_sep_guard_secondary_family.md`
+- `docs/next_issue_materialized_supplementals.md`
 
 GitHub issue:
 
-- `#15`
-- <https://github.com/Npieju/nr-learn/issues/15>
+- `#16`
+- <https://github.com/Npieju/nr-learn/issues/16>
 
 Primary next execution order:
 
-1. `seasonal de-risk long-horizon formalization`
-2. `September guard secondary family ordering`
-3. `#7 optimize_roi_strategy runtime reduction for nested challenger runs`
-4. その後に必要なら next challenger family を再選定する
+1. `#7 optimize_roi_strategy runtime reduction for nested challenger runs`
+2. `#16 materialize supplemental tables for faster evaluation loads`
+3. その後に next challenger family / next data-loading reduction を再選定する
 
 ### 3.1 [experiment] Tighter policy search frontier refinement
 
