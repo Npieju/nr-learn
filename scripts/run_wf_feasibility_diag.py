@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import json
 from collections import Counter
+from collections.abc import Callable
 from pathlib import Path
 import sys
 import time
@@ -159,6 +160,7 @@ def _summarize_fold_candidates(
     constraints: PolicyConstraints,
     search_config: dict[str, object] | None,
     mode: str,
+    progress_callback: Callable[[int, int, dict[str, object]], None] | None = None,
 ) -> tuple[dict[str, object], list[dict[str, object]]]:
     resolved_search_config = _resolve_regime_search_config(search_config, frame=valid_df)
 
@@ -239,6 +241,15 @@ def _summarize_fold_candidates(
     best_feasible_score = float("-inf")
     best_fallback: dict[str, object] | None = None
     best_fallback_score = float("-inf")
+    total_search_steps = (
+        len(blend_candidates)
+        * len(edge_candidates)
+        * len(min_prob_candidates)
+        * len(odds_min_candidates)
+        * len(odds_max_candidates)
+    )
+    processed_search_steps = 0
+    checkpoint_interval = max(1, total_search_steps // 8)
 
     for blend_weight in blend_candidates:
         valid_df["blend_prob"] = blend_prob(valid_df["iso_prob"], valid_df["market_prob"], float(blend_weight))
@@ -360,6 +371,29 @@ def _summarize_fold_candidates(
                                 if selection_score is not None and selection_score > best_feasible_score:
                                     best_feasible_score = float(selection_score)
                                     best_feasible = row
+
+                        processed_search_steps += 1
+                        if (
+                            progress_callback is not None
+                            and (
+                                processed_search_steps == 1
+                                or processed_search_steps == total_search_steps
+                                or processed_search_steps % checkpoint_interval == 0
+                            )
+                        ):
+                            progress_callback(
+                                processed_search_steps,
+                                total_search_steps,
+                                {
+                                    "fold": int(fold_index),
+                                    "blend_weight": float(blend_weight),
+                                    "min_edge": float(min_edge),
+                                    "min_prob": float(min_prob),
+                                    "odds_min": float(odds_min),
+                                    "odds_max": float(odds_max),
+                                    "candidate_rows": int(len(candidate_rows)),
+                                },
+                            )
 
     failure_reason_counts = Counter(
         reason for row in candidate_rows for reason in row.get("gate_failures", [])
@@ -544,6 +578,20 @@ def main() -> int:
         fold_progress.start(message="analyzing folds")
         for fold_index, (train_df, valid_df, test_df) in enumerate(nested_slices, start=1):
             print(f"[wf-feasibility] analyzing fold {fold_index}/{len(nested_slices)}")
+            fold_started_at = time.monotonic()
+
+            def report_fold_checkpoint(processed: int, total: int, checkpoint: dict[str, object]) -> None:
+                log_progress(
+                    "[wf-feasibility] "
+                    f"fold={fold_index}/{len(nested_slices)} "
+                    f"search_step={processed}/{total} "
+                    f"blend_weight={checkpoint['blend_weight']:.2f} "
+                    f"min_edge={checkpoint['min_edge']:.2f} "
+                    f"min_prob={checkpoint['min_prob']:.2f} "
+                    f"odds={checkpoint['odds_min']:.1f}-{checkpoint['odds_max']:.1f} "
+                    f"candidate_rows={checkpoint['candidate_rows']}"
+                )
+
             fold_summary, fold_detail = _summarize_fold_candidates(
                 fold_index=fold_index,
                 train_df=train_df,
@@ -554,10 +602,18 @@ def main() -> int:
                 constraints=constraints,
                 search_config=search_config,
                 mode=args.wf_mode,
+                progress_callback=report_fold_checkpoint,
             )
             fold_summaries.append(fold_summary)
             detail_rows.extend(fold_detail)
-            fold_progress.update(message=f"fold={fold_index} candidates={len(fold_detail)}")
+            elapsed_fold_sec = int(time.monotonic() - fold_started_at)
+            fold_progress.update(
+                message=(
+                    f"fold={fold_index} candidates={len(fold_detail)} "
+                    f"feasible={fold_summary['feasible_candidates']} "
+                    f"elapsed={elapsed_fold_sec}s"
+                )
+            )
         progress.update(message="fold analysis completed")
 
         output_slug = _derive_output_slug(args.config, model_path)

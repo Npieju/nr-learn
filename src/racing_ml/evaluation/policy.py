@@ -75,6 +75,11 @@ def to_float(value: object) -> float | None:
         return None
 
 
+def _is_winning_rank(value: object) -> bool:
+    rank = to_float(value)
+    return rank is not None and not pd.isna(rank) and int(rank) == 1
+
+
 def compute_market_prob(frame: pd.DataFrame, odds_col: str) -> pd.Series:
     odds = pd.to_numeric(frame[odds_col], errors="coerce")
     implied = 1.0 / odds.replace(0, np.nan)
@@ -226,7 +231,7 @@ def simulate_flat_strategy(
         rank = to_float(pick.get("rank"))
         odds = to_float(pick.get(odds_col))
         payout = 0.0
-        if rank is not None and int(rank) == 1 and odds is not None and odds > 0:
+        if _is_winning_rank(rank) and odds is not None and odds > 0:
             hits += 1
             payout = stake * odds
         total_return += payout
@@ -513,12 +518,25 @@ def simulate_fractional_kelly(
     total_return = 0.0
     hits = 0
     bets = 0
+    work_frame = pd.DataFrame(
+        {
+            "race_id": frame["race_id"].to_numpy(),
+            "prob": pd.to_numeric(frame[prob_col], errors="coerce").to_numpy(dtype=float),
+            "odds_num": (
+                frame["_policy_odds_num"].to_numpy(dtype=float)
+                if "_policy_odds_num" in frame.columns
+                else pd.to_numeric(frame[odds_col], errors="coerce").to_numpy(dtype=float)
+            ),
+            "rank_num": (
+                frame["_policy_rank_num"].to_numpy(dtype=float)
+                if "_policy_rank_num" in frame.columns
+                else pd.to_numeric(frame["rank"], errors="coerce").to_numpy(dtype=float)
+            ),
+        }
+    )
 
-    for _, group in frame.groupby("race_id"):
-        work = group.copy()
-        work["prob"] = pd.to_numeric(work[prob_col], errors="coerce")
-        work["odds_num"] = pd.to_numeric(work[odds_col], errors="coerce")
-        work = work.dropna(subset=["prob", "odds_num"])
+    for _, group in work_frame.groupby("race_id", sort=False):
+        work = group.dropna(subset=["prob", "odds_num"])
         work = work[(work["odds_num"] > odds_min) & (work["odds_num"] <= odds_max)]
         if work.empty:
             continue
@@ -544,9 +562,9 @@ def simulate_fractional_kelly(
         bets += 1
         total_bet += stake
 
-        rank = to_float(pick.get("rank"))
+        rank = pick.get("rank_num")
         payout = 0.0
-        if rank is not None and int(rank) == 1:
+        if _is_winning_rank(rank):
             hits += 1
             payout = stake * odds
         total_return += payout
@@ -599,12 +617,25 @@ def simulate_ev_portfolio(
     race_bets = 0
     race_hits = 0
     synthetic_odds_hits: list[float] = []
+    work_frame = pd.DataFrame(
+        {
+            "race_id": frame["race_id"].to_numpy(),
+            "prob": pd.to_numeric(frame[prob_col], errors="coerce").to_numpy(dtype=float),
+            "odds_num": (
+                frame["_policy_odds_num"].to_numpy(dtype=float)
+                if "_policy_odds_num" in frame.columns
+                else pd.to_numeric(frame[odds_col], errors="coerce").to_numpy(dtype=float)
+            ),
+            "rank_num": (
+                frame["_policy_rank_num"].to_numpy(dtype=float)
+                if "_policy_rank_num" in frame.columns
+                else pd.to_numeric(frame["rank"], errors="coerce").to_numpy(dtype=float)
+            ),
+        }
+    )
 
-    for _, group in frame.groupby("race_id"):
-        work = group.copy()
-        work["prob"] = pd.to_numeric(work[prob_col], errors="coerce")
-        work["odds_num"] = pd.to_numeric(work[odds_col], errors="coerce")
-        work = work.dropna(subset=["prob", "odds_num"])
+    for _, group in work_frame.groupby("race_id", sort=False):
+        work = group.dropna(subset=["prob", "odds_num"])
         work = work[(work["odds_num"] > odds_min) & (work["odds_num"] <= odds_max)]
         if work.empty:
             continue
@@ -624,8 +655,8 @@ def simulate_ev_portfolio(
 
         payout = 0.0
         for _, pick in picks.iterrows():
-            rank = to_float(pick.get("rank"))
-            if rank is not None and int(rank) == 1:
+            rank = pick.get("rank_num")
+            if _is_winning_rank(rank):
                 payout += float(stake_each * float(pick["odds_num"]))
 
         if payout > 0:
@@ -716,7 +747,7 @@ def simulate_annotated_runtime_policy(
             total_bet += stake
             rank = to_float(pick.get("rank"))
             odds = to_float(pick.get(odds_col))
-            if rank is not None and int(rank) == 1 and odds is not None and odds > 0:
+            if _is_winning_rank(rank) and odds is not None and odds > 0:
                 payout = stake * odds
                 race_hits += 1
         else:
@@ -727,7 +758,7 @@ def simulate_annotated_runtime_policy(
                 rank = to_float(pick.get("rank"))
                 odds = to_float(pick.get(odds_col))
                 weight = to_float(pick.get(weight_col)) or 0.0
-                if rank is not None and int(rank) == 1 and odds is not None and odds > 0:
+                if _is_winning_rank(rank) and odds is not None and odds > 0:
                     payout += stake * weight * odds
             if payout > 0:
                 race_hits += 1

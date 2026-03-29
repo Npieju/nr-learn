@@ -1,9 +1,12 @@
 from __future__ import annotations
 
 import argparse
+import json
+import os
 from pathlib import Path
 import subprocess
 import sys
+import threading
 import time
 import traceback
 
@@ -24,6 +27,10 @@ from racing_ml.common.progress import Heartbeat, ProgressBar
 def log_progress(message: str) -> None:
     now = time.strftime("%H:%M:%S")
     print(f"[revision-gate {now}] {message}", flush=True)
+
+
+def _python_command(script_path: str) -> list[str]:
+    return [sys.executable, "-u", script_path]
 
 
 def _resolve_path(path_value: str | Path) -> Path:
@@ -100,14 +107,62 @@ def _run_command(command: list[str], *, label: str) -> None:
     subprocess.run(command, cwd=ROOT, check=True)
 
 
+def _forward_stream(
+    stream: object,
+    *,
+    sink: list[str],
+    target: object,
+) -> None:
+    if stream is None:
+        return
+    try:
+        for chunk in iter(stream.readline, ""):
+            if not chunk:
+                break
+            sink.append(chunk)
+            print(chunk, end="", file=target, flush=True)
+    finally:
+        try:
+            stream.close()
+        except Exception:
+            pass
+
+
 def _run_command_result(command: list[str], *, label: str) -> subprocess.CompletedProcess[str]:
     log_progress(f"running {label}: {' '.join(command)}")
-    result = subprocess.run(command, cwd=ROOT, check=False, text=True, capture_output=True)
-    if result.stdout:
-        print(result.stdout, end="")
-    if result.stderr:
-        print(result.stderr, end="", file=sys.stderr)
-    return result
+    process = subprocess.Popen(
+        command,
+        cwd=ROOT,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        bufsize=1,
+    )
+    stdout_chunks: list[str] = []
+    stderr_chunks: list[str] = []
+    stdout_thread = threading.Thread(
+        target=_forward_stream,
+        args=(process.stdout,),
+        kwargs={"sink": stdout_chunks, "target": sys.stdout},
+        daemon=True,
+    )
+    stderr_thread = threading.Thread(
+        target=_forward_stream,
+        args=(process.stderr,),
+        kwargs={"sink": stderr_chunks, "target": sys.stderr},
+        daemon=True,
+    )
+    stdout_thread.start()
+    stderr_thread.start()
+    return_code = process.wait()
+    stdout_thread.join()
+    stderr_thread.join()
+    return subprocess.CompletedProcess(
+        args=command,
+        returncode=return_code,
+        stdout="".join(stdout_chunks),
+        stderr="".join(stderr_chunks),
+    )
 
 
 def _planned_step(
@@ -151,6 +206,188 @@ def _read_json_dict(path: Path) -> dict[str, object] | None:
         return None
     payload = read_json(path)
     return payload if isinstance(payload, dict) else None
+
+
+_CHALLENGER_EQUIVALENCE_FIELDS: tuple[str, ...] = (
+    "stability_assessment",
+    "auc",
+    "top1_roi",
+    "ev_top1_roi",
+    "wf_nested_actual_folds",
+    "wf_nested_test_roi_weighted",
+    "wf_nested_test_roi_mean",
+    "wf_nested_test_bets_total",
+)
+
+
+def _values_equivalent(candidate_value: object, anchor_value: object, *, tolerance: float) -> bool:
+    if isinstance(candidate_value, (int, float)) and isinstance(anchor_value, (int, float)):
+        return abs(float(candidate_value) - float(anchor_value)) <= tolerance
+    return candidate_value == anchor_value
+
+
+def _resolve_versioned_evaluation_summary_path() -> Path:
+    manifest_path = ROOT / "artifacts" / "reports" / "evaluation_manifest.json"
+    manifest_payload = _read_json_dict(manifest_path)
+    if isinstance(manifest_payload, dict):
+        output_files = manifest_payload.get("output_files")
+        if isinstance(output_files, dict):
+            versioned_summary = output_files.get("versioned_summary")
+            if isinstance(versioned_summary, str) and versioned_summary.strip():
+                return _resolve_path(versioned_summary)
+    return ROOT / "artifacts" / "reports" / "evaluation_summary.json"
+
+
+def _build_challenger_equivalence_report(
+    *,
+    anchor_summary_path: Path,
+    candidate_summary_path: Path,
+    tolerance: float,
+) -> dict[str, object]:
+    anchor_payload = _read_json_dict(anchor_summary_path)
+    candidate_payload = _read_json_dict(candidate_summary_path)
+    report: dict[str, object] = {
+        "anchor_summary": artifact_display_path(anchor_summary_path, workspace_root=ROOT),
+        "candidate_summary": artifact_display_path(candidate_summary_path, workspace_root=ROOT),
+        "fields": list(_CHALLENGER_EQUIVALENCE_FIELDS),
+        "tolerance": float(tolerance),
+    }
+    if anchor_payload is None:
+        report["status"] = "unavailable"
+        report["reason"] = "anchor_summary_missing_or_invalid"
+        return report
+    if candidate_payload is None:
+        report["status"] = "unavailable"
+        report["reason"] = "candidate_summary_missing_or_invalid"
+        return report
+
+    comparisons: list[dict[str, object]] = []
+    all_equivalent = True
+    for field_name in _CHALLENGER_EQUIVALENCE_FIELDS:
+        anchor_value = anchor_payload.get(field_name)
+        candidate_value = candidate_payload.get(field_name)
+        equal = _values_equivalent(candidate_value, anchor_value, tolerance=tolerance)
+        all_equivalent = all_equivalent and equal
+        comparisons.append(
+            {
+                "field": field_name,
+                "anchor_value": anchor_value,
+                "candidate_value": candidate_value,
+                "equivalent": equal,
+            }
+        )
+    report["status"] = "equivalent" if all_equivalent else "different"
+    report["comparisons"] = comparisons
+    return report
+
+
+def _challenger_equivalence_highlights(report: dict[str, object]) -> list[str]:
+    status = str(report.get("status") or "")
+    if status == "equivalent":
+        return [
+            "challenger evaluation summary is equivalent to the anchor across the configured decisive fields",
+            "continuing to wf feasibility and promotion gate is unlikely to change the candidate role unless later diagnostics diverge",
+        ]
+    if status == "different":
+        differences = [
+            str(item.get("field"))
+            for item in report.get("comparisons", [])
+            if isinstance(item, dict) and not bool(item.get("equivalent"))
+        ]
+        joined = ", ".join(differences[:5]) if differences else "configured fields"
+        return [f"challenger evaluation summary differs from the anchor on {joined}"]
+    reason = str(report.get("reason") or "equivalence_check_unavailable")
+    return [f"challenger equivalence check unavailable: {reason}"]
+
+
+def _build_lock_path(manifest_output: Path, *, revision_slug: str) -> Path:
+    if manifest_output.name == f"revision_gate_{revision_slug}.json":
+        return manifest_output.with_suffix(manifest_output.suffix + ".lock")
+    return manifest_output.parent / f"revision_gate_{revision_slug}.lock"
+
+
+def _pid_is_running(pid: int) -> bool:
+    if pid <= 0:
+        return False
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        return True
+    return True
+
+
+def _read_lock_payload(lock_path: Path) -> dict[str, object]:
+    if not lock_path.exists():
+        return {}
+    try:
+        text = lock_path.read_text(encoding="utf-8").strip()
+    except OSError:
+        return {}
+    if not text:
+        return {}
+    try:
+        payload = json.loads(text)
+    except json.JSONDecodeError:
+        return {}
+    return payload if isinstance(payload, dict) else {}
+
+
+def _acquire_run_lock(
+    *,
+    lock_path: Path,
+    revision_slug: str,
+    manifest_output: Path,
+) -> dict[str, object]:
+    payload = {
+        "pid": os.getpid(),
+        "revision": revision_slug,
+        "manifest_output": artifact_display_path(manifest_output, workspace_root=ROOT),
+        "started_at": utc_now_iso(),
+    }
+
+    while True:
+        try:
+            fd = os.open(lock_path, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+        except FileExistsError:
+            existing = _read_lock_payload(lock_path)
+            existing_pid = int(existing.get("pid", 0) or 0) if isinstance(existing, dict) else 0
+            if existing and not _pid_is_running(existing_pid):
+                try:
+                    lock_path.unlink()
+                    continue
+                except FileNotFoundError:
+                    continue
+            return existing
+        else:
+            with os.fdopen(fd, "w", encoding="utf-8") as file:
+                json.dump(payload, file, ensure_ascii=False, indent=2)
+            return {}
+
+
+def _release_run_lock(lock_path: Path) -> None:
+    try:
+        lock_path.unlink()
+    except FileNotFoundError:
+        return
+
+
+def _duplicate_run_highlights(*, revision_slug: str, lock_path: Path, existing: dict[str, object]) -> list[str]:
+    active_pid = existing.get("pid")
+    started_at = existing.get("started_at")
+    manifest_output = existing.get("manifest_output")
+    highlights = [
+        f"revision {revision_slug} is already running in another process",
+        f"active lock path: {artifact_display_path(lock_path, workspace_root=ROOT)}",
+    ]
+    if active_pid is not None:
+        highlights.append(f"active pid={active_pid}")
+    if started_at is not None:
+        highlights.append(f"active run started_at={started_at}")
+    if manifest_output is not None:
+        highlights.append(f"active manifest={manifest_output}")
+    return highlights
 
 
 def _classify_step_failure(*, step_name: str, result: subprocess.CompletedProcess[str]) -> dict[str, object]:
@@ -203,6 +440,18 @@ def _classify_step_failure(*, step_name: str, result: subprocess.CompletedProces
             "highlights": [
                 "walk-forward feasibility reached model inference but could not form enough chronological slices",
                 "expand the local date window or switch to a less demanding walk-forward scheme before rerunning revision gate",
+            ],
+        }
+
+    if step_name == "wf_feasibility" and "Odds column is required for feasibility diagnostic" in combined_output:
+        return {
+            "error_code": "missing_market_odds",
+            "error_message": "revision gate walk-forward feasibility could not run because the dataset does not include historical odds",
+            "recommended_action": "populate_historical_odds_or_accept_formal_block",
+            "current_phase": "wf_feasibility",
+            "highlights": [
+                "walk-forward feasibility reached feature/model loading but the local dataset has no odds column for policy simulation",
+                "populate historical odds in the local raw pipeline before rerunning if promotion-grade policy diagnostics are required",
             ],
         }
 
@@ -314,6 +563,7 @@ def _build_manifest_payload(
     manifest_output: Path,
     executed_steps: list[dict[str, object]],
     promotion_report: dict[str, object] | None = None,
+    challenger_equivalence: dict[str, object] | None = None,
     error_code: str | None = None,
     error_message: str | None = None,
     recommended_action: str | None = None,
@@ -352,6 +602,7 @@ def _build_manifest_payload(
             "summary": (promotion_report or {}).get("summary") if isinstance(promotion_report, dict) else None,
             "formal_benchmark": (promotion_report or {}).get("formal_benchmark") if isinstance(promotion_report, dict) else None,
         },
+        "challenger_equivalence": challenger_equivalence,
         "read_order": _read_order(),
         "steps": executed_steps,
         "artifacts": {
@@ -405,10 +656,15 @@ def main() -> int:
     parser.add_argument("--promotion-output", default=None)
     parser.add_argument("--wf-summary-output", default=None)
     parser.add_argument("--manifest-output", default=None)
+    parser.add_argument("--challenger-anchor-evaluation-summary", default=None)
+    parser.add_argument("--challenger-equivalence-tolerance", type=float, default=0.0)
+    parser.add_argument("--stop-on-equivalent-challenger", action="store_true")
     parser.add_argument("--allow-wf-soft-block", action="store_true")
     parser.add_argument("--dry-run", action="store_true")
     args = parser.parse_args()
 
+    lock_path: Path | None = None
+    lock_acquired = False
     try:
         if args.list_profiles:
             print(format_model_run_profiles())
@@ -448,6 +704,7 @@ def main() -> int:
         manifest_output.parent.mkdir(parents=True, exist_ok=True)
         promotion_output.parent.mkdir(parents=True, exist_ok=True)
         wf_summary_output.parent.mkdir(parents=True, exist_ok=True)
+        lock_path = _build_lock_path(manifest_output, revision_slug=revision_slug)
 
         progress = ProgressBar(total=4, prefix="[revision-gate]", logger=log_progress, min_interval_sec=0.0)
         progress.start(
@@ -459,7 +716,7 @@ def main() -> int:
             )
         )
 
-        train_command = [sys.executable, "scripts/run_train.py"]
+        train_command = _python_command("scripts/run_train.py")
         _extend_profile_or_config_args(
             train_command,
             profile=resolved_profile,
@@ -474,8 +731,7 @@ def main() -> int:
             train_command.extend(["--max-valid-rows", str(args.train_max_valid_rows)])
 
         evaluate_command = [
-            sys.executable,
-            "scripts/run_evaluate.py",
+            *_python_command("scripts/run_evaluate.py"),
             "--max-rows",
             str(args.evaluate_max_rows),
             "--wf-mode",
@@ -501,8 +757,7 @@ def main() -> int:
             evaluate_command.extend(["--end-date", str(args.evaluate_end_date)])
 
         wf_command = [
-            sys.executable,
-            "scripts/run_wf_feasibility_diag.py",
+            *_python_command("scripts/run_wf_feasibility_diag.py"),
             "--wf-mode",
             args.evaluate_wf_mode,
             "--wf-scheme",
@@ -526,8 +781,7 @@ def main() -> int:
             wf_command.extend(["--end-date", str(args.evaluate_end_date)])
 
         promotion_command = [
-            sys.executable,
-            "scripts/run_promotion_gate.py",
+            *_python_command("scripts/run_promotion_gate.py"),
             "--evaluation-manifest",
             "artifacts/reports/evaluation_manifest.json",
             "--wf-summary",
@@ -542,6 +796,7 @@ def main() -> int:
         executed_steps: list[dict[str, object]] = []
         status = "pass"
         decision = "promote"
+        challenger_equivalence_report: dict[str, object] | None = None
 
         if args.dry_run:
             executed_steps = [
@@ -602,6 +857,7 @@ def main() -> int:
                 manifest_output=manifest_output,
                 executed_steps=executed_steps,
                 promotion_report=None,
+                challenger_equivalence=None,
                 dry_run=True,
             )
             manifest_payload["recommended_action"] = "run_revision_gate"
@@ -618,6 +874,55 @@ def main() -> int:
             print(f"[revision-gate] wf command: {' '.join(wf_command)}")
             print(f"[revision-gate] promotion command: {' '.join(promotion_command)}")
             return 0
+
+        existing_lock = _acquire_run_lock(
+            lock_path=lock_path,
+            revision_slug=revision_slug,
+            manifest_output=manifest_output,
+        )
+        if existing_lock:
+            manifest_payload = _build_manifest_payload(
+                revision_slug=revision_slug,
+                started_at=started_at,
+                status="blocked",
+                decision="hold",
+                resolved_profile=resolved_profile,
+                config_path=config_path,
+                data_config_path=data_config_path,
+                feature_config_path=feature_config_path,
+                train_artifact_suffix=train_artifact_suffix,
+                skip_train=bool(args.skip_train),
+                train_max_train_rows=args.train_max_train_rows,
+                train_max_valid_rows=args.train_max_valid_rows,
+                evaluate_model_artifact_suffix=args.evaluate_model_artifact_suffix,
+                evaluate_max_rows=args.evaluate_max_rows,
+                evaluate_pre_feature_max_rows=args.evaluate_pre_feature_max_rows,
+                evaluate_start_date=args.evaluate_start_date,
+                evaluate_end_date=args.evaluate_end_date,
+                evaluate_wf_mode=args.evaluate_wf_mode,
+                evaluate_wf_scheme=args.evaluate_wf_scheme,
+                wf_summary_output=wf_summary_output,
+                promotion_min_feasible_folds=args.promotion_min_feasible_folds,
+                promotion_output=promotion_output,
+                manifest_output=manifest_output,
+                executed_steps=executed_steps,
+                promotion_report=None,
+                challenger_equivalence=None,
+                error_code="duplicate_revision_gate_running",
+                error_message="another revision gate process is already running for the same revision",
+                recommended_action="wait_for_active_revision_gate_or_choose_new_revision",
+                current_phase="duplicate_run_guard",
+                highlights=_duplicate_run_highlights(
+                    revision_slug=revision_slug,
+                    lock_path=lock_path,
+                    existing=existing_lock,
+                ),
+            )
+            _write_manifest(manifest_output, manifest_payload, label="writing duplicate-run blocked manifest")
+            print(f"[revision-gate] manifest saved: {manifest_output}")
+            print("[revision-gate] decision: hold")
+            return 1
+        lock_acquired = True
 
         if args.skip_train:
             executed_steps.append(
@@ -667,6 +972,7 @@ def main() -> int:
                     manifest_output=manifest_output,
                     executed_steps=executed_steps,
                     promotion_report=None,
+                    challenger_equivalence=None,
                     error_code=str(failure_details.get("error_code") or "train_failed"),
                     error_message=str(failure_details.get("error_message") or "revision training failed"),
                     recommended_action=str(failure_details.get("recommended_action") or "inspect_revision_gate_failure"),
@@ -716,6 +1022,7 @@ def main() -> int:
                 manifest_output=manifest_output,
                 executed_steps=executed_steps,
                 promotion_report=None,
+                challenger_equivalence=None,
                 error_code=str(failure_details.get("error_code") or "evaluate_failed"),
                 error_message=str(failure_details.get("error_message") or "revision evaluation failed"),
                 recommended_action=str(failure_details.get("recommended_action") or "inspect_revision_gate_failure"),
@@ -728,6 +1035,73 @@ def main() -> int:
             return int(evaluate_result.returncode) or 1
         progress.update(message="evaluation completed")
 
+        if args.challenger_anchor_evaluation_summary:
+            anchor_summary_path = _resolve_path(str(args.challenger_anchor_evaluation_summary))
+            candidate_summary_path = _resolve_versioned_evaluation_summary_path()
+            challenger_equivalence_report = _build_challenger_equivalence_report(
+                anchor_summary_path=anchor_summary_path,
+                candidate_summary_path=candidate_summary_path,
+                tolerance=float(args.challenger_equivalence_tolerance),
+            )
+            equivalence_status = str(challenger_equivalence_report.get("status") or "unknown")
+            log_progress(
+                "challenger equivalence check "
+                f"status={equivalence_status} anchor={artifact_display_path(anchor_summary_path, workspace_root=ROOT)} "
+                f"candidate={artifact_display_path(candidate_summary_path, workspace_root=ROOT)}"
+            )
+            executed_steps.append(
+                {
+                    "name": "challenger_equivalence",
+                    "status": equivalence_status,
+                    "anchor_summary": artifact_display_path(anchor_summary_path, workspace_root=ROOT),
+                    "candidate_summary": artifact_display_path(candidate_summary_path, workspace_root=ROOT),
+                }
+            )
+            if equivalence_status == "equivalent":
+                highlights = _challenger_equivalence_highlights(challenger_equivalence_report)
+                for highlight in highlights:
+                    log_progress(highlight)
+                if args.stop_on_equivalent_challenger:
+                    status = "block"
+                    decision = "hold"
+                    manifest_payload = _build_manifest_payload(
+                        revision_slug=revision_slug,
+                        started_at=started_at,
+                        status=status,
+                        decision=decision,
+                        resolved_profile=resolved_profile,
+                        config_path=config_path,
+                        data_config_path=data_config_path,
+                        feature_config_path=feature_config_path,
+                        train_artifact_suffix=train_artifact_suffix,
+                        skip_train=bool(args.skip_train),
+                        train_max_train_rows=args.train_max_train_rows,
+                        train_max_valid_rows=args.train_max_valid_rows,
+                        evaluate_model_artifact_suffix=args.evaluate_model_artifact_suffix,
+                        evaluate_max_rows=args.evaluate_max_rows,
+                        evaluate_pre_feature_max_rows=args.evaluate_pre_feature_max_rows,
+                        evaluate_start_date=args.evaluate_start_date,
+                        evaluate_end_date=args.evaluate_end_date,
+                        evaluate_wf_mode=args.evaluate_wf_mode,
+                        evaluate_wf_scheme=args.evaluate_wf_scheme,
+                        wf_summary_output=wf_summary_output,
+                        promotion_min_feasible_folds=args.promotion_min_feasible_folds,
+                        promotion_output=promotion_output,
+                        manifest_output=manifest_output,
+                        executed_steps=executed_steps,
+                        promotion_report=None,
+                        challenger_equivalence=challenger_equivalence_report,
+                        error_code="equivalent_challenger_detected",
+                        error_message="challenger evaluation summary matched the anchor across the configured decisive fields",
+                        recommended_action="review_anchor_equivalence_before_running_wf",
+                        current_phase="challenger_equivalence",
+                        highlights=highlights,
+                    )
+                    _write_manifest(manifest_output, manifest_payload, label="writing equivalent-challenger blocked manifest")
+                    print(f"[revision-gate] manifest saved: {manifest_output}")
+                    print("[revision-gate] decision: hold")
+                    return 1
+
         wf_result = _run_command_result(wf_command, label="wf_feasibility")
         executed_steps.append({
             "name": "wf_feasibility",
@@ -739,7 +1113,7 @@ def main() -> int:
             status = "failed"
             decision = "error"
             failure_details = _classify_step_failure(step_name="wf_feasibility", result=wf_result)
-            if args.allow_wf_soft_block and str(failure_details.get("error_code") or "") == "insufficient_wf_window_coverage":
+            if args.allow_wf_soft_block and str(failure_details.get("error_code") or "") in {"insufficient_wf_window_coverage", "missing_market_odds"}:
                 _write_soft_block_wf_summary(
                     wf_summary_output=wf_summary_output,
                     config_path=config_path,
@@ -785,6 +1159,7 @@ def main() -> int:
                     manifest_output=manifest_output,
                     executed_steps=executed_steps,
                     promotion_report=None,
+                    challenger_equivalence=challenger_equivalence_report,
                     error_code=str(failure_details.get("error_code") or "wf_feasibility_failed"),
                     error_message=str(failure_details.get("error_message") or "revision wf feasibility failed"),
                     recommended_action=str(failure_details.get("recommended_action") or "inspect_revision_gate_failure"),
@@ -839,6 +1214,7 @@ def main() -> int:
             manifest_output=manifest_output,
             executed_steps=executed_steps,
             promotion_report=promotion_report,
+            challenger_equivalence=challenger_equivalence_report,
         )
         if isinstance(promotion_report, dict):
             if promotion_report.get("recommended_action") is not None:
@@ -861,6 +1237,9 @@ def main() -> int:
         print(f"[revision-gate] failed: {error}")
         traceback.print_exc()
         return 1
+    finally:
+        if lock_acquired and lock_path is not None:
+            _release_run_lock(lock_path)
 
 
 if __name__ == "__main__":

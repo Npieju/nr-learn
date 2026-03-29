@@ -266,6 +266,12 @@ def optimize_roi_strategy(
     valid_df["iso_prob"] = fit_isotonic(train_scores, train_labels, valid_df["score"].to_numpy())
     train_df["market_prob"] = compute_market_prob(train_df, odds_col=odds_col)
     valid_df["market_prob"] = compute_market_prob(valid_df, odds_col=odds_col)
+    train_df["_policy_odds_num"] = pd.to_numeric(train_df[odds_col], errors="coerce")
+    valid_df["_policy_odds_num"] = pd.to_numeric(valid_df[odds_col], errors="coerce")
+    if "rank" in train_df.columns:
+        train_df["_policy_rank_num"] = pd.to_numeric(train_df["rank"], errors="coerce")
+    if "rank" in valid_df.columns:
+        valid_df["_policy_rank_num"] = pd.to_numeric(valid_df["rank"], errors="coerce")
 
     if mode == "full":
         blend_candidates = _resolve_search_candidate_values(
