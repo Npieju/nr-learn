@@ -39,6 +39,17 @@ latest 2025 系の seasonal runtime policy は次の 2 段で読む。
 
 December tail のような control window は、この切替が broad replacement ではなく controlled override に留まっているかを確認するために使う。
 
+seasonal de-risk の正本ルールは `docs/seasonal_derisk_decision_standard.md` に置く。この guide では、まずその read order を実行手順へ落とし込む。
+
+latest 2025 の seasonal decision は、次の 4 段で固定する。
+
+1. September difficult window の dashboard summary を見る
+2. December tail control window の dashboard summary を見る
+3. 必要なときだけ compare を回し直す
+4. それでも迷うときだけ formal support artifact に降りる
+
+この順序を飛ばして、September 単独の改善だけで broad replacement と結論しない。
+
 latest 2025 の compare を再開するときは、次の 3 段で十分である。
 
 1. まず dashboard summary JSON だけを見る。
@@ -53,6 +64,23 @@ dashboard summary JSON は、September difficult window を `long_horizon -> tig
 - recent-2018 September / December: `artifacts/reports/dashboard/serving_compare_dashboard_current_recommended_serving_2025_latest_sep_full_month_2025_latest_vs_recent2018_true_retrain_fresh_vs_current_recommended_serving_2025_recent_2018_sep_full_month_2025_latest_vs_recent2018_true_retrain_fresh.json` と `artifacts/reports/dashboard/serving_compare_dashboard_current_recommended_serving_2025_latest_dec_tail_2025_latest_vs_recent2018_true_retrain_fresh_vs_current_recommended_serving_2025_recent_2018_dec_tail_2025_latest_vs_recent2018_true_retrain_fresh.json`
 
 コマンドを回し直すときも、`command_reference.md` の latest 2025 compare 例を同じ順に使う。運用判断では dashboard summary を先に見て、formal support が必要なときだけ promotion gate / evaluation summary に降りる。
+
+2026-03-29 時点の first read は次の 3 行で十分である。
+
+| compare | window | baseline | candidate | reading |
+| --- | --- | ---: | ---: | --- |
+| baseline vs long-horizon | 2025-09 8 dates | `-27.3` | `-4.3` | first seasonal de-risk alias |
+| baseline vs long-horizon | 2025-12 tail 8 dates | `+14.9` | `+14.9` | controlled override, not broad replacement |
+| baseline vs tighter policy | 2025-09 / 2025-12 | September de-risk, December not superior | second defensive option | analysis-first |
+
+この first read が崩れない限り、latest 2025 の seasonal ordering は変えない。
+
+latest 2025 の current conclusion template は次で固定する。
+
+- baseline default remains `current_recommended_serving_2025_latest`
+- first seasonal de-risk alias remains `current_long_horizon_serving_2025_latest`
+- `current_tighter_policy_search_candidate_2025_latest` stays analysis-first second defensive option
+- recent-2018 true retrain stays analysis-first third fallback
 
 ## 4. 代表日の smoke
 
