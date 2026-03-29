@@ -178,6 +178,53 @@ def _entity_race_shifted_rolling_mean(
     return joined["_feature_value"].astype(float)
 
 
+def _entity_race_shifted_rolling_mean_many(
+    frame: pd.DataFrame,
+    group_col: str,
+    value_cols: list[str],
+    window: int,
+    min_periods: int = 1,
+) -> pd.DataFrame:
+    required = {"race_id", group_col}
+    available_cols = [column for column in value_cols if column in frame.columns]
+    if not required.issubset(frame.columns) or not available_cols:
+        return pd.DataFrame(index=frame.index)
+
+    work = frame[["race_id", group_col, *available_cols]].copy()
+    work[group_col] = _clean_group_series(work, group_col)
+    for column in available_cols:
+        work[column] = pd.to_numeric(work[column], errors="coerce")
+    work["_row_order"] = np.arange(len(work), dtype=int)
+    work = work.dropna(subset=[group_col])
+    if work.empty:
+        return pd.DataFrame(index=frame.index)
+
+    race_group = (
+        work.groupby(["race_id", group_col], sort=False)
+        .agg({**{column: "mean" for column in available_cols}, "_row_order": "min"})
+        .reset_index()
+        .sort_values("_row_order")
+        .reset_index(drop=True)
+    )
+    shifted = race_group[available_cols].groupby(race_group[group_col], sort=False).shift(1)
+    rolled = (
+        shifted.groupby(race_group[group_col], sort=False)
+        .rolling(window=window, min_periods=min_periods)
+        .mean()
+        .reset_index(level=0, drop=True)
+    )
+
+    lookup = race_group[["race_id", group_col]].copy()
+    for column in available_cols:
+        lookup[column] = rolled[column].to_numpy(dtype=float)
+
+    joined = frame[["race_id", group_col]].copy()
+    joined[group_col] = _clean_group_series(joined, group_col)
+    joined = joined.merge(lookup, on=["race_id", group_col], how="left", sort=False)
+    joined.index = frame.index
+    return joined[available_cols].astype(float)
+
+
 def _select_horse_fallback_key(frame: pd.DataFrame) -> str | None:
     has_horse_id = "horse_id" in frame.columns
     has_horse_name = "horse_name" in frame.columns
@@ -550,21 +597,27 @@ def build_features(frame: pd.DataFrame) -> pd.DataFrame:
     if horse_key_source is not None:
         data["horse_history_key_source"] = horse_key_source
 
-    if {"jockey_id", "is_win"}.issubset(data.columns):
-        data["jockey_last_30_win_rate"] = _entity_race_shifted_rolling_mean(
+    jockey_window30 = pd.DataFrame(index=data.index)
+    if "jockey_id" in data.columns:
+        jockey_window30 = _entity_race_shifted_rolling_mean_many(
             data,
             "jockey_id",
-            "is_win",
+            ["is_win", "corner_gain_2_to_4", "closing_time_3f"],
             window=30,
-        ).fillna(0.0)
+        )
+    if "is_win" in jockey_window30.columns:
+        data["jockey_last_30_win_rate"] = jockey_window30["is_win"].fillna(0.0)
 
-    if {"trainer_id", "is_win"}.issubset(data.columns):
-        data["trainer_last_30_win_rate"] = _entity_race_shifted_rolling_mean(
+    trainer_window30 = pd.DataFrame(index=data.index)
+    if "trainer_id" in data.columns:
+        trainer_window30 = _entity_race_shifted_rolling_mean_many(
             data,
             "trainer_id",
-            "is_win",
+            ["is_win", "corner_gain_2_to_4", "closing_time_3f"],
             window=30,
-        ).fillna(0.0)
+        )
+    if "is_win" in trainer_window30.columns:
+        data["trainer_last_30_win_rate"] = trainer_window30["is_win"].fillna(0.0)
 
     if {"jockey_id", "trainer_id"}.issubset(data.columns):
         _compose_key(
@@ -611,13 +664,9 @@ def build_features(frame: pd.DataFrame) -> pd.DataFrame:
         ("trainer_id", "closing_time_3f", "trainer_last_30_avg_closing_time_3f", 30),
     ]
     for group_col, value_col, output_col, window in jockey_trainer_style_specs:
-        if {group_col, value_col}.issubset(data.columns):
-            data[output_col] = _entity_race_shifted_rolling_mean(
-                data,
-                group_col,
-                value_col,
-                window=window,
-            )
+        history_frame = jockey_window30 if group_col == "jockey_id" else trainer_window30
+        if value_col in history_frame.columns:
+            data[output_col] = history_frame[value_col]
 
     track_distance_history_specs = [
         ("horse_track_distance_key", "rank", "horse_track_distance_last_3_avg_rank", 3, 1, float(data["rank"].median()) if "rank" in data.columns and data["rank"].notna().any() else np.nan),
