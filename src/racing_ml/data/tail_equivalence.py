@@ -11,6 +11,26 @@ from racing_ml.data.dataset_loader import _read_csv_tail
 TailReader = Callable[[Path, int], tuple[pd.DataFrame, int]]
 
 
+def _series_value_diff_mask(left: pd.Series, right: pd.Series) -> pd.Series:
+    left_numeric = pd.to_numeric(left, errors="coerce")
+    right_numeric = pd.to_numeric(right, errors="coerce")
+    numeric_mask = left_numeric.notna() | right_numeric.notna()
+
+    equal_mask = pd.Series(False, index=left.index, dtype=bool)
+    if numeric_mask.any():
+        numeric_equal = (left_numeric == right_numeric) | (left_numeric.isna() & right_numeric.isna())
+        equal_mask.loc[numeric_mask] = numeric_equal.loc[numeric_mask]
+
+    non_numeric_mask = ~numeric_mask
+    if non_numeric_mask.any():
+        left_text = left.astype("string")
+        right_text = right.astype("string")
+        text_equal = (left_text == right_text) | (left_text.isna() & right_text.isna())
+        equal_mask.loc[non_numeric_mask] = text_equal.loc[non_numeric_mask]
+
+    return ~equal_mask
+
+
 def read_csv_tail_deque_trim_candidate(csv_path: Path, tail_rows: int) -> tuple[pd.DataFrame, int]:
     if tail_rows <= 0:
         raise ValueError("tail_rows must be greater than 0")
@@ -75,11 +95,13 @@ def compare_tail_readers(
     shape_equal = left_frame.shape == right_frame.shape
     totals_equal = int(left_total_rows) == int(right_total_rows)
     exact_equal = bool(column_order_equal and shape_equal and left_frame.equals(right_frame))
+    value_equal = bool(column_order_equal and shape_equal)
 
     first_diff_column: str | None = None
     first_diff_indices: list[int] = []
     first_diff_samples: list[dict[str, Any]] = []
     dtype_differences: list[dict[str, str]] = []
+    value_difference_count = 0
 
     for column in shared_columns:
         left_dtype = str(left_frame[column].dtype)
@@ -93,14 +115,16 @@ def compare_tail_readers(
                 }
             )
 
-    if not exact_equal and shared_columns and shape_equal:
+    if shared_columns and shape_equal:
         for column in shared_columns:
             left_series = left_frame[column]
             right_series = right_frame[column]
-            if left_series.equals(right_series):
+            diff_mask = _series_value_diff_mask(left_series, right_series)
+            diff_count = int(diff_mask.sum())
+            value_difference_count += diff_count
+            if diff_count == 0:
                 continue
             first_diff_column = column
-            diff_mask = left_series.astype("string") != right_series.astype("string")
             first_diff_indices = [int(index) for index in diff_mask[diff_mask].index[:sample_limit]]
             for index in first_diff_indices:
                 first_diff_samples.append(
@@ -112,6 +136,9 @@ def compare_tail_readers(
                     }
                 )
             break
+        value_equal = value_difference_count == 0
+
+    dtype_only_difference = bool((not exact_equal) and value_equal)
 
     return {
         "csv_path": str(csv_path),
@@ -134,6 +161,9 @@ def compare_tail_readers(
             "column_order_equal": bool(column_order_equal),
             "shared_column_count": int(len(shared_columns)),
             "exact_equal": bool(exact_equal),
+            "value_equal": bool(value_equal),
+            "dtype_only_difference": dtype_only_difference,
+            "value_difference_count": int(value_difference_count),
             "dtype_differences": dtype_differences,
             "first_diff_column": first_diff_column,
             "first_diff_indices": first_diff_indices,
