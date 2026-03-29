@@ -406,7 +406,7 @@ def _read_csv_tail(csv_path: Path, tail_rows: int) -> tuple[pd.DataFrame, int]:
         chunks.append(chunk)
         kept_rows += int(len(chunk))
         if kept_rows > max_kept_rows:
-            tail_frame = pd.concat(list(chunks), ignore_index=True).tail(max_kept_rows).reset_index(drop=True)
+            tail_frame = pd.concat(list(chunks), ignore_index=True).tail(max_kept_rows)
             chunks = deque([tail_frame])
             kept_rows = int(len(tail_frame))
 
