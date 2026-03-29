@@ -114,10 +114,41 @@ def read_csv_tail_compact_reset_late_candidate(csv_path: Path, tail_rows: int) -
     return tail_frame.tail(int(tail_rows)).reset_index(drop=True), total_rows
 
 
+def read_csv_tail_compact_iterable_candidate(csv_path: Path, tail_rows: int) -> tuple[pd.DataFrame, int]:
+    if tail_rows <= 0:
+        raise ValueError("tail_rows must be greater than 0")
+
+    chunk_size = max(min(int(tail_rows) * 4, 200000), 50000)
+    total_rows = 0
+    kept_rows = 0
+    max_kept_rows = int(tail_rows)
+    chunks: deque[pd.DataFrame] = deque()
+
+    for chunk in pd.read_csv(csv_path, low_memory=False, chunksize=chunk_size):
+        total_rows += int(len(chunk))
+        if len(chunk) > max_kept_rows:
+            chunk = chunk.tail(max_kept_rows)
+        chunks.append(chunk)
+        kept_rows += int(len(chunk))
+        if kept_rows > max_kept_rows:
+            tail_frame = pd.concat(chunks, ignore_index=True).tail(max_kept_rows)
+            chunks = deque([tail_frame])
+            kept_rows = int(len(tail_frame))
+
+    if not chunks:
+        return pd.DataFrame(), 0
+
+    tail_frame = pd.concat(chunks, ignore_index=True)
+    if len(tail_frame) <= int(tail_rows):
+        return tail_frame.reset_index(drop=True), total_rows
+    return tail_frame.tail(int(tail_rows)).reset_index(drop=True), total_rows
+
+
 TAIL_READER_CANDIDATES: dict[str, TailReader] = {
     "current": _read_csv_tail,
     "deque_trim": read_csv_tail_deque_trim_candidate,
     "compact_reset_late": read_csv_tail_compact_reset_late_candidate,
+    "compact_iterable": read_csv_tail_compact_iterable_candidate,
 }
 
 

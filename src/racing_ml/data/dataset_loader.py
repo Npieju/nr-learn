@@ -406,14 +406,14 @@ def _read_csv_tail(csv_path: Path, tail_rows: int) -> tuple[pd.DataFrame, int]:
         chunks.append(chunk)
         kept_rows += int(len(chunk))
         if kept_rows > max_kept_rows:
-            tail_frame = pd.concat(list(chunks), ignore_index=True).tail(max_kept_rows)
+            tail_frame = pd.concat(chunks, ignore_index=True).tail(max_kept_rows)
             chunks = deque([tail_frame])
             kept_rows = int(len(tail_frame))
 
     if not chunks:
         return pd.DataFrame(), 0
 
-    tail_frame = pd.concat(list(chunks), ignore_index=True)
+    tail_frame = pd.concat(chunks, ignore_index=True)
     if len(tail_frame) <= int(tail_rows):
         return tail_frame.reset_index(drop=True), total_rows
     return tail_frame.tail(int(tail_rows)).reset_index(drop=True), total_rows
