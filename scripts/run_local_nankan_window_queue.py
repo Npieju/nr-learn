@@ -63,7 +63,7 @@ def main() -> int:
     parser.add_argument("--race-id-source", default="race_list")
     parser.add_argument("--start-date", default="2006-03-29")
     parser.add_argument("--end-date", default="2026-03-28")
-    parser.add_argument("--date-order", default="asc")
+    parser.add_argument("--date-order", default="desc")
     parser.add_argument("--chunk-months", type=int, default=6)
     parser.add_argument("--max-cycles", type=int, default=1)
     parser.add_argument("--coverage-output", default="artifacts/reports/coverage_snapshot_local_nankan_current.json")
@@ -112,7 +112,10 @@ def main() -> int:
     ]
 
     launched_windows = 0
-    print(f"[local-nankan-window-queue] started manifest={args.manifest_file} poll_sec={args.poll_sec}", flush=True)
+    print(
+        f"[local-nankan-window-queue] started manifest={args.manifest_file} poll_sec={args.poll_sec} date_order={args.date_order}",
+        flush=True,
+    )
     while True:
         payload = _read_json(manifest_path)
         status = str(payload.get("status") or "")

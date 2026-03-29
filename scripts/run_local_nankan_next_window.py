@@ -21,7 +21,7 @@ def main() -> int:
     parser.add_argument("--race-id-source", default="race_list")
     parser.add_argument("--start-date", default="2006-03-29")
     parser.add_argument("--end-date", default="2026-03-28")
-    parser.add_argument("--date-order", default="asc")
+    parser.add_argument("--date-order", default="desc")
     parser.add_argument("--chunk-months", type=int, default=6)
     parser.add_argument("--max-cycles", type=int, default=1)
     parser.add_argument("--manifest-file", default="artifacts/reports/local_nankan_backfill_race_card_20y.json")
@@ -75,7 +75,10 @@ def main() -> int:
         args.status_board_output,
     ]
 
-    print(f"[local-nankan-next-window] starting target={args.target} manifest={args.manifest_file}", flush=True)
+    print(
+        f"[local-nankan-next-window] starting target={args.target} manifest={args.manifest_file} date_order={args.date_order}",
+        flush=True,
+    )
     backfill_exit_code = _run(backfill_command)
     print(f"[local-nankan-next-window] backfill_exit_code={backfill_exit_code}", flush=True)
     if backfill_exit_code != 0:
