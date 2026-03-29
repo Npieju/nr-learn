@@ -107,6 +107,8 @@ Conclusion
 - recent-2018 true retrain stays analysis-first third fallback
 ```
 
+secondary fallback ordering を固定するときは、`docs/seasonal_secondary_fallback_standard.md` を併用する。
+
 ## 7. Stop Conditions
 
 次のいずれかが出たら、この標準を見直す。
