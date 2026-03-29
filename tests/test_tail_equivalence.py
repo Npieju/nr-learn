@@ -28,10 +28,13 @@ class TailEquivalenceTest(unittest.TestCase):
                 tail_rows=2,
             )
 
-            self.assertTrue(result["comparison"]["exact_equal"])
-            self.assertTrue(result["comparison"]["value_equal"])
-            self.assertFalse(result["comparison"]["dtype_only_difference"])
-            self.assertEqual(result["comparison"]["first_diff_column"], None)
+            self.assertTrue(result["comparison"]["raw"]["exact_equal"])
+            self.assertTrue(result["comparison"]["raw"]["value_equal"])
+            self.assertFalse(result["comparison"]["raw"]["dtype_only_difference"])
+            self.assertEqual(result["comparison"]["raw"]["first_diff_column"], None)
+            self.assertTrue(result["comparison"]["normalized"]["exact_equal"])
+            self.assertTrue(result["comparison"]["normalized"]["value_equal"])
+            self.assertFalse(result["comparison"]["normalized"]["dtype_only_difference"])
 
     def test_compare_tail_readers_reports_first_difference(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -53,12 +56,15 @@ class TailEquivalenceTest(unittest.TestCase):
                 tail_rows=2,
             )
 
-            self.assertFalse(result["comparison"]["exact_equal"])
-            self.assertFalse(result["comparison"]["value_equal"])
-            self.assertFalse(result["comparison"]["dtype_only_difference"])
-            self.assertEqual(result["comparison"]["value_difference_count"], 1)
-            self.assertEqual(result["comparison"]["first_diff_column"], "value")
-            self.assertEqual(result["comparison"]["first_diff_indices"], [1])
+            self.assertFalse(result["comparison"]["raw"]["exact_equal"])
+            self.assertFalse(result["comparison"]["raw"]["value_equal"])
+            self.assertFalse(result["comparison"]["raw"]["dtype_only_difference"])
+            self.assertEqual(result["comparison"]["raw"]["value_difference_count"], 1)
+            self.assertEqual(result["comparison"]["raw"]["first_diff_column"], "value")
+            self.assertEqual(result["comparison"]["raw"]["first_diff_indices"], [1])
+            self.assertFalse(result["comparison"]["normalized"]["exact_equal"])
+            self.assertFalse(result["comparison"]["normalized"]["value_equal"])
+            self.assertFalse(result["comparison"]["normalized"]["dtype_only_difference"])
 
     def test_compare_tail_readers_reports_dtype_only_difference(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -80,7 +86,10 @@ class TailEquivalenceTest(unittest.TestCase):
                 tail_rows=2,
             )
 
-            self.assertFalse(result["comparison"]["exact_equal"])
-            self.assertTrue(result["comparison"]["value_equal"])
-            self.assertTrue(result["comparison"]["dtype_only_difference"])
-            self.assertEqual(result["comparison"]["value_difference_count"], 0)
+            self.assertFalse(result["comparison"]["raw"]["exact_equal"])
+            self.assertTrue(result["comparison"]["raw"]["value_equal"])
+            self.assertTrue(result["comparison"]["raw"]["dtype_only_difference"])
+            self.assertEqual(result["comparison"]["raw"]["value_difference_count"], 0)
+            self.assertFalse(result["comparison"]["normalized"]["exact_equal"])
+            self.assertTrue(result["comparison"]["normalized"]["value_equal"])
+            self.assertTrue(result["comparison"]["normalized"]["dtype_only_difference"])

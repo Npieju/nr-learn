@@ -52,17 +52,25 @@ def main() -> int:
                 csv_path=csv_path,
                 tail_rows=int(args.tail_rows),
             )
-        progress.update(message=f"comparison complete exact_equal={comparison['comparison']['exact_equal']}")
+        raw_exact_equal = comparison["comparison"]["raw"]["exact_equal"]
+        normalized_exact_equal = comparison["comparison"]["normalized"]["exact_equal"]
+        progress.update(
+            message=(
+                "comparison complete "
+                f"raw_exact_equal={raw_exact_equal} normalized_exact_equal={normalized_exact_equal}"
+            )
+        )
         comparison["manifest_file"] = artifact_display_path(manifest_path, workspace_root=ROOT)
         write_json(manifest_path, comparison)
         progress.update(message=f"manifest written path={artifact_display_path(manifest_path, workspace_root=ROOT)}")
         print(
             "[tail-equivalence] "
-            f"left={args.left_reader} right={args.right_reader} exact_equal={comparison['comparison']['exact_equal']}",
+            f"left={args.left_reader} right={args.right_reader} "
+            f"raw_exact_equal={raw_exact_equal} normalized_exact_equal={normalized_exact_equal}",
             flush=True,
         )
         progress.complete(message="tail equivalence completed")
-        if args.fail_on_diff and not comparison["comparison"]["exact_equal"]:
+        if args.fail_on_diff and not raw_exact_equal:
             return 2
         return 0
     except KeyboardInterrupt:

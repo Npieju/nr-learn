@@ -6,7 +6,7 @@ from typing import Any, Callable
 
 import pandas as pd
 
-from racing_ml.data.dataset_loader import _read_csv_tail
+from racing_ml.data.dataset_loader import _normalize_columns, _read_csv_tail
 
 TailReader = Callable[[Path, int], tuple[pd.DataFrame, int]]
 
@@ -72,28 +72,17 @@ TAIL_READER_CANDIDATES: dict[str, TailReader] = {
 }
 
 
-def compare_tail_readers(
+def _build_frame_comparison(
     *,
-    left_name: str,
-    left_reader: TailReader,
-    right_name: str,
-    right_reader: TailReader,
-    csv_path: Path,
-    tail_rows: int,
-    sample_limit: int = 5,
+    left_frame: pd.DataFrame,
+    right_frame: pd.DataFrame,
+    sample_limit: int,
 ) -> dict[str, Any]:
-    left_frame, left_total_rows = left_reader(csv_path, tail_rows)
-    right_frame, right_total_rows = right_reader(csv_path, tail_rows)
-
-    left_frame = left_frame.reset_index(drop=True)
-    right_frame = right_frame.reset_index(drop=True)
-
     left_columns = [str(column) for column in left_frame.columns]
     right_columns = [str(column) for column in right_frame.columns]
     shared_columns = [column for column in left_columns if column in right_frame.columns]
     column_order_equal = left_columns == right_columns
     shape_equal = left_frame.shape == right_frame.shape
-    totals_equal = int(left_total_rows) == int(right_total_rows)
     exact_equal = bool(column_order_equal and shape_equal and left_frame.equals(right_frame))
     value_equal = bool(column_order_equal and shape_equal)
 
@@ -139,6 +128,51 @@ def compare_tail_readers(
         value_equal = value_difference_count == 0
 
     dtype_only_difference = bool((not exact_equal) and value_equal)
+    return {
+        "shape_equal": bool(shape_equal),
+        "column_order_equal": bool(column_order_equal),
+        "shared_column_count": int(len(shared_columns)),
+        "exact_equal": bool(exact_equal),
+        "value_equal": bool(value_equal),
+        "dtype_only_difference": dtype_only_difference,
+        "value_difference_count": int(value_difference_count),
+        "dtype_differences": dtype_differences,
+        "first_diff_column": first_diff_column,
+        "first_diff_indices": first_diff_indices,
+        "first_diff_samples": first_diff_samples,
+    }
+
+
+def compare_tail_readers(
+    *,
+    left_name: str,
+    left_reader: TailReader,
+    right_name: str,
+    right_reader: TailReader,
+    csv_path: Path,
+    tail_rows: int,
+    sample_limit: int = 5,
+) -> dict[str, Any]:
+    left_frame, left_total_rows = left_reader(csv_path, tail_rows)
+    right_frame, right_total_rows = right_reader(csv_path, tail_rows)
+
+    left_frame = left_frame.reset_index(drop=True)
+    right_frame = right_frame.reset_index(drop=True)
+    totals_equal = int(left_total_rows) == int(right_total_rows)
+    raw_comparison = _build_frame_comparison(
+        left_frame=left_frame,
+        right_frame=right_frame,
+        sample_limit=sample_limit,
+    )
+    normalized_left_frame = _normalize_columns(left_frame).reset_index(drop=True)
+    normalized_right_frame = _normalize_columns(right_frame).reset_index(drop=True)
+    normalized_comparison = _build_frame_comparison(
+        left_frame=normalized_left_frame,
+        right_frame=normalized_right_frame,
+        sample_limit=sample_limit,
+    )
+    left_columns = [str(column) for column in left_frame.columns]
+    right_columns = [str(column) for column in right_frame.columns]
 
     return {
         "csv_path": str(csv_path),
@@ -157,16 +191,7 @@ def compare_tail_readers(
         },
         "comparison": {
             "totals_equal": bool(totals_equal),
-            "shape_equal": bool(shape_equal),
-            "column_order_equal": bool(column_order_equal),
-            "shared_column_count": int(len(shared_columns)),
-            "exact_equal": bool(exact_equal),
-            "value_equal": bool(value_equal),
-            "dtype_only_difference": dtype_only_difference,
-            "value_difference_count": int(value_difference_count),
-            "dtype_differences": dtype_differences,
-            "first_diff_column": first_diff_column,
-            "first_diff_indices": first_diff_indices,
-            "first_diff_samples": first_diff_samples,
+            "raw": raw_comparison,
+            "normalized": normalized_comparison,
         },
     }
