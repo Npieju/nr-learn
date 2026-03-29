@@ -54,10 +54,15 @@ def main() -> int:
             )
         raw_exact_equal = comparison["comparison"]["raw"]["exact_equal"]
         normalized_exact_equal = comparison["comparison"]["normalized"]["exact_equal"]
+        raw_canonical_dtype_only = comparison["comparison"]["raw"]["canonical_dtype_only_difference"]
+        normalized_canonical_dtype_only = comparison["comparison"]["normalized"]["canonical_dtype_only_difference"]
         progress.update(
             message=(
                 "comparison complete "
-                f"raw_exact_equal={raw_exact_equal} normalized_exact_equal={normalized_exact_equal}"
+                f"raw_exact_equal={raw_exact_equal} "
+                f"normalized_exact_equal={normalized_exact_equal} "
+                f"raw_canonical_dtype_only={raw_canonical_dtype_only} "
+                f"normalized_canonical_dtype_only={normalized_canonical_dtype_only}"
             )
         )
         comparison["manifest_file"] = artifact_display_path(manifest_path, workspace_root=ROOT)
@@ -66,7 +71,10 @@ def main() -> int:
         print(
             "[tail-equivalence] "
             f"left={args.left_reader} right={args.right_reader} "
-            f"raw_exact_equal={raw_exact_equal} normalized_exact_equal={normalized_exact_equal}",
+            f"raw_exact_equal={raw_exact_equal} "
+            f"normalized_exact_equal={normalized_exact_equal} "
+            f"raw_canonical_dtype_only={raw_canonical_dtype_only} "
+            f"normalized_canonical_dtype_only={normalized_canonical_dtype_only}",
             flush=True,
         )
         progress.complete(message="tail equivalence completed")

@@ -31,6 +31,23 @@ def _series_value_diff_mask(left: pd.Series, right: pd.Series) -> pd.Series:
     return ~equal_mask
 
 
+def _classify_dtype_difference(left: pd.Series, right: pd.Series) -> str:
+    if not left.notna().any() and not right.notna().any():
+        return "all_null"
+
+    left_numeric = pd.to_numeric(left, errors="coerce")
+    right_numeric = pd.to_numeric(right, errors="coerce")
+    numeric_coverage = (left_numeric.notna() | right_numeric.notna()).all()
+    if numeric_coverage:
+        left_integral = bool(((left_numeric.dropna() % 1) == 0).all())
+        right_integral = bool(((right_numeric.dropna() % 1) == 0).all())
+        if left_integral and right_integral:
+            return "numeric_integral_equivalent"
+        return "numeric_dtype_only"
+
+    return "other"
+
+
 def read_csv_tail_deque_trim_candidate(csv_path: Path, tail_rows: int) -> tuple[pd.DataFrame, int]:
     if tail_rows <= 0:
         raise ValueError("tail_rows must be greater than 0")
@@ -90,17 +107,27 @@ def _build_frame_comparison(
     first_diff_indices: list[int] = []
     first_diff_samples: list[dict[str, Any]] = []
     dtype_differences: list[dict[str, str]] = []
+    dtype_difference_categories: list[dict[str, str]] = []
     value_difference_count = 0
 
     for column in shared_columns:
         left_dtype = str(left_frame[column].dtype)
         right_dtype = str(right_frame[column].dtype)
         if left_dtype != right_dtype:
+            classification = _classify_dtype_difference(left_frame[column], right_frame[column])
             dtype_differences.append(
                 {
                     "column": column,
                     "left_dtype": left_dtype,
                     "right_dtype": right_dtype,
+                }
+            )
+            dtype_difference_categories.append(
+                {
+                    "column": column,
+                    "left_dtype": left_dtype,
+                    "right_dtype": right_dtype,
+                    "classification": classification,
                 }
             )
 
@@ -128,6 +155,14 @@ def _build_frame_comparison(
         value_equal = value_difference_count == 0
 
     dtype_only_difference = bool((not exact_equal) and value_equal)
+    canonical_dtype_only_difference = bool(
+        dtype_only_difference
+        and dtype_difference_categories
+        and all(
+            item["classification"] in {"all_null", "numeric_integral_equivalent", "numeric_dtype_only"}
+            for item in dtype_difference_categories
+        )
+    )
     return {
         "shape_equal": bool(shape_equal),
         "column_order_equal": bool(column_order_equal),
@@ -135,8 +170,10 @@ def _build_frame_comparison(
         "exact_equal": bool(exact_equal),
         "value_equal": bool(value_equal),
         "dtype_only_difference": dtype_only_difference,
+        "canonical_dtype_only_difference": canonical_dtype_only_difference,
         "value_difference_count": int(value_difference_count),
         "dtype_differences": dtype_differences,
+        "dtype_difference_categories": dtype_difference_categories,
         "first_diff_column": first_diff_column,
         "first_diff_indices": first_diff_indices,
         "first_diff_samples": first_diff_samples,
