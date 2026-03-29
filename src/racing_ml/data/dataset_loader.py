@@ -369,9 +369,56 @@ def _select_table_columns(frame: pd.DataFrame, keep_columns: list[str], join_on:
     return frame[selected].copy()
 
 
-def _load_candidate_table(candidate: Path, table_cfg: dict[str, Any]) -> pd.DataFrame:
+def _build_candidate_usecols(
+    table_cfg: dict[str, Any],
+    *,
+    join_on: list[str],
+    keep_columns: list[str],
+    required_columns: list[str],
+):
+    table_loader = str(table_cfg.get("table_loader", "")).strip().lower()
+    if table_loader or not join_on:
+        return None
+
+    requested = list(dict.fromkeys([*join_on, *keep_columns, *required_columns]))
+    if not requested:
+        return None
+
+    resolved_aliases = _resolve_column_aliases(table_cfg.get("column_aliases"))
+    accepted = set()
+    for column in requested:
+        canonical = str(column).strip().lower()
+        if not canonical:
+            continue
+        accepted.add(canonical)
+        for alias in resolved_aliases.get(canonical, []):
+            accepted.add(alias)
+
+    if not accepted:
+        return None
+
+    return lambda column: str(column).strip().lower() in accepted
+
+
+def _load_candidate_table(
+    candidate: Path,
+    table_cfg: dict[str, Any],
+    *,
+    join_on: list[str],
+    keep_columns: list[str],
+    required_columns: list[str],
+) -> pd.DataFrame:
     try:
-        table = pd.read_csv(candidate, low_memory=False)
+        table = pd.read_csv(
+            candidate,
+            low_memory=False,
+            usecols=_build_candidate_usecols(
+                table_cfg,
+                join_on=join_on,
+                keep_columns=keep_columns,
+                required_columns=required_columns,
+            ),
+        )
     except pd.errors.EmptyDataError:
         return pd.DataFrame()
     table = _normalize_columns(table, extra_aliases=table_cfg.get("column_aliases"))
@@ -386,7 +433,16 @@ def _load_candidate_table(candidate: Path, table_cfg: dict[str, Any]) -> pd.Data
 def _load_materialized_candidate_table(candidate: Path, table_cfg: dict[str, Any]) -> pd.DataFrame:
     materialized_cfg = dict(table_cfg)
     materialized_cfg.pop("table_loader", None)
-    return _load_candidate_table(candidate, materialized_cfg)
+    join_on = _normalize_string_list(materialized_cfg.get("join_on"))
+    keep_columns = _normalize_string_list(materialized_cfg.get("keep_columns"))
+    required_columns = _normalize_string_list(materialized_cfg.get("required_columns")) or join_on
+    return _load_candidate_table(
+        candidate,
+        materialized_cfg,
+        join_on=join_on,
+        keep_columns=keep_columns,
+        required_columns=required_columns,
+    )
 
 
 def _read_csv_tail(csv_path: Path, tail_rows: int) -> tuple[pd.DataFrame, int]:
@@ -480,7 +536,13 @@ def _load_matching_table(
         return None
 
     for candidate in _iter_csv_candidates(search_roots, pattern):
-        table = _load_candidate_table(candidate, table_cfg)
+        table = _load_candidate_table(
+            candidate,
+            table_cfg,
+            join_on=join_on,
+            keep_columns=keep_columns,
+            required_columns=required_columns,
+        )
         if required_columns and not all(column in table.columns for column in required_columns):
             continue
         if join_on and not all(column in table.columns for column in join_on):
@@ -557,7 +619,13 @@ def _inspect_table_sources(
 
     for candidate in candidates:
         try:
-            table = _load_candidate_table(candidate, table_cfg)
+            table = _load_candidate_table(
+                candidate,
+                table_cfg,
+                join_on=join_on,
+                keep_columns=_normalize_string_list(table_cfg.get("keep_columns")),
+                required_columns=required_columns,
+            )
         except Exception as error:
             result["status"] = "read_error"
             result["active_file"] = _display_path(candidate, base_dir)
