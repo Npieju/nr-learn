@@ -43,6 +43,10 @@ COLUMN_ALIASES = {
     "dam_name": ["dam_name", "dam", "母"],
     "damsire_name": ["damsire_name", "dam_sire", "mother_father", "母父"],
 }
+BASE_RESOLVED_COLUMN_ALIASES: dict[str, list[str]] = {
+    canonical: [str(alias).strip().lower() for alias in aliases if str(alias).strip()]
+    for canonical, aliases in COLUMN_ALIASES.items()
+}
 
 TIME_PATTERN = re.compile(r"^(?:(?P<minutes>\d+):)?(?P<seconds>\d+(?:\.\d+)?)$")
 PASSING_ORDER_NUMBER_PATTERN = re.compile(r"\d+")
@@ -118,13 +122,13 @@ def _pick_dataset(raw_dir: Path) -> Path:
 
 
 def _resolve_column_aliases(extra_aliases: dict[str, Any] | None = None) -> dict[str, list[str]]:
-    resolved: dict[str, list[str]] = {
-        canonical: [str(alias).strip().lower() for alias in aliases if str(alias).strip()]
-        for canonical, aliases in COLUMN_ALIASES.items()
-    }
-
     if not isinstance(extra_aliases, dict):
-        return resolved
+        return BASE_RESOLVED_COLUMN_ALIASES
+
+    resolved: dict[str, list[str]] = {
+        canonical: list(aliases)
+        for canonical, aliases in BASE_RESOLVED_COLUMN_ALIASES.items()
+    }
 
     for canonical, aliases in extra_aliases.items():
         canonical_name = str(canonical).strip().lower()
