@@ -21,27 +21,27 @@
 
 2026-03-29 時点で、Kelly runtime family (`#10`, `#11`, `#12`, `#13`)、seasonal ordering (`#14`, `#15`)、runtime broad reduction (`#7`)、supplemental materialization (`#16`)、feature-builder runtime (`#17`) は close 済みである。loader runtime の small safe cuts を進めた `#18` も wrap-up 段階にあり、current operational anchor は引き続き `r20260329_tighter_policy_ratio003_abs90` である。
 
-この時点の next active issue は `#22` の training-table load residual profiling である。
+この時点の next active issue は `#23` の supplemental merge residual reduction である。
 
 Primary active issue:
 
-- `#22`
-- <https://github.com/Npieju/nr-learn/issues/22>
+- `#23`
+- <https://github.com/Npieju/nr-learn/issues/23>
 
 Primary issue draft:
 
-- `docs/next_issue_training_table_load_residuals.md`
+- `docs/next_issue_supplemental_merge_residual.md`
 - `docs/tail_loader_equivalence_gate_standard.md`
 
 GitHub issue:
 
-- `#22`
-- <https://github.com/Npieju/nr-learn/issues/22>
+- `#23`
+- <https://github.com/Npieju/nr-learn/issues/23>
 
 Primary next execution order:
 
-1. `tail_training_table` loading の residual hotspot を分解する
-2. その後に next exact-safe reduction candidate を再選定する
+1. `_merge_supplemental_tables` の exact-safe cut を探索する
+2. その後に append / remaining tail residual を再選定する
 
 ### 3.1 [experiment] Tighter policy search frontier refinement
 
