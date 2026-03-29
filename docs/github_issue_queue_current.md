@@ -31,6 +31,7 @@ Primary active issue:
 Primary issue draft:
 
 - `docs/next_issue_tail_equivalence_harness.md`
+- `docs/tail_loader_equivalence_gate_standard.md`
 
 GitHub issue:
 

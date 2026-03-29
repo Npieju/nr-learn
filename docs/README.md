@@ -72,6 +72,8 @@ seasonal second-layer fallback の順位づけは [seasonal_secondary_fallback_s
 
 runtime 改善の次 issue 下書きは [next_issue_tail_equivalence_harness.md](next_issue_tail_equivalence_harness.md) を使う。
 
+tail loader optimization の gate 運用は [tail_loader_equivalence_gate_standard.md](tail_loader_equivalence_gate_standard.md) を使う。
+
 ## 正本
 
 このプロジェクトの理解と運用に必要な中核文書は次の 8 本である。

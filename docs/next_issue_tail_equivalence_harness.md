@@ -30,6 +30,7 @@ tail loader の候補最適化を、selected rows / downstream summary / manifes
 - tail loader candidate を old/new で比較する regression path がある
 - reduced smoke の summary equality まで比較できる
 - future aggressive tail optimization を confidence を持って試せる
+- `exact` / `canonical` / `value` gate の使い分けが docs と CLI で固定されている
 
 ## Suggested Validation
 

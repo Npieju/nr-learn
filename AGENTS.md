@@ -15,6 +15,7 @@
 5. `docs/ml_model_development_standard.md`
 6. `docs/development_operational_cautions.md`
 7. `docs/initial_issue_backlog.md`
+8. `docs/tail_loader_equivalence_gate_standard.md`
 
 既存の `docs/` は reference / legacy として残すが、新しい標準は上の文書を優先する。
 
@@ -58,6 +59,7 @@
 - dev process: `docs/autonomous_dev_standard.md`
 - AI coding standard: `docs/ai_coding_best_practices.md`
 - ML development standard: `docs/ml_model_development_standard.md`
+- tail loader gate standard: `docs/tail_loader_equivalence_gate_standard.md`
 
 ## Issue Quality Bar
 
