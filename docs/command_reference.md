@@ -299,6 +299,16 @@ supplemental materialize の初期コマンド:
   --manifest-file artifacts/reports/supplemental_materialize_corner_passing_order.json
 ```
 
+`netkeiba_race_card` を opt-in materialized path として作る例:
+
+```bash
+/workspaces/nr-learn/.venv/bin/python scripts/run_materialize_supplemental_table.py \
+  --data-config configs/data_2025_latest.yaml \
+  --table-name netkeiba_race_card \
+  --output-file data/processed/supplemental/netkeiba_race_card.csv \
+  --manifest-file artifacts/reports/supplemental_materialize_netkeiba_race_card.json
+```
+
 materialized supplemental path を opt-in で評価する smoke:
 
 ```bash
@@ -319,6 +329,7 @@ materialized supplemental path を opt-in で評価する smoke:
 - `scripts/run_materialize_supplemental_table.py` は progress と manifest を出し、`corner_passing_order` のような raw supplemental table を再利用用 CSV に前展開する。
 - default config は `data/processed/supplemental/corner_passing_order.csv` を優先し、存在しない場合だけ raw supplemental CSV へ fallback する。
 - `configs/data_2025_latest_materialized_corner.yaml` は A/B や追加検証用の明示 config として残している。
+- `configs/data_2025_latest_materialized_racecard.yaml` は `netkeiba_race_card` materialized path の A/B 用 config であり、2026-03-29 時点では analysis-only の opt-in 扱いである。
 
 ## 5. serving 検証
 
