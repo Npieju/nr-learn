@@ -3,6 +3,7 @@ from __future__ import annotations
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 import pandas as pd
 
@@ -27,6 +28,19 @@ class DatasetLoaderTailReadTest(unittest.TestCase):
             self.assertEqual(total_rows, 12)
             self.assertEqual(len(tail_frame), 5)
             self.assertEqual(tail_frame["value"].tolist(), [7, 8, 9, 10, 11])
+
+    def test_read_csv_tail_preserves_current_multi_overflow_behavior(self) -> None:
+        chunks = [
+            pd.DataFrame({"value": [0, 1, 2]}),
+            pd.DataFrame({"value": [3, 4, 5, 6]}),
+            pd.DataFrame({"value": [7, 8, 9]}),
+        ]
+
+        with mock.patch("racing_ml.data.dataset_loader.pd.read_csv", return_value=iter(chunks)):
+            tail_frame, total_rows = _read_csv_tail(Path("dummy.csv"), tail_rows=5)
+
+        self.assertEqual(total_rows, 10)
+        self.assertEqual(tail_frame["value"].tolist(), [5, 6, 7, 8, 9])
 
     def test_materialize_supplemental_table_writes_corner_passing_output(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:

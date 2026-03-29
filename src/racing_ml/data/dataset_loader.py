@@ -392,7 +392,7 @@ def _read_csv_tail(csv_path: Path, tail_rows: int) -> tuple[pd.DataFrame, int]:
     for chunk in pd.read_csv(csv_path, low_memory=False, chunksize=chunk_size):
         total_rows += int(len(chunk))
         if len(chunk) > max_kept_rows:
-            chunk = chunk.tail(max_kept_rows).reset_index(drop=True)
+            chunk = chunk.tail(max_kept_rows)
         chunks.append(chunk)
         kept_rows += int(len(chunk))
         if kept_rows > max_kept_rows:
