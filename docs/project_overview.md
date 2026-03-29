@@ -55,6 +55,8 @@
 1. September window は `current_long_horizon_serving_2025_latest` を最初の de-risk alias として参照する。
 2. non-September は `current_recommended_serving_2025_latest` を既定運用に保ち、他候補は analysis-first compare に留める。
 
+この seasonal 判断の標準文面と read order は `docs/seasonal_derisk_decision_standard.md` を正本にする。
+
 latest 2025 の actual-date compare を再開するときは、次の 3 段で読めば十分である。
 
 1. まず `serving_validation_guide.md` の dashboard summary JSON 一覧から、September は `long_horizon -> tighter policy -> recent-2018`、December は対応する control window を順に開く。

@@ -64,6 +64,8 @@ promoted anchor に対する challenger 判定には [policy_challenger_decision
 
 次の serving / seasonal 本線 issue 下書きは [next_issue_seasonal_derisk_long_horizon.md](next_issue_seasonal_derisk_long_horizon.md) を使う。
 
+seasonal de-risk の判断標準は [seasonal_derisk_decision_standard.md](seasonal_derisk_decision_standard.md) を使う。
+
 ## 正本
 
 このプロジェクトの理解と運用に必要な中核文書は次の 8 本である。
