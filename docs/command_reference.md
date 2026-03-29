@@ -255,7 +255,7 @@ supplemental materialize の初期コマンド:
 
 ```bash
 /workspaces/nr-learn/.venv/bin/python scripts/run_materialize_supplemental_table.py \
-  --data-config configs/data_2025_latest_materialized_corner.yaml \
+  --data-config configs/data_2025_latest.yaml \
   --table-name corner_passing_order \
   --manifest-file artifacts/reports/supplemental_materialize_corner_passing_order.json
 ```
@@ -278,7 +278,8 @@ materialized supplemental path を opt-in で評価する smoke:
 補足:
 
 - `scripts/run_materialize_supplemental_table.py` は progress と manifest を出し、`corner_passing_order` のような raw supplemental table を再利用用 CSV に前展開する。
-- 現時点では `configs/data_2025_latest_materialized_corner.yaml` は opt-in 専用であり、default runtime path はまだ切り替えていない。
+- default config は `data/processed/supplemental/corner_passing_order.csv` を優先し、存在しない場合だけ raw supplemental CSV へ fallback する。
+- `configs/data_2025_latest_materialized_corner.yaml` は A/B や追加検証用の明示 config として残している。
 
 ## 5. serving 検証
 
