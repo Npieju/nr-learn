@@ -1,0 +1,123 @@
+{
+  "started_at": "2026-03-29T07:23:24Z",
+  "finished_at": "2026-03-29T07:30:57Z",
+  "status": "completed",
+  "stopped_reason": "requested_window_collected",
+  "manifest_file": "artifacts/reports/local_nankan_backfill_race_result_20y_window026_20180929_20190328.json",
+  "date_window": {
+    "start": "2018-09-29",
+    "end": "2019-03-28"
+  },
+  "date_order": "asc",
+  "limit": null,
+  "max_cycles": 1,
+  "target_filter": "race_result",
+  "current_phase": "crawl_completed",
+  "recommended_action": "run_local_materialize",
+  "materialize_after_collect": false,
+  "highlights": [
+    "completed_cycles=1",
+    "dry_run=False",
+    "stopped_reason=requested_window_collected",
+    "final_pending_work_item_count=1553",
+    "final_pending_race_ids=1553",
+    "collect_status=completed",
+    "collect_failure_total=0"
+  ],
+  "cycle_reports": [
+    {
+      "cycle": 1,
+      "started_at": "2026-03-29T07:23:39Z",
+      "prepare_summary": {
+        "target_filter": "race_result",
+        "date_window": {
+          "start": "2018-09-29",
+          "end": "2019-03-28"
+        },
+        "date_order": "asc",
+        "race_id_source": "race_list",
+        "seed_file": "data/external/local_nankan/seeds/local_nankan_seed.csv",
+        "reports": [
+          {
+            "kind": "race_ids",
+            "targets": [
+              "race_result"
+            ],
+            "row_count": 1553,
+            "output_files": [
+              "data/external/local_nankan/ids/race_ids.csv"
+            ],
+            "source": "race_list"
+          }
+        ],
+        "race_id_source_report": {
+          "source": "race_list",
+          "date_window": {
+            "start": "2018-09-29",
+            "end": "2019-03-28"
+          },
+          "date_order": "asc",
+          "requested_calendar_pages": 3,
+          "calendar_pages_fetched": 0,
+          "program_pages_fetched": 0,
+          "raw_meeting_count": 131,
+          "meeting_count": 131,
+          "raw_discovered_count": 1553,
+          "row_count": 1553,
+          "failure_count": 0,
+          "failures": [],
+          "raw_html_dir": "/workspaces/nr-learn/data/external/local_nankan/raw_html/race_list"
+        }
+      },
+      "pending_id_count": 1553,
+      "pending_counts_by_kind": {
+        "race_ids": 1553
+      },
+      "collect_summary": {
+        "started_at": "2026-03-29T07:23:39Z",
+        "finished_at": "2026-03-29T07:30:56Z",
+        "status": "completed",
+        "provider": "nankankeiba",
+        "manifest_file": "artifacts/reports/local_nankan_crawl_manifest.json",
+        "lock_file": "artifacts/reports/local_nankan_crawl_manifest.json.lock",
+        "selected_targets": [
+          "race_result"
+        ],
+        "current_phase": "crawl_completed",
+        "recommended_action": "run_local_materialize",
+        "highlights": [
+          "selected_targets=1",
+          "requested_ids_total=1553",
+          "failure_count_total=0",
+          "provider fixed to nankankeiba.com result/syousai/uma_info"
+        ],
+        "error_code": null,
+        "error_message": null,
+        "targets": [
+          {
+            "target": "race_result",
+            "status": "completed",
+            "requested_ids": 1553,
+            "processed_ids": 1553,
+            "parsed_ids": 1553,
+            "fetched_count": 1553,
+            "rows_written": 464400,
+            "failure_count": 0,
+            "output_file": "data/external/local_nankan/results/local_race_result.csv",
+            "manifest_file": "artifacts/reports/local_nankan_crawl_manifest_race_result.json",
+            "raw_html_path": "data/external/local_nankan/raw_html/race_result",
+            "sample_ids": [
+              "2018100119070101",
+              "2018100119070102",
+              "2018100119070103",
+              "2018100119070104",
+              "2018100119070105"
+            ],
+            "failures": []
+          }
+        ]
+      },
+      "finished_at": "2026-03-29T07:30:57Z"
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "created_at": "2026-03-29T09:22:17Z",
+  "status": "completed",
+  "window_index": 40,
+  "window_slug": "window040_20250929_20260328",
+  "date_window": {
+    "start": "2025-09-29",
+    "end": "2026-03-28"
+  },
+  "backfill_status": "completed",
+  "backfill_phase": "crawl_completed",
+  "backfill_recommended_action": "run_local_materialize",
+  "source_manifests": {
+    "aggregate_window_manifest": "artifacts/reports/local_nankan_backfill_race_result_20y_window040_20250929_20260328.json",
+    "materialize_manifest": null
+  },
+  "archive_paths": {
+    "archive_dir": "artifacts/archives/local_nankan/window040_20250929_20260328",
+    "tarball": "artifacts/archives/local_nankan/tarballs/window040_20250929_20260328.tar.gz",
+    "archive_index": "artifacts/archives/local_nankan/archive_index.json"
+  },
+  "slice_counts": {
+    "race_result_rows": 19141,
+    "race_card_rows": 0,
+    "pedigree_rows": 0,
+    "horse_key_count": 4759
+  },
+  "git_commit_targets": [
+    "artifacts/archives/local_nankan/window040_20250929_20260328",
+    "artifacts/archives/local_nankan/tarballs/window040_20250929_20260328.tar.gz",
+    "artifacts/archives/local_nankan/archive_index.json"
+  ],
+  "tarball_size_bytes": 815439
+}

@@ -1,5 +1,5 @@
 {
-  "created_at": "2026-03-29T04:35:34Z",
+  "created_at": "2026-03-29T07:13:51Z",
   "status": "completed",
   "window_index": 4,
   "window_slug": "window004_20070929_20080328",
@@ -30,5 +30,5 @@
     "artifacts/archives/local_nankan/tarballs/window004_20070929_20080328.tar.gz",
     "artifacts/archives/local_nankan/archive_index.json"
   ],
-  "tarball_size_bytes": 725315
+  "tarball_size_bytes": 725359
 }
