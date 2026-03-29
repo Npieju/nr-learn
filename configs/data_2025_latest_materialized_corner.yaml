@@ -35,6 +35,7 @@ dataset:
       merge_mode: "fill_missing"
     - name: "corner_passing_order"
       pattern: "**/*corner_passing_order*.csv"
+      materialized_file: "data/processed/supplemental/corner_passing_order.csv"
       join_on:
         - "race_id"
         - "gate_no"
@@ -137,7 +138,6 @@ dataset:
 
 split:
   method: "time_series"
-  train_start: "2018-01-01"
   train_end: "2024-12-31"
   valid_start: "2025-01-01"
   valid_end: "2025-12-28"

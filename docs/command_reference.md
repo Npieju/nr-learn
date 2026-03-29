@@ -251,6 +251,35 @@ profile 一覧:
 - `--train-max-train-rows` と `--train-max-valid-rows` を使うと、real run でも lightweight smoke を組める。
 - `--skip-train` と `--evaluate-model-artifact-suffix` を組み合わせると、設定だけ変えた threshold-only revision を既存学習済み model artifact に対して formal 評価できる。
 
+supplemental materialize の初期コマンド:
+
+```bash
+/workspaces/nr-learn/.venv/bin/python scripts/run_materialize_supplemental_table.py \
+  --data-config configs/data_2025_latest_materialized_corner.yaml \
+  --table-name corner_passing_order \
+  --manifest-file artifacts/reports/supplemental_materialize_corner_passing_order.json
+```
+
+materialized supplemental path を opt-in で評価する smoke:
+
+```bash
+/workspaces/nr-learn/.venv/bin/python scripts/run_evaluate.py \
+  --config configs/model_catboost_value_stack_lgbm_roi_high_coverage_tune_roi012_liquidity_regime_hybrid_june_strict_serving_kelly_runtime_edge005.yaml \
+  --data-config configs/data_2025_latest_materialized_corner.yaml \
+  --feature-config configs/features_catboost_rich_high_coverage_diag.yaml \
+  --model-artifact-suffix r20260326_tighter_policy_ratio003 \
+  --artifact-suffix perf_smoke_materialized_corner_v1 \
+  --max-rows 5000 \
+  --pre-feature-max-rows 10000 \
+  --wf-mode fast \
+  --wf-scheme nested
+```
+
+補足:
+
+- `scripts/run_materialize_supplemental_table.py` は progress と manifest を出し、`corner_passing_order` のような raw supplemental table を再利用用 CSV に前展開する。
+- 現時点では `configs/data_2025_latest_materialized_corner.yaml` は opt-in 専用であり、default runtime path はまだ切り替えていない。
+
 ## 5. serving 検証
 
 基本の流れと各 artifact の読み方は [serving_validation_guide.md](serving_validation_guide.md) を参照する。

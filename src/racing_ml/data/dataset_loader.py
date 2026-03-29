@@ -86,6 +86,14 @@ class TrainingTableLoadResult:
     primary_source_rows_total: int | None
 
 
+def _get_supplemental_table_configs(dataset_config: dict[str, Any] | None) -> list[dict[str, Any]]:
+    dataset_cfg = _resolve_dataset_config(dataset_config)
+    supplemental_tables = dataset_cfg.get("supplemental_tables")
+    if not isinstance(supplemental_tables, list) or not supplemental_tables:
+        return list(DEFAULT_SUPPLEMENTAL_TABLES)
+    return [table for table in supplemental_tables if isinstance(table, dict)]
+
+
 def _pick_dataset(raw_dir: Path) -> Path:
     csv_files = list(raw_dir.glob("**/*.csv"))
     if not csv_files:
@@ -324,6 +332,13 @@ def _iter_csv_candidates(search_roots: list[Path], pattern: str) -> list[Path]:
     return output
 
 
+def _resolve_materialized_candidate(table_cfg: dict[str, Any], base_dir: Path | None) -> Path | None:
+    materialized_file = str(table_cfg.get("materialized_file", "")).strip()
+    if not materialized_file:
+        return None
+    return _resolve_path(materialized_file, base_dir)
+
+
 def _display_path(path: Path, base_dir: Path | None) -> str:
     if base_dir is None:
         return str(path)
@@ -356,6 +371,12 @@ def _load_candidate_table(candidate: Path, table_cfg: dict[str, Any]) -> pd.Data
         table = _expand_corner_passing_order(table)
 
     return table
+
+
+def _load_materialized_candidate_table(candidate: Path, table_cfg: dict[str, Any]) -> pd.DataFrame:
+    materialized_cfg = dict(table_cfg)
+    materialized_cfg.pop("table_loader", None)
+    return _load_candidate_table(candidate, materialized_cfg)
 
 
 def _read_csv_tail(csv_path: Path, tail_rows: int) -> tuple[pd.DataFrame, int]:
@@ -433,7 +454,15 @@ def _load_matching_table(
     join_on: list[str],
     keep_columns: list[str],
     required_columns: list[str],
+    base_dir: Path | None = None,
 ) -> pd.DataFrame | None:
+    materialized_candidate = _resolve_materialized_candidate(table_cfg, base_dir)
+    if materialized_candidate is not None and materialized_candidate.exists() and materialized_candidate.is_file():
+        table = _load_materialized_candidate_table(materialized_candidate, table_cfg)
+        if required_columns and all(column in table.columns for column in required_columns):
+            if not join_on or all(column in table.columns for column in join_on):
+                return _select_table_columns(table, keep_columns=keep_columns, join_on=join_on)
+
     pattern = str(table_cfg.get("pattern", table_cfg.get("path_glob", ""))).strip()
     if not pattern:
         return None
@@ -463,11 +492,14 @@ def _inspect_table_sources(
 
     join_on = _normalize_string_list(table_cfg.get("join_on"))
     required_columns = _normalize_string_list(table_cfg.get("required_columns")) or join_on
+    materialized_candidate = _resolve_materialized_candidate(table_cfg, base_dir)
     pattern = str(table_cfg.get("pattern", table_cfg.get("path_glob", ""))).strip()
     candidates = _iter_csv_candidates(search_roots, pattern) if pattern else []
 
     result: dict[str, Any] = {
         "name": str(table_cfg.get("name", "unnamed")),
+        "materialized_file": _display_path(materialized_candidate, base_dir) if materialized_candidate is not None else None,
+        "materialized_exists": bool(materialized_candidate is not None and materialized_candidate.exists()),
         "pattern": pattern,
         "search_roots": [_display_path(path, base_dir) for path in search_roots],
         "matched_file_count": int(len(candidates)),
@@ -477,6 +509,35 @@ def _inspect_table_sources(
         "optional": bool(table_cfg.get("optional", False)),
         "status": "missing",
     }
+
+    if materialized_candidate is not None and materialized_candidate.exists() and materialized_candidate.is_file():
+        try:
+            table = _load_materialized_candidate_table(materialized_candidate, table_cfg)
+        except Exception as error:
+            result["status"] = "materialized_read_error"
+            result["active_file"] = _display_path(materialized_candidate, base_dir)
+            result["error"] = str(error)
+            return result
+
+        missing_required = [column for column in required_columns if column not in table.columns]
+        missing_join = [column for column in join_on if column not in table.columns]
+        if not missing_required and not missing_join:
+            dedupe_on = _normalize_string_list(table_cfg.get("dedupe_on")) or join_on
+            dedupe_on = [column for column in dedupe_on if column in table.columns]
+            duplicate_rows = int(table.duplicated(subset=dedupe_on).sum()) if dedupe_on else 0
+            result.update(
+                {
+                    "status": "ok_materialized",
+                    "active_file": _display_path(materialized_candidate, base_dir),
+                    "row_count": int(len(table)),
+                    "column_count": int(len(table.columns)),
+                    "dedupe_on": dedupe_on,
+                    "duplicate_rows_on_key": duplicate_rows,
+                    "canonical_columns": [str(column) for column in table.columns[:50]],
+                }
+            )
+            return result
+
     if not candidates:
         if result["optional"]:
             result["status"] = "optional_missing"
@@ -584,6 +645,7 @@ def _append_external_tables(
             join_on=[],
             keep_columns=keep_columns,
             required_columns=required_columns,
+            base_dir=base_dir,
         )
         if append_frame is None or append_frame.empty:
             continue
@@ -614,9 +676,7 @@ def _merge_supplemental_tables(
         return frame
 
     dataset_cfg = _resolve_dataset_config(dataset_config)
-    supplemental_tables = dataset_cfg.get("supplemental_tables")
-    if not isinstance(supplemental_tables, list) or not supplemental_tables:
-        supplemental_tables = DEFAULT_SUPPLEMENTAL_TABLES
+    supplemental_tables = _get_supplemental_table_configs(dataset_cfg)
 
     default_search_roots = _resolve_search_roots(
         raw_dir=raw_dir,
@@ -626,9 +686,6 @@ def _merge_supplemental_tables(
     )
 
     for table_cfg in supplemental_tables:
-        if not isinstance(table_cfg, dict):
-            continue
-
         join_on = _normalize_string_list(table_cfg.get("join_on"))
         if not join_on or not all(column in frame.columns for column in join_on):
             continue
@@ -647,6 +704,7 @@ def _merge_supplemental_tables(
             join_on=join_on,
             keep_columns=keep_columns,
             required_columns=required_columns,
+            base_dir=base_dir,
         )
         if supplemental_frame is None or supplemental_frame.empty:
             continue
@@ -886,13 +944,89 @@ def inspect_dataset_sources(
             if isinstance(table_cfg, dict)
         ]
 
-    supplemental_tables = dataset_cfg.get("supplemental_tables")
-    if not isinstance(supplemental_tables, list) or not supplemental_tables:
-        supplemental_tables = DEFAULT_SUPPLEMENTAL_TABLES
     summary["supplemental_tables"] = [
         _inspect_table_sources(table_cfg=table_cfg, default_search_roots=supplemental_defaults, base_dir=base_path)
-        for table_cfg in supplemental_tables
-        if isinstance(table_cfg, dict)
+        for table_cfg in _get_supplemental_table_configs(dataset_cfg)
     ]
 
     return summary
+
+
+def materialize_supplemental_table(
+    raw_dir: str | Path,
+    *,
+    table_name: str,
+    dataset_config: dict[str, Any] | None = None,
+    base_dir: str | Path | None = None,
+    output_file: str | Path | None = None,
+) -> dict[str, Any]:
+    base_path = Path(base_dir) if base_dir is not None else None
+    raw_path = _resolve_path(raw_dir, base_path)
+    dataset_cfg = _resolve_dataset_config(dataset_config)
+    supplemental_tables = _get_supplemental_table_configs(dataset_cfg)
+    normalized_name = str(table_name).strip()
+    table_cfg = next((table for table in supplemental_tables if str(table.get("name", "")).strip() == normalized_name), None)
+    if table_cfg is None:
+        raise ValueError(f"Unknown supplemental table: {table_name}")
+
+    resolved_output = Path(output_file) if output_file is not None else _resolve_materialized_candidate(table_cfg, base_path)
+    if resolved_output is None:
+        raise ValueError(f"No output file configured for supplemental table: {table_name}")
+    if not resolved_output.is_absolute() and base_path is not None:
+        resolved_output = base_path / resolved_output
+
+    search_dirs = _normalize_string_list(table_cfg.get("search_dirs"))
+    if search_dirs:
+        search_roots = [_resolve_path(search_dir, base_path) for search_dir in search_dirs]
+    else:
+        search_roots = _resolve_search_roots(
+            raw_dir=raw_path,
+            dataset_config=dataset_cfg,
+            base_dir=base_path,
+            include_raw_dir=True,
+        )
+
+    source_table_cfg = dict(table_cfg)
+    source_table_cfg.pop("materialized_file", None)
+    join_on = _normalize_string_list(table_cfg.get("join_on"))
+    required_columns = _normalize_string_list(table_cfg.get("required_columns")) or join_on
+    keep_columns = _normalize_string_list(table_cfg.get("keep_columns"))
+    table = _load_matching_table(
+        table_cfg=source_table_cfg,
+        search_roots=search_roots,
+        join_on=join_on,
+        keep_columns=keep_columns,
+        required_columns=required_columns,
+        base_dir=base_path,
+    )
+    if table is None or table.empty:
+        return {
+            "status": "not_ready",
+            "table_name": normalized_name,
+            "raw_dir": _display_path(raw_path, base_path),
+            "output_file": _display_path(resolved_output, base_path),
+            "search_roots": [_display_path(path, base_path) for path in search_roots],
+            "reason": "source_table_missing",
+            "row_count": 0,
+        }
+
+    dedupe_on = _normalize_string_list(table_cfg.get("dedupe_on")) or join_on
+    dedupe_on = [column for column in dedupe_on if column in table.columns]
+    duplicate_rows = int(table.duplicated(subset=dedupe_on).sum()) if dedupe_on else 0
+    if dedupe_on:
+        table = table.drop_duplicates(subset=dedupe_on, keep="first")
+
+    resolved_output.parent.mkdir(parents=True, exist_ok=True)
+    table.to_csv(resolved_output, index=False)
+    return {
+        "status": "completed",
+        "table_name": normalized_name,
+        "raw_dir": _display_path(raw_path, base_path),
+        "output_file": _display_path(resolved_output, base_path),
+        "search_roots": [_display_path(path, base_path) for path in search_roots],
+        "row_count": int(len(table)),
+        "column_count": int(len(table.columns)),
+        "duplicate_rows_on_key": duplicate_rows,
+        "dedupe_on": dedupe_on,
+        "columns": [str(column) for column in table.columns],
+    }
