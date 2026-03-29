@@ -434,6 +434,74 @@ def _extract_multiline_cell_values(cell: Tag | None) -> list[str]:
     return [value for value in values if value]
 
 
+def _parse_legacy_local_nankan_race_card_table(
+    table: Tag,
+    *,
+    metadata: dict[str, Any],
+    race_id: str,
+    odds_map: dict[str, dict[str, str]],
+) -> pd.DataFrame:
+    rows: list[dict[str, Any]] = []
+    current_frame_no: str | None = None
+
+    for row_tag in table.find_all("tr"):
+        if not isinstance(row_tag, Tag):
+            continue
+        cells = [cell for cell in row_tag.find_all("td", recursive=False) if isinstance(cell, Tag)]
+        if len(cells) >= 15:
+            frame_no = _normalize_text(cells[0].get_text(" ", strip=True))
+            current_frame_no = frame_no or current_frame_no
+            gate_cell_index = 1
+            horse_cell_index = 2
+        elif len(cells) >= 14 and current_frame_no:
+            frame_no = current_frame_no
+            gate_cell_index = 0
+            horse_cell_index = 1
+        else:
+            continue
+
+        horse_values = _extract_multiline_cell_values(cells[horse_cell_index])
+        if len(horse_values) < 3:
+            continue
+
+        gate_no = _normalize_text(cells[gate_cell_index].get_text(" ", strip=True))
+        odds_entry = odds_map.get(gate_no, {})
+        sex, age = _parse_sex_age(" ".join(horse_values))
+        jockey_trainer_values = _extract_multiline_cell_values(cells[horse_cell_index + 1])
+        weight_values = _extract_multiline_cell_values(cells[horse_cell_index + 3])
+
+        rows.append(
+            {
+                **metadata,
+                "horse_id": _build_race_horse_id(race_id, gate_no),
+                "horse_key": _extract_anchor_id(cells[horse_cell_index], HORSE_LINK_PATTERN),
+                "horse_name": _extract_anchor_text(cells[horse_cell_index], HORSE_LINK_PATTERN),
+                "frame_no": frame_no,
+                "gate_no": gate_no,
+                "sex": sex,
+                "age": age,
+                "weight": _extract_first_number(weight_values[0] if weight_values else None),
+                "weight_change": _extract_first_number(weight_values[1] if len(weight_values) > 1 else None),
+                "odds": _extract_first_float_text(odds_entry.get("odds")),
+                "popularity": _extract_first_number(odds_entry.get("popularity")),
+                "carried_weight": _extract_first_float_text(jockey_trainer_values[2] if len(jockey_trainer_values) > 2 else None),
+                "jockey_id": _extract_anchor_text(cells[horse_cell_index + 1], JOCKEY_LINK_PATTERN) or (jockey_trainer_values[0] if jockey_trainer_values else None),
+                "jockey_key": _extract_anchor_id(cells[horse_cell_index + 1], JOCKEY_LINK_PATTERN),
+                "trainer_id": _extract_anchor_text(cells[horse_cell_index + 1], TRAINER_LINK_PATTERN) or (jockey_trainer_values[3] if len(jockey_trainer_values) > 3 else None),
+                "trainer_key": _extract_anchor_id(cells[horse_cell_index + 1], TRAINER_LINK_PATTERN),
+                "sire_name": horse_values[0] if len(horse_values) > 0 else None,
+                "dam_name": horse_values[3] if len(horse_values) > 3 else None,
+                "owner_name": None,
+                "breeder_name": None,
+            }
+        )
+
+    if not rows:
+        raise ValueError(f"no legacy race card rows parsed for race_id={race_id}")
+    frame = pd.DataFrame(rows)
+    return frame.drop_duplicates(subset=["race_id", "horse_id"], keep="first").reset_index(drop=True)
+
+
 def _parse_local_nankan_odds_js(script_text: str | None) -> dict[str, dict[str, str]]:
     if not script_text:
         return {}
@@ -461,6 +529,14 @@ def parse_local_nankan_race_card_html(html: str, race_id: str, odds_js: str | No
     odds_map = _parse_local_nankan_odds_js(odds_js)
     table = soup.select_one(".nk23_c-table23__inner table.nk23_c-table23__table")
     if not isinstance(table, Tag):
+        legacy_table = soup.find("table", class_=re.compile(r"tb-shousai"))
+        if isinstance(legacy_table, Tag):
+            return _parse_legacy_local_nankan_race_card_table(
+                legacy_table,
+                metadata=metadata,
+                race_id=race_id,
+                odds_map=odds_map,
+            )
         raise ValueError(f"race card table not found for race_id={race_id}")
 
     rows: list[dict[str, Any]] = []

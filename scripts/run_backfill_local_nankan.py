@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 from datetime import date, datetime, timedelta
+import os
 from pathlib import Path
 import sys
 import time
@@ -222,9 +223,10 @@ def _write_windowed_running_manifest(manifest_path: Path, aggregate: dict[str, A
     payload["finished_at"] = None
     payload["status"] = "planned" if str(payload.get("status") or "") == "planned" else "running"
     payload["current_phase"] = active_phase
+    payload["pid"] = os.getpid()
     payload["active_window"] = active_window
     payload["active_window_date_window"] = active_window_date_window
-    payload["completed_window_count"] = len(payload.get("window_reports", []))
+    payload["completed_window_count"] = len(_completed_window_keys(payload.get("window_reports", [])))
     payload["stop_reason"] = stop_reason
     payload["last_updated_at"] = utc_now_iso()
     write_json(manifest_path, payload)
@@ -287,8 +289,10 @@ def _run_windowed_backfill(
         "date_order": date_order,
         "chunk_months": int(chunk_months),
         "requested_window_count": int(len(all_windows)),
-        "executed_window_count": int(len(windows)),
+        "selected_window_count": int(len(windows)),
+        "executed_window_count": 0,
         "resume_completed_window_count": int(len(completed_window_keys)),
+        "completed_window_count": int(len(completed_window_keys)),
         "remaining_window_count": int(len(pending_windows)),
         "limit": limit,
         "max_cycles": max_cycles,
@@ -361,7 +365,9 @@ def _run_windowed_backfill(
         }
         aggregate["window_reports"] = _upsert_window_report(aggregate["window_reports"], window_report)
         completed_window_keys = _completed_window_keys(aggregate["window_reports"])
+        aggregate["executed_window_count"] = int(run_window_count)
         aggregate["resume_completed_window_count"] = int(len(completed_window_keys))
+        aggregate["completed_window_count"] = int(len(completed_window_keys))
         aggregate["remaining_window_count"] = max(int(len(all_windows)) - int(len(completed_window_keys)), 0)
         progress.update(current=run_window_count, message=f"window={window_index}/{len(all_windows)} status={summary.get('status')} reason={summary.get('stopped_reason')}")
         _write_windowed_running_manifest(
@@ -408,10 +414,15 @@ def _run_windowed_backfill(
     aggregate["current_phase"] = current_phase
     aggregate["recommended_action"] = recommended_action
     aggregate["stop_reason"] = stop_reason
+    aggregate["pid"] = os.getpid()
+    aggregate["active_window"] = None
+    aggregate["active_window_date_window"] = None
     aggregate["highlights"] = [
         f"requested_window_count={aggregate['requested_window_count']}",
         f"executed_window_count={aggregate['executed_window_count']}",
+        f"selected_window_count={aggregate['selected_window_count']}",
         f"resume_completed_window_count={aggregate['resume_completed_window_count']}",
+        f"completed_window_count={aggregate['completed_window_count']}",
         f"remaining_window_count={aggregate['remaining_window_count']}",
         f"chunk_months={chunk_months}",
         f"sleep_sec_between_windows={sleep_sec_between_windows}",
