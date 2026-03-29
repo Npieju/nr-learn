@@ -166,6 +166,7 @@ def _build_summary(
     materialize_status = str(materialize_summary.get("status") or "")
     collect_failures = _collect_failure_total(collect_summary)
     fully_exhausted = stopped_reason in {"pending_ids_exhausted", "requested_window_collected"}
+    collected_anything = any(_dict_payload(report.get("collect_summary")) for report in cycle_reports)
     final_pending_id_count = int(final_cycle.get("pending_id_count") or 0)
     raw_final_pending_counts_by_kind = final_cycle.get("pending_counts_by_kind")
     final_pending_counts_by_kind: dict[str, int] = raw_final_pending_counts_by_kind if isinstance(raw_final_pending_counts_by_kind, dict) else {}
@@ -174,6 +175,10 @@ def _build_summary(
         status = "planned"
         current_phase = "planned"
         recommended_action = "review_backfill_plan"
+    elif stopped_reason == "pending_ids_exhausted" and not collected_anything and final_pending_id_count == 0:
+        status = "completed"
+        current_phase = "no_pending_ids"
+        recommended_action = "continue_windowed_backfill_if_needed"
     elif materialize_after_collect and materialize_status == "completed":
         status = "completed" if fully_exhausted and collect_failures == 0 else "partial"
         current_phase = "materialized_primary_raw"

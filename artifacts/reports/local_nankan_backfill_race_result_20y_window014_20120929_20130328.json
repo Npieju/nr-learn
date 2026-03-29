@@ -1,0 +1,79 @@
+{
+  "started_at": "2026-03-29T06:03:51Z",
+  "finished_at": "2026-03-29T06:04:03Z",
+  "status": "completed",
+  "stopped_reason": "pending_ids_exhausted",
+  "manifest_file": "artifacts/reports/local_nankan_backfill_race_result_20y_window014_20120929_20130328.json",
+  "date_window": {
+    "start": "2012-09-29",
+    "end": "2013-03-28"
+  },
+  "date_order": "asc",
+  "limit": null,
+  "max_cycles": 1,
+  "target_filter": "race_result",
+  "current_phase": "no_pending_ids",
+  "recommended_action": "continue_windowed_backfill_if_needed",
+  "materialize_after_collect": false,
+  "highlights": [
+    "completed_cycles=1",
+    "dry_run=False",
+    "stopped_reason=pending_ids_exhausted",
+    "final_pending_work_item_count=0",
+    "final_pending_race_ids=0",
+    "collect_status=unknown",
+    "collect_failure_total=0"
+  ],
+  "cycle_reports": [
+    {
+      "cycle": 1,
+      "started_at": "2026-03-29T06:04:03Z",
+      "prepare_summary": {
+        "target_filter": "race_result",
+        "date_window": {
+          "start": "2012-09-29",
+          "end": "2013-03-28"
+        },
+        "date_order": "asc",
+        "race_id_source": "race_list",
+        "seed_file": "data/external/local_nankan/seeds/local_nankan_seed.csv",
+        "reports": [
+          {
+            "kind": "race_ids",
+            "targets": [
+              "race_result"
+            ],
+            "row_count": 0,
+            "output_files": [
+              "data/external/local_nankan/ids/race_ids.csv"
+            ],
+            "source": "race_list"
+          }
+        ],
+        "race_id_source_report": {
+          "source": "race_list",
+          "date_window": {
+            "start": "2012-09-29",
+            "end": "2013-03-28"
+          },
+          "date_order": "asc",
+          "requested_calendar_pages": 3,
+          "calendar_pages_fetched": 0,
+          "program_pages_fetched": 0,
+          "raw_meeting_count": 134,
+          "meeting_count": 134,
+          "raw_discovered_count": 1512,
+          "row_count": 0,
+          "failure_count": 0,
+          "failures": [],
+          "raw_html_dir": "/workspaces/nr-learn/data/external/local_nankan/raw_html/race_list"
+        }
+      },
+      "pending_id_count": 0,
+      "pending_counts_by_kind": {
+        "race_ids": 0
+      },
+      "finished_at": "2026-03-29T06:04:03Z"
+    }
+  ]
+}

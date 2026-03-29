@@ -260,6 +260,7 @@ def prepare_local_nankan_ids_from_config(
             limit=limit,
             date_order=date_order,
             exclude_race_ids=completed_ids,
+            require_result_link=target_filter == "race_result",
         )
         if not discovered_frame.empty:
             race_source_frame = discovered_frame.rename(columns={"race_id": race_id_column, "date": date_column})

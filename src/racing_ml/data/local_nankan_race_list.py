@@ -15,7 +15,8 @@ from racing_ml.data.local_nankan_collect import RequestSettings, _build_session,
 CALENDAR_URL_TEMPLATE = "https://www.nankankeiba.com/calendar/{calendar_key}.do"
 PROGRAM_URL_TEMPLATE = "https://www.nankankeiba.com/program/{meeting_id}.do"
 PROGRAM_LINK_PATTERN = re.compile(r"/program/(?P<meeting_id>\d{14})\.do")
-RACE_LINK_PATTERN = re.compile(r"/(?:syousai|result)/(?P<race_id>\d{16})\.do")
+RESULT_LINK_PATTERN = re.compile(r"/result/(?P<race_id>\d{16})\.do")
+RACE_CARD_LINK_PATTERN = re.compile(r"/syousai/(?P<race_id>\d{16})\.do")
 
 
 def _parse_date(value: str) -> pd.Timestamp:
@@ -108,16 +109,40 @@ def parse_local_nankan_program_html(
     *,
     meeting_id: str,
     source_page_url: str,
+    require_result_link: bool = False,
 ) -> pd.DataFrame:
     soup = BeautifulSoup(html, "html.parser")
     records: list[dict[str, Any]] = []
     seen_race_ids: set[str] = set()
 
-    for anchor in soup.find_all("a", href=RACE_LINK_PATTERN):
-        if not isinstance(anchor, Tag):
-            continue
+    def _matching_anchors(pattern: re.Pattern[str]) -> list[Tag]:
+        anchors: list[Tag] = []
+        for anchor in soup.find_all("a", href=pattern):
+            if not isinstance(anchor, Tag):
+                continue
+            href = str(anchor.get("href", "")).strip()
+            match = pattern.search(href)
+            if match is None:
+                continue
+            race_id = match.group("race_id")
+            if not race_id.startswith(meeting_id):
+                continue
+            anchors.append(anchor)
+        return anchors
+
+    result_links = _matching_anchors(RESULT_LINK_PATTERN)
+    if result_links:
+        candidate_anchors = result_links
+        candidate_pattern = RESULT_LINK_PATTERN
+    elif require_result_link:
+        return pd.DataFrame(columns=["date", "meeting_id", "race_id", "race_no", "source_page_url", "source"])
+    else:
+        candidate_anchors = _matching_anchors(RACE_CARD_LINK_PATTERN)
+        candidate_pattern = RACE_CARD_LINK_PATTERN
+
+    for anchor in candidate_anchors:
         href = str(anchor.get("href", "")).strip()
-        match = RACE_LINK_PATTERN.search(href)
+        match = candidate_pattern.search(href)
         if match is None:
             continue
         race_id = match.group("race_id")
@@ -147,6 +172,7 @@ def discover_local_nankan_race_ids_from_calendar(
     limit: int | None = None,
     date_order: str = "asc",
     exclude_race_ids: set[str] | None = None,
+    require_result_link: bool = False,
 ) -> tuple[pd.DataFrame, dict[str, Any]]:
     crawl_cfg = _resolve_crawl_config(crawl_config)
     normalized_end_date = end_date or start_date
@@ -229,6 +255,7 @@ def discover_local_nankan_race_ids_from_calendar(
                 html,
                 meeting_id=meeting_id,
                 source_page_url=source_page_url,
+                require_result_link=require_result_link,
             )
             raw_race_count += int(len(race_frame))
             for race_row in race_frame.to_dict("records"):
