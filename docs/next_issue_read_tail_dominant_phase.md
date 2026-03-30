@@ -51,3 +51,28 @@
 - accepted exact-safe tail candidate or explicit reject read
 - updated phase budget
 - next hotspot decision if tail still does not move mainline
+
+## Current Read
+
+`#27` の revisit では、known exact-safe candidate を current mainline に対して再照合した。
+
+- `compact_reset_late`
+- `compact_iterable`
+- `single_chunk_fastpath`
+
+3 candidate はすべて `scripts/run_tail_loader_equivalence.py --fail-gate exact` を通過した。manifest は次のとおり。
+
+- `artifacts/reports/tail_loader_equivalence_compact_reset_late_r20260330.json`
+- `artifacts/reports/tail_loader_equivalence_compact_iterable_r20260330.json`
+- `artifacts/reports/tail_loader_equivalence_single_chunk_fastpath_r20260330.json`
+
+direct read timing (`tail_rows=10000`) は次のレンジだった。
+
+- `current`: 約 `12.90s`
+- `compact_reset_late`: 約 `12.74s`
+- `compact_iterable`: 約 `12.40s`
+- `single_chunk_fastpath`: 約 `12.66s`
+
+ただし source diff を詰めると、current `_read_csv_tail` は `single_chunk_fastpath` candidate と実質同型で、差分は関数名だけだった。current vs `single_chunk_fastpath` の repeated A/B も `12.8624s vs 12.8146s` で、remaining gap は noise と見てよい。
+
+したがって `#27` の結論は、current mainline は既知の best exact-safe tail cuts をほぼ吸収済みであり、runtime 本線は `_merge_supplemental_tables` の dominant residual revisit に戻すべき、である。

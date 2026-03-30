@@ -21,28 +21,28 @@
 
 2026-03-29 時点で、Kelly runtime family (`#10`, `#11`, `#12`, `#13`)、seasonal ordering (`#14`, `#15`)、runtime broad reduction (`#7`)、supplemental materialization (`#16`)、feature-builder runtime (`#17`) は close 済みである。loader runtime の small safe cuts を進めた `#18` も wrap-up 段階にあり、current operational anchor は引き続き `r20260329_tighter_policy_ratio003_abs90` である。
 
-この時点の next active issue は `#27` の read-tail dominant phase revisit である。
+この時点の next active issue は `#28` の supplemental dominant phase revisit である。
 
 Primary active issue:
 
-- `#27`
-- <https://github.com/Npieju/nr-learn/issues/27>
+- `#28`
+- <https://github.com/Npieju/nr-learn/issues/28>
 
 Primary issue draft:
 
+- `docs/next_issue_supplemental_dominant_phase.md`
 - `docs/next_issue_read_tail_dominant_phase.md`
-- `docs/next_issue_tail_load_phase_budget.md`
 
 GitHub issue:
 
-- `#27`
-- <https://github.com/Npieju/nr-learn/issues/27>
+- `#28`
+- <https://github.com/Npieju/nr-learn/issues/28>
 
 Primary next execution order:
 
-1. `_read_csv_tail` の exact-safe candidate を tail equivalence gate つきで再提示する
-2. repeated phase budget と reduced smoke の両方で mainline に残るかを確認する
-3. tail が still dominant でなければ、その時点で次 hotspot issue を切る
+1. `_merge_supplemental_tables` の current dominant residual を repeated phase budget で再確認する
+2. baseline path に直接乗る exact-safe cut を 1 本以上 landing する
+3. reduced smoke と summary equivalence で mainline に残るかを確認する
 
 ### 3.1 [experiment] Tighter policy search frontier refinement
 
