@@ -56,3 +56,24 @@ current mainline の 10k tail first read では、`netkeiba_race_result load=0.5
 - reduced smoke end-to-end
 
 を 1 本の read に揃えてから、pre-slim append candidate を比較する。
+
+## Current Read
+
+current mainline の append-path first read は次のとおり。
+
+- `append_load_sec=0.5518`
+- `recent_filter_sec=0.0297`
+- `dedupe_concat_sec=0.0917`
+- `sort_tail_sec=0.2063`
+- `append_rows_final=101810`
+- `recent_date_floor=2021-01-16`
+
+つまり current residual の本体は、recent-date filter や dedupe ではなく `netkeiba_race_result` の load 自体と、その後の sort/tail である。
+
+このため `#32` の next move は、small post-read tweak ではなく、
+
+- pre-slim append source
+- append-specific materialization
+- exact-equal summary compare
+
+の順で candidate を比較することである。
