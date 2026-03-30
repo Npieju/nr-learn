@@ -33,6 +33,10 @@ promoted candidate の low bet-rate / low exposure shape を監査し、serving 
 - concentration:
   - September promoted candidate は `8 bets` が 4/8 dates にしか出ず、4 dates は `0 bet`
   - December promoted candidate の total net `+20.0` のうち `+21.9` が top 2 dates (`2025-12-06`, `2025-12-07`) 由来
+- bankroll sweep:
+  - September pure path final bankroll は prior A `0.2959` に対して promoted `0.7333`
+  - December pure path final bankroll は prior A `1.6712` に対して promoted `1.6551`
+  - December best hybrid は `1.7395` で、promoted を使うのは `2025-12-06` だけ
 
 ## In Scope
 
