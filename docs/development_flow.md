@@ -22,6 +22,7 @@
 - 実験の速さと、採用判断の厳しさは分けて運用する。
 - 長時間ジョブは、途中経過が見えることを標準とする。
 - この workspace / container では full train や full evaluate の並列実行で OOM kill が起きうるため、正式 checkpoint は直列実行を基本とする。
+- full train は quiet heavy-job lane を前提にし、別の full train / evaluate / revision gate や重い local collection が生きているときは fail-fast で止める。
 - operator-facing CLI は、設定ミス・入力不足・output path の取り違えを fail-fast で検出し、想定内の失敗では traceback を出さない。
 - まとまった変更を終えたら `git status` と diff を確認し、意味のある単位で commit する。共有 remote が使える作業では push までを完了条件に含め、push できない場合は理由を明示して残す。
 

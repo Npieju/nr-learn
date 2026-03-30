@@ -36,6 +36,7 @@ current read:
 - resource-safe rerun rule の明文化
 - `#50` 実行時の duplicate / concurrent heavy job 整理
 - 必要なら reduced execution fallback の issue 分離
+- `run_train.py` の fail-fast preflight で quiet heavy-job lane を要求すること
 
 ## Non-Goals
 
@@ -48,3 +49,9 @@ current read:
 - `#50` の win component を 1 本だけ clean に再実行できる
 - failure が feature bug か capacity かを再度曖昧にしない
 - family read と execution blocker read が issue 上で分離される
+
+## Current Implementation
+
+- `scripts/run_train.py` は既定で concurrent heavy job を preflight で検査する
+- conflict がある場合は OS kill を待たず、concise な fail-fast message で止まる
+- override が必要なときだけ `--allow-concurrent-heavy-jobs` を明示する
