@@ -20,7 +20,9 @@ from racing_ml.data.dataset_loader import (
     _select_table_columns,
     _sort_and_tail,
     load_training_table,
+    load_training_table_tail,
     materialize_config_table,
+    materialize_primary_tail_cache,
     materialize_supplemental_table,
 )
 
@@ -175,6 +177,49 @@ class DatasetLoaderTailReadTest(unittest.TestCase):
             materialized = pd.read_csv(output_path)
             self.assertEqual(len(materialized), 1)
             self.assertEqual(materialized["race_id"].tolist(), [202501010101])
+
+    def test_materialize_primary_tail_cache_and_load_training_table_tail_uses_it(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            raw_dir = root / "raw"
+            raw_dir.mkdir(parents=True, exist_ok=True)
+            source = raw_dir / "sample_race_result.csv"
+            pd.DataFrame(
+                {
+                    "date": [f"2025-01-{day:02d}" for day in range(1, 7)],
+                    "race_id": [f"2025010{day}0101" for day in range(1, 7)],
+                    "horse_id": [f"h{day}" for day in range(1, 7)],
+                    "horse_name": [f"horse-{day}" for day in range(1, 7)],
+                    "track": ["tokyo"] * 6,
+                }
+            ).to_csv(source, index=False)
+
+            dataset_config = {
+                "primary_tail_cache_file": "processed/primary_tail.pkl",
+                "primary_tail_cache_manifest_file": "artifacts/primary_tail_manifest.json",
+            }
+
+            summary = materialize_primary_tail_cache(
+                raw_dir,
+                tail_rows=3,
+                dataset_config=dataset_config,
+                base_dir=root,
+            )
+
+            self.assertEqual(summary["status"], "completed")
+            self.assertEqual(summary["row_count"], 3)
+            self.assertEqual(summary["primary_source_rows_total"], 6)
+
+            tail_frame, total_rows = load_training_table_tail(
+                raw_dir,
+                tail_rows=3,
+                dataset_config=dataset_config,
+                base_dir=root,
+            )
+
+            self.assertEqual(total_rows, 6)
+            self.assertEqual(len(tail_frame), 3)
+            self.assertEqual(tail_frame["race_id"].astype(str).tolist(), ["202501040101", "202501050101", "202501060101"])
 
     def test_select_table_columns_reuses_frame_for_noop_selection(self) -> None:
         frame = pd.DataFrame({"race_id": [101], "horse_id": ["h1"], "horse_key": ["k1"]})

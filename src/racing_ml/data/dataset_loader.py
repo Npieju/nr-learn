@@ -655,6 +655,63 @@ def _resolve_recent_date_floor(frame: pd.DataFrame) -> pd.Timestamp | None:
     return pd.Timestamp(date_series.min())
 
 
+def _resolve_primary_tail_cache_candidate(
+    dataset_config: dict[str, Any] | None,
+    *,
+    base_dir: Path | None,
+    tail_rows: int,
+) -> tuple[Path, Path | None] | None:
+    dataset_cfg = _resolve_dataset_config(dataset_config)
+    cache_file = dataset_cfg.get("primary_tail_cache_file")
+    if not cache_file:
+        return None
+    resolved_cache = _resolve_path(str(cache_file), base_dir)
+    manifest_file = dataset_cfg.get("primary_tail_cache_manifest_file")
+    resolved_manifest = _resolve_path(str(manifest_file), base_dir) if manifest_file else None
+    if resolved_manifest is not None and resolved_manifest.exists():
+        try:
+            with open(resolved_manifest, "r", encoding="utf-8") as handle:
+                manifest = json.load(handle)
+        except Exception:
+            return None
+        manifest_tail_rows = manifest.get("tail_rows")
+        if manifest_tail_rows is not None and int(manifest_tail_rows) != int(tail_rows):
+            return None
+    return resolved_cache, resolved_manifest
+
+
+def _load_primary_tail_cache(
+    dataset_config: dict[str, Any] | None,
+    *,
+    base_dir: Path | None,
+    tail_rows: int,
+) -> tuple[pd.DataFrame, int] | None:
+    resolved = _resolve_primary_tail_cache_candidate(dataset_config, base_dir=base_dir, tail_rows=tail_rows)
+    if resolved is None:
+        return None
+    cache_file, manifest_file = resolved
+    if not cache_file.exists() or not cache_file.is_file():
+        return None
+
+    frame = pd.read_pickle(cache_file)
+    if len(frame) < int(tail_rows):
+        return None
+    if len(frame) > int(tail_rows):
+        frame = frame.tail(int(tail_rows)).reset_index(drop=True)
+
+    primary_source_rows_total = int(len(frame))
+    if manifest_file is not None and manifest_file.exists():
+        try:
+            with open(manifest_file, "r", encoding="utf-8") as handle:
+                manifest = json.load(handle)
+            manifest_total = manifest.get("primary_source_rows_total")
+            if manifest_total is not None:
+                primary_source_rows_total = int(manifest_total)
+        except Exception:
+            pass
+    return frame, primary_source_rows_total
+
+
 def _restrict_table_to_join_keys(table: pd.DataFrame, base_frame: pd.DataFrame, join_on: list[str]) -> pd.DataFrame:
     available_join_on = [column for column in join_on if column in table.columns and column in base_frame.columns]
     if not available_join_on:
@@ -1108,8 +1165,16 @@ def load_training_table_tail(
 ) -> tuple[pd.DataFrame, int]:
     base_path = Path(base_dir) if base_dir is not None else None
     raw_path = _resolve_path(raw_dir, base_path)
-    dataset_path = _pick_dataset(raw_path)
-    frame, primary_source_rows_total = _read_csv_tail(dataset_path, int(tail_rows))
+    cached = _load_primary_tail_cache(
+        dataset_config,
+        base_dir=base_path,
+        tail_rows=int(tail_rows),
+    )
+    if cached is not None:
+        frame, primary_source_rows_total = cached
+    else:
+        dataset_path = _pick_dataset(raw_path)
+        frame, primary_source_rows_total = _read_csv_tail(dataset_path, int(tail_rows))
     frame = _normalize_columns(frame)
     recent_date_floor = _resolve_recent_date_floor(frame)
     frame = _append_external_tables(
@@ -1444,3 +1509,53 @@ def materialize_config_table(
         "race_id_date_start": race_id_date_start,
         "race_id_date_end": race_id_date_end,
     }
+
+
+def materialize_primary_tail_cache(
+    raw_dir: str | Path,
+    *,
+    tail_rows: int,
+    dataset_config: dict[str, Any] | None = None,
+    base_dir: str | Path | None = None,
+    output_file: str | Path | None = None,
+    manifest_file: str | Path | None = None,
+) -> dict[str, Any]:
+    if int(tail_rows) <= 0:
+        raise ValueError("tail_rows must be greater than 0")
+
+    base_path = Path(base_dir) if base_dir is not None else None
+    raw_path = _resolve_path(raw_dir, base_path)
+    dataset_path = _pick_dataset(raw_path)
+    frame, primary_source_rows_total = _read_csv_tail(dataset_path, int(tail_rows))
+
+    dataset_cfg = _resolve_dataset_config(dataset_config)
+    cache_file = output_file if output_file is not None else dataset_cfg.get("primary_tail_cache_file")
+    if not cache_file:
+        raise ValueError("No output file configured for primary tail cache")
+    resolved_output = _resolve_path(str(cache_file), base_path)
+
+    resolved_manifest: Path | None = None
+    manifest_candidate = manifest_file if manifest_file is not None else dataset_cfg.get("primary_tail_cache_manifest_file")
+    if manifest_candidate:
+        resolved_manifest = _resolve_path(str(manifest_candidate), base_path)
+
+    resolved_output.parent.mkdir(parents=True, exist_ok=True)
+    frame.to_pickle(resolved_output)
+
+    summary = {
+        "status": "completed",
+        "raw_dir": _display_path(raw_path, base_path),
+        "source_dataset": _display_path(dataset_path, base_path),
+        "output_file": _display_path(resolved_output, base_path),
+        "tail_rows": int(tail_rows),
+        "row_count": int(len(frame)),
+        "column_count": int(len(frame.columns)),
+        "primary_source_rows_total": int(primary_source_rows_total),
+        "columns": [str(column) for column in frame.columns],
+    }
+    if resolved_manifest is not None:
+        resolved_manifest.parent.mkdir(parents=True, exist_ok=True)
+        with open(resolved_manifest, "w", encoding="utf-8") as handle:
+            json.dump(summary, handle, ensure_ascii=False, indent=2)
+        summary["manifest_file"] = _display_path(resolved_manifest, base_path)
+    return summary

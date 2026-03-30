@@ -89,3 +89,30 @@ exact tail cache は raw file としては速いが、reduced smoke で substant
 差分は `run_context.data_config` や `primary_source_rows_total` だけではなく、`top1_roi`, `ev_top1_roi`, `auc`, `ev_threshold_1_0_bets` にも及んだ。したがって current best read は、「plain CSV への source shaping は wall time には効くが、schema / parse behavior を保てず、そのままは mainline に昇格できない」である。
 
 このため `#36` の next move は、plain CSV cache を続けるのではなく、schema-preserving な primary cache path を検討することになる。
+
+second read として、exact tail 10k を pickle で保存する schema-preserving cache path を ad hoc で見た。
+
+- cache file: `data/processed/primary/race_result_tail10000_exact.pkl`
+- materialize manifest: `artifacts/reports/primary_tail_cache_tail10000.json`
+
+raw compare では current tail と完全一致した。
+
+- `exact_equal=true`
+- `same_columns=true`
+- `same_dtypes=true`
+
+loader-only compare も極めて強い。
+
+- current `_read_csv_tail(10k)`: `~18.9s-22.5s`
+- `pd.read_pickle(...)`: `~0.02s`
+
+さらに、loader に opt-in `primary_tail_cache_file` / `primary_tail_cache_manifest_file` path を追加して reduced smoke を確認した。
+
+- candidate smoke: `perf_smoke_primary_tail_cache_v1`
+- `loading training table 0m03s`, total `0m19s`
+- summary compare:
+  - `summary_equivalence_perf_smoke_append_logic_v3_vs_primary_tail_cache_v1.json`
+  - `difference_count=1`
+  - only diff: `run_context.data_config`
+
+したがって current best read は、「plain CSV source shaping は reject だが、schema-preserving primary tail cache path は same-summary equivalent で accepted」である。`#36` の next move は、この opt-in path を repo 標準の candidate config / command に昇格することになる。

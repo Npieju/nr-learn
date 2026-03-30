@@ -338,6 +338,17 @@ materialized supplemental path を opt-in で評価する smoke:
   --manifest-file artifacts/reports/materialize_netkeiba_race_result_append.json
 ```
 
+- primary tail cache の例:
+
+```bash
+/workspaces/nr-learn/.venv/bin/python scripts/run_materialize_primary_tail_cache.py \
+  --data-config configs/data_2025_latest.yaml \
+  --tail-rows 10000 \
+  --output-file data/processed/primary/race_result_tail10000_exact.pkl \
+  --manifest-file artifacts/reports/primary_tail_cache_tail10000.json
+```
+
+- `primary_tail_cache_file` / `primary_tail_cache_manifest_file` を data config に追加すると、`load_training_table_tail(...)` は requested `tail_rows` と一致する cache manifest がある場合に pickle cache を優先する。
 - default config は `data/processed/supplemental/corner_passing_order.csv` を優先し、存在しない場合だけ raw supplemental CSV へ fallback する。
 - default config は `data/processed/supplemental/netkeiba_race_card.csv` と `data/processed/supplemental/netkeiba_race_result_keys.csv` も優先し、存在しない場合だけ raw source へ fallback する。
 - `configs/data_2025_latest_materialized_corner.yaml` は A/B や追加検証用の明示 config として残している。
