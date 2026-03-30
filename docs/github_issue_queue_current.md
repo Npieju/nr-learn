@@ -21,28 +21,28 @@
 
 2026-03-29 時点で、Kelly runtime family (`#10`, `#11`, `#12`, `#13`)、seasonal ordering (`#14`, `#15`)、runtime broad reduction (`#7`)、supplemental materialization (`#16`)、feature-builder runtime (`#17`) は close 済みである。loader runtime の small safe cuts を進めた `#18` も wrap-up 段階にあり、current operational anchor は引き続き `r20260329_tighter_policy_ratio003_abs90` である。
 
-この時点の next active issue は `#36` の primary source shaping である。
+この時点の next active issue は `#37` の primary tail cache refresh automation である。
 
 Primary active issue:
 
-- `#36`
-- <https://github.com/Npieju/nr-learn/issues/36>
+- `#37`
+- <https://github.com/Npieju/nr-learn/issues/37>
 
 Primary issue draft:
 
-- `docs/next_issue_primary_source_shaping.md`
-- `docs/next_issue_read_csv_tail_residual_again.md`
+- `docs/next_issue_primary_tail_cache_refresh_automation.md`
+- `docs/primary_tail_cache_operational_policy.md`
 
 GitHub issue:
 
-- `#36`
-- <https://github.com/Npieju/nr-learn/issues/36>
+- `#37`
+- <https://github.com/Npieju/nr-learn/issues/37>
 
 Primary next execution order:
 
-1. current primary source load cost を source level で再確認する
-2. pre-shaped / cached recent source candidate を 1 本選ぶ
-3. loader-only と reduced smoke の両方で current mainline と比較する
+1. primary tail cache refresh rule を正本化する
+2. stale fallback 後の refresh 導線を標準化する
+3. default promotion の operational checklist を固める
 
 ### 3.1 [experiment] Tighter policy search frontier refinement
 
