@@ -60,3 +60,24 @@ source-shaping candidate の結果は次のとおり。
 - sort / tail
 
 の exact-safe logic cut を優先する issue である。
+
+## Current Read
+
+first accepted cut として、append_frame を concat 前に `max_rows + len(base_frame)` まで prelimit する path を入れた。final tail が `max_rows` 本である以上、base frame 全量が final tail に残ったとしても append 側はそのぶん上乗せした budget を持てば exact-safe に比較できる、という前提である。
+
+same-input micro compare は次のとおり。
+
+- old path: `0.3561s`
+- new path: `0.1438s`
+- `equal=True`
+- `limited_rows=20000`
+
+reduced smoke も通っている。
+
+- candidate smoke: `perf_smoke_append_logic_v1`
+- `loading training table 0m15s`, total `0m25s`
+- summary compare:
+  - `summary_equivalence_perf_smoke_racecard_default_mainline_v1_vs_append_logic_v1.json`
+  - `exact_equal=true`
+
+したがって current read は、「append prelimit logic cut は exact-safe かつ accepted」である。`#33` の next move は、この cut を base に append residual の次の logic surface を探すことである。

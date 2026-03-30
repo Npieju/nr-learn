@@ -695,6 +695,20 @@ def _sort_and_tail(frame: pd.DataFrame, max_rows: int | None) -> pd.DataFrame:
     return frame.tail(int(max_rows)).reset_index(drop=True)
 
 
+def _prelimit_append_frame_for_tail(
+    append_frame: pd.DataFrame,
+    base_frame: pd.DataFrame,
+    max_rows: int | None,
+) -> pd.DataFrame:
+    if max_rows is None or max_rows <= 0 or append_frame.empty or "date" not in append_frame.columns:
+        return append_frame
+
+    keep_rows = int(max_rows) + int(len(base_frame))
+    if len(append_frame) <= keep_rows:
+        return append_frame
+    return _sort_and_tail(append_frame, keep_rows)
+
+
 def _load_matching_table(
     *,
     table_cfg: dict[str, Any],
@@ -935,6 +949,8 @@ def _append_external_tables(
             recent_append_frame = append_frame.loc[append_dates.notna() & (append_dates >= recent_date_floor)].copy()
             if not recent_append_frame.empty:
                 append_frame = recent_append_frame
+
+        append_frame = _prelimit_append_frame_for_tail(append_frame, frame, max_rows)
 
         combined = pd.concat([frame, append_frame], ignore_index=True, sort=False)
         dedupe_on = _normalize_string_list(table_cfg.get("dedupe_on")) or ["race_id", "horse_id"]

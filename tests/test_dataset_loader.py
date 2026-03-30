@@ -13,6 +13,7 @@ from racing_ml.data.dataset_loader import (
     _normalize_columns,
     _append_external_tables,
     _load_matching_table,
+    _prelimit_append_frame_for_tail,
     _resolve_exact_candidate_usecols,
     _read_csv_tail,
     _restrict_table_to_join_keys,
@@ -368,6 +369,20 @@ class DatasetLoaderTailReadTest(unittest.TestCase):
             combined[["race_id", "horse_id", "value"]].values.tolist(),
             [[101, "h1", 1], [102, "h2", 2], [103, "h3", 3]],
         )
+
+    def test_prelimit_append_frame_for_tail_keeps_latest_budget(self) -> None:
+        base = pd.DataFrame({"date": ["2025-01-01", "2025-01-02"], "race_id": [1, 2]})
+        append = pd.DataFrame(
+            {
+                "date": pd.date_range("2025-01-01", periods=10, freq="D").astype(str),
+                "race_id": list(range(10, 20)),
+            }
+        )
+
+        limited = _prelimit_append_frame_for_tail(append, base, 3)
+
+        self.assertEqual(len(limited), 5)
+        self.assertEqual(limited["race_id"].tolist(), [15, 16, 17, 18, 19])
 
     def test_load_matching_table_skips_raw_candidate_when_filename_range_is_disjoint(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
