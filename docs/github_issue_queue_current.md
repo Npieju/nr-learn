@@ -29,12 +29,15 @@ Primary active issue:
 - <https://github.com/Npieju/nr-learn/issues/49>
 - `#50`
 - <https://github.com/Npieju/nr-learn/issues/50>
+- `#51`
+- <https://github.com/Npieju/nr-learn/issues/51>
 
 Primary issue draft:
 
 - `docs/next_issue_jockey_trainer_combo_regime_extension.md`
 - `docs/feature_family_ranking.md`
 - `docs/next_issue_jockey_trainer_combo_style_distance_candidate.md`
+- `docs/next_issue_jockey_trainer_combo_resource_safe_execution.md`
 
 GitHub issue:
 
@@ -42,12 +45,14 @@ GitHub issue:
 - <https://github.com/Npieju/nr-learn/issues/49>
 - `#50`
 - <https://github.com/Npieju/nr-learn/issues/50>
+- `#51`
+- <https://github.com/Npieju/nr-learn/issues/51>
 
 Primary next execution order:
 
-1. `#49` で `jockey / trainer / combo` family の first hypothesis を narrow に固定する
-2. style / track-distance extension の child execution issue を切る
-3. true component retrain で formal compare に載せる
+1. `#50` の style / track-distance candidate を family source of truth として維持する
+2. `#51` で resource-safe rerun lane を切って execution blocker を分離する
+3. clean rerun 完了後に `#50` の true component retrain を再開する
 
 ### 3.1 [experiment] Tighter policy search frontier refinement
 
