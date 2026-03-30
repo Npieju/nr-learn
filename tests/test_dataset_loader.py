@@ -12,6 +12,7 @@ from racing_ml.data.dataset_loader import (
     _normalize_digit_series,
     _normalize_columns,
     _append_external_tables,
+    _load_matching_table,
     _read_csv_tail,
     _restrict_table_to_join_keys,
     _select_table_columns,
@@ -111,6 +112,8 @@ class DatasetLoaderTailReadTest(unittest.TestCase):
             materialized = pd.read_csv(output_path)
             self.assertEqual(materialized["gate_no"].tolist(), [1, 2, 3])
             self.assertEqual(materialized["corner_4_position"].tolist(), [3, 2, 1])
+            self.assertEqual(summary["race_id_min"], "101")
+            self.assertEqual(summary["race_id_max"], "101")
 
     def test_select_table_columns_reuses_frame_for_noop_selection(self) -> None:
         frame = pd.DataFrame({"race_id": [101], "horse_id": ["h1"], "horse_key": ["k1"]})
@@ -305,6 +308,63 @@ class DatasetLoaderTailReadTest(unittest.TestCase):
             combined[["race_id", "horse_id", "value"]].values.tolist(),
             [[101, "h1", 1], [102, "h2", 2], [103, "h3", 3]],
         )
+
+    def test_load_matching_table_skips_raw_candidate_when_filename_range_is_disjoint(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            raw_dir = root / "raw"
+            raw_dir.mkdir(parents=True, exist_ok=True)
+            candidate = raw_dir / "19860105-20210731_laptime.csv"
+            pd.DataFrame({"race_id": [202101010101], "value": [1]}).to_csv(candidate, index=False)
+            base_frame = pd.DataFrame({"race_id": [202506040102, 202509050805]})
+
+            with mock.patch("racing_ml.data.dataset_loader._load_candidate_table") as loader:
+                loaded = _load_matching_table(
+                    table_cfg={"pattern": "**/*laptime*.csv"},
+                    search_roots=[raw_dir],
+                    join_on=["race_id"],
+                    keep_columns=["race_id", "value"],
+                    required_columns=["race_id"],
+                    base_frame=base_frame,
+                    base_dir=root,
+                )
+
+            self.assertIsNone(loaded)
+            loader.assert_not_called()
+
+    def test_load_matching_table_skips_materialized_candidate_when_manifest_range_is_disjoint(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            processed_dir = root / "processed"
+            processed_dir.mkdir(parents=True, exist_ok=True)
+            artifacts_dir = root / "artifacts"
+            artifacts_dir.mkdir(parents=True, exist_ok=True)
+            materialized = processed_dir / "corner_passing_order.csv"
+            materialized.write_text("race_id,gate_no,corner_1_position\n202101010101,1,1\n", encoding="utf-8")
+            manifest = artifacts_dir / "corner_manifest.json"
+            manifest.write_text(
+                '{"race_id_date_start":"20210101","race_id_date_end":"20210731"}',
+                encoding="utf-8",
+            )
+            base_frame = pd.DataFrame({"race_id": [202506040102, 202509050805], "gate_no": [1, 2]})
+
+            with mock.patch("racing_ml.data.dataset_loader._load_materialized_candidate_table") as loader:
+                loaded = _load_matching_table(
+                    table_cfg={
+                        "materialized_file": "processed/corner_passing_order.csv",
+                        "materialized_manifest_file": "artifacts/corner_manifest.json",
+                        "pattern": "**/*corner_passing_order*.csv",
+                    },
+                    search_roots=[root],
+                    join_on=["race_id", "gate_no"],
+                    keep_columns=["race_id", "gate_no", "corner_1_position"],
+                    required_columns=["race_id", "gate_no"],
+                    base_frame=base_frame,
+                    base_dir=root,
+                )
+
+            self.assertIsNone(loaded)
+            loader.assert_not_called()
 
 
 if __name__ == "__main__":

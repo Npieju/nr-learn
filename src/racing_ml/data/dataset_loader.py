@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from collections import deque
 from dataclasses import dataclass
+import json
 from pathlib import Path
 import re
 from typing import Any
@@ -50,6 +51,7 @@ BASE_RESOLVED_COLUMN_ALIASES: dict[str, list[str]] = {
 
 TIME_PATTERN = re.compile(r"^(?:(?P<minutes>\d+):)?(?P<seconds>\d+(?:\.\d+)?)$")
 PASSING_ORDER_NUMBER_PATTERN = re.compile(r"\d+")
+DATASET_DATE_RANGE_PREFIX_PATTERN = re.compile(r"^(?P<start>\d{8})-(?P<end>\d{8})")
 
 DEFAULT_SUPPLEMENTAL_TABLES: list[dict[str, Any]] = [
     {
@@ -382,6 +384,84 @@ def _display_path(path: Path, base_dir: Path | None) -> str:
         return str(path)
 
 
+def _parse_race_id_date_token(value: Any) -> str | None:
+    text = str(value).strip()
+    if len(text) < 8:
+        return None
+    token = text[:8]
+    return token if token.isdigit() else None
+
+
+def _resolve_frame_race_id_date_bounds(frame: pd.DataFrame, join_on: list[str]) -> tuple[str | None, str | None]:
+    if "race_id" not in join_on or "race_id" not in frame.columns or frame.empty:
+        return None, None
+
+    minimum: str | None = None
+    maximum: str | None = None
+    for value in frame["race_id"].dropna().tolist():
+        token = _parse_race_id_date_token(value)
+        if token is None:
+            continue
+        if minimum is None or token < minimum:
+            minimum = token
+        if maximum is None or token > maximum:
+            maximum = token
+    return minimum, maximum
+
+
+def _resolve_candidate_filename_date_bounds(candidate: Path) -> tuple[str | None, str | None]:
+    match = DATASET_DATE_RANGE_PREFIX_PATTERN.match(candidate.name)
+    if not match:
+        return None, None
+    return match.group("start"), match.group("end")
+
+
+def _resolve_materialized_manifest_date_bounds(table_cfg: dict[str, Any], base_dir: Path | None) -> tuple[str | None, str | None]:
+    manifest_file = str(table_cfg.get("materialized_manifest_file", "")).strip()
+    if not manifest_file:
+        return None, None
+
+    manifest_path = _resolve_path(manifest_file, base_dir)
+    if not manifest_path.exists() or not manifest_path.is_file():
+        return None, None
+
+    try:
+        with open(manifest_path, "r", encoding="utf-8") as handle:
+            payload = json.load(handle)
+    except Exception:
+        return None, None
+
+    start = str(payload.get("race_id_date_start", "")).strip() or _parse_race_id_date_token(payload.get("race_id_min"))
+    end = str(payload.get("race_id_date_end", "")).strip() or _parse_race_id_date_token(payload.get("race_id_max"))
+    return (start or None), (end or None)
+
+
+def _is_candidate_outside_base_race_range(
+    *,
+    candidate: Path,
+    table_cfg: dict[str, Any],
+    base_frame: pd.DataFrame | None,
+    join_on: list[str],
+    base_dir: Path | None,
+    is_materialized: bool,
+) -> bool:
+    if base_frame is None:
+        return False
+
+    base_start, base_end = _resolve_frame_race_id_date_bounds(base_frame, join_on)
+    if base_start is None or base_end is None:
+        return False
+
+    if is_materialized:
+        candidate_start, candidate_end = _resolve_materialized_manifest_date_bounds(table_cfg, base_dir)
+    else:
+        candidate_start, candidate_end = _resolve_candidate_filename_date_bounds(candidate)
+    if candidate_start is None or candidate_end is None:
+        return False
+
+    return candidate_end < base_start or candidate_start > base_end
+
+
 def _select_table_columns(frame: pd.DataFrame, keep_columns: list[str], join_on: list[str]) -> pd.DataFrame:
     if not keep_columns:
         return frame
@@ -559,10 +639,20 @@ def _load_matching_table(
     join_on: list[str],
     keep_columns: list[str],
     required_columns: list[str],
+    base_frame: pd.DataFrame | None = None,
     base_dir: Path | None = None,
 ) -> pd.DataFrame | None:
     materialized_candidate = _resolve_materialized_candidate(table_cfg, base_dir)
     if materialized_candidate is not None and materialized_candidate.exists() and materialized_candidate.is_file():
+        if _is_candidate_outside_base_race_range(
+            candidate=materialized_candidate,
+            table_cfg=table_cfg,
+            base_frame=base_frame,
+            join_on=join_on,
+            base_dir=base_dir,
+            is_materialized=True,
+        ):
+            return None
         table = _load_materialized_candidate_table(materialized_candidate, table_cfg)
         if required_columns and all(column in table.columns for column in required_columns):
             if not join_on or all(column in table.columns for column in join_on):
@@ -573,6 +663,15 @@ def _load_matching_table(
         return None
 
     for candidate in _iter_csv_candidates(search_roots, pattern):
+        if _is_candidate_outside_base_race_range(
+            candidate=candidate,
+            table_cfg=table_cfg,
+            base_frame=base_frame,
+            join_on=join_on,
+            base_dir=base_dir,
+            is_materialized=False,
+        ):
+            continue
         table = _load_candidate_table(
             candidate,
             table_cfg,
@@ -762,6 +861,7 @@ def _append_external_tables(
             join_on=[],
             keep_columns=keep_columns,
             required_columns=required_columns,
+            base_frame=frame,
             base_dir=base_dir,
         )
         if append_frame is None or append_frame.empty:
@@ -821,6 +921,7 @@ def _merge_supplemental_tables(
             join_on=join_on,
             keep_columns=keep_columns,
             required_columns=required_columns,
+            base_frame=frame,
             base_dir=base_dir,
         )
         if supplemental_frame is None or supplemental_frame.empty:
@@ -1097,6 +1198,7 @@ def materialize_supplemental_table(
         join_on=join_on,
         keep_columns=keep_columns,
         required_columns=required_columns,
+        base_frame=None,
         base_dir=base_path,
     )
     if table is None or table.empty:
@@ -1118,6 +1220,17 @@ def materialize_supplemental_table(
 
     resolved_output.parent.mkdir(parents=True, exist_ok=True)
     table.to_csv(resolved_output, index=False)
+    race_id_min: str | None = None
+    race_id_max: str | None = None
+    race_id_date_start: str | None = None
+    race_id_date_end: str | None = None
+    if "race_id" in table.columns:
+        race_values = table["race_id"].dropna().astype(str)
+        if not race_values.empty:
+            race_id_min = str(race_values.min())
+            race_id_max = str(race_values.max())
+            race_id_date_start = _parse_race_id_date_token(race_id_min)
+            race_id_date_end = _parse_race_id_date_token(race_id_max)
     return {
         "status": "completed",
         "table_name": normalized_name,
@@ -1129,4 +1242,8 @@ def materialize_supplemental_table(
         "duplicate_rows_on_key": duplicate_rows,
         "dedupe_on": dedupe_on,
         "columns": [str(column) for column in table.columns],
+        "race_id_min": race_id_min,
+        "race_id_max": race_id_max,
+        "race_id_date_start": race_id_date_start,
+        "race_id_date_end": race_id_date_end,
     }

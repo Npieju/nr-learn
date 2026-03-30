@@ -36,6 +36,7 @@ dataset:
     - name: "corner_passing_order"
       pattern: "**/*corner_passing_order*.csv"
       materialized_file: "data/processed/supplemental/corner_passing_order.csv"
+      materialized_manifest_file: "artifacts/reports/supplemental_materialize_corner_passing_order.json"
       join_on:
         - "race_id"
         - "gate_no"
