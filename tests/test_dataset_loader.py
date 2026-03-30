@@ -10,6 +10,7 @@ import pandas as pd
 from racing_ml.data.dataset_loader import (
     _normalize_columns,
     _read_csv_tail,
+    _restrict_table_to_join_keys,
     _select_table_columns,
     load_training_table,
     materialize_supplemental_table,
@@ -106,6 +107,35 @@ class DatasetLoaderTailReadTest(unittest.TestCase):
         selected = _select_table_columns(frame, keep_columns=["race_id", "horse_id", "horse_key"], join_on=["race_id", "horse_id"])
 
         self.assertIs(selected, frame)
+
+    def test_restrict_table_to_join_keys_preserves_matching_single_key_rows(self) -> None:
+        table = pd.DataFrame({"race_id": [101, 102, 103], "value": [1, 2, 3]})
+        base = pd.DataFrame({"race_id": [101, 103]})
+
+        restricted = _restrict_table_to_join_keys(table, base, ["race_id"])
+
+        self.assertEqual(restricted["race_id"].tolist(), [101, 103])
+        self.assertEqual(restricted["value"].tolist(), [1, 3])
+
+    def test_restrict_table_to_join_keys_preserves_matching_composite_rows(self) -> None:
+        table = pd.DataFrame(
+            {
+                "race_id": [101, 101, 102],
+                "horse_id": ["h1", "h2", "h3"],
+                "value": [1, 2, 3],
+            }
+        )
+        base = pd.DataFrame(
+            {
+                "race_id": [101, 102],
+                "horse_id": ["h2", "h3"],
+            }
+        )
+
+        restricted = _restrict_table_to_join_keys(table, base, ["race_id", "horse_id"])
+
+        self.assertEqual(restricted[["race_id", "horse_id"]].values.tolist(), [[101, "h2"], [102, "h3"]])
+        self.assertEqual(restricted["value"].tolist(), [2, 3])
 
     def test_load_training_table_prefers_materialized_supplemental_file(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:

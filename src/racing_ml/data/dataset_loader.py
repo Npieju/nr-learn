@@ -496,8 +496,17 @@ def _restrict_table_to_join_keys(table: pd.DataFrame, base_frame: pd.DataFrame, 
     join_keys = base_frame[available_join_on].drop_duplicates()
     if join_keys.empty:
         return table.iloc[0:0].copy()
+    if len(available_join_on) == 1:
+        table_keys = pd.Index(table[available_join_on[0]])
+        base_keys = pd.Index(join_keys[available_join_on[0]])
+    else:
+        table_keys = pd.MultiIndex.from_frame(table[available_join_on])
+        base_keys = pd.MultiIndex.from_frame(join_keys)
 
-    return table.merge(join_keys, on=available_join_on, how="inner")
+    mask = table_keys.isin(base_keys)
+    if bool(np.all(mask)):
+        return table
+    return table.loc[mask].copy()
 
 
 def _sort_and_tail(frame: pd.DataFrame, max_rows: int | None) -> pd.DataFrame:
