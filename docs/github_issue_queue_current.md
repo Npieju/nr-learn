@@ -21,28 +21,33 @@
 
 2026-03-29 時点で、Kelly runtime family (`#10`, `#11`, `#12`, `#13`)、seasonal ordering (`#14`, `#15`)、runtime broad reduction (`#7`)、supplemental materialization (`#16`)、feature-builder runtime (`#17`) は close 済みである。loader runtime の small safe cuts を進めた `#18` も wrap-up 段階にあり、current operational anchor は引き続き `r20260329_tighter_policy_ratio003_abs90` である。
 
-この時点の next active issue は `#49` の jockey-trainer-combo reentry である。
+この時点の next active issue は `#49` の jockey-trainer-combo reentry であり、first child execution は style-distance candidate に寄せる。
 
 Primary active issue:
 
 - `#49`
 - <https://github.com/Npieju/nr-learn/issues/49>
+- `#50`
+- <https://github.com/Npieju/nr-learn/issues/50>
 
 Primary issue draft:
 
 - `docs/next_issue_jockey_trainer_combo_regime_extension.md`
 - `docs/feature_family_ranking.md`
+- `docs/next_issue_jockey_trainer_combo_style_distance_candidate.md`
 
 GitHub issue:
 
 - `#49`
 - <https://github.com/Npieju/nr-learn/issues/49>
+- `#50`
+- <https://github.com/Npieju/nr-learn/issues/50>
 
 Primary next execution order:
 
-1. `#48` の role split read を正本化する
-2. class/rest/surface family を clean に締める
-3. Tier A 次順位の `jockey / trainer / combo` family へ queue を進める
+1. `#49` で `jockey / trainer / combo` family の first hypothesis を narrow に固定する
+2. style / track-distance extension の child execution issue を切る
+3. true component retrain で formal compare に載せる
 
 ### 3.1 [experiment] Tighter policy search frontier refinement
 

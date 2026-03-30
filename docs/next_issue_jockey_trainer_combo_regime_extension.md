@@ -32,3 +32,21 @@
 
 - next feature experiment family が 1 本に絞れる
 - role split 後の queue が自然につながる
+
+## Current First Candidate
+
+first candidate は `style + track-distance` extension とする。
+
+理由:
+
+- builder にすでに存在し、新規実装を増やさずに試せる
+- `fundamental_enriched_no_lineage` で採用済みの richer side である
+- current core family を壊さず narrow add-on として読める
+
+tracked config:
+
+- `configs/features_catboost_rich_high_coverage_diag_jockey_trainer_combo_regime_extension.yaml`
+
+detail:
+
+- `docs/next_issue_jockey_trainer_combo_style_distance_candidate.md`

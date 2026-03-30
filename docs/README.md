@@ -77,6 +77,7 @@ runtime 後に experiment queue へ戻すときは [next_issue_post_runtime_benc
 runtime 後の最初の experiment 再開は [next_issue_tighter_policy_reentry_after_runtime.md](next_issue_tighter_policy_reentry_after_runtime.md) を使う。
 feature 側の次 issue 下書きは [next_issue_class_rest_surface_interactions.md](next_issue_class_rest_surface_interactions.md) を起点にし、support hardening の記録は [next_issue_class_rest_surface_support_hardening.md](next_issue_class_rest_surface_support_hardening.md) と [next_issue_surface_plus_class_layoff_interactions.md](next_issue_surface_plus_class_layoff_interactions.md) を参照し、promoted 後の serving read は [next_issue_post_surface_plus_class_layoff_promotion.md](next_issue_post_surface_plus_class_layoff_promotion.md) と [next_issue_surface_plus_class_layoff_bet_rate_robustness.md](next_issue_surface_plus_class_layoff_bet_rate_robustness.md) を見て、widening failure の後は [next_issue_surface_plus_class_layoff_role_split.md](next_issue_surface_plus_class_layoff_role_split.md) を使う。
 formal promoted line と operational default line の切り分けは [promoted_vs_operational_role_split_standard.md](promoted_vs_operational_role_split_standard.md) を使う。次の feature family reentry は [next_issue_jockey_trainer_combo_regime_extension.md](next_issue_jockey_trainer_combo_regime_extension.md) を使う。
+first execution candidate は [next_issue_jockey_trainer_combo_style_distance_candidate.md](next_issue_jockey_trainer_combo_style_distance_candidate.md) を使う。
 
 tail loader optimization の gate 運用は [tail_loader_equivalence_gate_standard.md](tail_loader_equivalence_gate_standard.md) を使う。
 
