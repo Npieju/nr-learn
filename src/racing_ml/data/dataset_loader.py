@@ -946,7 +946,7 @@ def _append_external_tables(
 
         if recent_date_floor is not None and "date" in append_frame.columns:
             append_dates = pd.to_datetime(append_frame["date"], errors="coerce")
-            recent_append_frame = append_frame.loc[append_dates.notna() & (append_dates >= recent_date_floor)].copy()
+            recent_append_frame = append_frame.loc[append_dates.notna() & (append_dates >= recent_date_floor)]
             if not recent_append_frame.empty:
                 append_frame = recent_append_frame
 

@@ -81,3 +81,21 @@ reduced smoke も通っている。
   - `exact_equal=true`
 
 したがって current read は、「append prelimit logic cut は exact-safe かつ accepted」である。`#33` の next move は、この cut を base に append residual の次の logic surface を探すことである。
+
+second accepted cut として、recent-date filter の `.copy()` を除去した。append path では filter 後の frame をそのまま read-only で prelimit / concat / drop_duplicates に流すだけなので、この copy は不要である。
+
+ad hoc read は次のとおり。
+
+- with copy: `0.0274s`
+- without copy: `0.0142s`
+- `equal=True`
+
+reduced smoke でも差分はきれいに保たれた。
+
+- candidate smoke: `perf_smoke_append_logic_v2`
+- `loading training table 0m13s`, total `0m23s`
+- summary compare:
+  - `summary_equivalence_perf_smoke_append_logic_v1_vs_v2.json`
+  - `exact_equal=true`
+
+したがって current best read は、「append logic residual は `prelimit` と `recent-filter no-copy` の 2 本で段階的に改善しており、current mainline は `loading training table 0m13s` まで前進した」である。
