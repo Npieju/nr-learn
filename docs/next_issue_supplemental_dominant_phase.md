@@ -60,3 +60,20 @@ current mainline における `_merge_supplemental_tables` の dominant residual
 - `Index/MultiIndex.isin` based restrict in `_restrict_table_to_join_keys(...)`
 
 また `race_card` materialized path は table-level では効く一方、end-to-end default win にはまだ届いていない。したがって `#28` の first priority は、materialize default 化ではなく current baseline path の dominant residual revisit である。
+
+## Current Read
+
+current mainline の `tail_training_table(10k)` で、append 後 base frame を作ってから `_merge_supplemental_tables` を table 単位に timing し直した。
+
+- `laptime`: `load 0.1168s`, `dedupe 0.0015s`, `restrict 0.0026s`, final `restricted_empty`
+- `corner_passing_order`: `load 0.2325s`, `dedupe 0.0318s`, `restrict 0.0424s`, final `restricted_empty`
+- `netkeiba_race_result_keys`: `load 0.2406s`, `dedupe 0.0056s`, `restrict 0.0170s`, `merge 0.0121s`
+- `netkeiba_race_card`: `load 0.5735s`, `dedupe 0.0167s`, `restrict 0.0180s`, `merge 0.1093s`
+- `netkeiba_pedigree`: `load 0.0491s`, `dedupe 0.0057s`, `restrict 0.0033s`, `merge 0.0105s`
+
+ここで重要なのは、`laptime` と `corner_passing_order` が単なる年代レンジ不一致ではなく、append 後 base frame が 2025 rows に押し上がっていることだった。current 10k tail raw 自体は 2021 だが、append 後 base frame の `race_id` は `202506040102 .. 202509050805` だった。一方で source 側は次で打ち止めである。
+
+- `laptime`: max `202110030612`
+- `corner_passing_order`: max `202110030612`
+
+したがって current runtime の空振り 2 本は、source range beyond-base mismatch と読める。`#28` の next candidate は、materialize default 化ではなく、parseable source-range を使った exact-safe early skip を検討することにある。
