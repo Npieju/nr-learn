@@ -30,6 +30,10 @@ def _normalize_text(value: object) -> str:
     return text
 
 
+def _is_valid_horse_key(value: object) -> bool:
+    return bool(_normalize_text(value)) and _normalize_text(value).isdigit()
+
+
 def _resolve_path(raw_path: str | Path, base_dir: Path) -> Path:
     path = Path(raw_path)
     if path.is_absolute():
@@ -174,7 +178,7 @@ def _build_horse_key_frame(
     if horse_key_column in seed_frame.columns:
         for value in seed_frame[horse_key_column].tolist():
             text = _normalize_text(value)
-            if not text or text in seen:
+            if not _is_valid_horse_key(text) or text in seen:
                 continue
             seen.add(text)
             records.append({"horse_key": text, "source": "seed_file"})
@@ -189,7 +193,7 @@ def _build_horse_key_frame(
             continue
         for value in frame["horse_key"].tolist():
             text = _normalize_text(value)
-            if not text or text in seen:
+            if not _is_valid_horse_key(text) or text in seen:
                 continue
             seen.add(text)
             records.append({"horse_key": text, "source": target_name})

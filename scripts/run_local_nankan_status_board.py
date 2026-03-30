@@ -113,6 +113,32 @@ def _build_live_collect_progress() -> dict[str, object]:
     return payload
 
 
+def _merge_live_target_states(
+    target_states: dict[str, object],
+    live_collect_progress: dict[str, object],
+) -> dict[str, object]:
+    merged: dict[str, object] = {**target_states}
+    for target_name, live_value in live_collect_progress.items():
+        live_payload = _dict_payload(live_value)
+        if not live_payload:
+            continue
+        current_payload = _dict_payload(merged.get(target_name))
+        merged[target_name] = {
+            **current_payload,
+            "present": True,
+            "status": live_payload.get("status") or current_payload.get("status"),
+            "requested_ids": live_payload.get("requested_ids"),
+            "processed_ids": live_payload.get("processed_ids"),
+            "parsed_ids": live_payload.get("parsed_ids"),
+            "failure_count": live_payload.get("failure_count"),
+            "rows_written": live_payload.get("rows_written"),
+            "started_at": live_payload.get("started_at"),
+            "finished_at": live_payload.get("finished_at"),
+            "sample_ids": live_payload.get("sample_ids"),
+        }
+    return merged
+
+
 def _backfill_process_state(backfill: dict[str, object]) -> tuple[str, str | None, int | None]:
     status = str(backfill.get("status") or "")
     pid = _optional_int(backfill.get("pid"))
@@ -173,6 +199,7 @@ def main() -> int:
     archive_reports = _list_payload(archive_payload.get("archive_reports"))
     backfill_process_state, backfill_stale_reason, backfill_pid = _backfill_process_state(backfill_payload)
     live_collect_progress = _build_live_collect_progress()
+    target_states = _merge_live_target_states(target_states, live_collect_progress)
     status, current_phase, recommended_action = _derive_status(coverage=coverage_payload, backfill=backfill_payload)
 
     payload = {

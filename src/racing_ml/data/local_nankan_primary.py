@@ -141,7 +141,22 @@ def _merge_card(frame: pd.DataFrame, card_frame: pd.DataFrame) -> pd.DataFrame:
     working = card_frame.drop_duplicates(subset=merge_columns, keep="last")
     keep_columns = merge_columns + [column for column in CARD_FILL_COLUMNS if column in working.columns]
     merged = frame.merge(working[keep_columns], on=merge_columns, how="left", suffixes=("", "__merge"))
-    return _fill_missing_from_merge(merged, CARD_FILL_COLUMNS)
+    output = _fill_missing_from_merge(merged, CARD_FILL_COLUMNS)
+
+    # Exclusions/cancellations can change horse_id suffixes (e.g. ':4' -> ':取消'),
+    # so fall back to race_id + horse_key when direct horse_id joins miss card fields.
+    if "horse_key" in output.columns and {"race_id", "horse_key"}.issubset(working.columns):
+        fallback_working = working.drop_duplicates(subset=["race_id", "horse_key"], keep="last")
+        fallback_keep_columns = ["race_id", "horse_key"] + [column for column in CARD_FILL_COLUMNS if column != "horse_key" and column in fallback_working.columns]
+        fallback = output.merge(
+            fallback_working[fallback_keep_columns],
+            on=["race_id", "horse_key"],
+            how="left",
+            suffixes=("", "__merge"),
+        )
+        output = _fill_missing_from_merge(fallback, [column for column in CARD_FILL_COLUMNS if column != "horse_key"])
+
+    return output
 
 
 def _merge_pedigree(frame: pd.DataFrame, pedigree_frame: pd.DataFrame) -> pd.DataFrame:
@@ -173,6 +188,9 @@ def _ensure_core_columns(frame: pd.DataFrame) -> pd.DataFrame:
     ]:
         if column in output.columns:
             output[column] = pd.to_numeric(output[column], errors="coerce")
+    if "rank" in output.columns and "odds" in output.columns:
+        non_runner_mask = output["rank"].isna()
+        output.loc[non_runner_mask & output["odds"].isna(), "odds"] = 0.0
     if "is_win" not in output.columns and "rank" in output.columns:
         output["is_win"] = (output["rank"] == 1).astype("Int64")
     return output
