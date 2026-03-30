@@ -80,6 +80,7 @@ formal promoted line と operational default line の切り分けは [promoted_v
 first execution candidate は [next_issue_jockey_trainer_combo_style_distance_candidate.md](next_issue_jockey_trainer_combo_style_distance_candidate.md) を使う。
 execution が resource pressure で止まる場合は [next_issue_jockey_trainer_combo_resource_safe_execution.md](next_issue_jockey_trainer_combo_resource_safe_execution.md) を参照する。
 NAR を JRA と無理に統合せず別 universe として進める標準は [nar_model_transfer_strategy.md](nar_model_transfer_strategy.md) を使う。
+NAR の formal read で分母つき bet-rate を必須にする標準は [nar_bet_denominator_standard.md](nar_bet_denominator_standard.md) を使う。
 
 tail loader optimization の gate 運用は [tail_loader_equivalence_gate_standard.md](tail_loader_equivalence_gate_standard.md) を使う。
 

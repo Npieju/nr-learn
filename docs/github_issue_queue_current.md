@@ -41,6 +41,7 @@ Primary issue draft:
 - `docs/next_issue_jockey_trainer_combo_style_distance_candidate.md`
 - `docs/next_issue_jockey_trainer_combo_resource_safe_execution.md`
 - `docs/nar_model_transfer_strategy.md`
+- `docs/nar_bet_denominator_standard.md`
 
 GitHub issue:
 
