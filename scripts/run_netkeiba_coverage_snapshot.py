@@ -378,6 +378,70 @@ def _summarize_alignment_metrics(merged: pd.DataFrame) -> dict[str, int]:
     }
 
 
+def _build_result_card_gap_summary(race_result: pd.DataFrame, race_card: pd.DataFrame) -> dict[str, int]:
+    empty = {
+        "paired_result_missing_card_problem_races": 0,
+        "paired_result_missing_card_problem_rows": 0,
+        "paired_result_missing_card_benign_races": 0,
+        "paired_result_missing_card_benign_rows": 0,
+    }
+    if race_result.empty or race_card.empty or "race_id" not in race_result.columns or "race_id" not in race_card.columns:
+        return empty
+    if "horse_key" not in race_result.columns or "horse_key" not in race_card.columns:
+        return empty
+
+    result_lookup = {
+        race_id: frame.copy()
+        for race_id, frame in race_result.groupby("race_id", sort=False)
+    }
+    card_lookup = {
+        race_id: frame.copy()
+        for race_id, frame in race_card.groupby("race_id", sort=False)
+    }
+
+    problem_races = 0
+    problem_rows = 0
+    benign_races = 0
+    benign_rows = 0
+    paired_race_ids = set(result_lookup).intersection(card_lookup)
+    for race_id in paired_race_ids:
+        result_frame = result_lookup[race_id]
+        card_frame = card_lookup[race_id]
+        if len(result_frame) <= len(card_frame):
+            continue
+        card_keys = set(card_frame["horse_key"].astype(str))
+        missing_rows = result_frame.loc[~result_frame["horse_key"].astype(str).isin(card_keys)].copy()
+        if missing_rows.empty:
+            continue
+
+        rank_series = (
+            missing_rows["rank"].fillna("").astype(str).str.strip()
+            if "rank" in missing_rows.columns
+            else pd.Series([""] * len(missing_rows), index=missing_rows.index, dtype="object")
+        )
+        odds_series = (
+            pd.to_numeric(missing_rows["odds"], errors="coerce")
+            if "odds" in missing_rows.columns
+            else pd.Series([pd.NA] * len(missing_rows), index=missing_rows.index, dtype="object")
+        )
+        benign_mask = rank_series.isin({"", "-"}) & odds_series.isna()
+
+        if bool(benign_mask.all()):
+            benign_races += 1
+            benign_rows += int(len(missing_rows))
+            continue
+
+        problem_races += 1
+        problem_rows += int((~benign_mask).sum())
+
+    return {
+        "paired_result_missing_card_problem_races": int(problem_races),
+        "paired_result_missing_card_problem_rows": int(problem_rows),
+        "paired_result_missing_card_benign_races": int(benign_races),
+        "paired_result_missing_card_benign_rows": int(benign_rows),
+    }
+
+
 def _build_alignment_summary(race_result: pd.DataFrame, race_card: pd.DataFrame) -> dict[str, object]:
     if race_result.empty and race_card.empty:
         return {
@@ -394,6 +458,10 @@ def _build_alignment_summary(race_result: pd.DataFrame, race_card: pd.DataFrame)
             "paired_positive_diff_races": 0,
             "paired_negative_diff_races": 0,
             "paired_max_abs_diff": 0,
+            "paired_result_missing_card_problem_races": 0,
+            "paired_result_missing_card_problem_rows": 0,
+            "paired_result_missing_card_benign_races": 0,
+            "paired_result_missing_card_benign_rows": 0,
         }
 
     rr_counts = (
@@ -423,11 +491,16 @@ def _build_alignment_summary(race_result: pd.DataFrame, race_card: pd.DataFrame)
             "paired_positive_diff_races": 0,
             "paired_negative_diff_races": 0,
             "paired_max_abs_diff": 0,
+            "paired_result_missing_card_problem_races": 0,
+            "paired_result_missing_card_problem_rows": 0,
+            "paired_result_missing_card_benign_races": 0,
+            "paired_result_missing_card_benign_rows": 0,
         }
 
     overall_metrics = _summarize_alignment_metrics(merged)
     paired = merged[(merged["race_result_rows"] > 0) & (merged["race_card_rows"] > 0)]
     paired_metrics = _summarize_alignment_metrics(paired)
+    gap_metrics = _build_result_card_gap_summary(race_result, race_card)
     return {
         "race_result_races": int(len(rr_counts)),
         "race_card_races": int(len(rc_counts)),
@@ -439,6 +512,7 @@ def _build_alignment_summary(race_result: pd.DataFrame, race_card: pd.DataFrame)
         "paired_positive_diff_races": paired_metrics["positive_diff_races"],
         "paired_negative_diff_races": paired_metrics["negative_diff_races"],
         "paired_max_abs_diff": paired_metrics["max_abs_diff"],
+        **gap_metrics,
     }
 
 
@@ -456,34 +530,33 @@ def _build_readiness(
         target_states.get(name, {}).get("status") == "completed"
         for name in ("race_result", "race_card")
     )
-    no_unpaired_races = (
-        _safe_int(alignment.get("race_result_only_races")) == 0
-        and _safe_int(alignment.get("race_card_only_races")) == 0
-    )
-    paired_result_coverage_ok = _safe_int(alignment.get("paired_negative_diff_races")) == 0
+    no_required_unpaired_races = _safe_int(alignment.get("race_result_only_races")) == 0
+    paired_result_coverage_ok = _safe_int(alignment.get("paired_result_missing_card_problem_races")) == 0
     paired_result_odds_ok = _safe_int(result_integrity.get("all_odds_missing_races")) == 0
-    pedigree_stable = target_states.get("pedigree", {}).get("status") not in {"running", "stale"}
+    pedigree_status = str(target_states.get("pedigree", {}).get("status") or "")
+    pedigree_ready = _is_completed_like(pedigree_status)
 
-    snapshot_consistent = race_targets_complete and paired_result_coverage_ok and no_unpaired_races and paired_result_odds_ok
-    benchmark_rerun_ready = snapshot_consistent and pedigree_stable
+    snapshot_consistent = race_targets_complete and paired_result_coverage_ok and no_required_unpaired_races and paired_result_odds_ok
+    benchmark_rerun_ready = snapshot_consistent and pedigree_ready
 
     reasons: list[str] = []
     if stale_targets:
         reasons.append(f"stale crawl manifests detected: {', '.join(stale_targets)}")
     if not race_targets_complete:
         reasons.append("race_result and race_card must both be completed")
-    if not no_unpaired_races:
-        reasons.append("race_result and race_card still have unpaired races")
+    if not no_required_unpaired_races:
+        reasons.append("race_result still has races without matching race_card coverage")
     if not paired_result_coverage_ok:
-        reasons.append("paired races still have race_result coverage gaps against race_card")
+        reasons.append("paired races still have non-benign race_result coverage gaps against race_card")
     if not paired_result_odds_ok:
         reasons.append("paired races still include all-odds-missing race results")
-    if not pedigree_stable:
-        pedigree_status = target_states.get("pedigree", {}).get("status")
+    if not pedigree_ready:
         if pedigree_status == "stale":
             reasons.append("pedigree manifest is stale; inspect crawl state")
         elif pedigree_status == "running":
             reasons.append("pedigree crawl is still running")
+        else:
+            reasons.append("pedigree collection is not completed yet")
 
     if benchmark_rerun_ready:
         recommended_action = "rerun_enriched_benchmark"
@@ -491,9 +564,9 @@ def _build_readiness(
         recommended_action = "inspect_manifests"
     elif not race_targets_complete:
         recommended_action = "wait_for_race_targets"
-    elif not no_unpaired_races or not paired_result_coverage_ok or not paired_result_odds_ok:
+    elif not no_required_unpaired_races or not paired_result_coverage_ok or not paired_result_odds_ok:
         recommended_action = "inspect_race_alignment"
-    elif not pedigree_stable:
+    elif not pedigree_ready:
         recommended_action = "wait_for_pedigree"
     else:
         recommended_action = "inspect_manifests"
