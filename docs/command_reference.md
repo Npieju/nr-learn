@@ -341,13 +341,28 @@ materialized supplemental path を opt-in で評価する smoke:
 - primary tail cache の例:
 
 ```bash
+/workspaces/nr-learn/.venv/bin/python scripts/run_primary_tail_cache_status.py \
+  --data-config configs/data_2025_latest_primary_tail_cache.yaml \
+  --tail-rows 10000
+```
+
+```bash
+/workspaces/nr-learn/.venv/bin/python scripts/run_primary_tail_cache_refresh_if_needed.py \
+  --data-config configs/data_2025_latest_primary_tail_cache.yaml \
+  --tail-rows 10000
+```
+
+```bash
 /workspaces/nr-learn/.venv/bin/python scripts/run_materialize_primary_tail_cache.py \
-  --data-config configs/data_2025_latest.yaml \
+  --data-config configs/data_2025_latest_primary_tail_cache.yaml \
   --tail-rows 10000 \
   --output-file data/processed/primary/race_result_tail10000_exact.pkl \
   --manifest-file artifacts/reports/primary_tail_cache_tail10000.json
 ```
 
+- status command の exit code は `fresh=0`, `stale/missing/tail_mismatch/cache_invalid=2`, `not_configured=1` である。
+- `run_primary_tail_cache_refresh_if_needed.py` は `fresh` なら no-op、`stale/missing/...` なら materialize を実行して再判定する。
+- refresh runbook は `status -> refresh_if_needed -> 必要なら reduced smoke` の順で使う。
 - `primary_tail_cache_file` / `primary_tail_cache_manifest_file` を data config に追加すると、`load_training_table_tail(...)` は requested `tail_rows` と一致する cache manifest がある場合に pickle cache を優先する。
 - tracked candidate config は [configs/data_2025_latest_primary_tail_cache.yaml](/workspaces/nr-learn/configs/data_2025_latest_primary_tail_cache.yaml) を使う。
 - cache manifest には `source_dataset`, `source_dataset_size_bytes`, `source_dataset_mtime_ns` が入り、raw primary source が変わった場合は stale cache とみなして raw tail read へ fallback する。

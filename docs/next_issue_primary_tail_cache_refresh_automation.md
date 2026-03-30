@@ -46,3 +46,37 @@ current accepted state:
 - refresh command dry-run / real run
 - reduced smoke re-run after refresh
 - doc sync for command reference and runtime queue
+
+## Current Read
+
+first cut として、operator が refresh 要否を 1 本で読める status CLI を追加した。
+
+- command: `scripts/run_primary_tail_cache_status.py`
+- current candidate config での real run:
+  - `status=fresh`
+  - `recommended_action=use_cache`
+  - exit code `0`
+
+status command は `fresh=0`, `stale/missing/tail_mismatch/cache_invalid=2`, `not_configured=1` を返す。したがって refresh runbook は次の一本道になった。
+
+1. `run_primary_tail_cache_status.py`
+2. `fresh` ならそのまま継続
+3. `stale/missing/...` なら `run_materialize_primary_tail_cache.py`
+4. 必要なら reduced smoke で再確認
+
+これで `#37` の current best read は、「refresh ownership は operator に残るが、判断入口と実行導線は CLI と docs で標準化できた」である。次の判断は、これで `#37` を閉じてよいか、あるいは refresh をさらに scheduler/hook 化する follow-up を切るかである。
+
+second cut として、status 判定をそのまま refresh 実行へつなぐ wrapper を追加した。
+
+- command: `scripts/run_primary_tail_cache_refresh_if_needed.py`
+- behavior:
+  - `fresh` なら `action=skipped_refresh`
+  - `stale/missing/...` なら materialize 実行後に再判定
+- current candidate config での real run:
+  - `status=fresh`
+  - `action=skipped_refresh`
+  - exit code `0`
+
+regression では stale cache から `action=refreshed`, final `status=fresh` まで確認している。
+
+したがって `#37` の current best read は、「primary tail cache refresh automation は scheduler なしでも operator-facing CLI と runbook の形で十分に標準化できた」である。残る follow-up は default promotion 判断や、必要なら scheduler/hook integration であって、refresh automation そのものではない。

@@ -12,6 +12,7 @@ from racing_ml.data.dataset_loader import (
     _normalize_digit_series,
     _normalize_columns,
     _append_external_tables,
+    inspect_primary_tail_cache_status,
     _load_matching_table,
     _prelimit_append_frame_for_tail,
     _resolve_exact_candidate_usecols,
@@ -24,6 +25,7 @@ from racing_ml.data.dataset_loader import (
     materialize_config_table,
     materialize_primary_tail_cache,
     materialize_supplemental_table,
+    refresh_primary_tail_cache_if_needed,
 )
 
 
@@ -278,6 +280,129 @@ class DatasetLoaderTailReadTest(unittest.TestCase):
             self.assertEqual(total_rows, 7)
             self.assertEqual(len(tail_frame), 3)
             self.assertEqual(tail_frame["race_id"].astype(str).tolist(), ["202501050101", "202501060101", "202501070101"])
+
+    def test_inspect_primary_tail_cache_status_reports_fresh_and_stale(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            raw_dir = root / "raw"
+            raw_dir.mkdir(parents=True, exist_ok=True)
+            source = raw_dir / "sample_race_result.csv"
+            initial = pd.DataFrame(
+                {
+                    "date": [f"2025-01-{day:02d}" for day in range(1, 7)],
+                    "race_id": [f"2025010{day}0101" for day in range(1, 7)],
+                    "horse_id": [f"h{day}" for day in range(1, 7)],
+                    "horse_name": [f"horse-{day}" for day in range(1, 7)],
+                    "track": ["tokyo"] * 6,
+                }
+            )
+            initial.to_csv(source, index=False)
+
+            dataset_config = {
+                "primary_tail_cache_file": "processed/primary_tail.pkl",
+                "primary_tail_cache_manifest_file": "artifacts/primary_tail_manifest.json",
+            }
+
+            materialize_primary_tail_cache(
+                raw_dir,
+                tail_rows=3,
+                dataset_config=dataset_config,
+                base_dir=root,
+            )
+
+            fresh = inspect_primary_tail_cache_status(
+                raw_dir,
+                tail_rows=3,
+                dataset_config=dataset_config,
+                base_dir=root,
+            )
+            self.assertEqual(fresh["status"], "fresh")
+            self.assertEqual(fresh["recommended_action"], "use_cache")
+
+            updated = pd.concat(
+                [
+                    initial,
+                    pd.DataFrame(
+                        {
+                            "date": ["2025-01-07"],
+                            "race_id": ["202501070101"],
+                            "horse_id": ["h7"],
+                            "horse_name": ["horse-7"],
+                            "track": ["tokyo"],
+                        }
+                    ),
+                ],
+                ignore_index=True,
+            )
+            updated.to_csv(source, index=False)
+
+            stale = inspect_primary_tail_cache_status(
+                raw_dir,
+                tail_rows=3,
+                dataset_config=dataset_config,
+                base_dir=root,
+            )
+            self.assertEqual(stale["status"], "stale")
+            self.assertEqual(stale["recommended_action"], "materialize_primary_tail_cache")
+
+    def test_refresh_primary_tail_cache_if_needed_refreshes_stale_cache(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            raw_dir = root / "raw"
+            raw_dir.mkdir(parents=True, exist_ok=True)
+            source = raw_dir / "sample_race_result.csv"
+            initial = pd.DataFrame(
+                {
+                    "date": [f"2025-01-{day:02d}" for day in range(1, 7)],
+                    "race_id": [f"2025010{day}0101" for day in range(1, 7)],
+                    "horse_id": [f"h{day}" for day in range(1, 7)],
+                    "horse_name": [f"horse-{day}" for day in range(1, 7)],
+                    "track": ["tokyo"] * 6,
+                }
+            )
+            initial.to_csv(source, index=False)
+
+            dataset_config = {
+                "primary_tail_cache_file": "processed/primary_tail.pkl",
+                "primary_tail_cache_manifest_file": "artifacts/primary_tail_manifest.json",
+            }
+
+            materialize_primary_tail_cache(
+                raw_dir,
+                tail_rows=3,
+                dataset_config=dataset_config,
+                base_dir=root,
+            )
+
+            updated = pd.concat(
+                [
+                    initial,
+                    pd.DataFrame(
+                        {
+                            "date": ["2025-01-07"],
+                            "race_id": ["202501070101"],
+                            "horse_id": ["h7"],
+                            "horse_name": ["horse-7"],
+                            "track": ["tokyo"],
+                        }
+                    ),
+                ],
+                ignore_index=True,
+            )
+            updated.to_csv(source, index=False)
+
+            refreshed = refresh_primary_tail_cache_if_needed(
+                raw_dir,
+                tail_rows=3,
+                dataset_config=dataset_config,
+                base_dir=root,
+            )
+
+            self.assertEqual(refreshed["action"], "refreshed")
+            self.assertEqual(refreshed["status"], "fresh")
+            refreshed_status = refreshed["refreshed_status_payload"]
+            self.assertEqual(refreshed_status["status"], "fresh")
+            self.assertEqual(refreshed_status["cache_row_count"], 3)
 
     def test_select_table_columns_reuses_frame_for_noop_selection(self) -> None:
         frame = pd.DataFrame({"race_id": [101], "horse_id": ["h1"], "horse_key": ["k1"]})

@@ -708,6 +708,75 @@ def _is_primary_tail_cache_manifest_fresh(
     return True
 
 
+def inspect_primary_tail_cache_status(
+    raw_dir: str | Path,
+    *,
+    tail_rows: int,
+    dataset_config: dict[str, Any] | None = None,
+    base_dir: str | Path | None = None,
+) -> dict[str, Any]:
+    base_path = Path(base_dir) if base_dir is not None else None
+    raw_path = _resolve_path(raw_dir, base_path)
+    dataset_path = _pick_dataset(raw_path)
+    dataset_cfg = _resolve_dataset_config(dataset_config)
+    cache_file = dataset_cfg.get("primary_tail_cache_file")
+    manifest_file = dataset_cfg.get("primary_tail_cache_manifest_file")
+
+    status = {
+        "status": "missing",
+        "raw_dir": _display_path(raw_path, base_path),
+        "source_dataset": _display_path(dataset_path, base_path),
+        "tail_rows": int(tail_rows),
+        "cache_file": _display_path(_resolve_path(str(cache_file), base_path), base_path) if cache_file else None,
+        "manifest_file": _display_path(_resolve_path(str(manifest_file), base_path), base_path) if manifest_file else None,
+        "recommended_action": "materialize_primary_tail_cache",
+    }
+    if not cache_file or not manifest_file:
+        status["status"] = "not_configured"
+        status["recommended_action"] = "configure_primary_tail_cache"
+        return status
+
+    resolved_cache = _resolve_path(str(cache_file), base_path)
+    resolved_manifest = _resolve_path(str(manifest_file), base_path)
+    if not resolved_cache.exists() or not resolved_manifest.exists():
+        return status
+
+    try:
+        with open(resolved_manifest, "r", encoding="utf-8") as handle:
+            manifest = json.load(handle)
+    except Exception as exc:
+        status["status"] = "manifest_invalid"
+        status["error"] = str(exc)
+        return status
+
+    manifest_tail_rows = manifest.get("tail_rows")
+    if manifest_tail_rows is not None and int(manifest_tail_rows) != int(tail_rows):
+        status["status"] = "tail_mismatch"
+        status["manifest_tail_rows"] = int(manifest_tail_rows)
+        return status
+
+    if not _is_primary_tail_cache_manifest_fresh(manifest, dataset_path=dataset_path, base_dir=base_path):
+        status["status"] = "stale"
+        return status
+
+    try:
+        frame = pd.read_pickle(resolved_cache)
+    except Exception as exc:
+        status["status"] = "cache_invalid"
+        status["error"] = str(exc)
+        return status
+
+    status["cache_row_count"] = int(len(frame))
+    if len(frame) < int(tail_rows):
+        status["status"] = "cache_short"
+        return status
+
+    status["status"] = "fresh"
+    status["recommended_action"] = "use_cache"
+    status["primary_source_rows_total"] = int(manifest.get("primary_source_rows_total") or len(frame))
+    return status
+
+
 def _load_primary_tail_cache(
     dataset_config: dict[str, Any] | None,
     *,
@@ -1593,3 +1662,52 @@ def materialize_primary_tail_cache(
             json.dump(summary, handle, ensure_ascii=False, indent=2)
         summary["manifest_file"] = _display_path(resolved_manifest, base_path)
     return summary
+
+
+def refresh_primary_tail_cache_if_needed(
+    raw_dir: str | Path,
+    *,
+    tail_rows: int,
+    dataset_config: dict[str, Any] | None = None,
+    base_dir: str | Path | None = None,
+) -> dict[str, Any]:
+    status = inspect_primary_tail_cache_status(
+        raw_dir,
+        tail_rows=tail_rows,
+        dataset_config=dataset_config,
+        base_dir=base_dir,
+    )
+    current_status = str(status.get("status") or "")
+    if current_status == "fresh":
+        return {
+            "status": "fresh",
+            "action": "skipped_refresh",
+            "status_payload": status,
+        }
+
+    if current_status == "not_configured":
+        return {
+            "status": "not_configured",
+            "action": "no_refresh",
+            "status_payload": status,
+        }
+
+    refresh_summary = materialize_primary_tail_cache(
+        raw_dir,
+        tail_rows=tail_rows,
+        dataset_config=dataset_config,
+        base_dir=base_dir,
+    )
+    refreshed_status = inspect_primary_tail_cache_status(
+        raw_dir,
+        tail_rows=tail_rows,
+        dataset_config=dataset_config,
+        base_dir=base_dir,
+    )
+    return {
+        "status": str(refreshed_status.get("status") or ""),
+        "action": "refreshed",
+        "status_payload": status,
+        "refresh_summary": refresh_summary,
+        "refreshed_status_payload": refreshed_status,
+    }

@@ -21,28 +21,28 @@
 
 2026-03-29 時点で、Kelly runtime family (`#10`, `#11`, `#12`, `#13`)、seasonal ordering (`#14`, `#15`)、runtime broad reduction (`#7`)、supplemental materialization (`#16`)、feature-builder runtime (`#17`) は close 済みである。loader runtime の small safe cuts を進めた `#18` も wrap-up 段階にあり、current operational anchor は引き続き `r20260329_tighter_policy_ratio003_abs90` である。
 
-この時点の next active issue は `#37` の primary tail cache refresh automation である。
+この時点の next active issue は `#38` の primary tail cache default promotion decision である。
 
 Primary active issue:
 
-- `#37`
-- <https://github.com/Npieju/nr-learn/issues/37>
+- `#38`
+- <https://github.com/Npieju/nr-learn/issues/38>
 
 Primary issue draft:
 
-- `docs/next_issue_primary_tail_cache_refresh_automation.md`
+- `docs/next_issue_primary_tail_cache_default_promotion.md`
 - `docs/primary_tail_cache_operational_policy.md`
 
 GitHub issue:
 
-- `#37`
-- <https://github.com/Npieju/nr-learn/issues/37>
+- `#38`
+- <https://github.com/Npieju/nr-learn/issues/38>
 
 Primary next execution order:
 
-1. primary tail cache refresh rule を正本化する
-2. stale fallback 後の refresh 導線を標準化する
-3. default promotion の operational checklist を固める
+1. primary tail cache default promotion checklist を固める
+2. keep opt-in と promote default のどちらかを決める
+3. rollback / keep rationale を docs に残す
 
 ### 3.1 [experiment] Tighter policy search frontier refinement
 
