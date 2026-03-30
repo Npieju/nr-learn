@@ -535,6 +535,8 @@ def _restrict_table_to_join_keys(table: pd.DataFrame, base_frame: pd.DataFrame, 
 
 def _sort_and_tail(frame: pd.DataFrame, max_rows: int | None) -> pd.DataFrame:
     if max_rows is None or max_rows <= 0 or len(frame) <= max_rows:
+        if isinstance(frame.index, pd.RangeIndex) and frame.index.start == 0 and frame.index.step == 1:
+            return frame
         return frame.reset_index(drop=True)
 
     if "date" in frame.columns:
@@ -775,7 +777,7 @@ def _append_external_tables(
         dedupe_on = _normalize_string_list(table_cfg.get("dedupe_on")) or ["race_id", "horse_id"]
         dedupe_on = [column for column in dedupe_on if column in combined.columns]
         if dedupe_on:
-            combined = combined.drop_duplicates(subset=dedupe_on, keep="first")
+            combined = combined.drop_duplicates(subset=dedupe_on, keep="first", ignore_index=True)
         frame = _sort_and_tail(combined, max_rows)
 
     return frame

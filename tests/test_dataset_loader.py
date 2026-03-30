@@ -11,9 +11,11 @@ from racing_ml.data.dataset_loader import (
     _normalize_decimal_series,
     _normalize_digit_series,
     _normalize_columns,
+    _append_external_tables,
     _read_csv_tail,
     _restrict_table_to_join_keys,
     _select_table_columns,
+    _sort_and_tail,
     load_training_table,
     materialize_supplemental_table,
 )
@@ -26,6 +28,13 @@ class DatasetLoaderTailReadTest(unittest.TestCase):
         normalized = _normalize_columns(frame)
 
         self.assertIs(normalized, frame)
+
+    def test_sort_and_tail_reuses_frame_when_full_frame_already_range_indexed(self) -> None:
+        frame = pd.DataFrame({"race_id": [1, 2], "value": [10, 20]})
+
+        sorted_frame = _sort_and_tail(frame, None)
+
+        self.assertIs(sorted_frame, frame)
 
     def test_read_csv_tail_returns_requested_tail_and_total_rows(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -241,6 +250,61 @@ class DatasetLoaderTailReadTest(unittest.TestCase):
 
             self.assertEqual(int(loaded.loc[0, "corner_1_position"]), 7)
             self.assertEqual(int(loaded.loc[0, "corner_4_position"]), 10)
+
+    def test_append_external_tables_keeps_range_index_after_dedupe(self) -> None:
+        frame = pd.DataFrame(
+            {
+                "date": ["2025-01-01", "2025-01-02"],
+                "race_id": [101, 102],
+                "horse_id": ["h1", "h2"],
+                "value": [1, 2],
+            }
+        )
+        append_frame = pd.DataFrame(
+            {
+                "date": ["2025-01-02", "2025-01-03"],
+                "race_id": [102, 103],
+                "horse_id": ["h2", "h3"],
+                "value": [99, 3],
+            }
+        )
+        dataset_config = {
+            "append_tables": [
+                {
+                    "name": "netkeiba_race_result",
+                    "pattern": "**/*netkeiba_race_result*.csv",
+                    "search_dirs": ["external"],
+                    "required_columns": ["date", "race_id", "horse_id"],
+                    "keep_columns": ["date", "race_id", "horse_id", "value"],
+                    "dedupe_on": ["race_id", "horse_id"],
+                }
+            ]
+        }
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            raw_dir = root / "raw"
+            raw_dir.mkdir(parents=True, exist_ok=True)
+            with mock.patch(
+                "racing_ml.data.dataset_loader._load_matching_table",
+                return_value=append_frame,
+            ):
+                combined = _append_external_tables(
+                    frame,
+                    raw_dir,
+                    dataset_config,
+                    root,
+                    recent_date_floor=pd.Timestamp("2025-01-01"),
+                    max_rows=None,
+                )
+
+        self.assertIsInstance(combined.index, pd.RangeIndex)
+        self.assertEqual(combined.index.start, 0)
+        self.assertEqual(combined.index.step, 1)
+        self.assertEqual(
+            combined[["race_id", "horse_id", "value"]].values.tolist(),
+            [[101, "h1", 1], [102, "h2", 2], [103, "h3", 3]],
+        )
 
 
 if __name__ == "__main__":
