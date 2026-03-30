@@ -67,3 +67,26 @@ current baseline path already includes 次の cut を含んでいる。
 - exact-safe source-range skip for out-of-range raw and materialized supplemental tables
 
 materialized race-card path は table-level では効く一方、end-to-end default 勝ちにはまだ届いていない。したがって `#29` の本線は materialized default 化ではなく、baseline path の `netkeiba_race_card` load residual revisit である。
+
+## Current Read
+
+`netkeiba_race_card` を current mainline で分解すると、支配的なのは `read_csv` 本体で、normalize はほぼ no-op だった。
+
+- `raw_read`: 約 `0.63s`
+- `normalize`: 約 `0.00s`
+- `select/reorder`: 約 `0.03s`
+
+このため first candidate として、join-based supplemental read で `usecols` callable を毎回通す代わりに、header から exact header list を引ける場合は list `usecols` を使う path を追加した。
+
+`#29` の first accepted read は次のとおり。
+
+- `netkeiba_race_card` table-level read: `0.5575s -> 0.5299s` 近辺
+- phase budget:
+  - `supplemental 1.0970s -> 1.0934s`
+  - total `15.08s -> 14.93s`
+- reduced smoke `perf_smoke_racecard_usecols_v1`:
+  - `loading training table 0m14s`
+  - total `0m24s`
+  - `summary_equivalence_perf_smoke_supplemental_skip_v1_vs_racecard_usecols_v1.json` で `exact_equal=true`
+
+したがってこの cut は small but safe として mainline に残せる。次の観点は、同じ `race_card` path の残差がまだ `read_csv` 本体なのか、post-read reorder / copy なのかをもう一段詰めることにある。

@@ -13,6 +13,7 @@ from racing_ml.data.dataset_loader import (
     _normalize_columns,
     _append_external_tables,
     _load_matching_table,
+    _resolve_exact_candidate_usecols,
     _read_csv_tail,
     _restrict_table_to_join_keys,
     _select_table_columns,
@@ -365,6 +366,25 @@ class DatasetLoaderTailReadTest(unittest.TestCase):
 
             self.assertIsNone(loaded)
             loader.assert_not_called()
+
+    def test_resolve_exact_candidate_usecols_preserves_header_names(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            candidate = root / "sample.csv"
+            candidate.write_text(
+                "\ufeffレースID,horse_id,horse_key,jockey_key\n101,h1,k1,j1\n",
+                encoding="utf-8",
+            )
+
+            usecols = _resolve_exact_candidate_usecols(
+                candidate,
+                {"column_aliases": {"race_id": ["レースID"]}},
+                join_on=["race_id", "horse_id"],
+                keep_columns=["horse_key"],
+                required_columns=["race_id", "horse_id", "horse_key"],
+            )
+
+        self.assertEqual(usecols, ["レースID", "horse_id", "horse_key"])
 
 
 if __name__ == "__main__":

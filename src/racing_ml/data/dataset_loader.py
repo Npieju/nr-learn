@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import csv
 from collections import deque
 from dataclasses import dataclass
+from functools import lru_cache
 import json
 from pathlib import Path
 import re
@@ -506,6 +508,50 @@ def _build_candidate_usecols(
     return lambda column: str(column).strip().lower() in accepted
 
 
+@lru_cache(maxsize=64)
+def _read_csv_header_columns(csv_path: str) -> tuple[str, ...]:
+    with open(csv_path, "r", encoding="utf-8-sig", newline="") as handle:
+        reader = csv.reader(handle)
+        return tuple(next(reader, ()))
+
+
+def _resolve_exact_candidate_usecols(
+    candidate: Path,
+    table_cfg: dict[str, Any],
+    *,
+    join_on: list[str],
+    keep_columns: list[str],
+    required_columns: list[str],
+) -> list[str] | None:
+    table_loader = str(table_cfg.get("table_loader", "")).strip().lower()
+    if table_loader or not join_on:
+        return None
+
+    requested = list(dict.fromkeys([*join_on, *keep_columns, *required_columns]))
+    if not requested:
+        return None
+
+    resolved_aliases = _resolve_column_aliases(table_cfg.get("column_aliases"))
+    accepted = set()
+    for column in requested:
+        canonical = str(column).strip().lower()
+        if not canonical:
+            continue
+        accepted.add(canonical)
+        for alias in resolved_aliases.get(canonical, []):
+            accepted.add(alias)
+    if not accepted:
+        return None
+
+    try:
+        header_columns = _read_csv_header_columns(str(candidate))
+    except Exception:
+        return None
+
+    exact_usecols = [column for column in header_columns if str(column).strip().lower() in accepted]
+    return exact_usecols or None
+
+
 def _load_candidate_table(
     candidate: Path,
     table_cfg: dict[str, Any],
@@ -514,16 +560,25 @@ def _load_candidate_table(
     keep_columns: list[str],
     required_columns: list[str],
 ) -> pd.DataFrame:
+    usecols = _resolve_exact_candidate_usecols(
+        candidate,
+        table_cfg,
+        join_on=join_on,
+        keep_columns=keep_columns,
+        required_columns=required_columns,
+    )
+    if usecols is None:
+        usecols = _build_candidate_usecols(
+            table_cfg,
+            join_on=join_on,
+            keep_columns=keep_columns,
+            required_columns=required_columns,
+        )
     try:
         table = pd.read_csv(
             candidate,
             low_memory=False,
-            usecols=_build_candidate_usecols(
-                table_cfg,
-                join_on=join_on,
-                keep_columns=keep_columns,
-                required_columns=required_columns,
-            ),
+            usecols=usecols,
         )
     except pd.errors.EmptyDataError:
         return pd.DataFrame()
