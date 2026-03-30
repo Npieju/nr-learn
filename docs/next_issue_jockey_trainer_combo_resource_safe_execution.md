@@ -57,3 +57,4 @@ current read:
 - override が必要なときだけ `--allow-concurrent-heavy-jobs` を明示する
 - `scripts/run_execution_capacity_status.py` で rerun 前に `ready / blocked` を確認できる
 - `scripts/run_execution_capacity_wait.py` で quiet lane が空くまで heartbeat 付きで待てる
+- `scripts/run_train_when_capacity_ready.py` で `wait -> train` を 1 コマンドにまとめられる
