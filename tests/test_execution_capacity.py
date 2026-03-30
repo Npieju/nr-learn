@@ -9,10 +9,10 @@ class ExecutionCapacityTests(unittest.TestCase):
     def test_find_conflicting_heavy_processes_detects_other_heavy_jobs(self) -> None:
         process_table = "\n".join(
             [
-                "PID COMMAND",
-                "100 /workspaces/nr-learn/.venv/bin/python scripts/run_train.py --config configs/model.yaml",
-                "101 /workspaces/nr-learn/.venv/bin/python scripts/run_collect_local_nankan.py --config configs/crawl_local_nankan_template.yaml --target pedigree",
-                "102 /workspaces/nr-learn/.venv/bin/python scripts/run_evaluate.py --config configs/model.yaml",
+                "PID PPID COMMAND",
+                "100 1 /workspaces/nr-learn/.venv/bin/python scripts/run_train.py --config configs/model.yaml",
+                "101 1 /workspaces/nr-learn/.venv/bin/python scripts/run_collect_local_nankan.py --config configs/crawl_local_nankan_template.yaml --target pedigree",
+                "102 1 /workspaces/nr-learn/.venv/bin/python scripts/run_evaluate.py --config configs/model.yaml",
             ]
         )
 
@@ -30,9 +30,9 @@ class ExecutionCapacityTests(unittest.TestCase):
     def test_find_conflicting_heavy_processes_marks_same_script_duplicates(self) -> None:
         process_table = "\n".join(
             [
-                "PID COMMAND",
-                "200 /workspaces/nr-learn/.venv/bin/python scripts/run_train.py --config configs/model.yaml",
-                "201 /workspaces/nr-learn/.venv/bin/python scripts/run_train.py --config configs/model.yaml",
+                "PID PPID COMMAND",
+                "200 1 /workspaces/nr-learn/.venv/bin/python scripts/run_train.py --config configs/model.yaml",
+                "201 1 /workspaces/nr-learn/.venv/bin/python scripts/run_train.py --config configs/model.yaml",
             ]
         )
 
@@ -49,9 +49,9 @@ class ExecutionCapacityTests(unittest.TestCase):
     def test_assert_no_conflicting_heavy_processes_raises_concise_error(self) -> None:
         process_table = "\n".join(
             [
-                "PID COMMAND",
-                "300 /workspaces/nr-learn/.venv/bin/python scripts/run_train.py --config configs/model.yaml",
-                "301 /workspaces/nr-learn/.venv/bin/python scripts/run_collect_local_nankan.py --config configs/crawl_local_nankan_template.yaml --target pedigree",
+                "PID PPID COMMAND",
+                "300 1 /workspaces/nr-learn/.venv/bin/python scripts/run_train.py --config configs/model.yaml",
+                "301 1 /workspaces/nr-learn/.venv/bin/python scripts/run_collect_local_nankan.py --config configs/crawl_local_nankan_template.yaml --target pedigree",
             ]
         )
 
@@ -69,9 +69,9 @@ class ExecutionCapacityTests(unittest.TestCase):
     def test_build_execution_capacity_status_returns_blocked_payload(self) -> None:
         process_table = "\n".join(
             [
-                "PID COMMAND",
-                "400 /workspaces/nr-learn/.venv/bin/python scripts/run_train.py --config configs/model.yaml",
-                "401 /workspaces/nr-learn/.venv/bin/python scripts/run_backfill_local_nankan.py --crawl-config configs/crawl_local_nankan_template.yaml",
+                "PID PPID COMMAND",
+                "400 1 /workspaces/nr-learn/.venv/bin/python scripts/run_train.py --config configs/model.yaml",
+                "401 1 /workspaces/nr-learn/.venv/bin/python scripts/run_backfill_local_nankan.py --crawl-config configs/crawl_local_nankan_template.yaml",
             ]
         )
 
@@ -85,6 +85,27 @@ class ExecutionCapacityTests(unittest.TestCase):
         self.assertEqual(payload["conflict_count"], 1)
         self.assertEqual(payload["conflicts"][0]["kind"], "local_nankan_backfill")
         self.assertEqual(payload["conflicts"][0]["pid"], 401)
+
+    def test_find_conflicting_heavy_processes_ignores_ancestor_revision_gate(self) -> None:
+        process_table = "\n".join(
+            [
+                "PID PPID COMMAND",
+                "500 1 /workspaces/nr-learn/.venv/bin/python scripts/run_local_revision_gate.py --revision nar_baseline",
+                "501 500 /workspaces/nr-learn/.venv/bin/python scripts/run_revision_gate.py --revision nar_baseline",
+                "502 501 /workspaces/nr-learn/.venv/bin/python scripts/run_train.py --config configs/model_local_baseline.yaml",
+                "503 1 /workspaces/nr-learn/.venv/bin/python scripts/run_collect_local_nankan.py --config configs/crawl_local_nankan_template.yaml",
+            ]
+        )
+
+        matches = find_conflicting_heavy_processes(
+            current_pid=502,
+            current_script_pattern="scripts/run_train.py",
+            process_table=process_table,
+        )
+
+        self.assertEqual(len(matches), 1)
+        self.assertEqual(matches[0].kind, "local_nankan_collect")
+        self.assertEqual(matches[0].pid, 503)
 
 
 if __name__ == "__main__":
