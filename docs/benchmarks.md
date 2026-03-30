@@ -84,6 +84,7 @@ formal な evaluation 導線は、[evaluation_guide.md](evaluation_guide.md) を
 - operational 採用は actual-date compare と role の単純さも含めて別途判断する。
 - low bet-rate の candidate は `bets / races` と `bets / rows` を明示して、exposure compression 依存の win ではないかを追加で確認する。
 - recent-heavy family は profile 名だけでは true retrain にならないため、component artifact を同一 suffix で再学習した run だけを正式比較対象として扱う。
+- formal promoted line と operational default line が分かれる場合は `docs/promoted_vs_operational_role_split_standard.md` を正本にする。
 
 運用上の読み方はさらに次の 3 行に圧縮できる。
 

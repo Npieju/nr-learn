@@ -84,6 +84,8 @@ latest 2025 の current conclusion template は次で固定する。
 - `r20260330_surface_plus_class_layoff_interactions_v1` stays analysis-first conservative promoted candidate until bet-rate robustness is cleared
 - recent-2018 true retrain stays analysis-first third fallback
 
+formal promoted と operational default が分かれるときは、`docs/promoted_vs_operational_role_split_standard.md` の文面を優先する。
+
 ## 4. 代表日の smoke
 
 特定日だけ runtime 挙動を確認したいときは、まず `run_serving_smoke.py` を使う。

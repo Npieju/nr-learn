@@ -66,6 +66,8 @@
 - bankroll sweep でも September は promoted pure path が優位だった一方、December は promoted pure path より `2025-12-06` だけ promoted を使う hybrid が優位だった。
 - その後の policy-side widening probes では、`sep_date_selected_rows_kelly_candidate` が `1 / 216 races`、`portfolio_lower_blend` が `0 / 216 races` となり、promoted line の exposure widening には失敗した。
 - したがって current primary line は feature family の support hardening継続でも serving default 昇格でも widening 継続でもなく、formal promoted line と operational default line の role split を explicit にする段階へ移る。
+- role split の current conclusion は、formal promoted line を `r20260330_surface_plus_class_layoff_interactions_v1`、operational default line を `current_recommended_serving_2025_latest` に固定することだ。
+- これにより `class / rest / surface` family は current queue 上では一段落し、次の feature reentry は `jockey / trainer / combo` family に移る。
 
 現時点の operational baseline は `current_recommended_serving_2025_latest` とする。
 

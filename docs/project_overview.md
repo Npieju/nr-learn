@@ -59,6 +59,14 @@ runtime 面では、`configs/data_2025_latest.yaml` に freshness-guarded primar
 
 experiment queue の current reading も更新された。`tighter policy search` は Rank 1 policy family のままだが、feature 側の primary line だった `class / rest / surface` interaction family は support hardening まで読み切った。`r20260330_class_rest_surface_interactions_v1` は ROI summary が強い一方で support `1/5` で止まり、`r20260330_surface_interaction_only_v1` は support `2/5` まで改善したが ROI を薄めすぎた。そこから middle-ground として作った `r20260330_surface_plus_class_layoff_interactions_v1` は formal benchmark `weighted_roi=1.1379979394080304`、`feasible_folds=3/5` で `pass / promote` に到達した。ただし actual-date compare と bankroll sweep を含む `#46` の読みでは low-frequency / concentrated shape が残り、さらに `#47` の policy-side widening probes も `3.70% -> 0.46% -> 0.00%` と suppressive 方向にしか動かなかった。したがって current queue は serving default 昇格でも widening 継続でもなく、この promoted line の role split を explicit にする段階に移っている。
 
+この role split は次で固定する。
+
+- formal promoted line: `r20260330_surface_plus_class_layoff_interactions_v1`
+- operational default line: `current_recommended_serving_2025_latest`
+- operational role: analysis-first conservative promoted candidate
+
+したがって next feature experiment queue は、同 family の widening を続けるのではなく、Tier A 次順位の `jockey / trainer / combo` family へ移すのが自然である。
+
 この seasonal 判断の標準文面と read order は `docs/seasonal_derisk_decision_standard.md` を正本にする。
 
 latest 2025 の actual-date compare を再開するときは、次の 3 段で読めば十分である。
