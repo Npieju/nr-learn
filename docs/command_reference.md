@@ -350,6 +350,7 @@ materialized supplemental path を opt-in で評価する smoke:
 
 - `primary_tail_cache_file` / `primary_tail_cache_manifest_file` を data config に追加すると、`load_training_table_tail(...)` は requested `tail_rows` と一致する cache manifest がある場合に pickle cache を優先する。
 - tracked candidate config は [configs/data_2025_latest_primary_tail_cache.yaml](/workspaces/nr-learn/configs/data_2025_latest_primary_tail_cache.yaml) を使う。
+- cache manifest には `source_dataset`, `source_dataset_size_bytes`, `source_dataset_mtime_ns` が入り、raw primary source が変わった場合は stale cache とみなして raw tail read へ fallback する。
 - default config は `data/processed/supplemental/corner_passing_order.csv` を優先し、存在しない場合だけ raw supplemental CSV へ fallback する。
 - default config は `data/processed/supplemental/netkeiba_race_card.csv` と `data/processed/supplemental/netkeiba_race_result_keys.csv` も優先し、存在しない場合だけ raw source へ fallback する。
 - `configs/data_2025_latest_materialized_corner.yaml` は A/B や追加検証用の明示 config として残している。

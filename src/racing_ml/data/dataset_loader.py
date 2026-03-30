@@ -680,10 +680,39 @@ def _resolve_primary_tail_cache_candidate(
     return resolved_cache, resolved_manifest
 
 
+def _is_primary_tail_cache_manifest_fresh(
+    manifest: dict[str, Any],
+    *,
+    dataset_path: Path,
+    base_dir: Path | None,
+) -> bool:
+    recorded_source = manifest.get("source_dataset")
+    if recorded_source:
+        expected_source = _display_path(dataset_path, base_dir)
+        if str(recorded_source) != expected_source:
+            return False
+
+    try:
+        stat_result = dataset_path.stat()
+    except OSError:
+        return False
+
+    recorded_size = manifest.get("source_dataset_size_bytes")
+    if recorded_size is not None and int(recorded_size) != int(stat_result.st_size):
+        return False
+
+    recorded_mtime_ns = manifest.get("source_dataset_mtime_ns")
+    if recorded_mtime_ns is not None and int(recorded_mtime_ns) != int(stat_result.st_mtime_ns):
+        return False
+
+    return True
+
+
 def _load_primary_tail_cache(
     dataset_config: dict[str, Any] | None,
     *,
     base_dir: Path | None,
+    dataset_path: Path,
     tail_rows: int,
 ) -> tuple[pd.DataFrame, int] | None:
     resolved = _resolve_primary_tail_cache_candidate(dataset_config, base_dir=base_dir, tail_rows=tail_rows)
@@ -704,6 +733,8 @@ def _load_primary_tail_cache(
         try:
             with open(manifest_file, "r", encoding="utf-8") as handle:
                 manifest = json.load(handle)
+            if not _is_primary_tail_cache_manifest_fresh(manifest, dataset_path=dataset_path, base_dir=base_dir):
+                return None
             manifest_total = manifest.get("primary_source_rows_total")
             if manifest_total is not None:
                 primary_source_rows_total = int(manifest_total)
@@ -1165,15 +1196,16 @@ def load_training_table_tail(
 ) -> tuple[pd.DataFrame, int]:
     base_path = Path(base_dir) if base_dir is not None else None
     raw_path = _resolve_path(raw_dir, base_path)
+    dataset_path = _pick_dataset(raw_path)
     cached = _load_primary_tail_cache(
         dataset_config,
         base_dir=base_path,
+        dataset_path=dataset_path,
         tail_rows=int(tail_rows),
     )
     if cached is not None:
         frame, primary_source_rows_total = cached
     else:
-        dataset_path = _pick_dataset(raw_path)
         frame, primary_source_rows_total = _read_csv_tail(dataset_path, int(tail_rows))
     frame = _normalize_columns(frame)
     recent_date_floor = _resolve_recent_date_floor(frame)
@@ -1546,6 +1578,8 @@ def materialize_primary_tail_cache(
         "status": "completed",
         "raw_dir": _display_path(raw_path, base_path),
         "source_dataset": _display_path(dataset_path, base_path),
+        "source_dataset_size_bytes": int(dataset_path.stat().st_size),
+        "source_dataset_mtime_ns": int(dataset_path.stat().st_mtime_ns),
         "output_file": _display_path(resolved_output, base_path),
         "tail_rows": int(tail_rows),
         "row_count": int(len(frame)),
