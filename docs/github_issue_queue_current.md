@@ -21,28 +21,28 @@
 
 2026-03-29 時点で、Kelly runtime family (`#10`, `#11`, `#12`, `#13`)、seasonal ordering (`#14`, `#15`)、runtime broad reduction (`#7`)、supplemental materialization (`#16`)、feature-builder runtime (`#17`) は close 済みである。loader runtime の small safe cuts を進めた `#18` も wrap-up 段階にあり、current operational anchor は引き続き `r20260329_tighter_policy_ratio003_abs90` である。
 
-この時点の next active issue は `#40` の tighter policy reentry after runtime refresh である。
+この時点の next active issue は `#41` の class rest surface interaction strengthening である。
 
 Primary active issue:
 
-- `#40`
-- <https://github.com/Npieju/nr-learn/issues/40>
+- `#41`
+- <https://github.com/Npieju/nr-learn/issues/41>
 
 Primary issue draft:
 
-- `docs/next_issue_tighter_policy_reentry_after_runtime.md`
-- `docs/policy_family_shortlist.md`
+- `docs/next_issue_class_rest_surface_interactions.md`
+- `docs/feature_family_ranking.md`
 
 GitHub issue:
 
-- `#40`
-- <https://github.com/Npieju/nr-learn/issues/40>
+- `#41`
+- <https://github.com/Npieju/nr-learn/issues/41>
 
 Primary next execution order:
 
-1. `tighter policy search` family を next experiment line に戻す
-2. current baseline に対する compare framing を固定する
-3. next formal candidate を 1 本に絞る
+1. `class / rest / surface change` family を next experiment line にする
+2. interaction 仮説を 1 本に絞る
+3. reduced smoke から formal candidate へつなぐ
 
 ### 3.1 [experiment] Tighter policy search frontier refinement
 

@@ -55,6 +55,8 @@
 - さらに `r20260327_recent_2018_component_retrain` として recent-2018 の true retrain も完了し、`AUC=0.8432`、`ev_top1_roi=0.7400`、`nested WF weighted test ROI=0.9595`、`formal_benchmark_feasible_fold_count=5` を確認した。
 - primary tail cache path は freshness guard と refresh automation を含めて standardize され、`configs/data_2025_latest.yaml` の default mainline に昇格した。
 - runtime default smoke は `loading training table 0m02s`, total `0m15s` で、explicit alias compare との差分は `run_context.data_config` のみだった。
+- runtime 完了後の experiment reentry では `tighter policy search` family を再読し、A anchor 維持・C near-par challenger・B no-op/failed side read を確認した。
+- したがって next primary experiment line は same-family widening ではなく、Tier A feature family の `class / rest / surface change` interaction 強化へ移す。
 
 現時点の operational baseline は `current_recommended_serving_2025_latest` とする。
 

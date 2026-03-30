@@ -57,6 +57,8 @@
 
 runtime 面では、`configs/data_2025_latest.yaml` に freshness-guarded primary tail cache が default で入り、current baseline smoke は faster path 上でも same-summary equivalent を確認済みである。したがって直近の queue は runtime ではなく experiment 側へ戻してよい。
 
+experiment queue の current reading も単純である。`tighter policy search` は Rank 1 policy family のままだが、same-family widening の first wave はすでに A anchor / C near-par challenger まで読み切っている。したがって next experiment は policy widening を続けるより、Tier A の feature family、特に `class / rest / surface` interaction を掘るほうが自然である。
+
 この seasonal 判断の標準文面と read order は `docs/seasonal_derisk_decision_standard.md` を正本にする。
 
 latest 2025 の actual-date compare を再開するときは、次の 3 段で読めば十分である。
