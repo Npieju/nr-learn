@@ -99,3 +99,21 @@ reduced smoke でも差分はきれいに保たれた。
   - `exact_equal=true`
 
 したがって current best read は、「append logic residual は `prelimit` と `recent-filter no-copy` の 2 本で段階的に改善しており、current mainline は `loading training table 0m13s` まで前進した」である。
+
+third accepted cut として、append table に explicit `keep_columns` を与え、base frame に存在しない不要列を source read 時点で落とした。
+
+- dropped columns:
+  - `jockey_key`
+  - `trainer_key`
+  - `owner_key`
+  - `passing_order_raw`
+
+この cut は current mainline config に直接入れて reduced smoke で確認した。
+
+- candidate smoke: `perf_smoke_append_keepcols_mainline_v1`
+- `loading training table 0m14s`, total `0m24s`
+- summary compare:
+  - `summary_equivalence_perf_smoke_append_logic_v2_vs_keepcols_mainline_v1.json`
+  - `exact_equal=true`
+
+したがって current best read は、「append logic residual は `prelimit`、`recent-filter no-copy`、`append keep_columns` の 3 本が accepted であり、current mainline は same-summary のまま `0m24s` 帯を維持している」である。
