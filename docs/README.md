@@ -79,6 +79,7 @@ feature 側の次 issue 下書きは [next_issue_class_rest_surface_interactions
 formal promoted line と operational default line の切り分けは [promoted_vs_operational_role_split_standard.md](promoted_vs_operational_role_split_standard.md) を使う。次の feature family reentry は [next_issue_jockey_trainer_combo_regime_extension.md](next_issue_jockey_trainer_combo_regime_extension.md) を使う。
 first execution candidate は [next_issue_jockey_trainer_combo_style_distance_candidate.md](next_issue_jockey_trainer_combo_style_distance_candidate.md) を使う。
 execution が resource pressure で止まる場合は [next_issue_jockey_trainer_combo_resource_safe_execution.md](next_issue_jockey_trainer_combo_resource_safe_execution.md) を参照する。
+NAR を JRA と無理に統合せず別 universe として進める標準は [nar_model_transfer_strategy.md](nar_model_transfer_strategy.md) を使う。
 
 tail loader optimization の gate 運用は [tail_loader_equivalence_gate_standard.md](tail_loader_equivalence_gate_standard.md) を使う。
 

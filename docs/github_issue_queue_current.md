@@ -31,6 +31,8 @@ Primary active issue:
 - <https://github.com/Npieju/nr-learn/issues/50>
 - `#51`
 - <https://github.com/Npieju/nr-learn/issues/51>
+- `#52`
+- <https://github.com/Npieju/nr-learn/issues/52>
 
 Primary issue draft:
 
@@ -38,6 +40,7 @@ Primary issue draft:
 - `docs/feature_family_ranking.md`
 - `docs/next_issue_jockey_trainer_combo_style_distance_candidate.md`
 - `docs/next_issue_jockey_trainer_combo_resource_safe_execution.md`
+- `docs/nar_model_transfer_strategy.md`
 
 GitHub issue:
 
@@ -47,12 +50,20 @@ GitHub issue:
 - <https://github.com/Npieju/nr-learn/issues/50>
 - `#51`
 - <https://github.com/Npieju/nr-learn/issues/51>
+- `#52`
+- <https://github.com/Npieju/nr-learn/issues/52>
 
 Primary next execution order:
 
 1. `#50` の style / track-distance candidate を family source of truth として維持する
 2. `#51` で resource-safe rerun lane を切って execution blocker を分離する
 3. clean rerun 完了後に `#50` の true component retrain を再開する
+
+Side universe track:
+
+1. `#52` で NAR を `separate universe` baseline として formalize する
+2. `bets / races / bet-rate` を mandatory read にする
+3. JRA の process / gating を移植し、threshold や feature priority は NAR 専用に再検証する
 
 ### 3.1 [experiment] Tighter policy search frontier refinement
 
