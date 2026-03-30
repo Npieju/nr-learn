@@ -73,6 +73,7 @@ seasonal second-layer fallback の順位づけは [seasonal_secondary_fallback_s
 runtime 改善の次 issue 下書きは [next_issue_primary_source_shaping.md](next_issue_primary_source_shaping.md) を使う。
 primary tail cache の運用標準は [primary_tail_cache_operational_policy.md](primary_tail_cache_operational_policy.md) を使う。
 primary tail cache の次 issue 下書きは [next_issue_primary_tail_cache_default_promotion.md](next_issue_primary_tail_cache_default_promotion.md) を使う。
+runtime 後に experiment queue へ戻すときは [next_issue_post_runtime_benchmark_refresh.md](next_issue_post_runtime_benchmark_refresh.md) を使う。
 
 tail loader optimization の gate 運用は [tail_loader_equivalence_gate_standard.md](tail_loader_equivalence_gate_standard.md) を使う。
 

@@ -3,6 +3,8 @@ dataset:
   raw_dir: "data/raw"
   interim_dir: "data/interim"
   processed_dir: "data/processed"
+  primary_tail_cache_file: "data/processed/primary/race_result_tail10000_exact.pkl"
+  primary_tail_cache_manifest_file: "artifacts/reports/primary_tail_cache_tail10000.json"
   external_raw_dirs:
     - "data/external/netkeiba/results"
     - "data/external/netkeiba/racecard"

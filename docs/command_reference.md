@@ -364,7 +364,8 @@ materialized supplemental path を opt-in で評価する smoke:
 - `run_primary_tail_cache_refresh_if_needed.py` は `fresh` なら no-op、`stale/missing/...` なら materialize を実行して再判定する。
 - refresh runbook は `status -> refresh_if_needed -> 必要なら reduced smoke` の順で使う。
 - `primary_tail_cache_file` / `primary_tail_cache_manifest_file` を data config に追加すると、`load_training_table_tail(...)` は requested `tail_rows` と一致する cache manifest がある場合に pickle cache を優先する。
-- tracked candidate config は [configs/data_2025_latest_primary_tail_cache.yaml](/workspaces/nr-learn/configs/data_2025_latest_primary_tail_cache.yaml) を使う。
+- [configs/data_2025_latest.yaml](/workspaces/nr-learn/configs/data_2025_latest.yaml) は primary tail cache を default mainline として含む。
+- tracked candidate config [configs/data_2025_latest_primary_tail_cache.yaml](/workspaces/nr-learn/configs/data_2025_latest_primary_tail_cache.yaml) は historical A/B と explicit alias 用に残している。
 - cache manifest には `source_dataset`, `source_dataset_size_bytes`, `source_dataset_mtime_ns` が入り、raw primary source が変わった場合は stale cache とみなして raw tail read へ fallback する。
 - default config は `data/processed/supplemental/corner_passing_order.csv` を優先し、存在しない場合だけ raw supplemental CSV へ fallback する。
 - default config は `data/processed/supplemental/netkeiba_race_card.csv` と `data/processed/supplemental/netkeiba_race_result_keys.csv` も優先し、存在しない場合だけ raw source へ fallback する。

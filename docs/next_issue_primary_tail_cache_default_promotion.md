@@ -50,3 +50,31 @@ current accepted state:
 - `run_primary_tail_cache_refresh_if_needed.py`
 - reduced smoke re-run
 - summary equivalence manifest review
+
+## Current Read
+
+promotion read は affirmative である。
+
+- default config に primary tail cache keys を追加した
+- default config の real status run:
+  - `status=fresh`
+  - `recommended_action=use_cache`
+- default config の real refresh-if-needed run:
+  - `status=fresh`
+  - `action=skipped_refresh`
+- reduced smoke:
+  - `perf_smoke_primary_tail_cache_default_promotion_v1`
+  - `loading training table 0m02s`
+  - total `0m15s`
+- candidate compare:
+  - `summary_equivalence_perf_smoke_primary_tail_cache_candidate_v2_vs_default_promotion_v1.json`
+  - `difference_count=1`
+  - only diff: `run_context.data_config`
+
+したがって current best read は、「freshness guard と refresh runbook が整ったため、primary tail cache は default mainline に昇格してよい」である。
+
+## Decision
+
+- promote default: yes
+- keep explicit alias: yes
+- rollback condition: summary drift / refresh runbook failure / stale fallback failure

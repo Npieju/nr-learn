@@ -65,16 +65,24 @@ refresh command はこれを使う。
 
 ## Promotion Rule
 
-現時点では、primary tail cache は opt-in alias として採用済みである。default mainline へ昇格するには、次を追加で満たす必要がある。
+default mainline へ昇格してよいのは、次を満たす場合である。
 
 - refresh 実行の責務が運用上あいまいでない
 - status command と refresh command の runbook が標準化されている
 - stale cache 時の fallback だけでなく refresh 導線も標準化されている
 - current mainline との reduced smoke equivalence が維持される
 
+rollback 条件は次である。
+
+- reduced smoke で summary drift が出る
+- status / refresh runbook が運用上回らない
+- stale cache fallback で予期しない failure が出る
+- raw source 更新頻度に対して refresh 運用コストが過大と判明する
+
 ## Decision
 
 2026-03-30 時点の正本判断は次である。
 
-- `primary tail cache` は freshness-guarded opt-in alias として keep
-- default 昇格は refresh automation / operational ownership が整ってから再判定
+- `primary tail cache` は freshness-guarded default mainline として promote
+- explicit alias [configs/data_2025_latest_primary_tail_cache.yaml](/workspaces/nr-learn/configs/data_2025_latest_primary_tail_cache.yaml) は historical A/B と manual fallback 用に keep
+- rollback は上の条件に当たるときだけ行う
