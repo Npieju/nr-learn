@@ -56,7 +56,10 @@
 - primary tail cache path は freshness guard と refresh automation を含めて standardize され、`configs/data_2025_latest.yaml` の default mainline に昇格した。
 - runtime default smoke は `loading training table 0m02s`, total `0m15s` で、explicit alias compare との差分は `run_context.data_config` のみだった。
 - runtime 完了後の experiment reentry では `tighter policy search` family を再読し、A anchor 維持・C near-par challenger・B no-op/failed side read を確認した。
-- したがって next primary experiment line は same-family widening ではなく、Tier A feature family の `class / rest / surface change` interaction 強化へ移す。
+- `r20260330_class_rest_surface_interactions_v1` では、true component retrain と stack rebuild までは正常完了し、formal evaluation も `auc=0.8417`、`ev_top1_roi=0.6837`、`nested WF weighted test ROI=1.1003` と強い summary を示した。
+- 一方で matching WF feasibility は `1/5` feasible folds に留まり、promotion gate は `block / hold` だった。
+- fold 1-4 の主な失敗理由は一貫して `min_bets` で、fold 5 のみ `portfolio` candidate が feasible になった。
+- したがって next primary experiment line は family abandon ではなく、`class / rest / surface change` interaction family の support hardening へ移す。
 
 現時点の operational baseline は `current_recommended_serving_2025_latest` とする。
 

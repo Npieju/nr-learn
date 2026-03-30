@@ -57,7 +57,7 @@
 
 runtime 面では、`configs/data_2025_latest.yaml` に freshness-guarded primary tail cache が default で入り、current baseline smoke は faster path 上でも same-summary equivalent を確認済みである。したがって直近の queue は runtime ではなく experiment 側へ戻してよい。
 
-experiment queue の current reading も単純である。`tighter policy search` は Rank 1 policy family のままだが、same-family widening の first wave はすでに A anchor / C near-par challenger まで読み切っている。したがって next experiment は policy widening を続けるより、Tier A の feature family、特に `class / rest / surface` interaction を掘るほうが自然である。
+experiment queue の current reading も単純である。`tighter policy search` は Rank 1 policy family のままだが、same-family widening の first wave はすでに A anchor / C near-par challenger まで読み切っている。次の primary line として試した `class / rest / surface` interaction は、`r20260330_class_rest_surface_interactions_v1` で evaluation summary 上の改善を示した一方、matching WF feasibility は `1/5` feasible folds に留まり support block になった。したがって current queue は family abandon ではなく、同 feature line の support hardening に移っている。
 
 この seasonal 判断の標準文面と read order は `docs/seasonal_derisk_decision_standard.md` を正本にする。
 
