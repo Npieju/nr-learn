@@ -53,6 +53,8 @@
 - その root issue を解消した上で、`r20260327_recent_2020_component_retrain` として recent-2020 の win / roi component を実際に再学習し、matching な stack bundle、evaluation、WF feasibility、promotion gate まで完了した。
 - 同 run は `pass / promote` で整合し、`AUC=0.8449`、`ev_top1_roi=0.7496`、`nested WF weighted test ROI=0.9218`、`formal_benchmark_feasible_fold_count=4` を確認した。
 - さらに `r20260327_recent_2018_component_retrain` として recent-2018 の true retrain も完了し、`AUC=0.8432`、`ev_top1_roi=0.7400`、`nested WF weighted test ROI=0.9595`、`formal_benchmark_feasible_fold_count=5` を確認した。
+- primary tail cache path は freshness guard と refresh automation を含めて standardize され、`configs/data_2025_latest.yaml` の default mainline に昇格した。
+- runtime default smoke は `loading training table 0m02s`, total `0m15s` で、explicit alias compare との差分は `run_context.data_config` のみだった。
 
 現時点の operational baseline は `current_recommended_serving_2025_latest` とする。
 

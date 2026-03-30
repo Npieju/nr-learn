@@ -37,7 +37,7 @@
 
 ## 4. 現在の運用上の位置づけ
 
-2026-03-27 時点で、現在の位置づけは次の 4 本に整理している。
+2026-03-30 時点で、現在の位置づけは次の 4 本に整理している。
 
 | 区分 | profile | 位置づけ | 状態 |
 | --- | --- | --- | --- |
@@ -54,6 +54,8 @@
 
 1. September window は `current_long_horizon_serving_2025_latest` を最初の de-risk alias として参照する。
 2. non-September は `current_recommended_serving_2025_latest` を既定運用に保ち、他候補は analysis-first compare に留める。
+
+runtime 面では、`configs/data_2025_latest.yaml` に freshness-guarded primary tail cache が default で入り、current baseline smoke は faster path 上でも same-summary equivalent を確認済みである。したがって直近の queue は runtime ではなく experiment 側へ戻してよい。
 
 この seasonal 判断の標準文面と read order は `docs/seasonal_derisk_decision_standard.md` を正本にする。
 
