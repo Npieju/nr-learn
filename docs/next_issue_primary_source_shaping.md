@@ -116,3 +116,24 @@ loader-only compare も極めて強い。
   - only diff: `run_context.data_config`
 
 したがって current best read は、「plain CSV source shaping は reject だが、schema-preserving primary tail cache path は same-summary equivalent で accepted」である。`#36` の next move は、この opt-in path を repo 標準の candidate config / command に昇格することになる。
+
+third read として、この path を repo 管理の candidate config に昇格した。
+
+- candidate config: `configs/data_2025_latest_primary_tail_cache.yaml`
+- cache file: `data/processed/primary/race_result_tail10000_exact.pkl`
+- manifest: `artifacts/reports/primary_tail_cache_tail10000.json`
+
+repo 内 config で取り直した reduced smoke A/B でも、current mainline に対して candidate は明確に速かった。
+
+- mainline smoke: `perf_smoke_primary_tail_cache_mainline_v2`
+  - `loading training table 0m20s`
+  - total `0m32s`
+- candidate smoke: `perf_smoke_primary_tail_cache_candidate_v2`
+  - `loading training table 0m02s`
+  - total `0m15s`
+- summary compare:
+  - `summary_equivalence_perf_smoke_primary_tail_cache_mainline_v2_vs_candidate_v2.json`
+  - `difference_count=1`
+  - only diff: `run_context.data_config`
+
+これで `#36` は `/tmp` overlay ではなく、repo 内の data config だけで再現でき、なおかつ current mainline に対して same-summary equivalent の opt-in runtime candidate を持った状態になった。次の判断は、この candidate config を正式な opt-in runtime alias として維持するか、cache freshness policy を整えてさらに default 昇格まで進めるかである。
