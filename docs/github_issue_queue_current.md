@@ -21,27 +21,28 @@
 
 2026-03-29 時点で、Kelly runtime family (`#10`, `#11`, `#12`, `#13`)、seasonal ordering (`#14`, `#15`)、runtime broad reduction (`#7`)、supplemental materialization (`#16`)、feature-builder runtime (`#17`) は close 済みである。loader runtime の small safe cuts を進めた `#18` も wrap-up 段階にあり、current operational anchor は引き続き `r20260329_tighter_policy_ratio003_abs90` である。
 
-この時点の next active issue は `#25` の append-external residual reduction である。
+この時点の next active issue は `#26` の tail training-table phase budget attribution である。
 
 Primary active issue:
 
-- `#25`
-- <https://github.com/Npieju/nr-learn/issues/25>
+- `#26`
+- <https://github.com/Npieju/nr-learn/issues/26>
 
 Primary issue draft:
 
+- `docs/next_issue_tail_load_phase_budget.md`
 - `docs/next_issue_append_external_residual.md`
-- `docs/next_issue_minimum_columns_residual.md`
 
 GitHub issue:
 
-- `#25`
-- <https://github.com/Npieju/nr-learn/issues/25>
+- `#26`
+- <https://github.com/Npieju/nr-learn/issues/26>
 
 Primary next execution order:
 
-1. `_append_external_tables` の exact-safe cut を探索する
-2. その後に remaining tail residual を再選定する
+1. `tail_training_table` の phase budget を current mainline で再計測する
+2. micro benchmark では効くのに reduced smoke で消える候補の interaction を特定する
+3. その結果に沿って next hotspot issue を 1 本に絞る
 
 ### 3.1 [experiment] Tighter policy search frontier refinement
 
