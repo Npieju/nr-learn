@@ -74,6 +74,7 @@ formal な evaluation 導線は、[evaluation_guide.md](evaluation_guide.md) を
 | operational baseline | `current_recommended_serving_2025_latest` | `pass / promote` | 既定運用 profile |
 | seasonal de-risk variant | `current_long_horizon_serving_2025_latest` | actual-date compare で有効 | September 系の保守候補 |
 | formal improvement candidate | `current_tighter_policy_search_candidate_2025_latest` | `pass / promote` | September difficult window 向けの analysis-first 防御候補 |
+| promoted feature candidate | `r20260330_surface_plus_class_layoff_interactions_v1` | `pass / promote` | actual-date では low-frequency conservative candidate |
 | recent-heavy retrain candidate | `current_recommended_serving_2025_recent_2018` family | `pass / promote` | true retrain 比較用の analysis-first 候補 |
 
 この表の意味は次のとおりである。
@@ -81,6 +82,7 @@ formal な evaluation 導線は、[evaluation_guide.md](evaluation_guide.md) を
 - `pass / promote` は「formal gate を通過した」ことを意味する。
 - それだけでは baseline 置換を意味しない。
 - operational 採用は actual-date compare と role の単純さも含めて別途判断する。
+- low bet-rate の candidate は `bets / races` と `bets / rows` を明示して、exposure compression 依存の win ではないかを追加で確認する。
 - recent-heavy family は profile 名だけでは true retrain にならないため、component artifact を同一 suffix で再学習した run だけを正式比較対象として扱う。
 
 運用上の読み方はさらに次の 3 行に圧縮できる。

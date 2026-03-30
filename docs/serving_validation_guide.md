@@ -72,6 +72,7 @@ dashboard summary JSON は、September difficult window を `long_horizon -> tig
 | baseline vs long-horizon | 2025-09 8 dates | `-27.3` | `-4.3` | first seasonal de-risk alias |
 | baseline vs long-horizon | 2025-12 tail 8 dates | `+14.9` | `+14.9` | controlled override, not broad replacement |
 | baseline vs tighter policy | 2025-09 / 2025-12 | September de-risk, December not superior | second defensive option | analysis-first |
+| baseline vs surface+class-layoff promoted | 2025-09 / 2025-12 | September `32 bets / -27.3`, December `45 bets / +21.8` | September `8 bets / -8.0`, December `13 bets / +20.0` | formal promoted but low-frequency; not default yet |
 
 この first read が崩れない限り、latest 2025 の seasonal ordering は変えない。
 
@@ -80,6 +81,7 @@ latest 2025 の current conclusion template は次で固定する。
 - baseline default remains `current_recommended_serving_2025_latest`
 - first seasonal de-risk alias remains `current_long_horizon_serving_2025_latest`
 - `current_tighter_policy_search_candidate_2025_latest` stays analysis-first second defensive option
+- `r20260330_surface_plus_class_layoff_interactions_v1` stays analysis-first conservative promoted candidate until bet-rate robustness is cleared
 - recent-2018 true retrain stays analysis-first third fallback
 
 ## 4. 代表日の smoke

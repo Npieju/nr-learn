@@ -21,28 +21,28 @@
 
 2026-03-29 時点で、Kelly runtime family (`#10`, `#11`, `#12`, `#13`)、seasonal ordering (`#14`, `#15`)、runtime broad reduction (`#7`)、supplemental materialization (`#16`)、feature-builder runtime (`#17`) は close 済みである。loader runtime の small safe cuts を進めた `#18` も wrap-up 段階にあり、current operational anchor は引き続き `r20260329_tighter_policy_ratio003_abs90` である。
 
-この時点の next active issue は `#45` の post-promotion serving validation である。
+この時点の next active issue は `#46` の bet-rate robustness audit である。
 
 Primary active issue:
 
-- `#45`
-- <https://github.com/Npieju/nr-learn/issues/45>
+- `#46`
+- <https://github.com/Npieju/nr-learn/issues/46>
 
 Primary issue draft:
 
-- `docs/next_issue_post_surface_plus_class_layoff_promotion.md`
+- `docs/next_issue_surface_plus_class_layoff_bet_rate_robustness.md`
 - `docs/feature_family_ranking.md`
 
 GitHub issue:
 
-- `#45`
-- <https://github.com/Npieju/nr-learn/issues/45>
+- `#46`
+- <https://github.com/Npieju/nr-learn/issues/46>
 
 Primary next execution order:
 
-1. `#44` promoted candidate を prior A anchor と serving compare で並べる
-2. benchmark / overview docs を promoted line 前提に更新する
-3. next experiment issue を updated promoted baseline 起点で切る
+1. `#45` の serving compare read を正本化する
+2. low bet-rate / low exposure の caution を denominator 付きで固定する
+3. robustness read を踏まえて next experiment issue を切る
 
 ### 3.1 [experiment] Tighter policy search frontier refinement
 
