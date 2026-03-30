@@ -17,7 +17,7 @@ from racing_ml.common.artifacts import ensure_output_file_path as artifact_ensur
 from racing_ml.common.artifacts import write_json
 from racing_ml.common.config import load_yaml
 from racing_ml.common.progress import Heartbeat, ProgressBar
-from racing_ml.data.dataset_loader import materialize_supplemental_table
+from racing_ml.data.dataset_loader import materialize_config_table
 
 
 def log_progress(message: str) -> None:
@@ -43,13 +43,14 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--data-config", default="configs/data_2025_latest.yaml")
     parser.add_argument("--table-name", default="corner_passing_order")
+    parser.add_argument("--table-kind", choices=["auto", "append", "supplemental"], default="supplemental")
     parser.add_argument("--output-file", default=None)
     parser.add_argument("--manifest-file", default="artifacts/reports/supplemental_materialize_manifest.json")
     args = parser.parse_args()
 
     try:
         progress = ProgressBar(total=4, prefix="[supplemental-materialize]", logger=log_progress, min_interval_sec=0.0)
-        progress.start(message=f"loading config table={args.table_name}")
+        progress.start(message=f"loading config table={args.table_name} kind={args.table_kind}")
         data_config = load_yaml(ROOT / args.data_config)
         dataset_cfg = data_config.get("dataset", {})
         raw_dir = dataset_cfg.get("raw_dir", "data/raw")
@@ -60,17 +61,23 @@ def main() -> int:
         if output_path is not None:
             artifact_ensure_output_file_path(output_path, label="materialized supplemental output", workspace_root=ROOT)
         progress.update(message="config ready")
-        with Heartbeat("[supplemental-materialize]", f"materializing table={args.table_name}", logger=log_progress):
-            summary = materialize_supplemental_table(
+        with Heartbeat(
+            "[supplemental-materialize]",
+            f"materializing table={args.table_name} kind={args.table_kind}",
+            logger=log_progress,
+        ):
+            summary = materialize_config_table(
                 raw_dir,
                 table_name=args.table_name,
                 dataset_config=dataset_cfg,
                 base_dir=ROOT,
                 output_file=output_path,
+                table_kind=args.table_kind,
             )
         progress.update(message=f"materialize status={summary.get('status')} rows={summary.get('row_count')}")
         summary["data_config"] = args.data_config
         summary["table_name"] = args.table_name
+        summary["table_kind"] = args.table_kind
         summary["manifest_file"] = artifact_display_path(manifest_path, workspace_root=ROOT)
         write_json(manifest_path, summary)
         progress.update(message=f"manifest written path={artifact_display_path(manifest_path, workspace_root=ROOT)}")

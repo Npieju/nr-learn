@@ -299,7 +299,7 @@ supplemental materialize の初期コマンド:
   --manifest-file artifacts/reports/supplemental_materialize_corner_passing_order.json
 ```
 
-`netkeiba_race_card` を opt-in materialized path として作る例:
+`netkeiba_race_card` を materialized path として再生成する例:
 
 ```bash
 /workspaces/nr-learn/.venv/bin/python scripts/run_materialize_supplemental_table.py \
@@ -326,10 +326,23 @@ materialized supplemental path を opt-in で評価する smoke:
 
 補足:
 
-- `scripts/run_materialize_supplemental_table.py` は progress と manifest を出し、`corner_passing_order` のような raw supplemental table を再利用用 CSV に前展開する。
+- `scripts/run_materialize_supplemental_table.py` は progress と manifest を出し、`--table-kind supplemental|append|auto` で config table を再利用用 CSV に前展開できる。
+- append table の例:
+
+```bash
+/workspaces/nr-learn/.venv/bin/python scripts/run_materialize_supplemental_table.py \
+  --data-config configs/data_2025_latest.yaml \
+  --table-name netkeiba_race_result \
+  --table-kind append \
+  --output-file data/processed/append/netkeiba_race_result.csv \
+  --manifest-file artifacts/reports/materialize_netkeiba_race_result_append.json
+```
+
 - default config は `data/processed/supplemental/corner_passing_order.csv` を優先し、存在しない場合だけ raw supplemental CSV へ fallback する。
+- default config は `data/processed/supplemental/netkeiba_race_card.csv` と `data/processed/supplemental/netkeiba_race_result_keys.csv` も優先し、存在しない場合だけ raw source へ fallback する。
 - `configs/data_2025_latest_materialized_corner.yaml` は A/B や追加検証用の明示 config として残している。
-- `configs/data_2025_latest_materialized_racecard.yaml` は `netkeiba_race_card` materialized path の A/B 用 config であり、2026-03-29 時点では analysis-only の opt-in 扱いである。
+- `configs/data_2025_latest_materialized_racecard.yaml` は historical A/B 記録用に残しているが、`netkeiba_race_card` 自体はすでに default mainline に昇格済みである。
+- `configs/data_2025_latest_materialized_result_keys.yaml` は `netkeiba_race_result_keys` materialized path の A/B 記録用 config であり、source 自体はすでに default mainline に昇格済みである。
 
 ## 5. serving 検証
 

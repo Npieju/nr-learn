@@ -19,6 +19,7 @@ from racing_ml.data.dataset_loader import (
     _select_table_columns,
     _sort_and_tail,
     load_training_table,
+    materialize_config_table,
     materialize_supplemental_table,
 )
 
@@ -115,6 +116,64 @@ class DatasetLoaderTailReadTest(unittest.TestCase):
             self.assertEqual(materialized["corner_4_position"].tolist(), [3, 2, 1])
             self.assertEqual(summary["race_id_min"], "101")
             self.assertEqual(summary["race_id_max"], "101")
+
+    def test_materialize_config_table_writes_append_output(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            raw_dir = root / "raw"
+            raw_dir.mkdir(parents=True, exist_ok=True)
+            external_dir = root / "external" / "results"
+            external_dir.mkdir(parents=True, exist_ok=True)
+            pd.DataFrame(
+                {
+                    "date": ["2025-01-01", "2025-01-01"],
+                    "race_id": ["202501010101", "202501010101"],
+                    "horse_id": ["h1", "h1"],
+                    "horse_name": ["horse-a", "horse-a"],
+                    "track": ["tokyo", "tokyo"],
+                    "distance": [1600, 1600],
+                    "gate_no": [1, 1],
+                    "rank": [1, 1],
+                }
+            ).to_csv(raw_dir / "primary.csv", index=False)
+            pd.DataFrame(
+                {
+                    "date": ["2025-01-01", "2025-01-01"],
+                    "race_id": ["202501010101", "202501010101"],
+                    "horse_id": ["h1", "h1"],
+                    "extra": ["x", "x"],
+                }
+            ).to_csv(external_dir / "sample_race_result.csv", index=False)
+
+            dataset_config = {
+                "external_raw_dirs": ["external/results"],
+                "append_tables": [
+                    {
+                        "name": "netkeiba_race_result",
+                        "search_dirs": ["external/results"],
+                        "pattern": "**/*race_result*.csv",
+                        "required_columns": ["date", "race_id"],
+                        "dedupe_on": ["race_id", "horse_id"],
+                        "materialized_file": "processed/netkeiba_race_result.csv",
+                    }
+                ],
+            }
+
+            summary = materialize_config_table(
+                raw_dir,
+                table_name="netkeiba_race_result",
+                table_kind="append",
+                dataset_config=dataset_config,
+                base_dir=root,
+            )
+
+            self.assertEqual(summary["status"], "completed")
+            self.assertEqual(summary["table_kind"], "append")
+            output_path = root / "processed" / "netkeiba_race_result.csv"
+            self.assertTrue(output_path.exists())
+            materialized = pd.read_csv(output_path)
+            self.assertEqual(len(materialized), 1)
+            self.assertEqual(materialized["race_id"].tolist(), [202501010101])
 
     def test_select_table_columns_reuses_frame_for_noop_selection(self) -> None:
         frame = pd.DataFrame({"race_id": [101], "horse_id": ["h1"], "horse_key": ["k1"]})

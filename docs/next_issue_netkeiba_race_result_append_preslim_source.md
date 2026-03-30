@@ -77,3 +77,17 @@ current mainline の append-path first read は次のとおり。
 - exact-equal summary compare
 
 の順で candidate を比較することである。
+
+append / supplemental の両方を同じ手順で materialize できるように、`run_materialize_supplemental_table.py` は `--table-kind append|supplemental|auto` を受ける generic runner に拡張した。
+
+そのうえで first append candidate として `netkeiba_race_result` の full materialized source を作成した。
+
+- output: `data/processed/append/netkeiba_race_result.csv`
+- manifest: `artifacts/reports/materialize_netkeiba_race_result_append.json`
+
+loader-only repeated compare は次のとおりだった。
+
+- current: `[13.2767, 13.6774, 13.6150]`, average `13.5230s`
+- full materialized append candidate: `[13.7303, 13.9262, 14.0185]`, average `13.8917s`
+
+したがって current read では、「full materialized append source は standardization value はあるが、performance candidate としては reject」である。`#32` の next move は、full materialize ではなく recent-window を意識した narrower append source candidate に移ることになる。

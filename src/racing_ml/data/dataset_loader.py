@@ -102,6 +102,14 @@ def _get_supplemental_table_configs(dataset_config: dict[str, Any] | None) -> li
     return [table for table in supplemental_tables if isinstance(table, dict)]
 
 
+def _get_append_table_configs(dataset_config: dict[str, Any] | None) -> list[dict[str, Any]]:
+    dataset_cfg = _resolve_dataset_config(dataset_config)
+    append_tables = dataset_cfg.get("append_tables")
+    if not isinstance(append_tables, list) or not append_tables:
+        return []
+    return [table for table in append_tables if isinstance(table, dict)]
+
+
 def _pick_dataset(raw_dir: Path) -> Path:
     csv_files = list(raw_dir.glob("**/*.csv"))
     if not csv_files:
@@ -1288,6 +1296,124 @@ def materialize_supplemental_table(
             race_id_date_end = _parse_race_id_date_token(race_id_max)
     return {
         "status": "completed",
+        "table_name": normalized_name,
+        "raw_dir": _display_path(raw_path, base_path),
+        "output_file": _display_path(resolved_output, base_path),
+        "search_roots": [_display_path(path, base_path) for path in search_roots],
+        "row_count": int(len(table)),
+        "column_count": int(len(table.columns)),
+        "duplicate_rows_on_key": duplicate_rows,
+        "dedupe_on": dedupe_on,
+        "columns": [str(column) for column in table.columns],
+        "race_id_min": race_id_min,
+        "race_id_max": race_id_max,
+        "race_id_date_start": race_id_date_start,
+        "race_id_date_end": race_id_date_end,
+    }
+
+
+def materialize_config_table(
+    raw_dir: str | Path,
+    *,
+    table_name: str,
+    dataset_config: dict[str, Any] | None = None,
+    base_dir: str | Path | None = None,
+    output_file: str | Path | None = None,
+    table_kind: str = "auto",
+) -> dict[str, Any]:
+    base_path = Path(base_dir) if base_dir is not None else None
+    raw_path = _resolve_path(raw_dir, base_path)
+    dataset_cfg = _resolve_dataset_config(dataset_config)
+    normalized_name = str(table_name).strip()
+    normalized_kind = str(table_kind).strip().lower() or "auto"
+    if normalized_kind not in {"auto", "append", "supplemental"}:
+        raise ValueError(f"Unsupported table_kind: {table_kind}")
+
+    selected_kind: str | None = None
+    table_cfg: dict[str, Any] | None = None
+    if normalized_kind in {"auto", "append"}:
+        table_cfg = next(
+            (table for table in _get_append_table_configs(dataset_cfg) if str(table.get("name", "")).strip() == normalized_name),
+            None,
+        )
+        if table_cfg is not None:
+            selected_kind = "append"
+    if table_cfg is None and normalized_kind in {"auto", "supplemental"}:
+        table_cfg = next(
+            (table for table in _get_supplemental_table_configs(dataset_cfg) if str(table.get("name", "")).strip() == normalized_name),
+            None,
+        )
+        if table_cfg is not None:
+            selected_kind = "supplemental"
+    if table_cfg is None or selected_kind is None:
+        raise ValueError(f"Unknown config table: {table_name}")
+
+    resolved_output = Path(output_file) if output_file is not None else _resolve_materialized_candidate(table_cfg, base_path)
+    if resolved_output is None:
+        raise ValueError(f"No output file configured for config table: {table_name}")
+    if not resolved_output.is_absolute() and base_path is not None:
+        resolved_output = base_path / resolved_output
+
+    search_dirs = _normalize_string_list(table_cfg.get("search_dirs"))
+    if search_dirs:
+        search_roots = [_resolve_path(search_dir, base_path) for search_dir in search_dirs]
+    else:
+        search_roots = _resolve_search_roots(
+            raw_dir=raw_path,
+            dataset_config=dataset_cfg,
+            base_dir=base_path,
+            include_raw_dir=(selected_kind == "supplemental"),
+        )
+
+    source_table_cfg = dict(table_cfg)
+    source_table_cfg.pop("materialized_file", None)
+    source_table_cfg.pop("materialized_manifest_file", None)
+    join_on = _normalize_string_list(table_cfg.get("join_on"))
+    required_columns = _normalize_string_list(table_cfg.get("required_columns")) or join_on
+    keep_columns = _normalize_string_list(table_cfg.get("keep_columns"))
+    table = _load_matching_table(
+        table_cfg=source_table_cfg,
+        search_roots=search_roots,
+        join_on=join_on,
+        keep_columns=keep_columns,
+        required_columns=required_columns,
+        base_frame=None,
+        base_dir=base_path,
+    )
+    if table is None or table.empty:
+        return {
+            "status": "not_ready",
+            "table_kind": selected_kind,
+            "table_name": normalized_name,
+            "raw_dir": _display_path(raw_path, base_path),
+            "output_file": _display_path(resolved_output, base_path),
+            "search_roots": [_display_path(path, base_path) for path in search_roots],
+            "reason": "source_table_missing",
+            "row_count": 0,
+        }
+
+    dedupe_on = _normalize_string_list(table_cfg.get("dedupe_on")) or join_on
+    dedupe_on = [column for column in dedupe_on if column in table.columns]
+    duplicate_rows = int(table.duplicated(subset=dedupe_on).sum()) if dedupe_on else 0
+    if dedupe_on:
+        table = table.drop_duplicates(subset=dedupe_on, keep="first")
+
+    resolved_output.parent.mkdir(parents=True, exist_ok=True)
+    table.to_csv(resolved_output, index=False)
+    race_id_min: str | None = None
+    race_id_max: str | None = None
+    race_id_date_start: str | None = None
+    race_id_date_end: str | None = None
+    if "race_id" in table.columns:
+        race_values = table["race_id"].dropna().astype(str)
+        if not race_values.empty:
+            race_id_min = str(race_values.min())
+            race_id_max = str(race_values.max())
+            race_id_date_start = _parse_race_id_date_token(race_id_min)
+            race_id_date_end = _parse_race_id_date_token(race_id_max)
+    return {
+        "status": "completed",
+        "table_kind": selected_kind,
         "table_name": normalized_name,
         "raw_dir": _display_path(raw_path, base_path),
         "output_file": _display_path(resolved_output, base_path),
