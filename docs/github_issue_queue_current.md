@@ -21,39 +21,38 @@
 
 2026-03-29 時点で、Kelly runtime family (`#10`, `#11`, `#12`, `#13`)、seasonal ordering (`#14`, `#15`)、runtime broad reduction (`#7`)、supplemental materialization (`#16`)、feature-builder runtime (`#17`) は close 済みである。loader runtime の small safe cuts を進めた `#18` も wrap-up 段階にあり、current operational anchor は引き続き `r20260329_tighter_policy_ratio003_abs90` である。
 
-この時点の next active issue は `#49` の jockey-trainer-combo family であり、first child `#50` は `pass / promote` まで完了した。current next child は、その promoted line の role split を固定する compare issue に寄せる。
+この時点の current reading は次である。`#49` の jockey-trainer-combo family では first child `#50` が `pass / promote` に到達したが、`#53` の actual-date role split read で family anchor にはならないことが確認された。したがって直近の execution queue は `#52` の NAR separate-universe baseline formalization に寄せる。
 
 Primary active issue:
 
-- `#49`
-- <https://github.com/Npieju/nr-learn/issues/49>
-- `#53`
-- <https://github.com/Npieju/nr-learn/issues/53>
 - `#52`
 - <https://github.com/Npieju/nr-learn/issues/52>
+- `#54`
+- <https://github.com/Npieju/nr-learn/issues/54>
+- `#49`
+- <https://github.com/Npieju/nr-learn/issues/49>
 
 Primary issue draft:
 
-- `docs/next_issue_jockey_trainer_combo_regime_extension.md`
-- `docs/feature_family_ranking.md`
-- `docs/next_issue_jockey_trainer_combo_role_split.md`
 - `docs/nar_model_transfer_strategy.md`
 - `docs/nar_bet_denominator_standard.md`
+- `docs/next_issue_local_nankan_baseline_formalization.md`
+- `docs/next_issue_jockey_trainer_combo_regime_extension.md`
 
 GitHub issue:
 
-- `#49`
-- <https://github.com/Npieju/nr-learn/issues/49>
-- `#53`
-- <https://github.com/Npieju/nr-learn/issues/53>
 - `#52`
 - <https://github.com/Npieju/nr-learn/issues/52>
+- `#54`
+- <https://github.com/Npieju/nr-learn/issues/54>
+- `#49`
+- <https://github.com/Npieju/nr-learn/issues/49>
 
 Primary next execution order:
 
-1. `#53` で `r20260330_jockey_trainer_combo_style_distance_v1` の role split を formal / operational の両面で固定する
-2. `bets / races / bet-rate` を compare read の mandatory field として残す
-3. その結果に応じて、`#49` で widen / harden / family close のどれに進むかを決める
+1. `#54` で local Nankan baseline の first formal artifact を出す
+2. `bets / races / bet-rate` を NAR line の mandatory read として残す
+3. JRA の `#49` family は promoted-but-non-anchor read として一段止め、次の widening は NAR baseline の first read 後に再判断する
 
 Side universe track:
 

@@ -71,7 +71,9 @@
 - `jockey / trainer / combo` family の first child `r20260330_jockey_trainer_combo_style_distance_v1` は、その後 quiet-lane rerun を経て true component retrain、stack rebuild、formal revision gate まで完了した。
 - 同 run は `pass / promote` で整合し、`auc=0.8431`、`nested WF weighted test ROI=0.8907`、`wf_nested_test_bets_total=516`、matching WF feasibility `3/3` を確認した。
 - 一方で promotion gate の formal benchmark は `weighted_roi=0.95`、`bets_total=480` で、surface+layoff promoted line や tighter-policy promoted line より top-line は弱い。
-- したがって current queue は family widening ではなく、この promoted line の role split を compare で固定する段階にある。
+- `#53` の actual-date compare では、September window が baseline `32 / 216 races / -27.3` に対して `5 / 216 / -3.6`、December control が baseline `45 / 264 / +21.8` に対して `30 / 264 / -9.3` だった。surface+layoff promoted line と比べても September `8 / 216 / -8.0`、December `13 / 264 / +20.0` より強い role は示さなかった。
+- したがって current reading は family anchor ではなく、analysis-first promoted candidate である。
+- 一方で local Nankan は status board / preflight / benchmark gate 上 `ready_for_benchmark` まで到達したため、next execution queue は NAR separate-universe baseline formalization に移る。
 
 現時点の operational baseline は `current_recommended_serving_2025_latest` とする。
 

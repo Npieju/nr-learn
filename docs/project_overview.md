@@ -65,9 +65,9 @@ experiment queue の current reading も更新された。`tighter policy search
 - operational default line: `current_recommended_serving_2025_latest`
 - operational role: analysis-first conservative promoted candidate
 
-`jockey / trainer / combo` family の first child `r20260330_jockey_trainer_combo_style_distance_v1` もその後 formal gate `pass / promote` まで到達した。主な summary は `auc=0.8431`、`nested WF weighted test ROI=0.8907`、matching support は `3/3 feasible folds` だった。一方で formal benchmark top-line は `weighted_roi=0.95`、`bets_total=480` であり、既存 promoted line の `r20260330_surface_plus_class_layoff_interactions_v1` や `r20260329_tighter_policy_ratio003_abs90` より弱い。したがって current next step は family widening ではなく、この promoted line を family anchor にするのか、analysis-first promoted candidate に留めるのかを compare で固定する段階である。
+`jockey / trainer / combo` family の first child `r20260330_jockey_trainer_combo_style_distance_v1` もその後 formal gate `pass / promote` まで到達した。主な summary は `auc=0.8431`、`nested WF weighted test ROI=0.8907`、matching support は `3/3 feasible folds` だった。一方で formal benchmark top-line は `weighted_roi=0.95`、`bets_total=480` であり、既存 promoted line の `r20260330_surface_plus_class_layoff_interactions_v1` や `r20260329_tighter_policy_ratio003_abs90` より弱い。actual-date compare でも September は `5 / 216 races = 2.31% / total net -3.6`、December control は `30 / 264 races = 11.36% / total net -9.3` で、baseline (`32 / 216 / -27.3`, `45 / 264 / +21.8`) と surface+layoff promoted line (`8 / 216 / -8.0`, `13 / 264 / +20.0`) のどちらも明確には上回らなかった。したがって current reading は family anchor ではなく、analysis-first promoted candidate である。
 
-したがって next feature experiment queue は、`jockey / trainer / combo` family をいったん role decision まで読み切ることである。
+したがって next execution queue は、JRA family widening を急がず、benchmark-ready になった NAR separate-universe baseline を formalize することに移る。
 
 この seasonal 判断の標準文面と read order は `docs/seasonal_derisk_decision_standard.md` を正本にする。
 
