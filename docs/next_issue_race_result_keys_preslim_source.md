@@ -55,3 +55,37 @@ pre-slim race-result-keys source candidate が、current accepted supplemental p
 - reduced smoke end-to-end
 
 を 1 本の read に揃えてから、pre-slim candidate を比較する。
+
+## Current Read
+
+current mainline の 10k tail first read は次のとおり。
+
+- `tail_training_table_sec=13.853`
+- `netkeiba_race_result load=0.52s`
+- `netkeiba_race_card load=0.3207s`
+- `netkeiba_race_result_keys load=0.23s`
+- `netkeiba_pedigree load=0.0483s`
+
+このため、race-card 昇格後の next supplemental residual は `netkeiba_race_result_keys` と見てよい。
+
+そのうえで `netkeiba_race_result_keys` を materialize し、
+
+- `data/processed/supplemental/netkeiba_race_result_keys.csv`
+- `artifacts/reports/supplemental_materialize_netkeiba_race_result_keys.json`
+
+を生成した。
+
+loader-only repeated compare は次のとおり。
+
+- current: `[14.0172, 13.9594, 15.1751]`, average `14.3839s`
+- materialized candidate: `[14.1395, 13.8796, 14.1632]`, average `14.0607s`
+
+reduced smoke も通っている。
+
+- candidate: `perf_smoke_result_keys_preslim_v1`
+- `loading training table 0m15s`, total `0m25s`
+- summary compare:
+  - `summary_equivalence_perf_smoke_racecard_default_mainline_v1_vs_result_keys_preslim_v1.json`
+  - difference は `run_context.data_config` の 1 件だけ
+
+したがって final read は「materialized race-result-keys candidate は exact-equivalent behavior を保ったまま loader-only で持続的に勝ち、reduced smoke でも near-par を維持した」である。これにより `netkeiba_race_result_keys` の materialized source は default 昇格でよい。
