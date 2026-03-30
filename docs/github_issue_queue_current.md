@@ -17,32 +17,32 @@
 
 ## 3. Current Issue Set
 
-### 3.0 Current Queue After Append Parser Wrap-Up
+### 3.0 Current Queue After Tail Micro-Cut Exhaustion
 
 2026-03-29 時点で、Kelly runtime family (`#10`, `#11`, `#12`, `#13`)、seasonal ordering (`#14`, `#15`)、runtime broad reduction (`#7`)、supplemental materialization (`#16`)、feature-builder runtime (`#17`) は close 済みである。loader runtime の small safe cuts を進めた `#18` も wrap-up 段階にあり、current operational anchor は引き続き `r20260329_tighter_policy_ratio003_abs90` である。
 
-この時点の next active issue は `#35` の `read_csv_tail` residual である。
+この時点の next active issue は `#36` の primary source shaping である。
 
 Primary active issue:
 
-- `#35`
-- <https://github.com/Npieju/nr-learn/issues/35>
+- `#36`
+- <https://github.com/Npieju/nr-learn/issues/36>
 
 Primary issue draft:
 
+- `docs/next_issue_primary_source_shaping.md`
 - `docs/next_issue_read_csv_tail_residual_again.md`
-- `docs/next_issue_append_parser_residual.md`
 
 GitHub issue:
 
-- `#35`
-- <https://github.com/Npieju/nr-learn/issues/35>
+- `#36`
+- <https://github.com/Npieju/nr-learn/issues/36>
 
 Primary next execution order:
 
-1. current mainline の global phase budget を `tail_training_table(10k)` で再確認する
-2. `_read_csv_tail(...)` の exact-safe candidate を 1 本選ぶ
-3. tail equivalence exact gate と reduced smoke の両方で current mainline と比較する
+1. current primary source load cost を source level で再確認する
+2. pre-shaped / cached recent source candidate を 1 本選ぶ
+3. loader-only と reduced smoke の両方で current mainline と比較する
 
 ### 3.1 [experiment] Tighter policy search frontier refinement
 
