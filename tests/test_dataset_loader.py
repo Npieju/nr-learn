@@ -155,6 +155,22 @@ class DatasetLoaderTailReadTest(unittest.TestCase):
         self.assertEqual(normalized.tolist()[:2], [1.4, 36.8])
         self.assertTrue(pd.isna(normalized.iloc[2]))
 
+    def test_normalize_digit_series_salvages_parenthetical_weight_strings(self) -> None:
+        series = pd.Series(["474(-2)", "504(0)", None])
+
+        normalized = _normalize_digit_series(series)
+
+        self.assertEqual(normalized.tolist()[:2], [474.0, 504.0])
+        self.assertTrue(pd.isna(normalized.iloc[2]))
+
+    def test_normalize_decimal_series_keeps_direct_numeric_strings(self) -> None:
+        series = pd.Series(["36.8", "1.4", None])
+
+        normalized = _normalize_decimal_series(series)
+
+        self.assertEqual(normalized.tolist()[:2], [36.8, 1.4])
+        self.assertTrue(pd.isna(normalized.iloc[2]))
+
     def test_load_training_table_prefers_materialized_supplemental_file(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)

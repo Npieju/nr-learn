@@ -199,15 +199,25 @@ def _parse_first_numeric_token(value: object) -> float:
 def _normalize_digit_series(series: pd.Series) -> pd.Series:
     if pd.api.types.is_numeric_dtype(series):
         return pd.to_numeric(series, errors="coerce")
-    extracted = series.astype(str).str.extract(r"(\d+)", expand=False)
-    return pd.to_numeric(extracted, errors="coerce")
+    numeric = pd.to_numeric(series, errors="coerce")
+    missing_mask = series.notna() & numeric.isna()
+    if not bool(missing_mask.any()):
+        return numeric
+    extracted = series.loc[missing_mask].astype(str).str.extract(r"(\d+)", expand=False)
+    numeric.loc[missing_mask] = pd.to_numeric(extracted, errors="coerce")
+    return numeric
 
 
 def _normalize_decimal_series(series: pd.Series) -> pd.Series:
     if pd.api.types.is_numeric_dtype(series):
         return pd.to_numeric(series, errors="coerce")
-    extracted = series.astype(str).str.extract(r"(\d+(?:\.\d+)?)", expand=False)
-    return pd.to_numeric(extracted, errors="coerce")
+    numeric = pd.to_numeric(series, errors="coerce")
+    missing_mask = series.notna() & numeric.isna()
+    if not bool(missing_mask.any()):
+        return numeric
+    extracted = series.loc[missing_mask].astype(str).str.extract(r"(\d+(?:\.\d+)?)", expand=False)
+    numeric.loc[missing_mask] = pd.to_numeric(extracted, errors="coerce")
+    return numeric
 
 
 def _load_laptime_summary(raw_dir: Path) -> pd.DataFrame | None:

@@ -68,3 +68,11 @@
   - `loading training table 0m14s`
   - total `0m24s`
   - summary drift なし
+
+続く second cut では、object dtype の `weight` / `odds` 系に対しても `pd.to_numeric(..., errors='coerce')` を先に試し、失敗した rows にだけ regex extract を掛ける hybrid path を入れた。current tail frame では次の読みだった。
+
+- `weight`: non-null `106658`, direct numeric `20819`, regex salvage `85712`
+- `odds`: direct numeric と regex の successful rows が同数
+- `rank`: 既存の `pd.to_numeric` で十分
+
+この hybrid path により `_ensure_minimum_columns` は `1.192s -> 1.134s` まで下がり、reduced smoke `perf_smoke_minimum_columns_v2_hybrid_parse` も `loading training table 0m14s`, total `0m24s`、summary drift なしで通った。
