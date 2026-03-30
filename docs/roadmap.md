@@ -64,7 +64,8 @@
 - 同 run は `pass / promote` で整合し、`formal_benchmark_weighted_roi=1.1379979394080304`、`formal_benchmark_feasible_fold_count=3` を確認した。
 - 続く actual-date compare では、September difficult window で `32 bets / -27.3` に対して `8 bets / -8.0`、December tail control window で `45 bets / +21.8` に対して `13 bets / +20.0` を確認した。
 - bankroll sweep でも September は promoted pure path が優位だった一方、December は promoted pure path より `2025-12-06` だけ promoted を使う hybrid が優位だった。
-- したがって current primary line は feature family の support hardening継続でも serving default 昇格でもなく、promoted candidate の gain を壊さずに exposure を健全化できるかを試す段階へ移る。
+- その後の policy-side widening probes では、`sep_date_selected_rows_kelly_candidate` が `1 / 216 races`、`portfolio_lower_blend` が `0 / 216 races` となり、promoted line の exposure widening には失敗した。
+- したがって current primary line は feature family の support hardening継続でも serving default 昇格でも widening 継続でもなく、formal promoted line と operational default line の role split を explicit にする段階へ移る。
 
 現時点の operational baseline は `current_recommended_serving_2025_latest` とする。
 
