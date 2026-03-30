@@ -59,7 +59,10 @@
 - `r20260330_class_rest_surface_interactions_v1` では、true component retrain と stack rebuild までは正常完了し、formal evaluation も `auc=0.8417`、`ev_top1_roi=0.6837`、`nested WF weighted test ROI=1.1003` と強い summary を示した。
 - 一方で matching WF feasibility は `1/5` feasible folds に留まり、promotion gate は `block / hold` だった。
 - fold 1-4 の主な失敗理由は一貫して `min_bets` で、fold 5 のみ `portfolio` candidate が feasible になった。
-- したがって next primary experiment line は family abandon ではなく、`class / rest / surface change` interaction family の support hardening へ移す。
+- その後 support hardening を進め、`r20260330_surface_interaction_only_v1` では support が `2/5` まで改善したが、nested weighted ROI は `0.7462` に低下して `hold` だった。
+- さらに middle-ground candidate `r20260330_surface_plus_class_layoff_interactions_v1` を作成し、true component retrain、stack rebuild、matching WF feasibility、promotion gate まで完了した。
+- 同 run は `pass / promote` で整合し、`formal_benchmark_weighted_roi=1.1379979394080304`、`formal_benchmark_feasible_fold_count=3` を確認した。
+- したがって current primary line は feature family の support hardening継続ではなく、promoted candidate の serving validation と benchmark refresh へ移る。
 
 現時点の operational baseline は `current_recommended_serving_2025_latest` とする。
 
