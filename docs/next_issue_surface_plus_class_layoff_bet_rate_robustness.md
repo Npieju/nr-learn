@@ -57,3 +57,25 @@ promoted candidate の low bet-rate / low exposure shape を監査し、serving 
 - bet count だけでなく `bets / races` と `bets / rows` が明示される
 - low bet-rate が role decision にどう効くかが文章で固定される
 - next experiment line が overfit suspicion を無視せずに切れる
+
+## Result
+
+`#46` の current decision は次で固定する。
+
+- `r20260330_surface_plus_class_layoff_interactions_v1` は formal promoted line として維持する
+- serving default は引き続き `current_recommended_serving_2025_latest`
+- promoted candidate の operational role は analysis-first conservative promoted candidate
+
+根拠は 3 つある。
+
+1. actual-date bet rate が低い
+   - September `8 / 216 races = 3.70%`
+   - December `13 / 264 races = 4.92%`
+2. date concentration が高い
+   - September は `4/8` dates で `0 bet`
+   - December total net `+20.0` のうち `+21.9` が `2025-12-06` と `2025-12-07` の 2 dates 由来
+3. bankroll sweep でも broad replacement にならない
+   - September は promoted pure path が強い
+   - December は promoted pure path `1.6551` より、`2025-12-06` だけ promoted を使う hybrid `1.7395` が強い
+
+したがって次の実務 line は「default replacement を急ぐ」ことではなく、「この promoted line の exposure を健全に広げられるか」を試すことになる。

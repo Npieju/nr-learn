@@ -63,7 +63,8 @@
 - さらに middle-ground candidate `r20260330_surface_plus_class_layoff_interactions_v1` を作成し、true component retrain、stack rebuild、matching WF feasibility、promotion gate まで完了した。
 - 同 run は `pass / promote` で整合し、`formal_benchmark_weighted_roi=1.1379979394080304`、`formal_benchmark_feasible_fold_count=3` を確認した。
 - 続く actual-date compare では、September difficult window で `32 bets / -27.3` に対して `8 bets / -8.0`、December tail control window で `45 bets / +21.8` に対して `13 bets / +20.0` を確認した。
-- したがって current primary line は feature family の support hardening継続ではなく、promoted candidate の low bet-rate / low exposure shape を denominator 付きで監査する段階へ移る。
+- bankroll sweep でも September は promoted pure path が優位だった一方、December は promoted pure path より `2025-12-06` だけ promoted を使う hybrid が優位だった。
+- したがって current primary line は feature family の support hardening継続でも serving default 昇格でもなく、promoted candidate の gain を壊さずに exposure を健全化できるかを試す段階へ移る。
 
 現時点の operational baseline は `current_recommended_serving_2025_latest` とする。
 
