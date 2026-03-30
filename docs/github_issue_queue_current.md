@@ -21,28 +21,31 @@
 
 2026-03-29 時点で、Kelly runtime family (`#10`, `#11`, `#12`, `#13`)、seasonal ordering (`#14`, `#15`)、runtime broad reduction (`#7`)、supplemental materialization (`#16`)、feature-builder runtime (`#17`) は close 済みである。loader runtime の small safe cuts を進めた `#18` も wrap-up 段階にあり、current operational anchor は引き続き `r20260329_tighter_policy_ratio003_abs90` である。
 
-この時点の next active issue は `#42` の class rest surface support hardening である。
+この時点の next active issue は parent `#42` の下で走る child execution `#44` である。
 
 Primary active issue:
 
-- `#42`
-- <https://github.com/Npieju/nr-learn/issues/42>
+- `#44`
+- <https://github.com/Npieju/nr-learn/issues/44>
 
 Primary issue draft:
 
 - `docs/next_issue_class_rest_surface_support_hardening.md`
+- `docs/next_issue_surface_plus_class_layoff_interactions.md`
 - `docs/feature_family_ranking.md`
 
 GitHub issue:
 
-- `#42`
+- parent `#42`
 - <https://github.com/Npieju/nr-learn/issues/42>
+- active child `#44`
+- <https://github.com/Npieju/nr-learn/issues/44>
 
 Primary next execution order:
 
-1. `#41` の summary-vs-support divergence を formal support 観点で読み直す
-2. support-aware な narrower interaction candidate を 1 本に絞る
-3. next formal candidate を issue / config / validation の形まで落とす
+1. `#43` formal result を parent `#42` に反映する
+2. `surface + class long layoff` candidate を true component retrain で流す
+3. formal support が `3/5` に届くかを `#41` / `#43` と比較する
 
 ### 3.1 [experiment] Tighter policy search frontier refinement
 
