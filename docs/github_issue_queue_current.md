@@ -21,16 +21,14 @@
 
 2026-03-29 時点で、Kelly runtime family (`#10`, `#11`, `#12`, `#13`)、seasonal ordering (`#14`, `#15`)、runtime broad reduction (`#7`)、supplemental materialization (`#16`)、feature-builder runtime (`#17`) は close 済みである。loader runtime の small safe cuts を進めた `#18` も wrap-up 段階にあり、current operational anchor は引き続き `r20260329_tighter_policy_ratio003_abs90` である。
 
-この時点の next active issue は `#49` の jockey-trainer-combo reentry であり、first child execution は style-distance candidate に寄せる。
+この時点の next active issue は `#49` の jockey-trainer-combo family であり、first child `#50` は `pass / promote` まで完了した。current next child は、その promoted line の role split を固定する compare issue に寄せる。
 
 Primary active issue:
 
 - `#49`
 - <https://github.com/Npieju/nr-learn/issues/49>
-- `#50`
-- <https://github.com/Npieju/nr-learn/issues/50>
-- `#51`
-- <https://github.com/Npieju/nr-learn/issues/51>
+- `#53`
+- <https://github.com/Npieju/nr-learn/issues/53>
 - `#52`
 - <https://github.com/Npieju/nr-learn/issues/52>
 
@@ -38,8 +36,7 @@ Primary issue draft:
 
 - `docs/next_issue_jockey_trainer_combo_regime_extension.md`
 - `docs/feature_family_ranking.md`
-- `docs/next_issue_jockey_trainer_combo_style_distance_candidate.md`
-- `docs/next_issue_jockey_trainer_combo_resource_safe_execution.md`
+- `docs/next_issue_jockey_trainer_combo_role_split.md`
 - `docs/nar_model_transfer_strategy.md`
 - `docs/nar_bet_denominator_standard.md`
 
@@ -47,18 +44,16 @@ GitHub issue:
 
 - `#49`
 - <https://github.com/Npieju/nr-learn/issues/49>
-- `#50`
-- <https://github.com/Npieju/nr-learn/issues/50>
-- `#51`
-- <https://github.com/Npieju/nr-learn/issues/51>
+- `#53`
+- <https://github.com/Npieju/nr-learn/issues/53>
 - `#52`
 - <https://github.com/Npieju/nr-learn/issues/52>
 
 Primary next execution order:
 
-1. `#50` の style / track-distance candidate を family source of truth として維持する
-2. `#51` で resource-safe rerun lane を切って execution blocker を分離する
-3. clean rerun 完了後に `#50` の true component retrain を再開する
+1. `#53` で `r20260330_jockey_trainer_combo_style_distance_v1` の role split を formal / operational の両面で固定する
+2. `bets / races / bet-rate` を compare read の mandatory field として残す
+3. その結果に応じて、`#49` で widen / harden / family close のどれに進むかを決める
 
 Side universe track:
 

@@ -68,6 +68,10 @@
 - したがって current primary line は feature family の support hardening継続でも serving default 昇格でも widening 継続でもなく、formal promoted line と operational default line の role split を explicit にする段階へ移る。
 - role split の current conclusion は、formal promoted line を `r20260330_surface_plus_class_layoff_interactions_v1`、operational default line を `current_recommended_serving_2025_latest` に固定することだ。
 - これにより `class / rest / surface` family は current queue 上では一段落し、次の feature reentry は `jockey / trainer / combo` family に移る。
+- `jockey / trainer / combo` family の first child `r20260330_jockey_trainer_combo_style_distance_v1` は、その後 quiet-lane rerun を経て true component retrain、stack rebuild、formal revision gate まで完了した。
+- 同 run は `pass / promote` で整合し、`auc=0.8431`、`nested WF weighted test ROI=0.8907`、`wf_nested_test_bets_total=516`、matching WF feasibility `3/3` を確認した。
+- 一方で promotion gate の formal benchmark は `weighted_roi=0.95`、`bets_total=480` で、surface+layoff promoted line や tighter-policy promoted line より top-line は弱い。
+- したがって current queue は family widening ではなく、この promoted line の role split を compare で固定する段階にある。
 
 現時点の operational baseline は `current_recommended_serving_2025_latest` とする。
 
