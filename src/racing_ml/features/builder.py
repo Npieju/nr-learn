@@ -375,6 +375,14 @@ def _bucketize_gate_ratio(gate_ratio: pd.Series) -> pd.Series:
     return bucket
 
 
+def _binary_interaction(left: pd.Series, right: pd.Series) -> pd.Series:
+    left_num = pd.to_numeric(left, errors="coerce")
+    right_num = pd.to_numeric(right, errors="coerce")
+    interaction = left_num * right_num
+    valid = left_num.notna() & right_num.notna()
+    return interaction.where(valid, np.nan)
+
+
 def build_features(frame: pd.DataFrame) -> pd.DataFrame:
     data = frame.copy()
     clean_group_cache: dict[str, pd.Series] = {}
@@ -553,6 +561,16 @@ def build_features(frame: pd.DataFrame) -> pd.DataFrame:
         previous_surface = _group_shift(data, "horse_history_key", "_race_surface_tmp").astype("string")
         surface_switch = (data["_race_surface_tmp"] != previous_surface).astype(float)
         data["horse_surface_switch"] = surface_switch.where(previous_surface.notna(), np.nan)
+        if "horse_is_short_turnaround" in data.columns:
+            data["horse_surface_switch_short_turnaround"] = _binary_interaction(
+                data["horse_surface_switch"],
+                data["horse_is_short_turnaround"],
+            )
+        if "horse_is_long_layoff" in data.columns:
+            data["horse_surface_switch_long_layoff"] = _binary_interaction(
+                data["horse_surface_switch"],
+                data["horse_is_long_layoff"],
+            )
 
     if horse_history_key is not None and "race_class_score" in data.columns:
         data["horse_last_class_score"] = pd.to_numeric(
@@ -564,6 +582,24 @@ def build_features(frame: pd.DataFrame) -> pd.DataFrame:
         data["horse_is_class_up"] = class_up.where(data["horse_class_change"].notna(), np.nan)
         class_down = (data["horse_class_change"] < 0).astype(float)
         data["horse_is_class_down"] = class_down.where(data["horse_class_change"].notna(), np.nan)
+        if "horse_is_short_turnaround" in data.columns:
+            data["horse_class_up_short_turnaround"] = _binary_interaction(
+                data["horse_is_class_up"],
+                data["horse_is_short_turnaround"],
+            )
+            data["horse_class_down_short_turnaround"] = _binary_interaction(
+                data["horse_is_class_down"],
+                data["horse_is_short_turnaround"],
+            )
+        if "horse_is_long_layoff" in data.columns:
+            data["horse_class_up_long_layoff"] = _binary_interaction(
+                data["horse_is_class_up"],
+                data["horse_is_long_layoff"],
+            )
+            data["horse_class_down_long_layoff"] = _binary_interaction(
+                data["horse_is_class_down"],
+                data["horse_is_long_layoff"],
+            )
 
     if horse_history_key is not None and {"rank"}.issubset(data.columns):
         horse_history_window3 = _group_shifted_rolling_mean_many(

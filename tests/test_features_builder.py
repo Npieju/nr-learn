@@ -7,6 +7,7 @@ import pandas as pd
 from racing_ml.features.builder import (
     _build_early_corner_position,
     _build_surface_series,
+    build_features,
     _entity_race_shifted_rolling_mean,
     _entity_race_shifted_rolling_mean_many,
     _group_shifted_rolling_mean,
@@ -82,6 +83,33 @@ class FeatureBuilderRollingReuseTest(unittest.TestCase):
         for column in ["is_win", "closing_time_3f", "corner_gain_2_to_4"]:
             single = _entity_race_shifted_rolling_mean(frame, "jockey_id", column, window=3)
             pd.testing.assert_series_equal(many[column], single, check_names=False)
+
+    def test_build_features_adds_rest_surface_and_class_interactions(self) -> None:
+        frame = pd.DataFrame(
+            {
+                "date": ["2025-01-01", "2025-01-10", "2025-05-01"],
+                "race_id": ["r1", "r2", "r3"],
+                "horse_id": ["h1", "h1", "h1"],
+                "horse_name": ["horse-1", "horse-1", "horse-1"],
+                "track": ["tokyo", "tokyo", "tokyo"],
+                "distance": [1200, 1400, 1400],
+                "weight": [500, 498, 502],
+                "rank": [2, 1, 3],
+                "芝・ダート区分": ["芝", "ダート", "ダート"],
+                "競争条件": ["1勝クラス", "2勝クラス", "1勝クラス"],
+                "is_win": [0, 1, 0],
+            }
+        )
+
+        actual = build_features(frame)
+
+        self.assertTrue(pd.isna(actual.loc[0, "horse_surface_switch_short_turnaround"]))
+        self.assertEqual(actual.loc[1, "horse_surface_switch_short_turnaround"], 1.0)
+        self.assertEqual(actual.loc[1, "horse_class_up_short_turnaround"], 1.0)
+        self.assertEqual(actual.loc[1, "horse_class_down_short_turnaround"], 0.0)
+        self.assertEqual(actual.loc[2, "horse_surface_switch_long_layoff"], 0.0)
+        self.assertEqual(actual.loc[2, "horse_class_down_long_layoff"], 1.0)
+        self.assertEqual(actual.loc[2, "horse_class_up_long_layoff"], 0.0)
 
 
 if __name__ == "__main__":
