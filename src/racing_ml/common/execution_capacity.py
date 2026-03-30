@@ -87,3 +87,29 @@ def assert_no_conflicting_heavy_processes(
         f"found conflicting processes ({summary}). "
         "wait for them to finish or rerun with --allow-concurrent-heavy-jobs"
     )
+
+
+def build_execution_capacity_status(
+    *,
+    current_script_pattern: str | None = None,
+    current_pid: int | None = None,
+    process_table: str | None = None,
+) -> dict[str, object]:
+    conflicts = find_conflicting_heavy_processes(
+        current_pid=current_pid,
+        current_script_pattern=current_script_pattern,
+        process_table=process_table,
+    )
+    return {
+        "status": "blocked" if conflicts else "ready",
+        "current_script_pattern": current_script_pattern,
+        "conflict_count": len(conflicts),
+        "conflicts": [
+            {
+                "pid": item.pid,
+                "kind": item.kind,
+                "command": item.command,
+            }
+            for item in conflicts
+        ],
+    }

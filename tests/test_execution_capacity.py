@@ -1,68 +1,91 @@
+import unittest
+
 from racing_ml.common.execution_capacity import assert_no_conflicting_heavy_processes
+from racing_ml.common.execution_capacity import build_execution_capacity_status
 from racing_ml.common.execution_capacity import find_conflicting_heavy_processes
 
 
-def test_find_conflicting_heavy_processes_detects_other_heavy_jobs():
-    process_table = "\n".join(
-        [
-            "PID COMMAND",
-            "100 /workspaces/nr-learn/.venv/bin/python scripts/run_train.py --config configs/model.yaml",
-            "101 /workspaces/nr-learn/.venv/bin/python scripts/run_collect_local_nankan.py --config configs/crawl_local_nankan_template.yaml --target pedigree",
-            "102 /workspaces/nr-learn/.venv/bin/python scripts/run_evaluate.py --config configs/model.yaml",
-        ]
-    )
+class ExecutionCapacityTests(unittest.TestCase):
+    def test_find_conflicting_heavy_processes_detects_other_heavy_jobs(self) -> None:
+        process_table = "\n".join(
+            [
+                "PID COMMAND",
+                "100 /workspaces/nr-learn/.venv/bin/python scripts/run_train.py --config configs/model.yaml",
+                "101 /workspaces/nr-learn/.venv/bin/python scripts/run_collect_local_nankan.py --config configs/crawl_local_nankan_template.yaml --target pedigree",
+                "102 /workspaces/nr-learn/.venv/bin/python scripts/run_evaluate.py --config configs/model.yaml",
+            ]
+        )
 
-    matches = find_conflicting_heavy_processes(
-        current_pid=100,
-        current_script_pattern="scripts/run_train.py",
-        process_table=process_table,
-    )
-
-    assert [(item.kind, item.pid) for item in matches] == [
-        ("local_nankan_collect", 101),
-        ("evaluate", 102),
-    ]
-
-
-def test_find_conflicting_heavy_processes_marks_same_script_duplicates():
-    process_table = "\n".join(
-        [
-            "PID COMMAND",
-            "200 /workspaces/nr-learn/.venv/bin/python scripts/run_train.py --config configs/model.yaml",
-            "201 /workspaces/nr-learn/.venv/bin/python scripts/run_train.py --config configs/model.yaml",
-        ]
-    )
-
-    matches = find_conflicting_heavy_processes(
-        current_pid=200,
-        current_script_pattern="scripts/run_train.py",
-        process_table=process_table,
-    )
-
-    assert len(matches) == 1
-    assert matches[0].kind == "same_script"
-    assert matches[0].pid == 201
-
-
-def test_assert_no_conflicting_heavy_processes_raises_concise_error():
-    process_table = "\n".join(
-        [
-            "PID COMMAND",
-            "300 /workspaces/nr-learn/.venv/bin/python scripts/run_train.py --config configs/model.yaml",
-            "301 /workspaces/nr-learn/.venv/bin/python scripts/run_collect_local_nankan.py --config configs/crawl_local_nankan_template.yaml --target pedigree",
-        ]
-    )
-
-    try:
-        assert_no_conflicting_heavy_processes(
-            current_pid=300,
+        matches = find_conflicting_heavy_processes(
+            current_pid=100,
             current_script_pattern="scripts/run_train.py",
             process_table=process_table,
         )
-    except ValueError as error:
-        message = str(error)
-    else:
-        raise AssertionError("expected ValueError")
 
-    assert "resource-safe execution requires a quiet heavy-job lane" in message
-    assert "local_nankan_collect:pid=301" in message
+        self.assertEqual(
+            [(item.kind, item.pid) for item in matches],
+            [("local_nankan_collect", 101), ("evaluate", 102)],
+        )
+
+    def test_find_conflicting_heavy_processes_marks_same_script_duplicates(self) -> None:
+        process_table = "\n".join(
+            [
+                "PID COMMAND",
+                "200 /workspaces/nr-learn/.venv/bin/python scripts/run_train.py --config configs/model.yaml",
+                "201 /workspaces/nr-learn/.venv/bin/python scripts/run_train.py --config configs/model.yaml",
+            ]
+        )
+
+        matches = find_conflicting_heavy_processes(
+            current_pid=200,
+            current_script_pattern="scripts/run_train.py",
+            process_table=process_table,
+        )
+
+        self.assertEqual(len(matches), 1)
+        self.assertEqual(matches[0].kind, "same_script")
+        self.assertEqual(matches[0].pid, 201)
+
+    def test_assert_no_conflicting_heavy_processes_raises_concise_error(self) -> None:
+        process_table = "\n".join(
+            [
+                "PID COMMAND",
+                "300 /workspaces/nr-learn/.venv/bin/python scripts/run_train.py --config configs/model.yaml",
+                "301 /workspaces/nr-learn/.venv/bin/python scripts/run_collect_local_nankan.py --config configs/crawl_local_nankan_template.yaml --target pedigree",
+            ]
+        )
+
+        with self.assertRaises(ValueError) as context:
+            assert_no_conflicting_heavy_processes(
+                current_pid=300,
+                current_script_pattern="scripts/run_train.py",
+                process_table=process_table,
+            )
+
+        message = str(context.exception)
+        self.assertIn("resource-safe execution requires a quiet heavy-job lane", message)
+        self.assertIn("local_nankan_collect:pid=301", message)
+
+    def test_build_execution_capacity_status_returns_blocked_payload(self) -> None:
+        process_table = "\n".join(
+            [
+                "PID COMMAND",
+                "400 /workspaces/nr-learn/.venv/bin/python scripts/run_train.py --config configs/model.yaml",
+                "401 /workspaces/nr-learn/.venv/bin/python scripts/run_backfill_local_nankan.py --crawl-config configs/crawl_local_nankan_template.yaml",
+            ]
+        )
+
+        payload = build_execution_capacity_status(
+            current_pid=400,
+            current_script_pattern="scripts/run_train.py",
+            process_table=process_table,
+        )
+
+        self.assertEqual(payload["status"], "blocked")
+        self.assertEqual(payload["conflict_count"], 1)
+        self.assertEqual(payload["conflicts"][0]["kind"], "local_nankan_backfill")
+        self.assertEqual(payload["conflicts"][0]["pid"], 401)
+
+
+if __name__ == "__main__":
+    unittest.main()

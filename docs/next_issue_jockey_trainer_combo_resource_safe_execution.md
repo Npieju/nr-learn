@@ -55,3 +55,4 @@ current read:
 - `scripts/run_train.py` は既定で concurrent heavy job を preflight で検査する
 - conflict がある場合は OS kill を待たず、concise な fail-fast message で止まる
 - override が必要なときだけ `--allow-concurrent-heavy-jobs` を明示する
+- `scripts/run_execution_capacity_status.py` で rerun 前に `ready / blocked` を確認できる
