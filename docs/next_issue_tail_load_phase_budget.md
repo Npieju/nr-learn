@@ -66,3 +66,28 @@ current mainline の repeated reduced smoke を `perf_smoke_phase_budget_a` / `p
 つまり直近の `0m14s` と `0m16s` は、少なくとも 1 秒単位の run-to-run variance を含んでいる。append 単体の micro win が mainline に乗らない理由を論じる前に、この baseline variance を current issue の正本として押さえる必要がある。
 
 この initial read により、次の focus は「append subphase の絶対値」よりも、「current mainline の phase budget を repeated smoke でどこまで再現できるか」に移った。
+
+さらに `tail_training_table` の phase budget を current mainline で 3 回連続計測すると、次のようになった。
+
+- run1
+  - `read_tail 13.5398s`
+  - `append 0.6867s`
+  - `supplemental 3.2791s`
+  - `minimum 1.1898s`
+  - total `18.7646s`
+- run2
+  - `read_tail 13.5254s`
+  - `append 0.6897s`
+  - `supplemental 3.3483s`
+  - `minimum 1.3054s`
+  - total `18.9425s`
+- run3
+  - `read_tail 12.8691s`
+  - `append 0.6892s`
+  - `supplemental 3.4708s`
+  - `minimum 1.2609s`
+  - total `18.3422s`
+
+この repeated read から、append は `~0.69s` でほぼ安定しており、直近で試した append-side micro cuts が full reduced smoke で効かなかったのは自然だと分かる。current mainline の dominant phase は依然 `_read_csv_tail` で、次点が `_merge_supplemental_tables` である。
+
+したがって `#26` の結論は、append path をさらに深掘るよりも、next active issue を `_read_csv_tail` dominant phase へ戻すことが正しい、というものである。

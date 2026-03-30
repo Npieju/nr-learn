@@ -21,28 +21,28 @@
 
 2026-03-29 時点で、Kelly runtime family (`#10`, `#11`, `#12`, `#13`)、seasonal ordering (`#14`, `#15`)、runtime broad reduction (`#7`)、supplemental materialization (`#16`)、feature-builder runtime (`#17`) は close 済みである。loader runtime の small safe cuts を進めた `#18` も wrap-up 段階にあり、current operational anchor は引き続き `r20260329_tighter_policy_ratio003_abs90` である。
 
-この時点の next active issue は `#26` の tail training-table phase budget attribution である。
+この時点の next active issue は `#27` の read-tail dominant phase revisit である。
 
 Primary active issue:
 
-- `#26`
-- <https://github.com/Npieju/nr-learn/issues/26>
+- `#27`
+- <https://github.com/Npieju/nr-learn/issues/27>
 
 Primary issue draft:
 
+- `docs/next_issue_read_tail_dominant_phase.md`
 - `docs/next_issue_tail_load_phase_budget.md`
-- `docs/next_issue_append_external_residual.md`
 
 GitHub issue:
 
-- `#26`
-- <https://github.com/Npieju/nr-learn/issues/26>
+- `#27`
+- <https://github.com/Npieju/nr-learn/issues/27>
 
 Primary next execution order:
 
-1. `tail_training_table` の phase budget を current mainline で再計測する
-2. micro benchmark では効くのに reduced smoke で消える候補の interaction を特定する
-3. その結果に沿って next hotspot issue を 1 本に絞る
+1. `_read_csv_tail` の exact-safe candidate を tail equivalence gate つきで再提示する
+2. repeated phase budget と reduced smoke の両方で mainline に残るかを確認する
+3. tail が still dominant でなければ、その時点で次 hotspot issue を切る
 
 ### 3.1 [experiment] Tighter policy search frontier refinement
 
