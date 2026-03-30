@@ -91,3 +91,20 @@ loader-only repeated compare は次のとおりだった。
 - full materialized append candidate: `[13.7303, 13.9262, 14.0185]`, average `13.8917s`
 
 したがって current read では、「full materialized append source は standardization value はあるが、performance candidate としては reject」である。`#32` の next move は、full materialize ではなく recent-window を意識した narrower append source candidate に移ることになる。
+
+さらに exact floor に合わせた narrower append source も確認した。
+
+- candidate: `data/processed/append/netkeiba_race_result_since_20210116.csv`
+- manifest: `artifacts/reports/materialize_netkeiba_race_result_append_since_20210116.json`
+
+loader-only repeated compare は次のとおり。
+
+- current: `[13.6644, 13.5878, 13.8723]`, average `13.7082s`
+- narrow exact-floor candidate: `[13.6976, 13.7682, 14.1045]`, average `13.8568s`
+
+このため `#32` の final read は明確で、append source-shaping candidate は
+
+- full-history materialized: reject
+- exact-floor narrow materialized: reject
+
+である。したがって next path は source artifact の再設計ではなく、`_append_external_tables(...)` 自体の exact-safe logic cut に移る。

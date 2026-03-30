@@ -21,28 +21,28 @@
 
 2026-03-29 時点で、Kelly runtime family (`#10`, `#11`, `#12`, `#13`)、seasonal ordering (`#14`, `#15`)、runtime broad reduction (`#7`)、supplemental materialization (`#16`)、feature-builder runtime (`#17`) は close 済みである。loader runtime の small safe cuts を進めた `#18` も wrap-up 段階にあり、current operational anchor は引き続き `r20260329_tighter_policy_ratio003_abs90` である。
 
-この時点の next active issue は `#32` の pre-slim netkeiba race-result append source candidate である。
+この時点の next active issue は `#33` の append loader logic residual である。
 
 Primary active issue:
 
-- `#32`
-- <https://github.com/Npieju/nr-learn/issues/32>
+- `#33`
+- <https://github.com/Npieju/nr-learn/issues/33>
 
 Primary issue draft:
 
+- `docs/next_issue_append_loader_logic_residual.md`
 - `docs/next_issue_netkeiba_race_result_append_preslim_source.md`
-- `docs/next_issue_race_result_keys_preslim_source.md`
 
 GitHub issue:
 
-- `#32`
-- <https://github.com/Npieju/nr-learn/issues/32>
+- `#33`
+- <https://github.com/Npieju/nr-learn/issues/33>
 
 Primary next execution order:
 
-1. current mainline で `netkeiba_race_result` append residual を再計測する
-2. pre-slim append candidate を定義する
-3. table-level timing と reduced smoke で current accepted append path と比較する
+1. current append residual を phase ごとに再確認する
+2. `_append_external_tables(...)` の exact-safe logic cut を 1 本選ぶ
+3. loader-only と reduced smoke の両方で current mainline と比較する
 
 ### 3.1 [experiment] Tighter policy search frontier refinement
 
