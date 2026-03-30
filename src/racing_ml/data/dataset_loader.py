@@ -532,7 +532,7 @@ def _resolve_exact_candidate_usecols(
     required_columns: list[str],
 ) -> list[str] | None:
     table_loader = str(table_cfg.get("table_loader", "")).strip().lower()
-    if table_loader or not join_on:
+    if table_loader:
         return None
 
     requested = list(dict.fromkeys([*join_on, *keep_columns, *required_columns]))

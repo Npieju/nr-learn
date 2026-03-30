@@ -460,6 +460,26 @@ class DatasetLoaderTailReadTest(unittest.TestCase):
 
         self.assertEqual(usecols, ["レースID", "horse_id", "horse_key"])
 
+    def test_resolve_exact_candidate_usecols_supports_append_tables(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            candidate = root / "sample.csv"
+            candidate.write_text(
+                "date,race_id,horse_id,horse_key,owner_name,jockey_key\n"
+                "2025-01-01,101,h1,k1,o1,j1\n",
+                encoding="utf-8",
+            )
+
+            usecols = _resolve_exact_candidate_usecols(
+                candidate,
+                {},
+                join_on=[],
+                keep_columns=["date", "race_id", "horse_id", "horse_key", "owner_name"],
+                required_columns=["date", "race_id"],
+            )
+
+        self.assertEqual(usecols, ["date", "race_id", "horse_id", "horse_key", "owner_name"])
+
 
 if __name__ == "__main__":
     unittest.main()
