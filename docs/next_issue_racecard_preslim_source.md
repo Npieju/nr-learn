@@ -80,4 +80,11 @@ first read は次のとおり。
   - `summary_equivalence_perf_smoke_racecard_usecols_v1_vs_racecard_preslim_v1.json`
   - difference は `run_context.data_config` の 1 件だけ
 
-したがって current read は「materialized race-card candidate は exact-equivalent behavior を保ったまま loader-only では明確に勝ち、reduced smoke では少なくとも near-par」である。次の判断は、これを default 昇格候補にするか、analysis-only near-par candidate に留めるかである。
+その後の repeated reduced smoke compare でも、
+
+- current accepted `perf_smoke_racecard_current_repeat_v2`
+- materialized `perf_smoke_racecard_preslim_repeat_v2`
+
+の差分は `run_context.data_config` の 1 件だけだった。`summary_equivalence_perf_smoke_racecard_current_repeat_v2_vs_preslim_repeat_v2.json` でも substantive drift は出ていない。
+
+したがって final read は「materialized race-card candidate は exact-equivalent behavior を保ったまま loader-only で持続的に勝ち、reduced smoke でも durable near-par を維持した」である。これにより `netkeiba_race_card` の materialized source は default 昇格でよい。

@@ -81,6 +81,8 @@ dataset:
       search_dirs:
         - "data/external/netkeiba/racecard"
       pattern: "**/*racecard*.csv"
+      materialized_file: "data/processed/supplemental/netkeiba_race_card.csv"
+      materialized_manifest_file: "artifacts/reports/supplemental_materialize_netkeiba_race_card.json"
       join_on:
         - "race_id"
         - "horse_id"

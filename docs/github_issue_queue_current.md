@@ -21,28 +21,28 @@
 
 2026-03-29 時点で、Kelly runtime family (`#10`, `#11`, `#12`, `#13`)、seasonal ordering (`#14`, `#15`)、runtime broad reduction (`#7`)、supplemental materialization (`#16`)、feature-builder runtime (`#17`) は close 済みである。loader runtime の small safe cuts を進めた `#18` も wrap-up 段階にあり、current operational anchor は引き続き `r20260329_tighter_policy_ratio003_abs90` である。
 
-この時点の next active issue は `#30` の pre-slim race-card source candidate である。
+この時点の next active issue は `#31` の pre-slim race-result-keys source candidate である。
 
 Primary active issue:
 
-- `#30`
-- <https://github.com/Npieju/nr-learn/issues/30>
+- `#31`
+- <https://github.com/Npieju/nr-learn/issues/31>
 
 Primary issue draft:
 
+- `docs/next_issue_race_result_keys_preslim_source.md`
 - `docs/next_issue_racecard_preslim_source.md`
-- `docs/next_issue_race_card_load_residual.md`
 
 GitHub issue:
 
-- `#30`
-- <https://github.com/Npieju/nr-learn/issues/30>
+- `#31`
+- <https://github.com/Npieju/nr-learn/issues/31>
 
 Primary next execution order:
 
-1. pre-slim race-card source candidate を定義する
-2. table-level timing と reduced smoke で current accepted race-card path と比較する
-3. exact-equal を維持したまま end-to-end で勝てるかを確認する
+1. current mainline で `netkeiba_race_result_keys` residual を再計測する
+2. pre-slim race-result-keys candidate を定義する
+3. table-level timing と reduced smoke で current accepted path と比較する
 
 ### 3.1 [experiment] Tighter policy search frontier refinement
 
