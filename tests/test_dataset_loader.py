@@ -8,6 +8,8 @@ from unittest import mock
 import pandas as pd
 
 from racing_ml.data.dataset_loader import (
+    _normalize_decimal_series,
+    _normalize_digit_series,
     _normalize_columns,
     _read_csv_tail,
     _restrict_table_to_join_keys,
@@ -136,6 +138,22 @@ class DatasetLoaderTailReadTest(unittest.TestCase):
 
         self.assertEqual(restricted[["race_id", "horse_id"]].values.tolist(), [[101, "h2"], [102, "h3"]])
         self.assertEqual(restricted["value"].tolist(), [2, 3])
+
+    def test_normalize_digit_series_reuses_numeric_values_without_string_extract(self) -> None:
+        series = pd.Series([1400.0, 1800.0, None])
+
+        normalized = _normalize_digit_series(series)
+
+        self.assertEqual(normalized.tolist()[:2], [1400.0, 1800.0])
+        self.assertTrue(pd.isna(normalized.iloc[2]))
+
+    def test_normalize_decimal_series_reuses_numeric_values_without_string_extract(self) -> None:
+        series = pd.Series([1.4, 36.8, None])
+
+        normalized = _normalize_decimal_series(series)
+
+        self.assertEqual(normalized.tolist()[:2], [1.4, 36.8])
+        self.assertTrue(pd.isna(normalized.iloc[2]))
 
     def test_load_training_table_prefers_materialized_supplemental_file(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:

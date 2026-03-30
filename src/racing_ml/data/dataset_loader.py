@@ -196,6 +196,20 @@ def _parse_first_numeric_token(value: object) -> float:
     return float(match.group(1))
 
 
+def _normalize_digit_series(series: pd.Series) -> pd.Series:
+    if pd.api.types.is_numeric_dtype(series):
+        return pd.to_numeric(series, errors="coerce")
+    extracted = series.astype(str).str.extract(r"(\d+)", expand=False)
+    return pd.to_numeric(extracted, errors="coerce")
+
+
+def _normalize_decimal_series(series: pd.Series) -> pd.Series:
+    if pd.api.types.is_numeric_dtype(series):
+        return pd.to_numeric(series, errors="coerce")
+    extracted = series.astype(str).str.extract(r"(\d+(?:\.\d+)?)", expand=False)
+    return pd.to_numeric(extracted, errors="coerce")
+
+
 def _load_laptime_summary(raw_dir: Path) -> pd.DataFrame | None:
     candidates = [path for path in raw_dir.glob("**/*.csv") if "laptime" in path.name.lower()]
     if not candidates:
@@ -844,37 +858,20 @@ def _ensure_minimum_columns(frame: pd.DataFrame) -> pd.DataFrame:
         frame["rank"] = pd.to_numeric(frame["rank"], errors="coerce")
 
     if "distance" in frame.columns:
-        frame["distance"] = frame["distance"].astype(str).str.extract(r"(\d+)", expand=False)
-        frame["distance"] = pd.to_numeric(frame["distance"], errors="coerce")
+        frame["distance"] = _normalize_digit_series(frame["distance"])
 
     for column in ["frame_no", "gate_no"]:
         if column in frame.columns:
-            frame[column] = frame[column].astype(str).str.extract(r"(\d+)", expand=False)
-            frame[column] = pd.to_numeric(frame[column], errors="coerce")
+            frame[column] = _normalize_digit_series(frame[column])
 
     if "weight" in frame.columns:
-        frame["weight"] = (
-            frame["weight"]
-            .astype(str)
-            .str.extract(r"(\d+)", expand=False)
-        )
-        frame["weight"] = pd.to_numeric(frame["weight"], errors="coerce")
+        frame["weight"] = _normalize_digit_series(frame["weight"])
 
     if "odds" in frame.columns:
-        frame["odds"] = (
-            frame["odds"]
-            .astype(str)
-            .str.extract(r"(\d+(?:\.\d+)?)", expand=False)
-        )
-        frame["odds"] = pd.to_numeric(frame["odds"], errors="coerce")
+        frame["odds"] = _normalize_decimal_series(frame["odds"])
 
     if "popularity" in frame.columns:
-        frame["popularity"] = (
-            frame["popularity"]
-            .astype(str)
-            .str.extract(r"(\d+)", expand=False)
-        )
-        frame["popularity"] = pd.to_numeric(frame["popularity"], errors="coerce")
+        frame["popularity"] = _normalize_digit_series(frame["popularity"])
 
     if "finish_time" in frame.columns and "finish_time_sec" not in frame.columns:
         frame["finish_time_sec"] = frame["finish_time"].map(_parse_finish_time_seconds)

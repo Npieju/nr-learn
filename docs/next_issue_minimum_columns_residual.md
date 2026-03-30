@@ -47,3 +47,24 @@
 - minimum-column optimization or explicit reject
 - updated residual timing read
 - summary-equivalent reduced smoke
+
+## Current Status
+
+2026-03-30 の first read では、`_ensure_minimum_columns` の主要コストは次に集中していた。
+
+- `popularity_normalize`: 約 `0.13s`
+- `distance_normalize`: 約 `0.11s`
+- `frame_no_normalize`: 約 `0.08s`
+- `gate_no_normalize`: 約 `0.08s`
+- `weight_normalize`: 約 `0.07s`
+- `odds_normalize`: 約 `0.06s`
+
+このうち `distance`, `frame_no`, `gate_no`, `popularity` は tail loading 後の frame ですでに numeric dtype だったため、regex extract を通さず `pd.to_numeric(..., errors='coerce')` だけで処理する fast path を追加した。
+
+結果:
+
+- `_ensure_minimum_columns`: `1.663s -> 1.192s`
+- reduced smoke `perf_smoke_minimum_columns_v1_numeric_fastpath`:
+  - `loading training table 0m14s`
+  - total `0m24s`
+  - summary drift なし
