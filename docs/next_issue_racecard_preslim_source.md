@@ -57,3 +57,27 @@ pre-slim race-card source candidate が、current accepted race-card path を ta
 - parser option / dtype hint の micro tweak は exact-safe でも durable win にならない
 
 よって `#30` は parser micro tuning を繰り返すのではなく、source shape そのものを変えた candidate を評価する issue である。
+
+## Current Read
+
+既存の pre-slim candidate として、`configs/data_2025_latest_materialized_racecard.yaml` を current runtime rules に合わせて再読した。
+
+- `corner_passing_order` と `netkeiba_race_card` の `materialized_manifest_file` を config に追加
+- `artifacts/reports/supplemental_materialize_netkeiba_race_card.json` を再生成し、`race_id_date_start/end` を持たせた
+
+first read は次のとおり。
+
+- loader-only single run:
+  - current `14.3436s`
+  - materialized `13.8866s`
+- loader-only repeated A/B:
+  - average current `14.5743s`
+  - average materialized `14.3479s`
+- reduced smoke:
+  - `perf_smoke_racecard_preslim_v1` は `loading training table 0m14s`, total `0m24s`
+  - current accepted `perf_smoke_racecard_usecols_v1` と同着
+- summary compare:
+  - `summary_equivalence_perf_smoke_racecard_usecols_v1_vs_racecard_preslim_v1.json`
+  - difference は `run_context.data_config` の 1 件だけ
+
+したがって current read は「materialized race-card candidate は exact-equivalent behavior を保ったまま loader-only では明確に勝ち、reduced smoke では少なくとも near-par」である。次の判断は、これを default 昇格候補にするか、analysis-only near-par candidate に留めるかである。
