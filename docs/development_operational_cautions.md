@@ -28,6 +28,20 @@
 - 完了時に completed message を出す
 - 失敗時に停止 phase が分かる
 - possible なら件数、fold、row、file、cycle などの進捗単位を出す
+- 重くなりうる task に unbounded な no-output 区間を残さない
+
+bounded progress rule:
+
+- operator は長時間 task が「遅いだけ」なのか「落ちた / stuck した」のかをログだけで区別できなければならない
+- したがって heavy compute でも bounded interval で checkpoint を出す
+- heartbeat だけでは phase 内 progress が読めない場合、fold / search_step / row / file / cycle などの中間 checkpoint を追加する
+- 目安として 60 秒を超える no-output 区間は未完成扱いにする
+- 60 秒以内でも、重い内側ループで数分無音になりうる設計は review で reject 候補にする
+
+motivating example:
+
+- NAR `wf_feasibility` のように CPU を使い続ける task でも、checkpoint が疎いと operator からは dead/stuck と区別しづらい
+- この種の task は「生存 heartbeat」だけでなく「内側探索の進捗 checkpoint」まで必須にする
 
 推奨実装:
 
@@ -44,6 +58,7 @@ PR / review rule:
 
 - 数秒超の処理に progress がない新規 source は原則 accept しない
 - 既存 source を触るとき progress 不足を見つけたら、同時に是正するか follow-up issue を切る
+- 重い task に 60 秒超の no-output 区間が残る変更は原則 accept しない
 
 ### 2.2 Long-Running Jobs Must Preserve Readability
 

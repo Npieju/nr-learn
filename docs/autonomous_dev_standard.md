@@ -111,6 +111,7 @@ AI に任せる作業でも、最低限の契約を固定する。
 - strategy change は必ず artifact とセットでレビューする
 - docs only 変更でも、次の operator action が明確であること
 - 数秒で終わらない source を追加・更新する場合は progress を必須にする
+- 重い task は bounded progress output を持ち、60 秒超の no-output 区間を残さない
 - equivalence harness を持つ optimization は、accepted gate mode を docs に固定する
 
 ## 9. Branch And PR Policy

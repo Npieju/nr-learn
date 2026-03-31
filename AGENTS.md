@@ -49,6 +49,7 @@
 - JRA baseline 更新は human judgment を要求する
 - 不足する規則は会話ではなく docs / tests / instructions に追加する
 - 数秒で終わらない source に progress がない変更は未完成扱いにする
+- 重い task に 60 秒超の no-output 区間が残る変更は未完成扱いにする
 
 ## Important Entry Points
 
