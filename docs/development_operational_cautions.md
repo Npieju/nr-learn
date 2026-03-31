@@ -38,10 +38,18 @@ bounded progress rule:
 - 目安として 60 秒を超える no-output 区間は未完成扱いにする
 - 60 秒以内でも、重い内側ループで数分無音になりうる設計は review で reject 候補にする
 
+bounded interrupt rule:
+
+- operator が「まだ健全に進んでいる」と判断できない no-output 区間が続く場合、その task は途中で切れる設計にする
+- 具体的には `max_silent_seconds` や `max_elapsed_minutes` のような interrupt guard を持てる形が望ましい
+- guard 到達時は silent のまま待ち続けず、`interrupted_for_operator_review` のような明示的な停止理由を残す
+- 再実行は narrower search、smaller split、checkpoint 粒度改善のいずれかを伴うことを原則にする
+
 motivating example:
 
 - NAR `wf_feasibility` のように CPU を使い続ける task でも、checkpoint が疎いと operator からは dead/stuck と区別しづらい
 - この種の task は「生存 heartbeat」だけでなく「内側探索の進捗 checkpoint」まで必須にする
+- それでも bounded interval を超えて silent なら、operator が途中で切って再実行方針へ移れる guard が必要である
 
 推奨実装:
 

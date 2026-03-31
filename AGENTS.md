@@ -50,6 +50,7 @@
 - 不足する規則は会話ではなく docs / tests / instructions に追加する
 - 数秒で終わらない source に progress がない変更は未完成扱いにする
 - 重い task に 60 秒超の no-output 区間が残る変更は未完成扱いにする
+- 重い task は bounded interrupt rule を持ち、長時間 silent のまま無制限に走らせない
 
 ## Important Entry Points
 
