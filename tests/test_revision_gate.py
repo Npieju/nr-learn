@@ -9,8 +9,10 @@ import unittest
 
 from scripts.run_revision_gate import (
     _acquire_run_lock,
+    _build_running_manifest_payload,
     _build_challenger_equivalence_report,
     _build_lock_path,
+    _write_manifest,
     _classify_step_failure,
 )
 
@@ -126,6 +128,55 @@ class RevisionGateChallengerEquivalenceTest(unittest.TestCase):
             self.assertEqual(report["status"], "different")
             differing = [item["field"] for item in report["comparisons"] if not item["equivalent"]]
             self.assertEqual(differing, ["wf_nested_test_roi_weighted"])
+
+
+class RevisionGateRunningManifestTest(unittest.TestCase):
+    def test_running_manifest_overwrites_stale_failed_payload(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmp = Path(tmpdir)
+            manifest_output = tmp / "revision_gate_r20260331_sample.json"
+            wf_summary_output = tmp / "wf_summary.json"
+            promotion_output = tmp / "promotion_gate.json"
+            stale_payload = {
+                "revision": "r20260331_sample",
+                "status": "failed",
+                "decision": "error",
+                "current_phase": "train",
+            }
+            manifest_output.write_text(json.dumps(stale_payload), encoding="utf-8")
+
+            running_payload = _build_running_manifest_payload(
+                revision_slug="r20260331_sample",
+                started_at="2026-03-31T00:00:00Z",
+                resolved_profile=None,
+                config_path="configs/model.yaml",
+                data_config_path="configs/data.yaml",
+                feature_config_path="configs/features.yaml",
+                train_artifact_suffix="r20260331_sample",
+                skip_train=False,
+                train_max_train_rows=None,
+                train_max_valid_rows=None,
+                evaluate_model_artifact_suffix=None,
+                evaluate_max_rows=120000,
+                evaluate_pre_feature_max_rows=None,
+                evaluate_start_date=None,
+                evaluate_end_date=None,
+                evaluate_wf_mode="fast",
+                evaluate_wf_scheme="nested",
+                wf_summary_output=wf_summary_output,
+                promotion_min_feasible_folds=1,
+                promotion_output=promotion_output,
+                manifest_output=manifest_output,
+                executed_steps=[],
+                challenger_equivalence=None,
+            )
+            _write_manifest(manifest_output, running_payload, label="test running manifest overwrite")
+
+            overwritten = json.loads(manifest_output.read_text(encoding="utf-8"))
+            self.assertEqual(overwritten["status"], "running")
+            self.assertEqual(overwritten["decision"], "in_progress")
+            self.assertEqual(overwritten["current_phase"], "train")
+            self.assertEqual(overwritten["recommended_action"], "wait_for_revision_gate_completion")
 
 
 if __name__ == "__main__":

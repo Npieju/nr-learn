@@ -628,6 +628,69 @@ def _build_manifest_payload(
     return payload
 
 
+def _build_running_manifest_payload(
+    *,
+    revision_slug: str,
+    started_at: str,
+    resolved_profile: str | None,
+    config_path: str,
+    data_config_path: str,
+    feature_config_path: str,
+    train_artifact_suffix: str,
+    skip_train: bool,
+    train_max_train_rows: int | None,
+    train_max_valid_rows: int | None,
+    evaluate_model_artifact_suffix: str | None,
+    evaluate_max_rows: int,
+    evaluate_pre_feature_max_rows: int | None,
+    evaluate_start_date: str | None,
+    evaluate_end_date: str | None,
+    evaluate_wf_mode: str,
+    evaluate_wf_scheme: str,
+    wf_summary_output: Path,
+    promotion_min_feasible_folds: int,
+    promotion_output: Path,
+    manifest_output: Path,
+    executed_steps: list[dict[str, object]],
+    challenger_equivalence: dict[str, object] | None = None,
+) -> dict[str, object]:
+    initial_phase = "evaluate" if skip_train else "train"
+    return _build_manifest_payload(
+        revision_slug=revision_slug,
+        started_at=started_at,
+        status="running",
+        decision="in_progress",
+        resolved_profile=resolved_profile,
+        config_path=config_path,
+        data_config_path=data_config_path,
+        feature_config_path=feature_config_path,
+        train_artifact_suffix=train_artifact_suffix,
+        skip_train=skip_train,
+        train_max_train_rows=train_max_train_rows,
+        train_max_valid_rows=train_max_valid_rows,
+        evaluate_model_artifact_suffix=evaluate_model_artifact_suffix,
+        evaluate_max_rows=evaluate_max_rows,
+        evaluate_pre_feature_max_rows=evaluate_pre_feature_max_rows,
+        evaluate_start_date=evaluate_start_date,
+        evaluate_end_date=evaluate_end_date,
+        evaluate_wf_mode=evaluate_wf_mode,
+        evaluate_wf_scheme=evaluate_wf_scheme,
+        wf_summary_output=wf_summary_output,
+        promotion_min_feasible_folds=promotion_min_feasible_folds,
+        promotion_output=promotion_output,
+        manifest_output=manifest_output,
+        executed_steps=executed_steps,
+        promotion_report=None,
+        challenger_equivalence=challenger_equivalence,
+        recommended_action="wait_for_revision_gate_completion",
+        current_phase=initial_phase,
+        highlights=[
+            f"revision {revision_slug} is running",
+            f"current phase: {initial_phase}",
+        ],
+    )
+
+
 def _write_manifest(manifest_output: Path, payload: dict[str, object], *, label: str) -> None:
     with Heartbeat("[revision-gate]", label, logger=log_progress):
         write_json(manifest_output, payload)
@@ -923,6 +986,32 @@ def main() -> int:
             print("[revision-gate] decision: hold")
             return 1
         lock_acquired = True
+        running_manifest_payload = _build_running_manifest_payload(
+            revision_slug=revision_slug,
+            started_at=started_at,
+            resolved_profile=resolved_profile,
+            config_path=config_path,
+            data_config_path=data_config_path,
+            feature_config_path=feature_config_path,
+            train_artifact_suffix=train_artifact_suffix,
+            skip_train=bool(args.skip_train),
+            train_max_train_rows=args.train_max_train_rows,
+            train_max_valid_rows=args.train_max_valid_rows,
+            evaluate_model_artifact_suffix=args.evaluate_model_artifact_suffix,
+            evaluate_max_rows=args.evaluate_max_rows,
+            evaluate_pre_feature_max_rows=args.evaluate_pre_feature_max_rows,
+            evaluate_start_date=args.evaluate_start_date,
+            evaluate_end_date=args.evaluate_end_date,
+            evaluate_wf_mode=args.evaluate_wf_mode,
+            evaluate_wf_scheme=args.evaluate_wf_scheme,
+            wf_summary_output=wf_summary_output,
+            promotion_min_feasible_folds=args.promotion_min_feasible_folds,
+            promotion_output=promotion_output,
+            manifest_output=manifest_output,
+            executed_steps=executed_steps,
+            challenger_equivalence=None,
+        )
+        _write_manifest(manifest_output, running_manifest_payload, label="writing running revision manifest")
 
         if args.skip_train:
             executed_steps.append(
