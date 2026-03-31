@@ -37,6 +37,8 @@ bounded progress rule:
 - heartbeat だけでは phase 内 progress が読めない場合、fold / search_step / row / file / cycle などの中間 checkpoint を追加する
 - 目安として 60 秒を超える no-output 区間は未完成扱いにする
 - 60 秒以内でも、重い内側ループで数分無音になりうる設計は review で reject 候補にする
+- operator が VS Code の local terminal を見られない実行経路でも確認できるよう、長時間 task は repo 内の log file に live 出力されるべきである
+- progress の確認先は terminal ではなく stable な log file path として毎回明示する
 
 bounded interrupt rule:
 
@@ -61,6 +63,7 @@ motivating example:
 
 - operator が 30 秒以内に「生きている」と判断できる
 - operator が停止位置をログから特定できる
+- operator が VS Code から開ける file path を 1 本で把握できる
 
 PR / review rule:
 

@@ -8,6 +8,12 @@
 
 長時間かかるコマンドは、現在は `ProgressBar` または `Heartbeat` により途中経過が見える前提で整備している。
 
+長時間 run の確認先は terminal ではなく log file を優先する。
+
+- `run_revision_gate.py` の既定 live log: `artifacts/logs/revision_gate_<revision>.log`
+- `run_local_revision_gate.py` の既定 live log: `artifacts/logs/local_revision_gate_<revision>.log`
+- 任意 path に変えたいときだけ `--log-file` を付ける
+
 CLI の基本挙動:
 
 - operator 向け script は、config 不足、入力不足、output path の取り違えをなるべく早い段階で検出する。
@@ -267,6 +273,8 @@ profile 一覧:
   --evaluate-wf-mode full
 ```
 
+live progress は既定で `artifacts/logs/revision_gate_r20260321a.log` にも書かれる。
+
 重い実行前に orchestration だけ確認したいときは次を使う。
 
 ```bash
@@ -320,6 +328,8 @@ profile 一覧:
 
 - `run_revision_gate.py` は train、evaluate、promotion gate の各段階を progress 付きで出力する。
 - 現在の `run_revision_gate.py` は evaluate の後に matching `wf_feasibility_diag` も自動実行するので、promotion gate に必要な WF summary を別途手で作らなくてよい。
+- VS Code から進捗を追うときは `artifacts/logs/revision_gate_<revision>.log` を開く。
+- 既定 path を変えたいときだけ `--log-file <path>` を付ける。
 - `--dry-run` を付けると、重い train / evaluate を実行せずに planned command と revision manifest だけを確認できる。planned manifest には `read_order`, `current_phase`, `recommended_action`, `highlights` も入る。
 - `--train-max-train-rows` と `--train-max-valid-rows` を使うと、real run でも lightweight smoke を組める。
 - `--skip-train` と `--evaluate-model-artifact-suffix` を組み合わせると、設定だけ変えた threshold-only revision を既存学習済み model artifact に対して formal 評価できる。
@@ -913,6 +923,8 @@ local_nankan revision gate で backfill handoff を先に差し込む dry-run sm
   --snapshot-output artifacts/tmp/local_nankan_smoke/coverage_snapshot_for_revision_dry.json \
   --dry-run
 ```
+
+live progress は既定で `artifacts/logs/local_revision_gate_local_nankan_handoff_smoke.log` にも書かれる。
 
 補足:
 

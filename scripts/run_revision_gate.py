@@ -29,6 +29,40 @@ def log_progress(message: str) -> None:
     print(f"[revision-gate {now}] {message}", flush=True)
 
 
+class _TeeStream:
+    def __init__(self, *streams: object) -> None:
+        self._streams = streams
+
+    def write(self, data: str) -> int:
+        for stream in self._streams:
+            stream.write(data)
+        return len(data)
+
+    def flush(self) -> None:
+        for stream in self._streams:
+            stream.flush()
+
+    def isatty(self) -> bool:
+        primary = self._streams[0]
+        return bool(getattr(primary, "isatty", lambda: False)())
+
+
+def _default_log_path(*, revision_slug: str) -> Path:
+    return ROOT / "artifacts" / "logs" / f"revision_gate_{revision_slug}.log"
+
+
+def _configure_live_log(log_path: Path) -> None:
+    artifact_ensure_output_file_path(log_path, label="run log", workspace_root=ROOT)
+    log_path.parent.mkdir(parents=True, exist_ok=True)
+    log_handle = log_path.open("a", encoding="utf-8", buffering=1)
+    sys.stdout = _TeeStream(sys.stdout, log_handle)
+    sys.stderr = _TeeStream(sys.stderr, log_handle)
+    print(
+        f"[revision-gate] live log file: {artifact_display_path(log_path, workspace_root=ROOT)}",
+        flush=True,
+    )
+
+
 def _python_command(script_path: str) -> list[str]:
     return [sys.executable, "-u", script_path]
 
@@ -721,6 +755,7 @@ def main() -> int:
     parser.add_argument("--promotion-output", default=None)
     parser.add_argument("--wf-summary-output", default=None)
     parser.add_argument("--manifest-output", default=None)
+    parser.add_argument("--log-file", default=None)
     parser.add_argument("--challenger-anchor-evaluation-summary", default=None)
     parser.add_argument("--challenger-equivalence-tolerance", type=float, default=0.0)
     parser.add_argument("--stop-on-equivalent-challenger", action="store_true")
@@ -746,6 +781,8 @@ def main() -> int:
         )
         revision_value = args.revision or f"revision_{time.strftime('%Y%m%d_%H%M%S')}"
         revision_slug = _normalize_revision_slug(revision_value)
+        log_path = _resolve_path(args.log_file) if args.log_file else _default_log_path(revision_slug=revision_slug)
+        _configure_live_log(log_path)
         train_artifact_suffix = str(args.train_artifact_suffix or revision_slug).strip()
         if not train_artifact_suffix:
             raise ValueError("train artifact suffix must not be empty")
@@ -935,9 +972,11 @@ def main() -> int:
                 revision_slug=revision_slug,
                 skip_train=bool(args.skip_train),
             )
+            manifest_payload["artifacts"]["run_log"] = artifact_display_path(log_path, workspace_root=ROOT)
             _write_manifest(manifest_output, manifest_payload, label="writing dry-run manifest")
             progress.complete(message="dry-run plan prepared")
             print(f"[revision-gate] dry-run manifest saved: {manifest_output}")
+            print(f"[revision-gate] run log: {artifact_display_path(log_path, workspace_root=ROOT)}")
             print(f"[revision-gate] train command: {' '.join(train_command)}")
             print(f"[revision-gate] evaluate command: {' '.join(evaluate_command)}")
             print(f"[revision-gate] wf command: {' '.join(wf_command)}")
@@ -987,8 +1026,10 @@ def main() -> int:
                     existing=existing_lock,
                 ),
             )
+            manifest_payload["artifacts"]["run_log"] = artifact_display_path(log_path, workspace_root=ROOT)
             _write_manifest(manifest_output, manifest_payload, label="writing duplicate-run blocked manifest")
             print(f"[revision-gate] manifest saved: {manifest_output}")
+            print(f"[revision-gate] run log: {artifact_display_path(log_path, workspace_root=ROOT)}")
             print("[revision-gate] decision: hold")
             return 1
         lock_acquired = True
@@ -1017,6 +1058,7 @@ def main() -> int:
             executed_steps=executed_steps,
             challenger_equivalence=None,
         )
+        running_manifest_payload["artifacts"]["run_log"] = artifact_display_path(log_path, workspace_root=ROOT)
         _write_manifest(manifest_output, running_manifest_payload, label="writing running revision manifest")
 
         if args.skip_train:
@@ -1074,8 +1116,10 @@ def main() -> int:
                     current_phase=str(failure_details.get("current_phase") or "train"),
                     highlights=_failure_highlights(failure_details),
                 )
+                manifest_payload["artifacts"]["run_log"] = artifact_display_path(log_path, workspace_root=ROOT)
                 _write_manifest(manifest_output, manifest_payload, label="writing failed revision manifest")
                 print(f"[revision-gate] manifest saved: {manifest_output}")
+                print(f"[revision-gate] run log: {artifact_display_path(log_path, workspace_root=ROOT)}")
                 print("[revision-gate] decision: error")
                 return int(train_result.returncode) or 1
             progress.update(message=f"train completed artifact_suffix={train_artifact_suffix}")
@@ -1124,8 +1168,10 @@ def main() -> int:
                 current_phase=str(failure_details.get("current_phase") or "evaluate"),
                 highlights=_failure_highlights(failure_details),
             )
+            manifest_payload["artifacts"]["run_log"] = artifact_display_path(log_path, workspace_root=ROOT)
             _write_manifest(manifest_output, manifest_payload, label="writing failed revision manifest")
             print(f"[revision-gate] manifest saved: {manifest_output}")
+            print(f"[revision-gate] run log: {artifact_display_path(log_path, workspace_root=ROOT)}")
             print("[revision-gate] decision: error")
             return int(evaluate_result.returncode) or 1
         progress.update(message="evaluation completed")
@@ -1192,8 +1238,10 @@ def main() -> int:
                         current_phase="challenger_equivalence",
                         highlights=highlights,
                     )
+                    manifest_payload["artifacts"]["run_log"] = artifact_display_path(log_path, workspace_root=ROOT)
                     _write_manifest(manifest_output, manifest_payload, label="writing equivalent-challenger blocked manifest")
                     print(f"[revision-gate] manifest saved: {manifest_output}")
+                    print(f"[revision-gate] run log: {artifact_display_path(log_path, workspace_root=ROOT)}")
                     print("[revision-gate] decision: hold")
                     return 1
 
@@ -1261,8 +1309,10 @@ def main() -> int:
                     current_phase=str(failure_details.get("current_phase") or "wf_feasibility"),
                     highlights=_failure_highlights(failure_details),
                 )
+                manifest_payload["artifacts"]["run_log"] = artifact_display_path(log_path, workspace_root=ROOT)
                 _write_manifest(manifest_output, manifest_payload, label="writing failed revision manifest")
                 print(f"[revision-gate] manifest saved: {manifest_output}")
+                print(f"[revision-gate] run log: {artifact_display_path(log_path, workspace_root=ROOT)}")
                 print("[revision-gate] decision: error")
                 return int(wf_result.returncode) or 1
         progress.update(message="wf feasibility completed")
@@ -1311,6 +1361,7 @@ def main() -> int:
             promotion_report=promotion_report,
             challenger_equivalence=challenger_equivalence_report,
         )
+        manifest_payload["artifacts"]["run_log"] = artifact_display_path(log_path, workspace_root=ROOT)
         if isinstance(promotion_report, dict):
             if promotion_report.get("recommended_action") is not None:
                 manifest_payload["recommended_action"] = promotion_report.get("recommended_action")
@@ -1320,6 +1371,7 @@ def main() -> int:
                 manifest_payload["highlights"] = promotion_report.get("highlights")
         _write_manifest(manifest_output, manifest_payload, label="writing revision manifest")
         print(f"[revision-gate] manifest saved: {manifest_output}")
+        print(f"[revision-gate] run log: {artifact_display_path(log_path, workspace_root=ROOT)}")
         print(f"[revision-gate] decision: {decision}")
         return 0 if decision == "promote" else 1
     except KeyboardInterrupt:

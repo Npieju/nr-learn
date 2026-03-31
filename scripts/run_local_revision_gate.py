@@ -37,6 +37,40 @@ def log_progress(message: str) -> None:
     print(f"[local-revision-gate {now}] {message}", flush=True)
 
 
+class _TeeStream:
+    def __init__(self, *streams: object) -> None:
+        self._streams = streams
+
+    def write(self, data: str) -> int:
+        for stream in self._streams:
+            stream.write(data)
+        return len(data)
+
+    def flush(self) -> None:
+        for stream in self._streams:
+            stream.flush()
+
+    def isatty(self) -> bool:
+        primary = self._streams[0]
+        return bool(getattr(primary, "isatty", lambda: False)())
+
+
+def _default_log_path(*, revision_slug: str) -> Path:
+    return ROOT / "artifacts" / "logs" / f"local_revision_gate_{revision_slug}.log"
+
+
+def _configure_live_log(log_path: Path) -> None:
+    artifact_ensure_output_file_path(log_path, label="run log", workspace_root=ROOT)
+    log_path.parent.mkdir(parents=True, exist_ok=True)
+    log_handle = log_path.open("a", encoding="utf-8", buffering=1)
+    sys.stdout = _TeeStream(sys.stdout, log_handle)
+    sys.stderr = _TeeStream(sys.stderr, log_handle)
+    print(
+        f"[local-revision-gate] live log file: {artifact_display_path(log_path, workspace_root=ROOT)}",
+        flush=True,
+    )
+
+
 def _resolve_path(path_text: str | Path) -> Path:
     path = Path(path_text)
     return path if path.is_absolute() else (ROOT / path)
@@ -712,11 +746,14 @@ def main() -> int:
     parser.add_argument("--promotion-output", default=None)
     parser.add_argument("--revision-manifest-output", default=None)
     parser.add_argument("--wf-summary-output", default=None)
+    parser.add_argument("--log-file", default=None)
     parser.add_argument("--dry-run", action="store_true")
     args = parser.parse_args()
 
     revision_value = args.revision or f"{args.universe}_{time.strftime('%Y%m%d_%H%M%S')}"
     revision_slug = _normalize_revision_slug(revision_value)
+    log_path = _resolve_path(args.log_file) if args.log_file else _default_log_path(revision_slug=revision_slug)
+    _configure_live_log(log_path)
     snapshot_output = args.snapshot_output or f"artifacts/reports/coverage_snapshot_{revision_slug}.json"
     benchmark_manifest_output = args.benchmark_manifest_output or f"artifacts/reports/benchmark_gate_{revision_slug}.json"
     data_preflight_output = args.data_preflight_output or f"artifacts/reports/data_preflight_{revision_slug}.json"
@@ -787,6 +824,7 @@ def main() -> int:
             "dry_run": bool(args.dry_run),
         },
         "artifacts": {
+            "run_log": artifact_display_path(log_path, workspace_root=ROOT),
             "backfill_wrapper_manifest": artifact_display_path(backfill_wrapper_path, workspace_root=ROOT),
             "backfill_manifest": artifact_display_path(backfill_manifest_path, workspace_root=ROOT),
             "snapshot": artifact_display_path(snapshot_path, workspace_root=ROOT),
