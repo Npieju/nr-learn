@@ -688,6 +688,8 @@ def main() -> int:
     parser.add_argument("--evaluate-end-date", default=None)
     parser.add_argument("--evaluate-wf-mode", choices=["off", "fast", "full"], default="fast")
     parser.add_argument("--evaluate-wf-scheme", choices=["single", "nested"], default="nested")
+    parser.add_argument("--wf-max-silent-seconds", type=float, default=None)
+    parser.add_argument("--wf-max-fold-elapsed-seconds", type=float, default=None)
     parser.add_argument("--allow-wf-soft-block", action="store_true")
     parser.add_argument("--promotion-min-feasible-folds", type=int, default=1)
     parser.add_argument("--universe", default=DEFAULT_UNIVERSE)
@@ -1083,6 +1085,10 @@ def main() -> int:
             revision_command.extend(["--evaluate-start-date", args.evaluate_start_date])
         if args.evaluate_end_date:
             revision_command.extend(["--evaluate-end-date", args.evaluate_end_date])
+        if args.wf_max_silent_seconds is not None:
+            revision_command.extend(["--wf-max-silent-seconds", str(args.wf_max_silent_seconds)])
+        if args.wf_max_fold_elapsed_seconds is not None:
+            revision_command.extend(["--wf-max-fold-elapsed-seconds", str(args.wf_max_fold_elapsed_seconds)])
         if args.dry_run:
             revision_command.append("--dry-run")
         if args.allow_wf_soft_block:
@@ -1134,6 +1140,10 @@ def main() -> int:
             "--wf-scheme",
             args.evaluate_wf_scheme,
         ]
+        if args.wf_max_silent_seconds is not None:
+            wf_command.extend(["--max-silent-seconds", str(args.wf_max_silent_seconds)])
+        if args.wf_max_fold_elapsed_seconds is not None:
+            wf_command.extend(["--max-fold-elapsed-seconds", str(args.wf_max_fold_elapsed_seconds)])
         promotion_command = [
             sys.executable,
             "scripts/run_promotion_gate.py",

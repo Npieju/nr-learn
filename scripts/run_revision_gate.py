@@ -715,6 +715,8 @@ def main() -> int:
     parser.add_argument("--evaluate-end-date", default=None)
     parser.add_argument("--evaluate-wf-mode", choices=["off", "fast", "full"], default="fast")
     parser.add_argument("--evaluate-wf-scheme", choices=["single", "nested"], default="nested")
+    parser.add_argument("--wf-max-silent-seconds", type=float, default=None)
+    parser.add_argument("--wf-max-fold-elapsed-seconds", type=float, default=None)
     parser.add_argument("--promotion-min-feasible-folds", type=int, default=1)
     parser.add_argument("--promotion-output", default=None)
     parser.add_argument("--wf-summary-output", default=None)
@@ -842,6 +844,10 @@ def main() -> int:
             wf_command.extend(["--start-date", str(args.evaluate_start_date)])
         if args.evaluate_end_date:
             wf_command.extend(["--end-date", str(args.evaluate_end_date)])
+        if args.wf_max_silent_seconds is not None:
+            wf_command.extend(["--max-silent-seconds", str(args.wf_max_silent_seconds)])
+        if args.wf_max_fold_elapsed_seconds is not None:
+            wf_command.extend(["--max-fold-elapsed-seconds", str(args.wf_max_fold_elapsed_seconds)])
 
         promotion_command = [
             *_python_command("scripts/run_promotion_gate.py"),
