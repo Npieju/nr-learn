@@ -51,6 +51,37 @@ def log_progress(message: str) -> None:
     print(f"[wf-feasibility {now}] {message}", flush=True)
 
 
+def _count_strategy_evals_per_outer_step(
+    *,
+    kelly_frac_candidates: list[float],
+    max_frac_candidates: list[float],
+    top_k_candidates: list[int],
+    min_ev_candidates: list[float],
+) -> int:
+    return (
+        len(kelly_frac_candidates) * len(max_frac_candidates)
+        + len(top_k_candidates) * len(min_ev_candidates)
+    )
+
+
+def _should_emit_checkpoint(
+    *,
+    processed: int,
+    total: int,
+    checkpoint_interval: int,
+    now_monotonic: float,
+    last_progress_at: float,
+    max_silent_seconds: float | None,
+) -> bool:
+    if processed <= 0:
+        return False
+    if processed == 1 or processed == total or processed % checkpoint_interval == 0:
+        return True
+    if max_silent_seconds is not None and max_silent_seconds > 0 and (now_monotonic - last_progress_at) >= max_silent_seconds:
+        return True
+    return False
+
+
 def _sanitize_output_slug(value: str) -> str:
     slug = "".join(char.lower() if char.isalnum() else "_" for char in value.strip())
     while "__" in slug:
@@ -161,6 +192,8 @@ def _summarize_fold_candidates(
     search_config: dict[str, object] | None,
     mode: str,
     progress_callback: Callable[[int, int, dict[str, object]], None] | None = None,
+    max_silent_seconds: float | None = None,
+    max_fold_elapsed_seconds: float | None = None,
 ) -> tuple[dict[str, object], list[dict[str, object]]]:
     resolved_search_config = _resolve_regime_search_config(search_config, frame=valid_df)
 
@@ -241,15 +274,23 @@ def _summarize_fold_candidates(
     best_feasible_score = float("-inf")
     best_fallback: dict[str, object] | None = None
     best_fallback_score = float("-inf")
-    total_search_steps = (
+    outer_search_steps = (
         len(blend_candidates)
         * len(edge_candidates)
         * len(min_prob_candidates)
         * len(odds_min_candidates)
         * len(odds_max_candidates)
     )
+    total_search_steps = outer_search_steps * _count_strategy_evals_per_outer_step(
+        kelly_frac_candidates=kelly_frac_candidates,
+        max_frac_candidates=max_frac_candidates,
+        top_k_candidates=top_k_candidates,
+        min_ev_candidates=min_ev_candidates,
+    )
     processed_search_steps = 0
-    checkpoint_interval = max(1, total_search_steps // 8)
+    checkpoint_interval = max(1, total_search_steps // 16)
+    fold_started_at = time.monotonic()
+    last_progress_at = fold_started_at
 
     for blend_weight in blend_candidates:
         valid_df["blend_prob"] = blend_prob(valid_df["iso_prob"], valid_df["market_prob"], float(blend_weight))
@@ -270,6 +311,7 @@ def _summarize_fold_candidates(
                                     "odds_max": float(odds_max),
                                 }
                                 metrics = run_policy_strategy(valid_df, prob_col="blend_prob", odds_col=odds_col, params=params)
+                                processed_search_steps += 1
                                 roi = metrics.get("kelly_roi")
                                 hit_rate = float(metrics.get("kelly_hit_rate") or 0.0)
                                 base_score = float(roi) + 0.10 * hit_rate if roi is not None else None
@@ -314,6 +356,35 @@ def _summarize_fold_candidates(
                                 if selection_score is not None and selection_score > best_feasible_score:
                                     best_feasible_score = float(selection_score)
                                     best_feasible = row
+                                now_monotonic = time.monotonic()
+                                if progress_callback is not None and _should_emit_checkpoint(
+                                    processed=processed_search_steps,
+                                    total=total_search_steps,
+                                    checkpoint_interval=checkpoint_interval,
+                                    now_monotonic=now_monotonic,
+                                    last_progress_at=last_progress_at,
+                                    max_silent_seconds=max_silent_seconds,
+                                ):
+                                    progress_callback(
+                                        processed_search_steps,
+                                        total_search_steps,
+                                        {
+                                            "fold": int(fold_index),
+                                            "strategy_kind": "kelly",
+                                            "blend_weight": float(blend_weight),
+                                            "min_edge": float(min_edge),
+                                            "min_prob": float(min_prob),
+                                            "odds_min": float(odds_min),
+                                            "odds_max": float(odds_max),
+                                            "candidate_rows": int(len(candidate_rows)),
+                                        },
+                                    )
+                                    last_progress_at = now_monotonic
+                                if max_fold_elapsed_seconds is not None and max_fold_elapsed_seconds > 0 and (now_monotonic - fold_started_at) >= max_fold_elapsed_seconds:
+                                    raise RuntimeError(
+                                        f"wf feasibility fold {fold_index} exceeded max fold elapsed seconds "
+                                        f"({max_fold_elapsed_seconds:.0f}s); interrupted for operator review"
+                                    )
 
                         for top_k in top_k_candidates:
                             for min_ev in min_ev_candidates:
@@ -327,6 +398,7 @@ def _summarize_fold_candidates(
                                     "min_expected_value": float(min_ev),
                                 }
                                 metrics = run_policy_strategy(valid_df, prob_col="blend_prob", odds_col=odds_col, params=params)
+                                processed_search_steps += 1
                                 roi = metrics.get("portfolio_roi")
                                 hit_rate = float(metrics.get("portfolio_hit_rate") or 0.0)
                                 base_score = float(roi) + 0.20 * hit_rate if roi is not None else None
@@ -371,29 +443,35 @@ def _summarize_fold_candidates(
                                 if selection_score is not None and selection_score > best_feasible_score:
                                     best_feasible_score = float(selection_score)
                                     best_feasible = row
-
-                        processed_search_steps += 1
-                        if (
-                            progress_callback is not None
-                            and (
-                                processed_search_steps == 1
-                                or processed_search_steps == total_search_steps
-                                or processed_search_steps % checkpoint_interval == 0
-                            )
-                        ):
-                            progress_callback(
-                                processed_search_steps,
-                                total_search_steps,
-                                {
-                                    "fold": int(fold_index),
-                                    "blend_weight": float(blend_weight),
-                                    "min_edge": float(min_edge),
-                                    "min_prob": float(min_prob),
-                                    "odds_min": float(odds_min),
-                                    "odds_max": float(odds_max),
-                                    "candidate_rows": int(len(candidate_rows)),
-                                },
-                            )
+                                now_monotonic = time.monotonic()
+                                if progress_callback is not None and _should_emit_checkpoint(
+                                    processed=processed_search_steps,
+                                    total=total_search_steps,
+                                    checkpoint_interval=checkpoint_interval,
+                                    now_monotonic=now_monotonic,
+                                    last_progress_at=last_progress_at,
+                                    max_silent_seconds=max_silent_seconds,
+                                ):
+                                    progress_callback(
+                                        processed_search_steps,
+                                        total_search_steps,
+                                        {
+                                            "fold": int(fold_index),
+                                            "strategy_kind": "portfolio",
+                                            "blend_weight": float(blend_weight),
+                                            "min_edge": float(min_edge),
+                                            "min_prob": float(min_prob),
+                                            "odds_min": float(odds_min),
+                                            "odds_max": float(odds_max),
+                                            "candidate_rows": int(len(candidate_rows)),
+                                        },
+                                    )
+                                    last_progress_at = now_monotonic
+                                if max_fold_elapsed_seconds is not None and max_fold_elapsed_seconds > 0 and (now_monotonic - fold_started_at) >= max_fold_elapsed_seconds:
+                                    raise RuntimeError(
+                                        f"wf feasibility fold {fold_index} exceeded max fold elapsed seconds "
+                                        f"({max_fold_elapsed_seconds:.0f}s); interrupted for operator review"
+                                    )
 
     failure_reason_counts = Counter(
         reason for row in candidate_rows for reason in row.get("gate_failures", [])
@@ -479,6 +557,8 @@ def main() -> int:
     parser.add_argument("--end-date", default=None)
     parser.add_argument("--wf-mode", choices=["fast", "full"], default="full")
     parser.add_argument("--wf-scheme", choices=["nested"], default="nested")
+    parser.add_argument("--max-silent-seconds", type=float, default=60.0)
+    parser.add_argument("--max-fold-elapsed-seconds", type=float, default=None)
     args = parser.parse_args()
 
     try:
@@ -584,6 +664,7 @@ def main() -> int:
                 log_progress(
                     "[wf-feasibility] "
                     f"fold={fold_index}/{len(nested_slices)} "
+                    f"strategy={checkpoint['strategy_kind']} "
                     f"search_step={processed}/{total} "
                     f"blend_weight={checkpoint['blend_weight']:.2f} "
                     f"min_edge={checkpoint['min_edge']:.2f} "
@@ -603,6 +684,8 @@ def main() -> int:
                 search_config=search_config,
                 mode=args.wf_mode,
                 progress_callback=report_fold_checkpoint,
+                max_silent_seconds=args.max_silent_seconds,
+                max_fold_elapsed_seconds=args.max_fold_elapsed_seconds,
             )
             fold_summaries.append(fold_summary)
             detail_rows.extend(fold_detail)
