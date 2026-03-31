@@ -85,6 +85,7 @@ NAR の formal read で分母つき bet-rate を必須にする標準は [nar_be
 NAR の issue comment / decision summary にそのまま使う read ひな形は [nar_formal_read_template.md](nar_formal_read_template.md) を使う。
 NAR baseline の first execution issue は [next_issue_local_nankan_baseline_formalization.md](next_issue_local_nankan_baseline_formalization.md) を使う。
 NAR baseline 完了後の denominator-first decision は [next_issue_nar_post_formal_read.md](next_issue_nar_post_formal_read.md) を使う。
+NAR の `wf_feasibility` runtime follow-up は [next_issue_nar_wf_runtime_followup.md](next_issue_nar_wf_runtime_followup.md) を使う。
 
 tail loader optimization の gate 運用は [tail_loader_equivalence_gate_standard.md](tail_loader_equivalence_gate_standard.md) を使う。
 
