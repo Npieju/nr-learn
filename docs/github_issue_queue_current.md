@@ -29,6 +29,8 @@ Primary active issue:
 - <https://github.com/Npieju/nr-learn/issues/52>
 - `#54`
 - <https://github.com/Npieju/nr-learn/issues/54>
+- `#57`
+- <https://github.com/Npieju/nr-learn/issues/57>
 - `#49`
 - <https://github.com/Npieju/nr-learn/issues/49>
 
@@ -37,6 +39,7 @@ Primary issue draft:
 - `docs/nar_model_transfer_strategy.md`
 - `docs/nar_bet_denominator_standard.md`
 - `docs/next_issue_local_nankan_baseline_formalization.md`
+- `docs/next_issue_nar_post_formal_read.md`
 - `docs/next_issue_jockey_trainer_combo_regime_extension.md`
 
 GitHub issue:
@@ -45,14 +48,16 @@ GitHub issue:
 - <https://github.com/Npieju/nr-learn/issues/52>
 - `#54`
 - <https://github.com/Npieju/nr-learn/issues/54>
+- `#57`
+- <https://github.com/Npieju/nr-learn/issues/57>
 - `#49`
 - <https://github.com/Npieju/nr-learn/issues/49>
 
 Primary next execution order:
 
 1. `#54` で local Nankan baseline の first formal artifact を出す
-2. `bets / races / bet-rate` を NAR line の mandatory read として残す
-3. JRA の `#49` family は promoted-but-non-anchor read として一段止め、次の widening は NAR baseline の first read 後に再判断する
+2. `#57` で `bets / races / bet-rate` を NAR line の mandatory read として final 化する
+3. JRA の `#49` family は promoted-but-non-anchor read として一段止め、次の widening は NAR baseline の first formal read 後に再判断する
 
 Side universe track:
 
