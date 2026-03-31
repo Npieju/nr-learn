@@ -82,6 +82,7 @@ execution が resource pressure で止まる場合は [next_issue_jockey_trainer
 first promoted child の role decision は [next_issue_jockey_trainer_combo_role_split.md](next_issue_jockey_trainer_combo_role_split.md) を使う。
 NAR を JRA と無理に統合せず別 universe として進める標準は [nar_model_transfer_strategy.md](nar_model_transfer_strategy.md) を使う。
 NAR の formal read で分母つき bet-rate を必須にする標準は [nar_bet_denominator_standard.md](nar_bet_denominator_standard.md) を使う。
+NAR の issue comment / decision summary にそのまま使う read ひな形は [nar_formal_read_template.md](nar_formal_read_template.md) を使う。
 NAR baseline の first execution issue は [next_issue_local_nankan_baseline_formalization.md](next_issue_local_nankan_baseline_formalization.md) を使う。
 
 tail loader optimization の gate 運用は [tail_loader_equivalence_gate_standard.md](tail_loader_equivalence_gate_standard.md) を使う。
