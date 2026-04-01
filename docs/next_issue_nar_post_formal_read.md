@@ -41,3 +41,9 @@ local Nankan baseline の final support / promotion artifact を denominator-fir
 - `bets / races / bet-rate` を明示した formal read が残る
 - support / exposure / ROI をまとめて読んだ decision summary が残る
 - next NAR child issue が 1 measurable hypothesis に narrow される
+
+## Decision Summary
+
+NAR baseline の first denominator-first formal read は `pass / promote` で確定した。current best line は `configs/model_local_baseline_wf_runtime_narrow.yaml` で、formal read は `3525 / 28997 races = 12.16%`, `weighted_roi=3.6903`, `wf_feasible_fold_count=3` だった。
+
+次の NAR family は broad widening ではなく `class/rest/surface` の narrow replay にする。理由は、baseline に jockey/trainer history はすでに入っている一方で、JRA Tier A family の core な class/rest/surface はまだ NAR baseline に入っていないためである。

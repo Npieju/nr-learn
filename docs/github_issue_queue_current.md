@@ -27,12 +27,8 @@ Primary active issue:
 
 - `#52`
 - <https://github.com/Npieju/nr-learn/issues/52>
-- `#54`
-- <https://github.com/Npieju/nr-learn/issues/54>
-- `#57`
-- <https://github.com/Npieju/nr-learn/issues/57>
-- `#58`
-- <https://github.com/Npieju/nr-learn/issues/58>
+- `#61`
+- <https://github.com/Npieju/nr-learn/issues/61>
 - `#60`
 - <https://github.com/Npieju/nr-learn/issues/60>
 - `#49`
@@ -45,7 +41,9 @@ Primary issue draft:
 - `docs/next_issue_local_nankan_baseline_formalization.md`
 - `docs/next_issue_nar_post_formal_read.md`
 - `docs/next_issue_nar_wf_runtime_followup.md`
+- `docs/next_issue_nar_class_rest_surface_replay.md`
 - `configs/model_local_baseline_wf_runtime_narrow.yaml`
+- `configs/features_local_baseline_class_rest_surface_replay.yaml`
 - `#60` で long-running job の live progress を repo 内 log file に tee し、VS Code から確認できる operator path を作る
 - `docs/next_issue_jockey_trainer_combo_regime_extension.md`
 
@@ -53,12 +51,8 @@ GitHub issue:
 
 - `#52`
 - <https://github.com/Npieju/nr-learn/issues/52>
-- `#54`
-- <https://github.com/Npieju/nr-learn/issues/54>
-- `#57`
-- <https://github.com/Npieju/nr-learn/issues/57>
-- `#58`
-- <https://github.com/Npieju/nr-learn/issues/58>
+- `#61`
+- <https://github.com/Npieju/nr-learn/issues/61>
 - `#60`
 - <https://github.com/Npieju/nr-learn/issues/60>
 - `#49`
@@ -66,11 +60,9 @@ GitHub issue:
 
 Primary next execution order:
 
-1. `#57` で denominator-first NAR formal read を正本化し、next family を 1 本に narrow する
-2. `#58` で runtime-narrow line を current best NAR support diagnostic path として固定する
-3. `#54` は first formal NAR baseline execution 完了として decision summary を締める
-4. `#60` で long-running job の live progress を file-backed log に出し、VS Code から operator が追えるようにする
-5. JRA の `#49` family は promoted-but-non-anchor read として一段止め、次の widening は NAR baseline の first formal read 後に再判断する
+1. `#61` で class/rest/surface の narrow replay を first NAR feature family として formalize する
+2. `#60` で long-running job の live progress を file-backed log に出し、VS Code から operator が追えるようにする
+3. JRA の `#49` family は promoted-but-non-anchor read として一段止め、次の widening は NAR first replay family の formal read 後に再判断する
 
 Side universe track:
 

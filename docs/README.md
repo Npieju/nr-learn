@@ -87,6 +87,7 @@ NAR baseline の first execution issue は [next_issue_local_nankan_baseline_for
 NAR baseline 完了後の denominator-first decision は [next_issue_nar_post_formal_read.md](next_issue_nar_post_formal_read.md) を使う。
 NAR の `wf_feasibility` runtime follow-up は [next_issue_nar_wf_runtime_followup.md](next_issue_nar_wf_runtime_followup.md) を使う。
 NAR の runtime compare 候補 config は [model_local_baseline_wf_runtime_narrow.yaml](../configs/model_local_baseline_wf_runtime_narrow.yaml) を起点にする。
+NAR の first feature-family replay は [next_issue_nar_class_rest_surface_replay.md](next_issue_nar_class_rest_surface_replay.md) を使い、candidate feature config は [features_local_baseline_class_rest_surface_replay.yaml](../configs/features_local_baseline_class_rest_surface_replay.yaml) を起点にする。
 
 tail loader optimization の gate 運用は [tail_loader_equivalence_gate_standard.md](tail_loader_equivalence_gate_standard.md) を使う。
 
