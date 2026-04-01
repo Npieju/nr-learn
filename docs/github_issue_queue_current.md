@@ -27,8 +27,8 @@ Primary active issue:
 
 - `#52`
 - <https://github.com/Npieju/nr-learn/issues/52>
-- `#63`
-- <https://github.com/Npieju/nr-learn/issues/63>
+- `#64`
+- <https://github.com/Npieju/nr-learn/issues/64>
 - `#60`
 - <https://github.com/Npieju/nr-learn/issues/60>
 - `#49`
@@ -44,6 +44,7 @@ Primary issue draft:
 - `docs/next_issue_nar_class_rest_surface_replay.md`
 - `docs/next_issue_nar_class_rest_surface_availability_audit.md`
 - `docs/next_issue_nar_selection_fix_for_buildable_replay.md`
+- `docs/next_issue_nar_jockey_trainer_combo_replay.md`
 - `configs/model_local_baseline_wf_runtime_narrow.yaml`
 - `configs/features_local_baseline_class_rest_surface_replay.yaml`
 - `#60` で long-running job の live progress を repo 内 log file に tee し、VS Code から確認できる operator path を作る
@@ -53,8 +54,8 @@ GitHub issue:
 
 - `#52`
 - <https://github.com/Npieju/nr-learn/issues/52>
-- `#63`
-- <https://github.com/Npieju/nr-learn/issues/63>
+- `#64`
+- <https://github.com/Npieju/nr-learn/issues/64>
 - `#60`
 - <https://github.com/Npieju/nr-learn/issues/60>
 - `#49`
@@ -62,9 +63,9 @@ GitHub issue:
 
 Primary next execution order:
 
-1. `#63` で buildable な class/rest features 3 本を selected set に載せる selection fix を入れる
+1. `#64` で NAR の next replay family を `jockey / trainer / combo` に移し、baseline narrow と denominator-first で formal compare する
 2. `#60` で long-running job の live progress を file-backed log に出し、VS Code から operator が追えるようにする
-3. JRA の `#49` family は promoted-but-non-anchor read として一段止め、次の widening は NAR replay audit の formal read 後に再判断する
+3. JRA の `#49` family は promoted-but-non-anchor read として一段止め、次の widening は NAR next-family formal read の後に再判断する
 
 Side universe track:
 

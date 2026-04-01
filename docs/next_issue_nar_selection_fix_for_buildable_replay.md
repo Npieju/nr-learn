@@ -52,3 +52,28 @@ if explicit feature selection が `features.base/history/include` 以外の decl
 
 - fix が既存 JRA configs の semantics を広く変えてしまう
 - buildable 3 features を入れても support / exposure が baseline より明確に悪化する
+
+## Final Read
+
+`#63` では selection fix 自体は成功した。train manifest の used feature set は baseline 13 本から 16 本へ増え、次の 3 features が actual candidate に入った。
+
+- `horse_days_since_last_race`
+- `horse_weight_change`
+- `horse_distance_change`
+
+一方で formal compare は baseline を下回った。
+
+- baseline narrow:
+  - `auc=0.8775353752835744`
+  - `ev_top1_roi=1.940849373663306`
+  - `formal_benchmark_weighted_roi=3.6903437891931246`
+  - `formal_benchmark_bets_total=3525`
+  - `wf_feasible_fold_count=3`
+- replay v2 selection fix:
+  - `auc=0.8737311965910113`
+  - `ev_top1_roi=0.37983501374885426`
+  - `formal_benchmark_weighted_roi=1.011422845691383`
+  - `formal_benchmark_bets_total=499`
+  - `wf_feasible_fold_count=1`
+
+race 分母 `9819` に対する formal bet 率も `35.90% -> 5.08%` まで落ちていて、support / exposure とも baseline 劣後である。したがって `#63` は selection-fix issue として close し、feature promotion は行わない。
