@@ -64,6 +64,23 @@ def _count_strategy_evals_per_outer_step(
     )
 
 
+def _count_outer_search_steps(
+    *,
+    blend_candidates: list[float],
+    edge_candidates: list[float],
+    min_prob_candidates: list[float],
+    odds_min_candidates: list[float],
+    odds_max_candidates: list[float],
+) -> int:
+    return (
+        len(blend_candidates)
+        * len(edge_candidates)
+        * len(min_prob_candidates)
+        * len(odds_min_candidates)
+        * len(odds_max_candidates)
+    )
+
+
 def _should_emit_checkpoint(
     *,
     processed: int,
@@ -191,6 +208,7 @@ def _summarize_fold_candidates(
     constraints: PolicyConstraints,
     search_config: dict[str, object] | None,
     mode: str,
+    search_space_callback: Callable[[dict[str, object]], None] | None = None,
     progress_callback: Callable[[int, int, dict[str, object]], None] | None = None,
     max_silent_seconds: float | None = None,
     max_fold_elapsed_seconds: float | None = None,
@@ -274,23 +292,40 @@ def _summarize_fold_candidates(
     best_feasible_score = float("-inf")
     best_fallback: dict[str, object] | None = None
     best_fallback_score = float("-inf")
-    outer_search_steps = (
-        len(blend_candidates)
-        * len(edge_candidates)
-        * len(min_prob_candidates)
-        * len(odds_min_candidates)
-        * len(odds_max_candidates)
+    outer_search_steps = _count_outer_search_steps(
+        blend_candidates=blend_candidates,
+        edge_candidates=edge_candidates,
+        min_prob_candidates=min_prob_candidates,
+        odds_min_candidates=odds_min_candidates,
+        odds_max_candidates=odds_max_candidates,
     )
-    total_search_steps = outer_search_steps * _count_strategy_evals_per_outer_step(
+    strategy_evals_per_outer_step = _count_strategy_evals_per_outer_step(
         kelly_frac_candidates=kelly_frac_candidates,
         max_frac_candidates=max_frac_candidates,
         top_k_candidates=top_k_candidates,
         min_ev_candidates=min_ev_candidates,
     )
+    total_search_steps = outer_search_steps * strategy_evals_per_outer_step
+    search_space = {
+        "blend_weights": int(len(blend_candidates)),
+        "min_edges": int(len(edge_candidates)),
+        "min_probabilities": int(len(min_prob_candidates)),
+        "odds_mins": int(len(odds_min_candidates)),
+        "odds_maxs": int(len(odds_max_candidates)),
+        "fractional_kelly_values": int(len(kelly_frac_candidates)),
+        "max_fraction_values": int(len(max_frac_candidates)),
+        "top_ks": int(len(top_k_candidates)),
+        "min_expected_values": int(len(min_ev_candidates)),
+        "outer_search_steps": int(outer_search_steps),
+        "strategy_evals_per_outer_step": int(strategy_evals_per_outer_step),
+        "total_search_steps": int(total_search_steps),
+    }
     processed_search_steps = 0
     checkpoint_interval = max(1, total_search_steps // 16)
     fold_started_at = time.monotonic()
     last_progress_at = fold_started_at
+    if search_space_callback is not None:
+        search_space_callback(search_space)
 
     for blend_weight in blend_candidates:
         valid_df["blend_prob"] = blend_prob(valid_df["iso_prob"], valid_df["market_prob"], float(blend_weight))
@@ -530,6 +565,7 @@ def _summarize_fold_candidates(
         "test_races": int(test_df["race_id"].nunique()),
         "min_bets_required": int(min_bets_required),
         "total_candidates": int(len(candidate_rows)),
+        "search_space": search_space,
         "feasible_candidates": int(sum(1 for row in candidate_rows if bool(row.get("is_feasible")))),
         "feasible_by_strategy": dict(feasible_by_strategy),
         "failure_reason_counts": dict(failure_reason_counts),
@@ -660,6 +696,15 @@ def main() -> int:
             print(f"[wf-feasibility] analyzing fold {fold_index}/{len(nested_slices)}")
             fold_started_at = time.monotonic()
 
+            def report_fold_search_space(search_space: dict[str, object]) -> None:
+                log_progress(
+                    "[wf-feasibility] "
+                    f"fold={fold_index}/{len(nested_slices)} "
+                    f"search_space outer={search_space.get('outer_search_steps')} "
+                    f"strategy_evals_per_outer={search_space.get('strategy_evals_per_outer_step')} "
+                    f"total={search_space.get('total_search_steps')}"
+                )
+
             def report_fold_checkpoint(processed: int, total: int, checkpoint: dict[str, object]) -> None:
                 log_progress(
                     "[wf-feasibility] "
@@ -683,6 +728,7 @@ def main() -> int:
                 constraints=constraints,
                 search_config=search_config,
                 mode=args.wf_mode,
+                search_space_callback=report_fold_search_space,
                 progress_callback=report_fold_checkpoint,
                 max_silent_seconds=args.max_silent_seconds,
                 max_fold_elapsed_seconds=args.max_fold_elapsed_seconds,

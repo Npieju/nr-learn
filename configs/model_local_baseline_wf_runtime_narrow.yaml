@@ -1,0 +1,50 @@
+task: "classification"
+label: "is_win"
+
+model:
+  name: "lightgbm"
+  params:
+    objective: "binary"
+    device_type: "cuda"
+    learning_rate: 0.03
+    num_leaves: 64
+    min_data_in_leaf: 50
+    feature_fraction: 0.8
+    bagging_fraction: 0.8
+    bagging_freq: 1
+    n_estimators: 2000
+
+training:
+  cv: "expanding_window"
+  early_stopping_rounds: 100
+  max_train_rows: 300000
+  max_valid_rows: 100000
+  allow_fallback_model: false
+
+evaluation:
+  leakage_audit:
+    enabled: true
+  policy:
+    selection_mode: "gate_then_roi"
+    min_bet_ratio: 0.05
+    min_bets_abs: 100
+    max_drawdown: 0.45
+    min_final_bankroll: 0.85
+  policy_search:
+    full:
+      blend_weights: [0.2, 0.4]
+      min_edges: [0.01, 0.03, 0.05]
+      min_probabilities: [0.03, 0.05]
+      fractional_kelly_values: [0.25]
+      max_fraction_values: [0.02]
+      odds_mins: [1.0]
+      odds_maxs: [25.0, 40.0]
+      top_ks: [1]
+      min_expected_values: [1.0, 1.05]
+
+output:
+  model_dir: "artifacts/models"
+  report_dir: "artifacts/reports"
+  model_file: "local_nankan_baseline_model.joblib"
+  report_file: "train_metrics_local_nankan.json"
+  manifest_file: "local_nankan_baseline_model.manifest.json"

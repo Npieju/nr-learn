@@ -3,12 +3,23 @@ from __future__ import annotations
 import unittest
 
 from scripts.run_wf_feasibility_diag import (
+    _count_outer_search_steps,
     _count_strategy_evals_per_outer_step,
     _should_emit_checkpoint,
 )
 
 
 class WfFeasibilityProgressHelpersTest(unittest.TestCase):
+    def test_count_outer_search_steps_counts_grid(self) -> None:
+        total = _count_outer_search_steps(
+            blend_candidates=[0.2, 0.4],
+            edge_candidates=[0.01, 0.03, 0.05],
+            min_prob_candidates=[0.03, 0.05],
+            odds_min_candidates=[1.0],
+            odds_max_candidates=[25.0, 40.0],
+        )
+        self.assertEqual(total, 24)
+
     def test_count_strategy_evals_per_outer_step_counts_inner_trials(self) -> None:
         total = _count_strategy_evals_per_outer_step(
             kelly_frac_candidates=[0.25, 0.5],

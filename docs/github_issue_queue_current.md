@@ -45,6 +45,7 @@ Primary issue draft:
 - `docs/next_issue_local_nankan_baseline_formalization.md`
 - `docs/next_issue_nar_post_formal_read.md`
 - `docs/next_issue_nar_wf_runtime_followup.md`
+- `configs/model_local_baseline_wf_runtime_narrow.yaml`
 - `#60` で long-running job の live progress を repo 内 log file に tee し、VS Code から確認できる operator path を作る
 - `docs/next_issue_jockey_trainer_combo_regime_extension.md`
 
