@@ -67,8 +67,8 @@ GitHub issue:
 Primary next execution order:
 
 1. `#54` で local Nankan baseline の first formal artifact を出す
-2. `#57` で `bets / races / bet-rate` を NAR line の mandatory read として final 化する
-3. `#58` で NAR support diagnostics の runtime bottleneck を separate track として保持する
+2. `#58` で NAR support diagnostics の runtime bottleneck を narrow config compare まで進める
+3. `#57` で matching-tuple rerun を前提に `bets / races / bet-rate` を NAR line の mandatory read として final 化する
 4. `#60` で long-running job の live progress を file-backed log に出し、VS Code から operator が追えるようにする
 5. JRA の `#49` family は promoted-but-non-anchor read として一段止め、次の widening は NAR baseline の first formal read 後に再判断する
 

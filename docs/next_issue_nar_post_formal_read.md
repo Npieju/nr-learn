@@ -16,12 +16,17 @@ local Nankan baseline の final support / promotion artifact を denominator-fir
 - `wf_nested_test_bets_total=381` は interim read として出ている
 - ただし正式な `bets / races / bet-rate` は support / promotion artifact 未出力のため未確定
 - NAR では JRA よりも低 exposure high-ROI の読み違いを厳しく避ける必要がある
+- `#58` の narrow runtime line は完走しており、support read 自体は strong
+- ただし narrow `wf_summary` を baseline `evaluation_manifest` に組み合わせると config tuple mismatch で promotion gate は block になる
+- したがって denominator-first final read を確定するには、`configs/model_local_baseline_wf_runtime_narrow.yaml` を使った matching-tuple rerun が必要
 
 ## In Scope
 
 - `artifacts/reports/wf_feasibility_diag_r20260330_local_nankan_baseline_v1.json`
 - `artifacts/reports/promotion_gate_r20260330_local_nankan_baseline_v1.json`
 - `artifacts/reports/evaluation_summary_local_nankan_baseline_model_r20260330_local_nankan_baseline_v1.json`
+- `artifacts/reports/wf_feasibility_diag_local_baseline_wf_runtime_narrow_wf_full_nested.json`
+- `artifacts/reports/promotion_gate_r20260330_local_nankan_baseline_wf_runtime_narrow_v1.json`
 - `docs/nar_formal_read_template.md`
 - NAR next-family decision
 
