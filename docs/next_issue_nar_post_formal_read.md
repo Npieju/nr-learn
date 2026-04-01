@@ -13,12 +13,12 @@ local Nankan baseline の final support / promotion artifact を denominator-fir
 ## Current Read
 
 - evaluation summary は already strong
-- `wf_nested_test_bets_total=381` は interim read として出ている
-- ただし正式な `bets / races / bet-rate` は support / promotion artifact 未出力のため未確定
+- matching-tuple rerun `r20260330_local_nankan_baseline_wf_runtime_narrow_v1` が完了した
+- formal read は `bets_total=3525`, `test_races_total=28997`, `bet_rate=12.16%`
+- promotion gate は `status=pass`, `decision=promote`, `wf_feasible_fold_count=3`, `formal_benchmark_weighted_roi=3.6903`
 - NAR では JRA よりも低 exposure high-ROI の読み違いを厳しく避ける必要がある
 - `#58` の narrow runtime line は完走しており、support read 自体は strong
-- ただし narrow `wf_summary` を baseline `evaluation_manifest` に組み合わせると config tuple mismatch で promotion gate は block になる
-- したがって denominator-first final read を確定するには、`configs/model_local_baseline_wf_runtime_narrow.yaml` を使った matching-tuple rerun が必要
+- runtime / denominator の両面で、`configs/model_local_baseline_wf_runtime_narrow.yaml` が current best line になった
 
 ## In Scope
 
