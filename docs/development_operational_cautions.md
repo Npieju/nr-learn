@@ -27,6 +27,7 @@
 - 長時間区間では heartbeat か定期進捗を出す
 - 完了時に completed message を出す
 - 失敗時に停止 phase が分かる
+- progress は possible な限り分母付きで出す
 - possible なら件数、fold、row、file、cycle などの進捗単位を出す
 - 重くなりうる task に unbounded な no-output 区間を残さない
 
@@ -34,6 +35,8 @@ bounded progress rule:
 
 - operator は長時間 task が「遅いだけ」なのか「落ちた / stuck した」のかをログだけで区別できなければならない
 - したがって heavy compute でも bounded interval で checkpoint を出す
+- checkpoint は `x/y`, `fold a/b`, `rows a/b`, `files a/b` のように、operator が全体に対する位置を読める形を優先する
+- 分母が出せない heartbeat 単独の行は、生存確認としては有効でも progress としては不十分とみなす
 - heartbeat だけでは phase 内 progress が読めない場合、fold / search_step / row / file / cycle などの中間 checkpoint を追加する
 - 目安として 60 秒を超える no-output 区間は未完成扱いにする
 - 60 秒以内でも、重い内側ループで数分無音になりうる設計は review で reject 候補にする
@@ -81,6 +84,11 @@ progress は単に大量ログを流せばよいわけではない。
 - high-frequency spam を避ける
 
 良い progress は「今どこか」「どれくらい進んだか」「何で止まったか」を短時間で伝えられる。
+
+最低でも次のどちらかを満たすべきである。
+
+- 明示的な分母付き progress がある
+- 分母をまだ出せない理由と、次に分母付き progress が出る境界が明示されている
 
 ### 2.3 Dry-Run Is Preferred Before Formal Execution
 

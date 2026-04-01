@@ -112,6 +112,7 @@ AI に任せる作業でも、最低限の契約を固定する。
 - docs only 変更でも、次の operator action が明確であること
 - 数秒で終わらない source を追加・更新する場合は progress を必須にする
 - 重い task は bounded progress output を持ち、60 秒超の no-output 区間を残さない
+- progress は生存確認だけでなく、可能な限り分母付きの全体進捗を示す
 - 重い task は bounded interrupt rule も持ち、長時間 silent のまま無制限に走らせない
 - equivalence harness を持つ optimization は、accepted gate mode を docs に固定する
 
@@ -165,6 +166,7 @@ AI coding の標準は [ai_coding_best_practices.md](ai_coding_best_practices.md
 - 基本的に自動 coding を第一選択にする
 - ただし issue が AI-ready でない仕事は、先に issue 整形から始める
 - 数秒超の long-running source は progress / heartbeat / completion を持たせる
+- progress は `x/y` や `fold a/b` のような分母付き表現を優先し、heartbeat 単独で代用しない
 
 ## 13. Source Notes
 
