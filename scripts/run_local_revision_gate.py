@@ -5,6 +5,7 @@ from pathlib import Path
 import shlex
 import subprocess
 import sys
+import threading
 import time
 import traceback
 
@@ -59,6 +60,10 @@ def _default_log_path(*, revision_slug: str) -> Path:
     return ROOT / "artifacts" / "logs" / f"local_revision_gate_{revision_slug}.log"
 
 
+def _default_revision_gate_log_path(*, revision_slug: str) -> Path:
+    return ROOT / "artifacts" / "logs" / f"revision_gate_{revision_slug}.log"
+
+
 def _configure_live_log(log_path: Path) -> None:
     artifact_ensure_output_file_path(log_path, label="run log", workspace_root=ROOT)
     log_path.parent.mkdir(parents=True, exist_ok=True)
@@ -69,6 +74,44 @@ def _configure_live_log(log_path: Path) -> None:
         f"[local-revision-gate] live log file: {artifact_display_path(log_path, workspace_root=ROOT)}",
         flush=True,
     )
+
+
+class _FileRelay:
+    def __init__(self, path: Path) -> None:
+        self._path = path
+        self._stop = threading.Event()
+        self._thread: threading.Thread | None = None
+        self._offset = path.stat().st_size if path.exists() else 0
+
+    def start(self) -> None:
+        self._thread = threading.Thread(target=self._run, daemon=True)
+        self._thread.start()
+
+    def stop(self) -> None:
+        self._stop.set()
+        if self._thread is not None:
+            self._thread.join(timeout=5.0)
+        self._drain_once()
+
+    def _drain_once(self) -> None:
+        if not self._path.exists():
+            return
+        try:
+            with self._path.open("r", encoding="utf-8", errors="replace") as handle:
+                handle.seek(self._offset)
+                while True:
+                    line = handle.readline()
+                    if not line:
+                        break
+                    self._offset = handle.tell()
+                    print(line, end="", flush=True)
+        except OSError:
+            return
+
+    def _run(self) -> None:
+        while not self._stop.is_set():
+            self._drain_once()
+            self._stop.wait(1.0)
 
 
 def _resolve_path(path_text: str | Path) -> Path:
@@ -102,11 +145,24 @@ def _set_failure(
     payload["recommended_action"] = recommended_action
 
 
-def _run_command(command: list[str], *, label: str) -> dict[str, object]:
+def _run_command(command: list[str], *, label: str, relay_log_path: Path | None = None) -> dict[str, object]:
     started_at = utc_now_iso()
     printable = shlex.join(command)
     print(f"[local-revision-gate] running {label}: {printable}", flush=True)
-    result = subprocess.run(command, cwd=ROOT, check=False)
+    relay: _FileRelay | None = None
+    if relay_log_path is not None:
+        print(
+            "[local-revision-gate] "
+            f"{label} child log: {artifact_display_path(relay_log_path, workspace_root=ROOT)}",
+            flush=True,
+        )
+        relay = _FileRelay(relay_log_path)
+        relay.start()
+    try:
+        result = subprocess.run(command, cwd=ROOT, check=False)
+    finally:
+        if relay is not None:
+            relay.stop()
     finished_at = utc_now_iso()
     return {
         "label": label,
@@ -774,6 +830,7 @@ def main() -> int:
     promotion_path = _resolve_path(promotion_output)
     revision_manifest_path = _resolve_path(revision_manifest_output)
     wf_summary_path = _resolve_path(wf_summary_output)
+    revision_gate_log_path = _default_revision_gate_log_path(revision_slug=revision_slug)
     materialize_manifest_path = _resolve_path(materialize_manifest_output)
     backfill_wrapper_path = _resolve_path(backfill_wrapper_output)
     backfill_manifest_path = _resolve_path(backfill_manifest_output)
@@ -834,6 +891,7 @@ def main() -> int:
             "evaluation_pointer": artifact_display_path(evaluation_pointer_path, workspace_root=ROOT),
             "promotion_output": artifact_display_path(promotion_path, workspace_root=ROOT),
             "revision_manifest": artifact_display_path(revision_manifest_path, workspace_root=ROOT),
+            "revision_gate_run_log": artifact_display_path(revision_gate_log_path, workspace_root=ROOT),
             "wf_summary": artifact_display_path(wf_summary_path, workspace_root=ROOT),
             "lineage_manifest": artifact_display_path(lineage_path, workspace_root=ROOT),
         },
@@ -1116,6 +1174,8 @@ def main() -> int:
             wf_summary_output,
             "--manifest-output",
             revision_manifest_output,
+            "--log-file",
+            artifact_display_path(revision_gate_log_path, workspace_root=ROOT),
         ]
         if args.evaluate_pre_feature_max_rows is not None:
             revision_command.extend(["--evaluate-pre-feature-max-rows", str(args.evaluate_pre_feature_max_rows)])
@@ -1241,7 +1301,11 @@ def main() -> int:
             _refresh_summary_fields(payload)
         else:
             with Heartbeat("[local-revision-gate]", "running revision gate", logger=log_progress):
-                revision_result = _run_command(revision_command, label="revision_gate")
+                revision_result = _run_command(
+                    revision_command,
+                    label="revision_gate",
+                    relay_log_path=revision_gate_log_path,
+                )
             payload["revision_gate"] = revision_result
             revision_manifest_payload = _read_optional_json(revision_manifest_path)
             promotion_payload = _read_optional_json(promotion_path)
