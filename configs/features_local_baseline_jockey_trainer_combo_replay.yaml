@@ -1,0 +1,29 @@
+features:
+  base:
+    - age
+    - sex
+    - weight
+    - track
+    - distance
+    - weather
+    - ground_condition
+    - odds
+    - popularity
+  history:
+    - horse_last_3_avg_rank
+    - horse_last_5_win_rate
+    - jockey_last_30_win_rate
+    - trainer_last_30_win_rate
+  jockey_trainer_combo:
+    - jockey_trainer_combo_last_50_win_rate
+    - jockey_trainer_combo_last_50_avg_rank
+    - jockey_last_30_avg_closing_time_3f
+    - trainer_last_30_avg_closing_time_3f
+    - jockey_track_distance_last_50_win_rate
+    - jockey_track_distance_last_50_avg_rank
+    - trainer_track_distance_last_50_win_rate
+    - trainer_track_distance_last_50_avg_rank
+
+rules:
+  avoid_leakage: true
+  use_shift_for_rolling: true

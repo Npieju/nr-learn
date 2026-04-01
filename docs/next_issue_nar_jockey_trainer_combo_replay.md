@@ -26,6 +26,21 @@ if local Nankan baseline に `jockey / trainer / combo` の regime-aware replay 
   - `formal_benchmark_bets_total=499`
   - `wf_feasible_fold_count=1`
   - race-denominator bet rate `499 / 9819 = 5.08%`
+- first gap read for this family:
+  - selected candidate features before narrowing were `21`
+  - buildable and `selected=True` with `non_null_ratio > 0.91`:
+    - `jockey_trainer_combo_last_50_win_rate`
+    - `jockey_trainer_combo_last_50_avg_rank`
+    - `jockey_last_30_avg_closing_time_3f`
+    - `trainer_last_30_avg_closing_time_3f`
+    - `jockey_track_distance_last_50_win_rate`
+    - `jockey_track_distance_last_50_avg_rank`
+    - `trainer_track_distance_last_50_win_rate`
+    - `trainer_track_distance_last_50_avg_rank`
+  - not built:
+    - `jockey_last_30_avg_corner_gain_2_to_4`
+    - `trainer_last_30_avg_corner_gain_2_to_4`
+  - therefore the actual candidate is narrowed to the 8 buildable features above
 
 ## In Scope
 
