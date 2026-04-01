@@ -40,18 +40,32 @@ def log_progress(message: str) -> None:
 
 class _TeeStream:
     def __init__(self, *streams: object) -> None:
-        self._streams = streams
+        self._streams = list(streams)
 
     def write(self, data: str) -> int:
+        alive_streams: list[object] = []
         for stream in self._streams:
-            stream.write(data)
+            try:
+                stream.write(data)
+                alive_streams.append(stream)
+            except (BrokenPipeError, OSError, ValueError):
+                continue
+        self._streams = alive_streams
         return len(data)
 
     def flush(self) -> None:
+        alive_streams: list[object] = []
         for stream in self._streams:
-            stream.flush()
+            try:
+                stream.flush()
+                alive_streams.append(stream)
+            except (BrokenPipeError, OSError, ValueError):
+                continue
+        self._streams = alive_streams
 
     def isatty(self) -> bool:
+        if not self._streams:
+            return False
         primary = self._streams[0]
         return bool(getattr(primary, "isatty", lambda: False)())
 
