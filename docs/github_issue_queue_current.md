@@ -27,8 +27,8 @@ Primary active issue:
 
 - `#52`
 - <https://github.com/Npieju/nr-learn/issues/52>
-- `#61`
-- <https://github.com/Npieju/nr-learn/issues/61>
+- `#62`
+- <https://github.com/Npieju/nr-learn/issues/62>
 - `#60`
 - <https://github.com/Npieju/nr-learn/issues/60>
 - `#49`
@@ -42,6 +42,7 @@ Primary issue draft:
 - `docs/next_issue_nar_post_formal_read.md`
 - `docs/next_issue_nar_wf_runtime_followup.md`
 - `docs/next_issue_nar_class_rest_surface_replay.md`
+- `docs/next_issue_nar_class_rest_surface_availability_audit.md`
 - `configs/model_local_baseline_wf_runtime_narrow.yaml`
 - `configs/features_local_baseline_class_rest_surface_replay.yaml`
 - `#60` で long-running job の live progress を repo 内 log file に tee し、VS Code から確認できる operator path を作る
@@ -51,8 +52,8 @@ GitHub issue:
 
 - `#52`
 - <https://github.com/Npieju/nr-learn/issues/52>
-- `#61`
-- <https://github.com/Npieju/nr-learn/issues/61>
+- `#62`
+- <https://github.com/Npieju/nr-learn/issues/62>
 - `#60`
 - <https://github.com/Npieju/nr-learn/issues/60>
 - `#49`
@@ -60,9 +61,9 @@ GitHub issue:
 
 Primary next execution order:
 
-1. `#61` で class/rest/surface の narrow replay を first NAR feature family として formalize する
+1. `#62` で class/rest/surface replay の no-op 要因を availability / selection で切り分ける
 2. `#60` で long-running job の live progress を file-backed log に出し、VS Code から operator が追えるようにする
-3. JRA の `#49` family は promoted-but-non-anchor read として一段止め、次の widening は NAR first replay family の formal read 後に再判断する
+3. JRA の `#49` family は promoted-but-non-anchor read として一段止め、次の widening は NAR replay audit の formal read 後に再判断する
 
 Side universe track:
 
