@@ -89,6 +89,7 @@ NAR の `wf_feasibility` runtime follow-up は [next_issue_nar_wf_runtime_follow
 NAR の runtime compare 候補 config は [model_local_baseline_wf_runtime_narrow.yaml](../configs/model_local_baseline_wf_runtime_narrow.yaml) を起点にする。
 NAR の first feature-family replay は [next_issue_nar_class_rest_surface_replay.md](next_issue_nar_class_rest_surface_replay.md) を使い、candidate feature config は [features_local_baseline_class_rest_surface_replay.yaml](../configs/features_local_baseline_class_rest_surface_replay.yaml) を起点にする。
 NAR replay が no-op だった場合の feature-level 切り分けは [next_issue_nar_class_rest_surface_availability_audit.md](next_issue_nar_class_rest_surface_availability_audit.md) を使う。
+build 済み replay features を actual candidate に戻す selection fix は [next_issue_nar_selection_fix_for_buildable_replay.md](next_issue_nar_selection_fix_for_buildable_replay.md) を使う。
 
 tail loader optimization の gate 運用は [tail_loader_equivalence_gate_standard.md](tail_loader_equivalence_gate_standard.md) を使う。
 

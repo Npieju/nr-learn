@@ -96,6 +96,13 @@ def _normalize_string_list(values: Any) -> list[str]:
     return normalized
 
 
+def _collect_declared_feature_candidates(features_cfg: dict[str, Any]) -> list[str]:
+    candidates: list[str] = []
+    for _, values in features_cfg.items():
+        candidates.extend(_normalize_string_list(values))
+    return candidates
+
+
 def _looks_like_history_feature(column_name: str) -> bool:
     lower_name = column_name.lower()
     return ("last_" in lower_name) or lower_name.startswith("prev_")
@@ -140,9 +147,6 @@ def resolve_feature_selection(
     selection_cfg = feature_config.get("selection", {})
     mode = str(selection_cfg.get("mode", "explicit")).strip().lower() or "explicit"
 
-    base_columns = _normalize_string_list(features_cfg.get("base", []))
-    history_columns = _normalize_string_list(features_cfg.get("history", []))
-    explicit_includes = _normalize_string_list(features_cfg.get("include", []))
     force_include_columns = _normalize_string_list(selection_cfg.get("force_include_columns", []))
 
     excluded_columns = {
@@ -160,7 +164,7 @@ def resolve_feature_selection(
     ]
 
     if mode == "explicit":
-        candidates = [*base_columns, *history_columns, *explicit_includes]
+        candidates = _collect_declared_feature_candidates(features_cfg)
     elif mode in {"all_safe", "all_usable"}:
         candidates = list(frame.columns)
     else:
