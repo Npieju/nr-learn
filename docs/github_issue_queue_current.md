@@ -27,8 +27,6 @@ Primary active issue:
 
 - `#52`
 - <https://github.com/Npieju/nr-learn/issues/52>
-- `#64`
-- <https://github.com/Npieju/nr-learn/issues/64>
 - `#60`
 - <https://github.com/Npieju/nr-learn/issues/60>
 - `#49`
@@ -45,6 +43,7 @@ Primary issue draft:
 - `docs/next_issue_nar_class_rest_surface_availability_audit.md`
 - `docs/next_issue_nar_selection_fix_for_buildable_replay.md`
 - `docs/next_issue_nar_jockey_trainer_combo_replay.md`
+- `docs/next_issue_nar_wf_summary_path_alignment.md`
 - `configs/model_local_baseline_wf_runtime_narrow.yaml`
 - `configs/features_local_baseline_class_rest_surface_replay.yaml`
 - `#60` で long-running job の live progress を repo 内 log file に tee し、VS Code から確認できる operator path を作る
@@ -54,8 +53,6 @@ GitHub issue:
 
 - `#52`
 - <https://github.com/Npieju/nr-learn/issues/52>
-- `#64`
-- <https://github.com/Npieju/nr-learn/issues/64>
 - `#60`
 - <https://github.com/Npieju/nr-learn/issues/60>
 - `#49`
@@ -63,9 +60,9 @@ GitHub issue:
 
 Primary next execution order:
 
-1. `#64` で NAR の next replay family を `jockey / trainer / combo` に移し、baseline narrow と denominator-first で formal compare する
+1. NAR `jockey / trainer / combo` replay の formal result は確定済みなので、次は `docs/next_issue_nar_wf_summary_path_alignment.md` で revision gate と `wf_summary` output path の不一致を直す
 2. `#60` で long-running job の live progress を file-backed log に出し、VS Code から operator が追えるようにする
-3. JRA の `#49` family は promoted-but-non-anchor read として一段止め、次の widening は NAR next-family formal read の後に再判断する
+3. JRA の `#49` family は promoted-but-non-anchor read として一段止め、次の widening は NAR ops path 修正の後に再判断する
 
 Side universe track:
 
