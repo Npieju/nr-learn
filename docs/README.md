@@ -20,7 +20,7 @@
 4. [command_reference.md](command_reference.md)
 5. [benchmarks.md](benchmarks.md)
 
-対外説明が必要なら [public_benchmark_snapshot.md](public_benchmark_snapshot.md) を追加で読む。実装の中身まで入る必要がある場合だけ [system_architecture.md](system_architecture.md) を読む。
+対外説明が必要なら [public_benchmark_snapshot.md](public_benchmark_snapshot.md) と [public_benchmark_operational_reading_guide.md](public_benchmark_operational_reading_guide.md) を追加で読む。実装の中身まで入る必要がある場合だけ [system_architecture.md](system_architecture.md) を読む。
 
 latest 2025 の actual-date compare を再開したいだけなら、次の 3 段で足りる。
 
@@ -140,6 +140,8 @@ tail loader optimization の gate 運用は [tail_loader_equivalence_gate_standa
   - 実コードに対応したシステム構成、主要モジュール、学習から serving までの流れを整理した技術資料。
 - [public_benchmark_snapshot.md](public_benchmark_snapshot.md)
   - 対外説明で使う current benchmark の要約と、現在の採用位置づけをまとめた公開向け snapshot。
+- [public_benchmark_operational_reading_guide.md](public_benchmark_operational_reading_guide.md)
+  - 対外説明で benchmark 数字と operational role の関係を読むための公開向けガイド。
 
 ### 補助資料
 
@@ -161,6 +163,7 @@ tail loader optimization の gate 運用は [tail_loader_equivalence_gate_standa
 - baseline / candidate の位置づけが変わったら [project_overview.md](project_overview.md) を更新する。
 - 採用基準や formal result の読み方が変わったら [benchmarks.md](benchmarks.md) と [evaluation_guide.md](evaluation_guide.md) を更新する。
 - 対外説明に出す数値が変わったら [public_benchmark_snapshot.md](public_benchmark_snapshot.md) を更新する。
+- benchmark 数字と運用上の位置づけの説明順が変わったら [public_benchmark_operational_reading_guide.md](public_benchmark_operational_reading_guide.md) も更新する。
 - 実行手順や Git 運用が変わったら [development_flow.md](development_flow.md) と [command_reference.md](command_reference.md) を更新する。
 
 ## コードの入口

@@ -4,6 +4,8 @@
 
 この文書は、`nr-learn` の現状を対外向けに説明するときに使う benchmark snapshot である。
 
+benchmark 数字と operational role の関係そのものを説明するときは、この文書ではなく [public_benchmark_operational_reading_guide.md](public_benchmark_operational_reading_guide.md) を正本にする。
+
 内部運用の gate 条件、fold ごとの失敗理由、候補の棄却履歴まではここに持ち込まない。そうした内部向け判断材料は [benchmarks.md](benchmarks.md)、[evaluation_guide.md](evaluation_guide.md)、[roadmap.md](roadmap.md) を正本とする。
 
 internal reader が latest 2025 actual-date compare を再開したい場合は、この文書ではなく `serving_validation_guide.md` の dashboard summary JSON 一覧から入り、必要なときだけ `command_reference.md` と formal artifact に降りる。
