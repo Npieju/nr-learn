@@ -1,0 +1,23 @@
+features:
+  base:
+    - age
+    - sex
+    - weight
+    - track
+    - distance
+    - weather
+    - ground_condition
+    - odds
+    - popularity
+  history:
+    - horse_last_3_avg_rank
+    - horse_last_5_win_rate
+    - jockey_last_30_win_rate
+    - trainer_last_30_win_rate
+  include:
+    - gate_ratio
+    - frame_ratio
+
+rules:
+  avoid_leakage: true
+  use_shift_for_rolling: true

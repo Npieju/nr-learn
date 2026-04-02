@@ -27,6 +27,17 @@ if local Nankan baseline に `gate / frame / course bucket` family の buildable
 - feature ranking:
   - `gate / frame / course bucket bias` is the next recommended feature family after class/rest and jockey/trainer/combo
   - rationale: structural interpretability, likely high coverage, less raw-source risk than lineage / pace
+- first gap read:
+  - `feature_gap_summary_local_nankan_gate_frame_course_replay_v1.json`
+  - `priority_missing_raw_columns=[]`
+  - `missing_force_include_features=[]`
+  - `low_coverage_force_include_features=[]`
+  - candidate broad add-on 9 本のうち actual selected まで入ったのは 2 本だけ
+    - `gate_ratio`
+    - `frame_ratio`
+  - selected feature count は baseline `13` から `15` へ増えた
+  - `course_gate_bucket_last_100_*`, `course_baseline_*`, `time_deviation` は build される前提で入れたが、current local Nankan slice では selected set に残らなかった
+  - therefore actual candidate は `gate_ratio + frame_ratio` の narrow replay に絞る
 
 ## In Scope
 
@@ -63,3 +74,13 @@ if local Nankan baseline に `gate / frame / course bucket` family の buildable
 - no-op replay
 - support collapses versus current promoted NAR line
 - feature coverage is materially worse than combo replay
+
+## Current First Candidate
+
+first candidate は `gate_ratio + frame_ratio` replay とする。
+
+理由:
+
+- feature gap 上で actual selected set に入った gate/frame family はこの 2 本だけだった
+- baseline `13 -> 15 features` なので no-op ではない
+- `course_gate_bucket_*` や `course_baseline_*` を broad に抱えるより、まず buildable / selected が確認できた narrow add-on を formal compare に載せる方が defensible
