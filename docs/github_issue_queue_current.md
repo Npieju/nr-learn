@@ -57,9 +57,8 @@ GitHub issue:
 
 Primary next execution order:
 
-1. NAR の next family は `docs/next_issue_nar_gate_frame_course_replay.md` で `gate / frame / course bucket` replay を narrow に試す
-2. `#60` は file-backed live log standard の close summary を残して queue から落とす
-3. JRA の `#49` family は promoted-but-non-anchor read として一段止め、次の widening は NAR next family formal read の後に再判断する
+1. NAR の next family は `docs/next_issue_nar_owner_signal_replay.md` で owner signal replay を narrow に試す
+2. JRA の `#49` family は promoted-but-non-anchor read として一段止め、次の widening は NAR next family formal read の後に再判断する
 
 Side universe track:
 

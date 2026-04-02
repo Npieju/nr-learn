@@ -84,3 +84,32 @@ first candidate は `gate_ratio + frame_ratio` replay とする。
 - feature gap 上で actual selected set に入った gate/frame family はこの 2 本だけだった
 - baseline `13 -> 15 features` なので no-op ではない
 - `course_gate_bucket_*` や `course_baseline_*` を broad に抱えるより、まず buildable / selected が確認できた narrow add-on を formal compare に載せる方が defensible
+
+## Final Read
+
+- actual replay v1:
+  - selected features は `15`
+  - add-on は `gate_ratio`, `frame_ratio`
+- evaluation summary:
+  - `auc=0.8760517067265055`
+  - `top1_roi=0.832151950300438`
+  - `ev_top1_roi=1.2202668296160506`
+  - nested WF は `3/3 no_bet`
+  - `wf_nested_test_bets_total=0`
+- comparison:
+  - current promoted combo line より `ev_top1_roi` は高い
+  - ただし `auc`, `top1_roi` は劣後
+  - baseline narrow (`auc=0.8775353752835744`, `ev_top1_roi=1.940849373663306`) には明確に劣後
+
+## Decision Summary
+
+`#66` は `reject` とする。
+
+理由:
+
+- no-op ではなかったが、actual replay は `gate_ratio + frame_ratio` の 2 本だけだった
+- evaluation summary で baseline narrow を上回れなかった
+- nested WF が `3/3 no_bet` で、formal candidate としての support 形状が弱い
+- current promoted combo line を置き換える根拠にならない
+
+したがって next family は ranking の次順位である owner signal 単独評価へ進める。lineage / pace は low-coverage 側なので、この段階では primary line にしない。
