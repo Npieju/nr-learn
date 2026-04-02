@@ -45,6 +45,10 @@ phase compare の first read は次である。
 
 この差分から、current formal line の異常な強さは feature set より policy / promotion 側の selection によって大きく増幅されている可能性が高い。
 
+ただし baseline narrow 側の exact phase compare には制約がある。  
+historical baseline narrow promotion gate は generic `wf_summary` を auto-resolve しており、fold-level exact compare は current no-market run ほど clean ではない。  
+したがって次の実行単位は、baseline narrow を path-fixed revision gate で 1 本 rerun し、versioned `wf_summary` と versioned `promotion_gate` を同一 tuple で取り直すことである。
+
 ## In Scope
 
 - `scripts/run_evaluate.py`

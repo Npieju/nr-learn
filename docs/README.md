@@ -96,6 +96,7 @@ NAR の combo replay と path alignment fix 完了後の gate/frame replay read 
 gate/frame replay が baseline 劣後で終わった後の next family は [next_issue_nar_owner_signal_replay.md](next_issue_nar_owner_signal_replay.md) を使う。
 NAR の高すぎる AUC / ROI を leak と optimism に分解する監査は [next_issue_nar_evaluation_integrity_audit.md](next_issue_nar_evaluation_integrity_audit.md) を使う。
 market dependency を切り分けた後の本線である policy optimism 監査は [next_issue_nar_policy_optimism_audit.md](next_issue_nar_policy_optimism_audit.md) を使う。
+policy optimism の exact phase compare を取る baseline rerun は [next_issue_nar_baseline_pathfixed_rerun_for_policy_audit.md](next_issue_nar_baseline_pathfixed_rerun_for_policy_audit.md) を使う。
 
 tail loader optimization の gate 運用は [tail_loader_equivalence_gate_standard.md](tail_loader_equivalence_gate_standard.md) を使う。
 
