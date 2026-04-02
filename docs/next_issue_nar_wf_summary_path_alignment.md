@@ -35,6 +35,19 @@ if `wf_feasibility` output naming を versioned artifact path に揃えるか、
   - dry-run confirmation:
     - child command now includes `--summary-output artifacts/reports/wf_feasibility_diag_dryrun_nar_wf_path_alignment.json`
     - promotion command references the same path
+- end-to-end validation passed:
+  - revision: `r20260330_local_nankan_jockey_trainer_combo_replay_v1_pathfix`
+  - versioned `wf_summary` emitted:
+    - `artifacts/reports/wf_feasibility_diag_r20260330_local_nankan_jockey_trainer_combo_replay_v1_pathfix.json`
+  - promotion gate auto-completed:
+    - `artifacts/reports/promotion_gate_r20260330_local_nankan_jockey_trainer_combo_replay_v1_pathfix.json`
+    - `status=pass`
+    - `decision=promote`
+  - recovered formal values remained stable:
+    - `formal_benchmark_weighted_roi=4.324481148818757`
+    - `formal_benchmark_bets_total=3725`
+    - `wf_feasible_fold_count=3`
+    - `bet_rate=12.85%` on `28997` test races
 
 ## In Scope
 
@@ -68,3 +81,7 @@ if `wf_feasibility` output naming を versioned artifact path に揃えるか、
 
 - fix が generic non-versioned artifact consumers を壊す
 - manifest path だけ直って actual file が still unstable なら reject
+
+## Decision Summary
+
+`#65` は accept で close してよい。`wf_feasibility` child が versioned `wf_summary` path を受け取り、その same path を promotion gate が参照するようになった。dry-run だけでなく real local Nankan rerun でも、manual promotion recovery なしで versioned `wf_summary` と `promotion_gate` が end-to-end で揃ったため、この ops defect は解消済みである。
