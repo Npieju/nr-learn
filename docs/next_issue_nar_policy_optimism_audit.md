@@ -27,6 +27,21 @@ if NAR formal benchmark の過大な ROI は policy / promotion 側の optimisti
   - `ev_top1_roi=0.47997759445972094`
   - `wf_nested_test_roi_weighted=0.6824500434404865`
   - `wf_nested_test_bets_total=2302`
+- compare artifact:
+  - `artifacts/reports/nar_policy_optimism_phase_compare_baseline_vs_no_market_v1.json`
+
+phase compare の first read は次である。
+
+- evaluation AUC:
+  - `0.8775 -> 0.7672`
+- evaluation EV top1 ROI:
+  - `1.9408 -> 0.4800`
+- formal weighted ROI:
+  - `3.6903 -> 0.8104`
+- formal bets total:
+  - `3525 -> 8288`
+- formal bet rate:
+  - `12.85% -> 28.58%`
 
 この差分から、current formal line の異常な強さは feature set より policy / promotion 側の selection によって大きく増幅されている可能性が高い。
 
