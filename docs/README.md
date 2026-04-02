@@ -92,6 +92,7 @@ NAR replay が no-op だった場合の feature-level 切り分けは [next_issu
 build 済み replay features を actual candidate に戻す selection fix は [next_issue_nar_selection_fix_for_buildable_replay.md](next_issue_nar_selection_fix_for_buildable_replay.md) を使う。
 NAR の class/rest replay が baseline 劣後で終わった後の next family は [next_issue_nar_jockey_trainer_combo_replay.md](next_issue_nar_jockey_trainer_combo_replay.md) を使う。
 NAR の `jockey / trainer / combo` replay が formal `pass / promote` まで到達した後の ops fix は [next_issue_nar_wf_summary_path_alignment.md](next_issue_nar_wf_summary_path_alignment.md) を使う。
+NAR の combo replay と path alignment fix 完了後の next family は [next_issue_nar_gate_frame_course_replay.md](next_issue_nar_gate_frame_course_replay.md) を使う。
 
 tail loader optimization の gate 運用は [tail_loader_equivalence_gate_standard.md](tail_loader_equivalence_gate_standard.md) を使う。
 
