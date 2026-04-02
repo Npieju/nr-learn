@@ -17,6 +17,31 @@
 
 ## 3. Current Issue Set
 
+### 3.0 Current Queue As Of 2026-04-02
+
+NAR separate-universe line は、baseline narrow と `jockey_trainer_combo_replay_v1_pathfix` まで formal `pass / promote` を通した。  
+その後の integrity audit で、次が確認できた。
+
+- high AUC / high EV ROI の大部分は `odds / popularity` 依存
+- no-market ablation でも policy 自体は成立
+- したがって次の本線は feature family 追加ではなく `policy / promotion optimism` 監査
+
+Primary completed issue:
+
+- `#69`
+- <https://github.com/Npieju/nr-learn/issues/69>
+
+Primary active issue:
+
+- `#70`
+- <https://github.com/Npieju/nr-learn/issues/70>
+
+Primary next execution order:
+
+1. `#69` の結果を decision summary として固定する
+2. follow-up として `policy optimism` 監査 issue を起こす
+3. `evaluation summary -> wf_feasibility -> promotion gate` のどこで ROI が過大化しているかを phase 分解する
+
 ### 3.0 Current Queue After Tail Micro-Cut Exhaustion
 
 2026-03-29 時点で、Kelly runtime family (`#10`, `#11`, `#12`, `#13`)、seasonal ordering (`#14`, `#15`)、runtime broad reduction (`#7`)、supplemental materialization (`#16`)、feature-builder runtime (`#17`) は close 済みである。loader runtime の small safe cuts を進めた `#18` も wrap-up 段階にあり、current operational anchor は引き続き `r20260329_tighter_policy_ratio003_abs90` である。

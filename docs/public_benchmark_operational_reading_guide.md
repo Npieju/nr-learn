@@ -77,6 +77,13 @@ NAR の current public message は次で固定する。
 - NAR は separate universe の benchmark line として運用している
 - current formal promoted line は `jockey_trainer_combo_replay_v1_pathfix`
 - NAR は race 分母 bet rate が `12%` 台で、low-frequency candidate ではない
+- ただし NAR の高 AUC / 高 ROI は market-aware line として読むべきで、non-market skill の純粋な proxy とは扱わない
+
+追加の内部 caution は次である。
+
+- `odds / popularity` を外した no-market audit では、AUC は `0.8775 -> 0.7672`、formal benchmark weighted ROI は `3.6903 -> 0.8104` まで低下した
+- したがって、NAR current line の強さの大部分は market signal 依存である
+- 対外向けには「market-aware separate-universe benchmark」という説明を優先し、market を切った純モデル性能としては説明しない
 
 ## What To Say Publicly
 

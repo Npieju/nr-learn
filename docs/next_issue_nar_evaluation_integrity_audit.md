@@ -76,8 +76,58 @@ bet rate 自体は低すぎないが、ROI は高すぎる。まず leak / optim
 3. residual check
    - ablation 後も ROI が異常に高いかを見る
 
+## Result
+
+`no_market` ablation まで完了した現時点の結果は次である。
+
+1. `odds / popularity` 依存は強い  
+   baseline narrow と no-market の比較は次だった。
+   - baseline narrow evaluation:
+     - `auc=0.8775353752835744`
+     - `top1_roi=0.8381912618392912`
+     - `ev_top1_roi=1.940849373663306`
+   - no-market evaluation:
+     - `auc=0.7671689422296566`
+     - `top1_roi=0.7877482432019554`
+     - `ev_top1_roi=0.47997759445972094`
+
+   したがって、高 AUC と高 EV ROI の大部分は `odds / popularity` の market signal に依存している。
+
+2. ただし no-market line も policy 自体は成立する  
+   no-market evaluation では nested WF が `3/3 portfolio` で、`wf_nested_test_bets_total=2302` を維持した。  
+   formal side でも次を確認した。
+   - `formal_benchmark_weighted_roi=0.8103764478764478`
+   - `formal_benchmark_bets_total=8288`
+   - `bets / races = 8288 / 28997 = 28.58%`
+   - `wf_feasible_fold_count=3`
+
+   したがって「高 ROI は market mimic だけで全て説明できる」という整理も不十分である。
+
+3. current promoted baseline の異常な強さは market 依存で大きく崩れる  
+   baseline narrow formal と比較すると次だった。
+   - baseline narrow formal:
+     - `formal_benchmark_weighted_roi=3.6903437891931246`
+     - `formal_benchmark_bets_total=3725`
+     - `bets / races = 3725 / 28997 = 12.85%`
+   - no-market formal:
+     - `formal_benchmark_weighted_roi=0.8103764478764478`
+     - `formal_benchmark_bets_total=8288`
+     - `bets / races = 8288 / 28997 = 28.58%`
+
+   高ROIは大きく崩れた一方で、bet 数はむしろ増えた。  
+   つまり current NAR line は「market-aware にかなり依存した high-selectivity line」であり、non-market skill だけで説明できる line ではない。
+
+## Conclusion
+
+この issue の結論は次である。
+
+- direct feature leakage の即断材料はまだない
+- 高 AUC / 高 EV ROI の大部分は `odds / popularity` 依存
+- それでも no-market で policy は成立するので、残る論点は feature leak より `promotion / policy optimism` である
+
+次の本線は、promotion gate / wf feasibility がどの phase で ROI を過大化しているかを分解する issue に切り出す。
+
 ## Stop Condition
 
 - market ablation 後も説明がつかず、さらに raw-timing audit が必要になる
 - correction が broad redesign で、1 measurable hypothesis に落ちない
-
