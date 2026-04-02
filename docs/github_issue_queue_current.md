@@ -27,6 +27,8 @@ Primary active issue:
 
 - `#52`
 - <https://github.com/Npieju/nr-learn/issues/52>
+- `#65`
+- <https://github.com/Npieju/nr-learn/issues/65>
 - `#60`
 - <https://github.com/Npieju/nr-learn/issues/60>
 - `#49`
@@ -53,6 +55,8 @@ GitHub issue:
 
 - `#52`
 - <https://github.com/Npieju/nr-learn/issues/52>
+- `#65`
+- <https://github.com/Npieju/nr-learn/issues/65>
 - `#60`
 - <https://github.com/Npieju/nr-learn/issues/60>
 - `#49`

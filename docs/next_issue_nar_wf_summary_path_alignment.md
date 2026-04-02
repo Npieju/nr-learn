@@ -29,6 +29,12 @@ if `wf_feasibility` output naming を versioned artifact path に揃えるか、
   - `run_context.artifact_suffix=r20260330_local_nankan_jockey_trainer_combo_replay_v1`
 - expected but missing path:
   - `artifacts/reports/wf_feasibility_diag_r20260330_local_nankan_jockey_trainer_combo_replay_v1.json`
+- first cut landed:
+  - `run_wf_feasibility_diag.py` now accepts `--summary-output` and `--detail-output`
+  - `run_revision_gate.py` now passes versioned `wf_summary` / `.csv` paths into the child feasibility command
+  - dry-run confirmation:
+    - child command now includes `--summary-output artifacts/reports/wf_feasibility_diag_dryrun_nar_wf_path_alignment.json`
+    - promotion command references the same path
 
 ## In Scope
 

@@ -899,6 +899,14 @@ def main() -> int:
             wf_command.extend(["--max-silent-seconds", str(args.wf_max_silent_seconds)])
         if args.wf_max_fold_elapsed_seconds is not None:
             wf_command.extend(["--max-fold-elapsed-seconds", str(args.wf_max_fold_elapsed_seconds)])
+        wf_command.extend(
+            [
+                "--summary-output",
+                artifact_display_path(wf_summary_output, workspace_root=ROOT),
+                "--detail-output",
+                artifact_display_path(wf_summary_output.with_suffix(".csv"), workspace_root=ROOT),
+            ]
+        )
 
         promotion_command = [
             *_python_command("scripts/run_promotion_gate.py"),

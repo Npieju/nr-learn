@@ -137,6 +137,37 @@ def _derive_output_slug(config_path: str, model_path: Path) -> str:
     return "model"
 
 
+def _resolve_feasibility_output_paths(
+    *,
+    report_dir: Path,
+    config_path: str,
+    model_path: Path,
+    wf_mode: str,
+    wf_scheme: str,
+    start_date: str | None,
+    end_date: str | None,
+    summary_output: str | None,
+    detail_output: str | None,
+) -> tuple[Path, Path]:
+    if summary_output:
+        summary_path = ROOT / summary_output if not Path(summary_output).is_absolute() else Path(summary_output)
+    else:
+        output_slug = _derive_output_slug(config_path, model_path)
+        date_slug = _derive_date_window_slug(start_date, end_date)
+        wf_slug = _derive_wf_slug(wf_mode, wf_scheme)
+        summary_path = report_dir / f"wf_feasibility_diag_{output_slug}{date_slug}{wf_slug}.json"
+
+    if detail_output:
+        detail_path = ROOT / detail_output if not Path(detail_output).is_absolute() else Path(detail_output)
+    else:
+        if summary_path.suffix == ".json":
+            detail_path = summary_path.with_suffix(".csv")
+        else:
+            detail_path = summary_path.parent / f"{summary_path.name}.csv"
+
+    return summary_path, detail_path
+
+
 def _filter_frame_by_date_window(
     frame: pd.DataFrame,
     *,
@@ -588,6 +619,8 @@ def main() -> int:
     parser.add_argument("--feature-config", default="configs/features_catboost_rich_high_coverage_diag.yaml")
     parser.add_argument("--artifact-suffix", default=None)
     parser.add_argument("--model-artifact-suffix", default=None)
+    parser.add_argument("--summary-output", default=None)
+    parser.add_argument("--detail-output", default=None)
     parser.add_argument("--pre-feature-max-rows", type=int, default=None)
     parser.add_argument("--start-date", default=None)
     parser.add_argument("--end-date", default=None)
@@ -745,13 +778,19 @@ def main() -> int:
             )
         progress.update(message="fold analysis completed")
 
-        output_slug = _derive_output_slug(args.config, model_path)
-        date_slug = _derive_date_window_slug(args.start_date, args.end_date)
-        wf_slug = _derive_wf_slug(args.wf_mode, args.wf_scheme)
         report_dir = ROOT / "artifacts" / "reports"
         report_dir.mkdir(parents=True, exist_ok=True)
-        summary_path = report_dir / f"wf_feasibility_diag_{output_slug}{date_slug}{wf_slug}.json"
-        detail_path = report_dir / f"wf_feasibility_diag_{output_slug}{date_slug}{wf_slug}.csv"
+        summary_path, detail_path = _resolve_feasibility_output_paths(
+            report_dir=report_dir,
+            config_path=args.config,
+            model_path=model_path,
+            wf_mode=args.wf_mode,
+            wf_scheme=args.wf_scheme,
+            start_date=args.start_date,
+            end_date=args.end_date,
+            summary_output=args.summary_output,
+            detail_output=args.detail_output,
+        )
         artifact_ensure_output_file_path(summary_path, label="summary output", workspace_root=ROOT)
         artifact_ensure_output_file_path(detail_path, label="detail output", workspace_root=ROOT)
 

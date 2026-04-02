@@ -1,12 +1,17 @@
 from __future__ import annotations
 
+from pathlib import Path
+import tempfile
 import unittest
 
 from scripts.run_wf_feasibility_diag import (
     _count_outer_search_steps,
     _count_strategy_evals_per_outer_step,
+    _resolve_feasibility_output_paths,
     _should_emit_checkpoint,
 )
+
+ROOT = Path(__file__).resolve().parents[1]
 
 
 class WfFeasibilityProgressHelpersTest(unittest.TestCase):
@@ -82,6 +87,39 @@ class WfFeasibilityProgressHelpersTest(unittest.TestCase):
                 max_silent_seconds=60.0,
             )
         )
+
+    def test_resolve_feasibility_output_paths_uses_explicit_summary_and_derives_csv(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            summary_path, detail_path = _resolve_feasibility_output_paths(
+                report_dir=Path(tmpdir),
+                config_path="configs/model_local_baseline_wf_runtime_narrow.yaml",
+                model_path=Path("artifacts/models/local_nankan_baseline_model.joblib"),
+                wf_mode="fast",
+                wf_scheme="nested",
+                start_date=None,
+                end_date=None,
+                summary_output="artifacts/reports/custom_summary.json",
+                detail_output=None,
+            )
+            self.assertEqual(summary_path, ROOT / "artifacts/reports/custom_summary.json")
+            self.assertEqual(detail_path, summary_path.with_suffix(".csv"))
+
+    def test_resolve_feasibility_output_paths_builds_default_versioned_names(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            report_dir = Path(tmpdir)
+            summary_path, detail_path = _resolve_feasibility_output_paths(
+                report_dir=report_dir,
+                config_path="configs/model_local_baseline_wf_runtime_narrow.yaml",
+                model_path=Path("artifacts/models/local_nankan_baseline_model.joblib"),
+                wf_mode="fast",
+                wf_scheme="nested",
+                start_date=None,
+                end_date=None,
+                summary_output=None,
+                detail_output=None,
+            )
+            self.assertEqual(summary_path, report_dir / "wf_feasibility_diag_local_baseline_wf_runtime_narrow_wf_fast_nested.json")
+            self.assertEqual(detail_path, report_dir / "wf_feasibility_diag_local_baseline_wf_runtime_narrow_wf_fast_nested.csv")
 
 
 if __name__ == "__main__":
