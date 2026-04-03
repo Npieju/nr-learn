@@ -90,17 +90,18 @@ Latest fallback compare:
 
 Current open-work expectation:
 
-1. JRA 本線は新しい hypothesis issue を切る段階
+1. JRA 本線は `pace / closing-fit` family の selective replay を切る
 2. `gate/frame/course` extension は broad default でも September fallback primary でも September overlay でもなく、compare reference に留める
 3. `current_sep_guard_candidate` は September seasonal fallback のまま据え置く
 
 Primary next issue draft:
 
-- none currently
+- `docs/next_issue_pace_closing_fit_selective_candidate.md`
 
 Current active issue:
 
-- none currently
+- `#83`
+- <https://github.com/Npieju/nr-learn/issues/83>
 
 ### 3.0 Current Queue After Tail Micro-Cut Exhaustion
 
