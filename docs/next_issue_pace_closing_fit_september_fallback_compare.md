@@ -48,3 +48,39 @@ if `r20260403_pace_closing_fit_selective_v1` が broad September と late-Septem
 
 - broad September と late-September が逆方向で、role を 1 本に決められない
 - `sep_guard` より一貫して弱く、fallback contender を主張できない
+
+## Actual-Date Read
+
+Broad September difficult window:
+
+- `current_sep_guard_candidate_2025_latest`
+  - `9 bets`
+  - `total net = -4.3`
+  - `pure bankroll = 0.9995842542264094`
+- `r20260403_pace_closing_fit_selective_v1`
+  - `3 bets`
+  - `total net = -3.0`
+  - `pure bankroll = 0.892891589506173`
+
+Late-September 5-day window:
+
+- `current_sep_guard_candidate_2025_latest`
+  - `6 bets`
+  - `total net = -6.0`
+  - `pure bankroll = 0.9857901270555528`
+- `r20260403_pace_closing_fit_selective_v1`
+  - `2 bets`
+  - `total net = -2.0`
+  - `pure bankroll = 0.9184027777777779`
+
+## Decision Summary
+
+`r20260403_pace_closing_fit_selective_v1` は September difficult windows で baseline より defensive だが、September fallback role では `current_sep_guard_candidate_2025_latest` を更新しない。
+
+- broad September では `pace-closing-fit` の net は小さいが、pure bankroll は `sep_guard` が上
+- late-September でも同じで、`sep_guard` が pure bankroll で上
+
+したがって operational role は変わらない。
+
+- `current_sep_guard_candidate_2025_latest` を September seasonal fallback のまま据え置く
+- `r20260403_pace_closing_fit_selective_v1` は `analysis-first promoted candidate` に留める

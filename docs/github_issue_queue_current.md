@@ -115,7 +115,19 @@ Primary next issue draft:
 
 Current active issue:
 
-- `#85`
+- none
+
+Latest September fallback compare:
+
+1. `#85` で `r20260403_pace_closing_fit_selective_v1` と `current_sep_guard_candidate_2025_latest` を broad September / late-September で比較した
+2. broad September:
+   - sep guard `9 bets / -4.3 / pure bankroll 0.9995842542264094`
+   - pace-closing-fit `3 bets / -3.0 / pure bankroll 0.892891589506173`
+3. late-September:
+   - sep guard `6 bets / -6.0 / pure bankroll 0.9857901270555528`
+   - pace-closing-fit `2 bets / -2.0 / pure bankroll 0.9184027777777779`
+4. net だけ見れば pace-closing-fit は小さく見えるが、pure bankroll は両 window とも sep guard が上
+5. したがって `current_sep_guard_candidate_2025_latest` は September seasonal fallback のまま据え置き、`r20260403_pace_closing_fit_selective_v1` は `analysis-first promoted candidate` に留める
 
 Latest actual-date role split:
 
