@@ -329,6 +329,70 @@ def _build_challenger_equivalence_report(
     return report
 
 
+def _build_evaluation_promotion_alignment_report(*, evaluation_summary_path: Path) -> dict[str, object]:
+    payload = _read_json_dict(evaluation_summary_path)
+    report: dict[str, object] = {
+        "evaluation_summary": artifact_display_path(evaluation_summary_path, workspace_root=ROOT),
+    }
+    if payload is None:
+        report["status"] = "unavailable"
+        report["reason"] = "evaluation_summary_missing_or_invalid"
+        return report
+
+    folds = payload.get("wf_nested_folds")
+    if not isinstance(folds, list) or not folds:
+        report["status"] = "clear"
+        report["reason"] = "wf_nested_folds_unavailable"
+        return report
+
+    actual_folds = payload.get("wf_nested_actual_folds")
+    if not isinstance(actual_folds, int):
+        actual_folds = None
+
+    strategy_kinds: list[str] = []
+    all_no_bet = True
+    for item in folds:
+        if not isinstance(item, dict):
+            all_no_bet = False
+            continue
+        strategy_kind = str(item.get("strategy_kind") or "")
+        strategy_kinds.append(strategy_kind)
+        if strategy_kind != "no_bet":
+            all_no_bet = False
+
+    bets_total_raw = payload.get("wf_nested_test_bets_total")
+    bets_total = int(bets_total_raw) if isinstance(bets_total_raw, (int, float)) else None
+    report["wf_nested_actual_folds"] = actual_folds
+    report["wf_nested_fold_count"] = len(folds)
+    report["wf_nested_strategy_kinds"] = strategy_kinds
+    report["wf_nested_test_bets_total"] = bets_total
+
+    if all_no_bet and bets_total == 0:
+        report["status"] = "triggered"
+        report["reason"] = "evaluation_nested_all_no_bet"
+    else:
+        report["status"] = "clear"
+        report["reason"] = "evaluation_nested_has_feasible_policy"
+    return report
+
+
+def _promotion_alignment_highlights(report: dict[str, object]) -> list[str]:
+    status = str(report.get("status") or "")
+    if status == "triggered":
+        fold_count = report.get("wf_nested_actual_folds")
+        strategy_kinds = report.get("wf_nested_strategy_kinds") or []
+        bets_total = report.get("wf_nested_test_bets_total")
+        return [
+            "evaluation nested walk-forward produced no feasible betting policy across all completed folds",
+            f"evaluation nested strategies={strategy_kinds} folds={fold_count} wf_nested_test_bets_total={bets_total}",
+            "formal promotion is short-circuited because wf feasibility would otherwise uplift a no-bet evaluation candidate",
+        ]
+    if status == "clear":
+        return ["evaluation nested walk-forward produced at least one feasible policy; conservative short-circuit not triggered"]
+    reason = str(report.get("reason") or "promotion_alignment_check_unavailable")
+    return [f"evaluation promotion alignment check unavailable: {reason}"]
+
+
 def _challenger_equivalence_highlights(report: dict[str, object]) -> list[str]:
     status = str(report.get("status") or "")
     if status == "equivalent":
@@ -1266,6 +1330,79 @@ def main() -> int:
                     print(f"[revision-gate] run log: {artifact_display_path(log_path, workspace_root=ROOT)}")
                     print("[revision-gate] decision: hold")
                     return 1
+
+        evaluation_summary_path = _resolve_versioned_evaluation_summary_path()
+        promotion_alignment_report = _build_evaluation_promotion_alignment_report(
+            evaluation_summary_path=evaluation_summary_path
+        )
+        if str(promotion_alignment_report.get("status") or "") == "triggered":
+            highlights = _promotion_alignment_highlights(promotion_alignment_report)
+            for highlight in highlights:
+                log_progress(highlight)
+            executed_steps.append(
+                {
+                    "name": "promotion_alignment_short_circuit",
+                    "status": "triggered",
+                    "evaluation_summary": artifact_display_path(evaluation_summary_path, workspace_root=ROOT),
+                    "reason": promotion_alignment_report.get("reason"),
+                }
+            )
+            promotion_report = {
+                "status": "block",
+                "decision": "hold",
+                "current_phase": "evaluate",
+                "recommended_action": "review_evaluation_nested_wf_before_formal_promotion",
+                "summary": {
+                    "status": "block",
+                    "decision": "hold",
+                    "revision": revision_slug,
+                    "reason": promotion_alignment_report.get("reason"),
+                },
+                "formal_benchmark": None,
+                "highlights": highlights,
+                "alignment_short_circuit": promotion_alignment_report,
+            }
+            write_json(promotion_output, promotion_report)
+            manifest_payload = _build_manifest_payload(
+                revision_slug=revision_slug,
+                started_at=started_at,
+                status="block",
+                decision="hold",
+                resolved_profile=resolved_profile,
+                config_path=config_path,
+                data_config_path=data_config_path,
+                feature_config_path=feature_config_path,
+                train_artifact_suffix=train_artifact_suffix,
+                skip_train=bool(args.skip_train),
+                train_max_train_rows=args.train_max_train_rows,
+                train_max_valid_rows=args.train_max_valid_rows,
+                evaluate_model_artifact_suffix=args.evaluate_model_artifact_suffix,
+                evaluate_max_rows=args.evaluate_max_rows,
+                evaluate_pre_feature_max_rows=args.evaluate_pre_feature_max_rows,
+                evaluate_start_date=args.evaluate_start_date,
+                evaluate_end_date=args.evaluate_end_date,
+                evaluate_wf_mode=args.evaluate_wf_mode,
+                evaluate_wf_scheme=args.evaluate_wf_scheme,
+                wf_summary_output=wf_summary_output,
+                promotion_min_feasible_folds=args.promotion_min_feasible_folds,
+                promotion_output=promotion_output,
+                manifest_output=manifest_output,
+                executed_steps=executed_steps,
+                promotion_report=promotion_report,
+                challenger_equivalence=challenger_equivalence_report,
+                error_code="evaluation_nested_all_no_bet_short_circuit",
+                error_message="evaluation nested walk-forward produced no feasible policy and zero bets across completed folds",
+                recommended_action="review_evaluation_nested_wf_before_formal_promotion",
+                current_phase="evaluate",
+                highlights=highlights,
+            )
+            manifest_payload["artifacts"]["run_log"] = artifact_display_path(log_path, workspace_root=ROOT)
+            _write_manifest(manifest_output, manifest_payload, label="writing promotion-alignment blocked manifest")
+            progress.complete(message="promotion alignment short-circuited status=block")
+            print(f"[revision-gate] manifest saved: {manifest_output}")
+            print(f"[revision-gate] run log: {artifact_display_path(log_path, workspace_root=ROOT)}")
+            print("[revision-gate] decision: hold")
+            return 1
 
         wf_result = _run_command_result(wf_command, label="wf_feasibility")
         executed_steps.append({

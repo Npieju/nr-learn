@@ -9,6 +9,7 @@ import unittest
 
 from scripts.run_revision_gate import (
     _acquire_run_lock,
+    _build_evaluation_promotion_alignment_report,
     _build_running_manifest_payload,
     _build_challenger_equivalence_report,
     _build_lock_path,
@@ -128,6 +129,60 @@ class RevisionGateChallengerEquivalenceTest(unittest.TestCase):
             self.assertEqual(report["status"], "different")
             differing = [item["field"] for item in report["comparisons"] if not item["equivalent"]]
             self.assertEqual(differing, ["wf_nested_test_roi_weighted"])
+
+
+class RevisionGatePromotionAlignmentTest(unittest.TestCase):
+    def test_alignment_report_triggers_for_all_no_bet_zero_bets(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            summary_path = Path(tmpdir) / "evaluation_summary.json"
+            summary_path.write_text(
+                json.dumps(
+                    {
+                        "wf_nested_actual_folds": 3,
+                        "wf_nested_test_bets_total": 0,
+                        "wf_nested_folds": [
+                            {"fold": 1, "strategy_kind": "no_bet", "test_bets": 0},
+                            {"fold": 2, "strategy_kind": "no_bet", "test_bets": 0},
+                            {"fold": 3, "strategy_kind": "no_bet", "test_bets": 0},
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            report = _build_evaluation_promotion_alignment_report(
+                evaluation_summary_path=summary_path
+            )
+
+            self.assertEqual(report["status"], "triggered")
+            self.assertEqual(report["reason"], "evaluation_nested_all_no_bet")
+            self.assertEqual(report["wf_nested_test_bets_total"], 0)
+
+    def test_alignment_report_remains_clear_when_nested_policy_places_bets(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            summary_path = Path(tmpdir) / "evaluation_summary.json"
+            summary_path.write_text(
+                json.dumps(
+                    {
+                        "wf_nested_actual_folds": 3,
+                        "wf_nested_test_bets_total": 2302,
+                        "wf_nested_folds": [
+                            {"fold": 1, "strategy_kind": "portfolio", "test_bets": 911},
+                            {"fold": 2, "strategy_kind": "portfolio", "test_bets": 701},
+                            {"fold": 3, "strategy_kind": "portfolio", "test_bets": 690},
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            report = _build_evaluation_promotion_alignment_report(
+                evaluation_summary_path=summary_path
+            )
+
+            self.assertEqual(report["status"], "clear")
+            self.assertEqual(report["reason"], "evaluation_nested_has_feasible_policy")
+            self.assertEqual(report["wf_nested_test_bets_total"], 2302)
 
 
 class RevisionGateRunningManifestTest(unittest.TestCase):
