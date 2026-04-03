@@ -115,7 +115,8 @@ Primary next issue draft:
 
 Current active issue:
 
-- none
+- `#86`
+- owner signal ablation audit
 
 Latest September fallback compare:
 
@@ -142,7 +143,7 @@ Latest actual-date role split:
 
 Primary next issue draft:
 
-- `docs/next_issue_pace_closing_fit_september_fallback_compare.md`
+- `docs/next_issue_owner_signal_ablation_audit.md`
 
 ### 3.0 Current Queue After Tail Micro-Cut Exhaustion
 
