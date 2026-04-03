@@ -45,6 +45,64 @@ if `gate / frame / course bucket` family を broad add-on ではなく regime-aw
 - buildability / selection risk を feature-gap で確認する
 - if buildable なら narrow extension candidate を 1 本だけ formal rerun に載せる
 
+## Current Read
+
+- current baseline にはすでに次が入っている
+  - `gate_ratio`
+  - `frame_ratio`
+  - `course_gate_bucket_last_100_win_rate`
+  - `course_gate_bucket_last_100_avg_rank`
+- builder には `course_baseline_*` と `time_deviation` 系もある
+- ただし `course_baseline_time_per_1000m` と `time_deviation` は target 近傍で、selection の default safe exclude に入っている
+- したがって extension 候補は time-derived target proxy ではなく、course-conditioned regime signal に限る
+
+## Current First Candidate
+
+first candidate は `course_baseline_race_pace_balance_3f` 単体 add-on とする。
+
+理由:
+
+- `course_history_key` の shifted rolling mean から作られる course-conditioned baseline で、builder 実装済み
+- `time_deviation` と違って target 近傍列ではない
+- `gate / frame / course bucket` family を broad に壊さず、regime conditioning だけ足せる
+
+tracked config:
+
+- `configs/features_catboost_rich_high_coverage_diag_gate_frame_course_regime_extension.yaml`
+
+## First Gap Read
+
+- artifact:
+  - `artifacts/reports/feature_gap_summary_gate_frame_course_regime_extension_v1.json`
+  - `artifacts/reports/feature_gap_feature_coverage_gate_frame_course_regime_extension_v1.csv`
+- rows evaluated: `100000`
+- selected feature count: `109`
+- categorical feature count: `37`
+- `priority_missing_raw_columns=[]`
+- `missing_force_include_features=[]`
+- `low_coverage_force_include_features=[]`
+- focal candidate:
+  - `course_baseline_race_pace_balance_3f`
+  - `selected=True`
+  - `present=True`
+  - `non_null_ratio=0.57273`
+  - `status=ok`
+
+interpretation:
+
+- narrow candidate としては buildable
+- coverage は threshold `0.5` を上回るが、baseline core feature よりは薄い
+- rerun は許容だが、high-confidence family ではなく conditional challenger として扱う
+
+## Execution Standard
+
+JRA current baseline は `value_blend` なので、direct revision gate train ではなく true component retrain flow を使う。
+
+1. win component retrain
+2. roi component retrain
+3. stack rebuild
+4. `run_revision_gate.py --skip-train --evaluate-model-artifact-suffix ...`
+
 ## Expected Artifacts
 
 - family read summary
