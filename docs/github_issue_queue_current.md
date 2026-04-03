@@ -77,20 +77,30 @@ Latest actual-date role split:
 3. したがって `r20260403_gate_frame_course_regime_extension_v1` の operational role は `analysis-first promoted candidate` に固定し、serving default には上げない
 4. `current_long_horizon_serving_2025_latest` を first seasonal alias、`current_sep_guard_candidate` を second seasonal fallback として据え置く
 
+Latest fallback compare:
+
+1. `#81` gate/frame/course September fallback compare では、candidate は broad September と late-September の両方で `current_sep_guard_candidate` に pure bankroll で劣後した
+2. broad September:
+   - sep guard `9 bets / -4.3 / pure bankroll 0.9995842542264094`
+   - gate-frame-course candidate `5 bets / -3.6 / pure bankroll 0.8808888460219477`
+3. late-September:
+   - sep guard `6 bets / -6.0 / pure bankroll 0.9857901270555528`
+   - gate-frame-course candidate `3 bets / -1.6 / pure bankroll 0.9319444444444444`
+4. したがって `current_sep_guard_candidate` は September seasonal fallback のまま据え置き、`r20260403_gate_frame_course_regime_extension_v1` は compare reference に留める
+
 Current open-work expectation:
 
-1. JRA 本線は next hypothesis として `gate/frame/course` candidate の September fallback contender 性を切る
-2. `gate/frame/course` extension は broad default ではなく compare reference として保持する
-3. `current_sep_guard_candidate` を上回れない限り seasonal fallback には上げない
+1. JRA 本線は新しい hypothesis issue を切る段階
+2. `gate/frame/course` extension は broad default でも September fallback でもなく compare reference として保持する
+3. `current_sep_guard_candidate` は September seasonal fallback のまま据え置く
 
 Primary next issue draft:
 
-- `docs/next_issue_gate_frame_course_september_fallback_compare.md`
+- none currently
 
 Current active issue:
 
-- `#81`
-- <https://github.com/Npieju/nr-learn/issues/81>
+- none currently
 
 ### 3.0 Current Queue After Tail Micro-Cut Exhaustion
 
