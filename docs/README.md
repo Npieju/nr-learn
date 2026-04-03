@@ -103,6 +103,7 @@ NAR の formal benchmark source は `#73` で held-out test metrics に揃えた
 held-out formal `ROI < 1.0` でも `promote` になる permissive threshold の corrective issue は [next_issue_nar_promotion_threshold_realignment.md](next_issue_nar_promotion_threshold_realignment.md) を使う。
 local Nankan wrapper は `#74` 以後、promotion gate に held-out formal `weighted_roi >= 1.0` を default で要求する。
 pace / closing-fit selective replay の formal read は [next_issue_pace_closing_fit_selective_candidate.md](next_issue_pace_closing_fit_selective_candidate.md) を使い、その後の operational role split は [next_issue_pace_closing_fit_actual_date_role_split.md](next_issue_pace_closing_fit_actual_date_role_split.md) を使う。
+pace / closing-fit selective line の September fallback compare は [next_issue_pace_closing_fit_september_fallback_compare.md](next_issue_pace_closing_fit_september_fallback_compare.md) を使う。
 
 tail loader optimization の gate 運用は [tail_loader_equivalence_gate_standard.md](tail_loader_equivalence_gate_standard.md) を使う。
 

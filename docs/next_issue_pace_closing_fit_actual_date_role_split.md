@@ -48,3 +48,38 @@ if `r20260403_pace_closing_fit_selective_v1` が formal だけでなく actual-d
 
 - actual-date read が mixed で role を 1 本に決められない
 - baseline より明確に悪化して serving role を主張できない
+
+## Actual-Date Read
+
+Broad September difficult window は candidate が baseline より明確に良い。
+
+- baseline
+  - `32 bets`
+  - `total net = -27.3`
+  - `pure bankroll = 0.2958869306148325`
+- candidate `r20260403_pace_closing_fit_selective_v1`
+  - `3 bets`
+  - `total net = -3.0`
+  - `pure bankroll = 0.892891589506173`
+
+December control window は逆に baseline が明確に良い。
+
+- baseline
+  - `45 bets`
+  - `total net = +21.8`
+  - `pure bankroll = 1.6711564921099862`
+- candidate `r20260403_pace_closing_fit_selective_v1`
+  - `0 bets`
+  - `total net = 0.0`
+  - `pure bankroll = 1.0`
+
+## Decision Summary
+
+`r20260403_pace_closing_fit_selective_v1` は formal `pass / promote` だが、actual-date role は mixed ではなく明確に split している。
+
+- September difficult window では baseline より defensive
+- December control window では baseline の upside を再現できない
+
+したがって operational role は `analysis-first promoted candidate` に据え置く。serving default には上げない。
+
+次の execution source は、`current_sep_guard_candidate` に対する September fallback contender comparison である。

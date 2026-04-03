@@ -115,7 +115,22 @@ Primary next issue draft:
 
 Current active issue:
 
-- `#84`
+- `#85`
+
+Latest actual-date role split:
+
+1. `#84` pace-closing-fit actual-date role split は September difficult window と December control window の compare で確定した
+2. broad September:
+   - baseline `32 bets / -27.3 / pure bankroll 0.2958869306148325`
+   - pace-closing-fit candidate `3 bets / -3.0 / pure bankroll 0.892891589506173`
+3. December control:
+   - baseline `45 bets / +21.8 / pure bankroll 1.6711564921099862`
+   - pace-closing-fit candidate `0 bets / 0.0 / pure bankroll 1.0`
+4. したがって `r20260403_pace_closing_fit_selective_v1` は `analysis-first promoted candidate` に据え置き、serving default には上げない
+
+Primary next issue draft:
+
+- `docs/next_issue_pace_closing_fit_september_fallback_compare.md`
 
 ### 3.0 Current Queue After Tail Micro-Cut Exhaustion
 
