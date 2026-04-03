@@ -79,8 +79,18 @@ Latest actual-date role split:
 
 Current open-work expectation:
 
-1. JRA 本線は次の new hypothesis issue を切って再開する
-2. `gate/frame/course` extension は compare reference として保持し、default promotion は行わない
+1. JRA 本線は next hypothesis として `gate/frame/course` candidate の September fallback contender 性を切る
+2. `gate/frame/course` extension は broad default ではなく compare reference として保持する
+3. `current_sep_guard_candidate` を上回れない限り seasonal fallback には上げない
+
+Primary next issue draft:
+
+- `docs/next_issue_gate_frame_course_september_fallback_compare.md`
+
+Current active issue:
+
+- `#81`
+- <https://github.com/Npieju/nr-learn/issues/81>
 
 ### 3.0 Current Queue After Tail Micro-Cut Exhaustion
 
