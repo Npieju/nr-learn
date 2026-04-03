@@ -68,8 +68,12 @@ Latest reread completions:
 
 Next open work expectation:
 
-1. JRA の次 hypothesis は serving role ordering ではなく、新 family か shared portfolio bottleneck 改善で切る
+1. JRA の次 hypothesis は `shared portfolio bottleneck` の narrower regime split に寄せる
 2. `current_long_horizon_serving_2025_latest` を first seasonal alias、`current_sep_guard_candidate` を second seasonal fallback として据え置く
+
+Primary next issue draft:
+
+- `docs/next_issue_shared_portfolio_bottleneck_regime_split.md`
 
 Primary next issue draft:
 
