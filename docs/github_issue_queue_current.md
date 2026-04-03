@@ -65,16 +65,11 @@ Primary next issue draft:
 
 - `docs/next_issue_surface_plus_class_layoff_exposure_widening.md`
 
-Primary active issue:
-
-- `#76`
-- <https://github.com/Npieju/nr-learn/issues/76>
-
 Immediate execution expectation:
 
-1. `surface_plus_class_layoff` promoted line の policy-side widening read を reopen する
-2. feature family は固定し、existing September / December artifact を denominator-first で再読する
-3. widening が引き続き suppressive なら、role を `analysis-first promoted` のまま固定して close する
+1. `surface_plus_class_layoff` promoted line の policy-side widening reread は existing artifact だけで close する
+2. feature family は固定し、widening rerun は正当化しない
+3. 次は JRA の別 hypothesis か serving role ordering 側の issue を切る
 
 ### 3.0 Current Queue After Tail Micro-Cut Exhaustion
 
