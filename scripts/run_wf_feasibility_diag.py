@@ -228,6 +228,66 @@ def _serialize_candidate(row: dict[str, object] | None) -> dict[str, object] | N
     }
 
 
+def _extract_strategy_params(row: dict[str, object] | None) -> dict[str, float | int | str]:
+    if not isinstance(row, dict):
+        return {}
+    strategy_kind = str(row.get("strategy_kind") or "")
+    params: dict[str, float | int | str] = {
+        "strategy_kind": strategy_kind,
+        "blend_weight": float(row.get("blend_weight") or 0.0),
+        "min_prob": float(row.get("min_prob") or 0.0),
+        "odds_min": float(row.get("odds_min") or 0.0),
+        "odds_max": float(row.get("odds_max") or 0.0),
+    }
+    if strategy_kind == "kelly":
+        params.update(
+            {
+                "min_edge": float(row.get("min_edge") or 0.0),
+                "fractional_kelly": float(row.get("fractional_kelly") or 0.0),
+                "max_fraction": float(row.get("max_fraction") or 0.0),
+            }
+        )
+    elif strategy_kind == "portfolio":
+        params.update(
+            {
+                "top_k": int(row.get("top_k") or 0),
+                "min_expected_value": float(row.get("min_expected_value") or 0.0),
+            }
+        )
+    return params
+
+
+def _build_candidate_snapshot_from_metrics(
+    *,
+    strategy_kind: str,
+    params: dict[str, float | int | str],
+    metrics: dict[str, float | int | None],
+) -> dict[str, object]:
+    if strategy_kind == "kelly":
+        row = {
+            "strategy_kind": strategy_kind,
+            **params,
+            "roi": metrics.get("kelly_roi"),
+            "bets": int(metrics.get("kelly_bets") or 0),
+            "hit_rate": metrics.get("kelly_hit_rate"),
+            "final_bankroll": metrics.get("kelly_final_bankroll"),
+            "max_drawdown": metrics.get("kelly_max_drawdown"),
+        }
+    elif strategy_kind == "portfolio":
+        row = {
+            "strategy_kind": strategy_kind,
+            **params,
+            "roi": metrics.get("portfolio_roi"),
+            "bets": int(metrics.get("portfolio_bets") or 0),
+            "hit_rate": metrics.get("portfolio_hit_rate"),
+            "final_bankroll": metrics.get("portfolio_final_bankroll"),
+            "max_drawdown": metrics.get("portfolio_max_drawdown"),
+        }
+    else:
+        row = {"strategy_kind": strategy_kind, **params, "roi": None, "bets": 0, "hit_rate": None, "final_bankroll": None, "max_drawdown": None}
+    return _serialize_candidate(row) or {}
+
+
 def _summarize_fold_candidates(
     *,
     fold_index: int,
@@ -574,6 +634,31 @@ def _summarize_fold_candidates(
         )[:3]
     ]
 
+    best_feasible_test: dict[str, object] | None = None
+    if isinstance(best_feasible, dict):
+        best_feasible_params = _extract_strategy_params(best_feasible)
+        strategy_kind = str(best_feasible_params.get("strategy_kind") or "")
+        if strategy_kind in {"kelly", "portfolio"}:
+            test_eval = test_df.copy()
+            test_eval["iso_prob"] = fit_isotonic(train_scores, train_labels, test_eval["score"].to_numpy())
+            test_eval["market_prob"] = compute_market_prob(test_eval, odds_col=odds_col)
+            test_eval["blend_prob"] = blend_prob(
+                test_eval["iso_prob"],
+                test_eval["market_prob"],
+                float(best_feasible_params.get("blend_weight") or 0.0),
+            )
+            test_metrics = run_policy_strategy(
+                test_eval,
+                prob_col="blend_prob",
+                odds_col=odds_col,
+                params=best_feasible_params,
+            )
+            best_feasible_test = _build_candidate_snapshot_from_metrics(
+                strategy_kind=strategy_kind,
+                params=best_feasible_params,
+                metrics=test_metrics,
+            )
+
     summary = {
         "fold": int(fold_index),
         "train_dates": [
@@ -604,6 +689,7 @@ def _summarize_fold_candidates(
         "valid_stability_guardrail": build_stability_guardrail(frame=valid_df),
         "test_stability_guardrail": build_stability_guardrail(frame=test_df),
         "best_feasible": _serialize_candidate(best_feasible),
+        "best_feasible_test": best_feasible_test,
         "best_fallback": _serialize_candidate(best_fallback),
         "closest_infeasible": closest_infeasible,
     }

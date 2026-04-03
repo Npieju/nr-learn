@@ -197,9 +197,15 @@ def _summarize_formal_benchmark(folds: list[dict[str, Any]]) -> dict[str, Any]:
     feasible_entries: list[dict[str, Any]] = []
     weighted_roi_numerator = 0.0
     total_bets = 0
+    metric_source_counts: Counter[str] = Counter()
 
     for fold in folds:
-        best_feasible = (fold or {}).get("best_feasible")
+        best_feasible_test = (fold or {}).get("best_feasible_test")
+        metric_source = "test"
+        best_feasible = best_feasible_test
+        if not isinstance(best_feasible, dict):
+            best_feasible = (fold or {}).get("best_feasible")
+            metric_source = "valid_fallback"
         if not isinstance(best_feasible, dict):
             continue
 
@@ -215,9 +221,11 @@ def _summarize_formal_benchmark(folds: list[dict[str, Any]]) -> dict[str, Any]:
 
         weighted_roi_numerator += roi * bets
         total_bets += bets
+        metric_source_counts[metric_source] += 1
         feasible_entries.append(
             {
                 "fold": int((fold or {}).get("fold") or 0),
+                "metric_source": metric_source,
                 "strategy_kind": best_feasible.get("strategy_kind"),
                 "bets": bets,
                 "roi": roi,
@@ -232,6 +240,7 @@ def _summarize_formal_benchmark(folds: list[dict[str, Any]]) -> dict[str, Any]:
         "feasible_fold_count": int(len(feasible_entries)),
         "weighted_roi": weighted_roi,
         "bets_total": int(total_bets),
+        "metric_source_counts": dict(metric_source_counts),
         "folds": feasible_entries,
     }
 

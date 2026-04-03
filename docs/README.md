@@ -98,6 +98,7 @@ NAR の高すぎる AUC / ROI を leak と optimism に分解する監査は [ne
 market dependency を切り分けた後の本線である policy optimism 監査は [next_issue_nar_policy_optimism_audit.md](next_issue_nar_policy_optimism_audit.md) を使う。
 policy optimism の exact phase compare を取る baseline rerun は [next_issue_nar_baseline_pathfixed_rerun_for_policy_audit.md](next_issue_nar_baseline_pathfixed_rerun_for_policy_audit.md) を使う。
 policy optimism の exact compare 後に conservative short-circuit を入れる corrective issue は [next_issue_nar_promotion_alignment_short_circuit.md](next_issue_nar_promotion_alignment_short_circuit.md) を使う。
+formal benchmark を held-out test metrics に揃える corrective issue は [next_issue_nar_holdout_formal_benchmark_alignment.md](next_issue_nar_holdout_formal_benchmark_alignment.md) を使う。
 
 tail loader optimization の gate 運用は [tail_loader_equivalence_gate_standard.md](tail_loader_equivalence_gate_standard.md) を使う。
 

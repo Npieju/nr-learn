@@ -5,9 +5,11 @@ import tempfile
 import unittest
 
 from scripts.run_wf_feasibility_diag import (
+    _build_candidate_snapshot_from_metrics,
     _count_outer_search_steps,
     _count_strategy_evals_per_outer_step,
     _resolve_feasibility_output_paths,
+    _extract_strategy_params,
     _should_emit_checkpoint,
 )
 
@@ -120,6 +122,34 @@ class WfFeasibilityProgressHelpersTest(unittest.TestCase):
             )
             self.assertEqual(summary_path, report_dir / "wf_feasibility_diag_local_baseline_wf_runtime_narrow_wf_fast_nested.json")
             self.assertEqual(detail_path, report_dir / "wf_feasibility_diag_local_baseline_wf_runtime_narrow_wf_fast_nested.csv")
+
+    def test_extract_strategy_params_and_snapshot_for_portfolio(self) -> None:
+        row = {
+            "strategy_kind": "portfolio",
+            "blend_weight": 0.4,
+            "min_prob": 0.05,
+            "odds_min": 1.0,
+            "odds_max": 40.0,
+            "top_k": 1,
+            "min_expected_value": 1.05,
+        }
+        params = _extract_strategy_params(row)
+        snapshot = _build_candidate_snapshot_from_metrics(
+            strategy_kind="portfolio",
+            params=params,
+            metrics={
+                "portfolio_roi": 0.82,
+                "portfolio_bets": 611,
+                "portfolio_hit_rate": 0.14,
+                "portfolio_final_bankroll": 0.93,
+                "portfolio_max_drawdown": 0.31,
+            },
+        )
+        self.assertEqual(snapshot["strategy_kind"], "portfolio")
+        self.assertEqual(snapshot["params"]["top_k"], 1)
+        self.assertEqual(snapshot["params"]["min_expected_value"], 1.05)
+        self.assertEqual(snapshot["bets"], 611)
+        self.assertAlmostEqual(snapshot["roi"], 0.82)
 
 
 if __name__ == "__main__":

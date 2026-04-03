@@ -17,30 +17,38 @@
 
 ## 3. Current Issue Set
 
-### 3.0 Current Queue As Of 2026-04-02
+### 3.0 Current Queue As Of 2026-04-03
 
 NAR separate-universe line は、baseline narrow と `jockey_trainer_combo_replay_v1_pathfix` まで formal `pass / promote` を通した。  
-その後の integrity audit で、次が確認できた。
+その後の integrity audit と corrective で、次が確認できた。
 
 - high AUC / high EV ROI の大部分は `odds / popularity` 依存
 - no-market ablation でも policy 自体は成立
-- したがって次の本線は feature family 追加ではなく `policy / promotion optimism` 監査
+- baseline pathfix line は evaluation `3/3 no_bet + bets=0` でも formal 側で uplift していた
+- `#72` で `3/3 no_bet + bets=0` line の formal promote は short-circuit 済み
+- したがって次の本線は feature family 追加ではなく `held-out formal benchmark alignment`
 
-Primary completed issue:
+Primary completed issues:
 
 - `#69`
 - <https://github.com/Npieju/nr-learn/issues/69>
+- `#70`
+- <https://github.com/Npieju/nr-learn/issues/70>
+- `#71`
+- <https://github.com/Npieju/nr-learn/issues/71>
+- `#72`
+- <https://github.com/Npieju/nr-learn/issues/72>
 
 Primary active issue:
 
-- `#70`
-- <https://github.com/Npieju/nr-learn/issues/70>
+- `#73`
+- <https://github.com/Npieju/nr-learn/issues/73>
 
 Primary next execution order:
 
-1. `#70` の exact compare を decision summary として固定する
-2. baseline pathfix rerun `#71` を close する
-3. conservative short-circuit / promotion alignment の corrective issue を次の本線にする
+1. `wf_summary.best_feasible` と held-out test metrics の差分を formal benchmark source として分離する
+2. `promotion_gate` formal benchmark を held-out test metrics ベースに揃える
+3. baseline narrow path-fixed rerun で old formal ROI と new held-out formal ROI を比較する
 
 ### 3.0 Current Queue After Tail Micro-Cut Exhaustion
 
