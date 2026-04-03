@@ -14,40 +14,51 @@ if NAR formal benchmark の過大な ROI は policy / promotion 側の optimisti
 
 ## Current Read
 
-- baseline narrow formal:
-  - `formal_benchmark_weighted_roi=3.6903437891931246`
-  - `formal_benchmark_bets_total=3725`
-  - `bets / races = 3725 / 28997 = 12.85%`
+exact compare は path-fixed baseline rerun まで含めて確定した。
+
+- compare artifacts:
+  - `artifacts/reports/nar_policy_optimism_phase_compare_baseline_vs_no_market_v1.json`
+  - `artifacts/reports/nar_policy_optimism_phase_compare_baseline_pathfix_vs_no_market_v2.json`
+
+- baseline pathfix evaluation:
+  - `auc=0.8775363015459904`
+  - `ev_top1_roi=1.940849373663306`
+  - nested WF: `3/3 no_bet`
+  - `wf_nested_test_bets_total=0`
+- baseline pathfix formal:
+  - `formal_benchmark_weighted_roi=3.293016875212951`
+  - `formal_benchmark_bets_total=4323`
+  - `bets / races = 4323 / 28997 = 14.91%`
+- no-market evaluation:
+  - `auc=0.7671689422296566`
+  - `ev_top1_roi=0.47997759445972094`
+  - nested WF: `3/3 portfolio`
+  - `wf_nested_test_bets_total=2302`
 - no-market formal:
   - `formal_benchmark_weighted_roi=0.8103764478764478`
   - `formal_benchmark_bets_total=8288`
   - `bets / races = 8288 / 28997 = 28.58%`
-- no-market evaluation:
-  - `auc=0.7671689422296566`
-  - `ev_top1_roi=0.47997759445972094`
-  - `wf_nested_test_roi_weighted=0.6824500434404865`
-  - `wf_nested_test_bets_total=2302`
-- compare artifact:
-  - `artifacts/reports/nar_policy_optimism_phase_compare_baseline_vs_no_market_v1.json`
 
-phase compare の first read は次である。
+phase compare の exact read は次である。
 
 - evaluation AUC:
   - `0.8775 -> 0.7672`
 - evaluation EV top1 ROI:
   - `1.9408 -> 0.4800`
+- evaluation nested bets:
+  - `0 -> 2302`
 - formal weighted ROI:
-  - `3.6903 -> 0.8104`
+  - `3.2930 -> 0.8104`
 - formal bets total:
-  - `3525 -> 8288`
+  - `4323 -> 8288`
 - formal bet rate:
-  - `12.85% -> 28.58%`
+  - `14.91% -> 28.58%`
 
-この差分から、current formal line の異常な強さは feature set より policy / promotion 側の selection によって大きく増幅されている可能性が高い。
+この差分でいちばん重要なのは、baseline pathfix line が evaluation 段では `3/3 no_bet` なのに、formal 段では `4323 bets`, `weighted_roi=3.2930` まで持ち上がることである。  
+つまり current NAR line の異常な強さは feature set より `wf_feasibility / promotion` 側の selection で発生している、と読むのが妥当である。
 
-ただし baseline narrow 側の exact phase compare には制約がある。  
-historical baseline narrow promotion gate は generic `wf_summary` を auto-resolve しており、fold-level exact compare は current no-market run ほど clean ではない。  
-したがって次の実行単位は、baseline narrow を path-fixed revision gate で 1 本 rerun し、versioned `wf_summary` と versioned `promotion_gate` を同一 tuple で取り直すことである。
+historical baseline narrow の旧 read より path-fixed rerun のほうが lower ROI (`3.6903 -> 3.2930`) ではあるが、phase gap 自体は再現した。  
+したがって `#70` は diagnosis issue として close してよく、次の実行単位は conservative short-circuit / promotion alignment の corrective issue に切り替える。
 
 ## In Scope
 

@@ -35,14 +35,12 @@ Primary active issue:
 
 - `#70`
 - <https://github.com/Npieju/nr-learn/issues/70>
-- `#71`
-- <https://github.com/Npieju/nr-learn/issues/71>
 
 Primary next execution order:
 
-1. `#69` の結果を decision summary として固定する
-2. `#70` で `evaluation summary -> wf_feasibility -> promotion gate` のどこで ROI が過大化しているかを phase 分解する
-3. `#71` で baseline narrow を path-fixed rerun し、versioned `wf_summary` と versioned `promotion_gate` を同一 tuple で揃える
+1. `#70` の exact compare を decision summary として固定する
+2. baseline pathfix rerun `#71` を close する
+3. conservative short-circuit / promotion alignment の corrective issue を次の本線にする
 
 ### 3.0 Current Queue After Tail Micro-Cut Exhaustion
 
