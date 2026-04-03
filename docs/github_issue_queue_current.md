@@ -91,7 +91,7 @@ Latest fallback compare:
 Current open-work expectation:
 
 1. JRA 本線は新しい hypothesis issue を切る段階
-2. `gate/frame/course` extension は broad default でも September fallback でもなく compare reference として保持する
+2. `gate/frame/course` extension は broad default でも September fallback primary でも September overlay でもなく、compare reference に留める
 3. `current_sep_guard_candidate` は September seasonal fallback のまま据え置く
 
 Primary next issue draft:
