@@ -142,7 +142,12 @@ Latest actual-date role split:
 
 Primary next issue draft:
 
-- none
+- `docs/next_issue_tighter_policy_september_fallback_compare.md`
+
+Current active issue:
+
+- `#89`
+- <https://github.com/Npieju/nr-learn/issues/89>
 
 Latest breeder signal read:
 
