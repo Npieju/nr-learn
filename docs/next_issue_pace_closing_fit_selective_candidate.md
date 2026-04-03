@@ -72,3 +72,79 @@ defer:
 - focal features が gap read で low coverage / missing 扱いになる
 - actual selected set に入らない
 - support が baseline 比で明確に壊れる
+
+## Actual Execution Read
+
+- feature-gap:
+  - `artifacts/reports/feature_gap_summary_pace_closing_fit_selective_v1.json`
+  - `priority_missing_raw_columns=[]`
+  - `missing_force_include_features=[]`
+  - `low_coverage_force_include_features=[]`
+- focal coverage:
+  - `horse_last_3_avg_closing_time_3f = 0.747725`
+  - `course_baseline_race_pace_balance_3f = 0.706467`
+  - `horse_closing_vs_course = 0.507808`
+
+true component retrain:
+
+- win:
+  - `artifacts/reports/train_metrics_catboost_win_high_coverage_diag_r20260403_pace_closing_fit_selective_v1.json`
+  - `auc=0.8396600832597482`
+  - `best_iteration=375`
+- roi:
+  - `artifacts/reports/train_metrics_lightgbm_roi_high_coverage_diag_r20260403_pace_closing_fit_selective_v1.json`
+  - `top1_roi=0.9250361794500714`
+  - `best_iteration=78`
+
+actual used feature set:
+
+- win / roi の両方で次が selected に入った
+  - `horse_last_3_avg_closing_time_3f`
+  - `course_baseline_race_pace_balance_3f`
+  - `horse_closing_vs_course`
+
+execution note:
+
+- `value_blend` family の compare は suffixed build config ではなく base stack config を使い、`--evaluate-model-artifact-suffix r20260403_pace_closing_fit_selective_v1` を渡して formal compare した
+- suffixed stack config を直接 `revision_gate` に渡すと model path が二重 suffix になる
+
+## Final Read
+
+- revision:
+  - `r20260403_pace_closing_fit_selective_v1`
+- evaluation summary:
+  - `artifacts/reports/evaluation_summary_catboost_value_stack_lgbm_roi_high_coverage_tune_roi012_liquidity_regime_hybrid_model_r20260403_pace_closing_fit_selective_v1.json`
+  - `auc=0.8411224406691354`
+  - `top1_roi=0.7982417834980464`
+  - `ev_top1_roi=0.6212479889680533`
+  - `wf_nested_test_roi_weighted=0.8857142857142858`
+  - `wf_nested_test_bets_total=357`
+  - nested WF: `no_bet / portfolio / portfolio`
+- promotion / formal:
+  - `artifacts/reports/revision_gate_r20260403_pace_closing_fit_selective_v1.json`
+  - `status=pass`
+  - `decision=promote`
+  - `formal_benchmark_weighted_roi=1.0307760253096685`
+  - `formal_benchmark_bets_total=938`
+  - `formal_benchmark_feasible_fold_count=3`
+  - `bets / races / bet_rate = 938 / 6244 = 15.02%`
+
+baseline refresh compare:
+
+- baseline refresh:
+  - `auc=0.8400959298075428`
+  - `top1_roi=0.8070328660078143`
+  - `ev_top1_roi=0.5568030337853367`
+  - `wf_nested_test_roi_weighted=0.7628366750468021`
+  - `wf_nested_test_bets_total=544`
+- candidate read:
+  - `auc` は小幅に上
+  - `ev_top1_roi` と nested WF weighted ROI は上
+  - `top1_roi` と nested WF bet count は下
+  - held-out formal `weighted_roi` は `> 1.0`
+
+decision:
+
+- selective pace family は formal candidate として成立した
+- ただし serving role は未確定
+- 次は actual-date role split を切り、serving default contender か `analysis-first promoted candidate` かを分ける

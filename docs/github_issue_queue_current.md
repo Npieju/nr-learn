@@ -94,14 +94,28 @@ Current open-work expectation:
 2. `gate/frame/course` extension は broad default でも September fallback primary でも September overlay でもなく、compare reference に留める
 3. `current_sep_guard_candidate` は September seasonal fallback のまま据え置く
 
+Latest formal completion:
+
+1. `#83` pace-closing-fit selective candidate は formal `pass / promote` まで完了した
+2. first child `r20260403_pace_closing_fit_selective_v1` は
+   - `auc=0.8411224406691354`
+   - `top1_roi=0.7982417834980464`
+   - `ev_top1_roi=0.6212479889680533`
+   - `wf_nested_test_roi_weighted=0.8857142857142858`
+   - `wf_nested_test_bets_total=357`
+   - held-out formal `weighted_roi=1.0307760253096685`
+   - `formal_benchmark_bets_total=938`
+   - `bets / races / bet_rate = 938 / 6244 = 15.02%`
+3. baseline refresh 比では `auc`, `ev_top1_roi`, nested WF weighted ROI は小幅に上、`top1_roi` と nested WF bet count は下
+4. したがって next execution source は actual-date role split である
+
 Primary next issue draft:
 
-- `docs/next_issue_pace_closing_fit_selective_candidate.md`
+- `docs/next_issue_pace_closing_fit_actual_date_role_split.md`
 
 Current active issue:
 
-- `#83`
-- <https://github.com/Npieju/nr-learn/issues/83>
+- `#84`
 
 ### 3.0 Current Queue After Tail Micro-Cut Exhaustion
 
