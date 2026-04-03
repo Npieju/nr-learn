@@ -61,6 +61,16 @@ Primary next execution order:
 2. `tighter policy search` family は `abs90` anchor を維持し、near-par challenger は reference 扱いに留める
 3. NAR side は held-out formal benchmark を正本に維持し、新 hypothesis は必要時に別 issue で切る
 
+Latest reread completions:
+
+- `surface_plus_class_layoff` widening reread は close
+- `sep_guard` ordering reread も existing artifact だけで close 可能
+
+Next open work expectation:
+
+1. JRA の次 hypothesis は serving role ordering ではなく、新 family か shared portfolio bottleneck 改善で切る
+2. `current_long_horizon_serving_2025_latest` を first seasonal alias、`current_sep_guard_candidate` を second seasonal fallback として据え置く
+
 Primary next issue draft:
 
 - `docs/next_issue_surface_plus_class_layoff_exposure_widening.md`

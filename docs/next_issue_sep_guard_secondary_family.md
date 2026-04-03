@@ -95,3 +95,41 @@ Stop Condition
 - first seasonal alias は引き続き `current_long_horizon_serving_2025_latest`
 - `current_sep_guard_candidate` は second seasonal fallback として保持する
 - selected-rows family のその他 variant は analysis-only に留める
+
+## 5. Result
+
+existing artifact reread だけで ordering を固定できる。
+
+- broad September 10 日 compare:
+  - baseline `58 bets / total net -21.6`
+  - `current_sep_guard_candidate` `25 bets / total net +12.7067`
+  - pure path bankroll:
+    - baseline `0.2590`
+    - candidate `1.0008`
+- May-Sep full recent 35 shared dates compare:
+  - baseline `136 bets / total net -42.2080`
+  - `current_sep_guard_candidate` `103 bets / total net -7.9014`
+  - pure path bankroll:
+    - baseline `0.1886`
+    - candidate `0.7290`
+  - differing policy dates は September 10 日だけ
+- current long-horizon alias compare:
+  - September 2025 latest:
+    - baseline `32 bets / total net -27.3`
+    - long-horizon `9 bets / total net -4.3`
+  - December 2025 control:
+    - baseline `3 bets / total net +14.9`
+    - long-horizon `3 bets / total net +14.9`
+
+したがって current ordering は次で固定する。
+
+- baseline default:
+  - `current_recommended_serving_2025_latest`
+- first seasonal alias:
+  - `current_long_horizon_serving_2025_latest`
+- second seasonal fallback:
+  - `current_sep_guard_candidate`
+- selected-rows September guard variants:
+  - analysis-only
+
+next action は Sep guard family の再探索ではなく、別 family hypothesis か shared portfolio bottleneck の改善である。
