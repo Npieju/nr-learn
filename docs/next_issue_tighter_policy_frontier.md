@@ -114,3 +114,41 @@ if `tighter policy search` family の threshold frontier を `ratio`, `min_bets_
 - `artifacts/reports/promotion_gate_r20260326_tighter_policy_ratio003.json`
 - `artifacts/reports/promotion_gate_r20260327_tighter_policy_ratio003_abs80.json`
 - `docs/policy_family_shortlist.md`
+
+## 6. Final Read
+
+existing artifact compare で frontier decision は固定できた。
+
+- anchor A:
+  - `r20260329_tighter_policy_ratio003_abs90`
+  - formal `weighted_roi=1.1042287961989103`
+  - `feasible_folds=5/5`
+  - `bets_total=598`
+- challenger B:
+  - `r20260329_tighter_policy_ratio003_abs90_minprob005`
+  - evaluation decisive fields は anchor と実質同値
+  - revision gate は `wf_feasibility_failed`
+  - distinct challenger として扱う根拠が弱い
+- challenger C:
+  - `r20260329_tighter_policy_ratio003_abs90_odds25`
+  - evaluation `wf_nested_test_roi_weighted` は微増
+    - `0.9153552319682917 -> 0.916134557600003`
+  - formal `weighted_roi` は微減
+    - `1.1042287961989103 -> 1.1038859989058847`
+  - `feasible_folds=5/5`, `bets_total=598` は anchor と同じ
+
+compare artifact:
+
+- `artifacts/reports/jra_tighter_policy_frontier_compare_v1.json`
+
+decision:
+
+- strictest defensible anchor は引き続き `abs90`
+- `odds25` は near-par reference で、anchor replacement 根拠には足りない
+- `minprob005` は no-op/equivalence lesson として扱う
+- したがって、この frontier issue では新しい formal rerun は不要
+
+next step:
+
+- JRA 本線は `tighter policy frontier` を一段閉じる
+- 次の JRA execution は別の measurable hypothesis issue として切り出す

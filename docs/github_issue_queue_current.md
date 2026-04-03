@@ -31,6 +31,7 @@ NAR separate-universe line は、baseline narrow と `jockey_trainer_combo_repla
 - `#74` で local Nankan promotion gate に held-out formal `weighted_roi >= 1.0` の minimal guard を入れた
 - `#67` owner replay は no-op ではなかったが evaluation `3/3 no_bet + bets=0` で reject と確定した
 - `#49` jockey-trainer-combo family は first child と role split まで終え、analysis-first promoted candidate で一段落した
+- `#75` tighter policy frontier は existing artifact compare で再確定し、strictest defensible anchor は引き続き `abs90` で据え置きと結論した
 - したがって current NAR corrective stack は `#72` no-bet short-circuit, `#73` held-out alignment, `#74` threshold realignment まで完了した
 
 Primary completed issues:
@@ -51,16 +52,13 @@ Primary completed issues:
 - <https://github.com/Npieju/nr-learn/issues/67>
 - `#49`
 - <https://github.com/Npieju/nr-learn/issues/49>
-
-Primary active issue:
-
 - `#75`
 - <https://github.com/Npieju/nr-learn/issues/75>
 
 Primary next execution order:
 
-1. primary objective に沿って JRA policy frontier を再開する
-2. `tighter policy search` family の narrow frontier を再探索し、strictest defensible candidate を 1 本に絞る
+1. JRA 本線は new hypothesis issue を切って再開する
+2. `tighter policy search` family は `abs90` anchor を維持し、near-par challenger は reference 扱いに留める
 3. NAR side は held-out formal benchmark を正本に維持し、新 hypothesis は必要時に別 issue で切る
 
 ### 3.0 Current Queue After Tail Micro-Cut Exhaustion
