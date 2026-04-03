@@ -61,6 +61,21 @@ Primary next execution order:
 2. `tighter policy search` family は `abs90` anchor を維持し、near-par challenger は reference 扱いに留める
 3. NAR side は held-out formal benchmark を正本に維持し、新 hypothesis は必要時に別 issue で切る
 
+Primary next issue draft:
+
+- `docs/next_issue_surface_plus_class_layoff_exposure_widening.md`
+
+Primary active issue:
+
+- `#76`
+- <https://github.com/Npieju/nr-learn/issues/76>
+
+Immediate execution expectation:
+
+1. `surface_plus_class_layoff` promoted line の policy-side widening read を reopen する
+2. feature family は固定し、existing September / December artifact を denominator-first で再読する
+3. widening が引き続き suppressive なら、role を `analysis-first promoted` のまま固定して close する
+
 ### 3.0 Current Queue After Tail Micro-Cut Exhaustion
 
 2026-03-29 時点で、Kelly runtime family (`#10`, `#11`, `#12`, `#13`)、seasonal ordering (`#14`, `#15`)、runtime broad reduction (`#7`)、supplemental materialization (`#16`)、feature-builder runtime (`#17`) は close 済みである。loader runtime の small safe cuts を進めた `#18` も wrap-up 段階にあり、current operational anchor は引き続き `r20260329_tighter_policy_ratio003_abs90` である。
