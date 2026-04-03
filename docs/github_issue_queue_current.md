@@ -72,8 +72,12 @@ Latest reread completions:
 
 Next open work expectation:
 
-1. JRA の次 hypothesis は shared portfolio bottleneck ではなく、新しい feature family か policy family に切る
+1. JRA の次 hypothesis は gate/frame/course family の regime extension に切る
 2. `current_long_horizon_serving_2025_latest` を first seasonal alias、`current_sep_guard_candidate` を second seasonal fallback として据え置く
+
+Primary next issue draft:
+
+- `docs/next_issue_gate_frame_course_regime_extension.md`
 
 Primary next issue draft:
 
