@@ -72,12 +72,13 @@ Latest reread completions:
 
 Next open work expectation:
 
-1. JRA の次 hypothesis は gate/frame/course family の regime extension に切る
-2. `current_long_horizon_serving_2025_latest` を first seasonal alias、`current_sep_guard_candidate` を second seasonal fallback として据え置く
+1. `#79` gate/frame/course regime extension は formal `pass / promote` まで完了した
+2. 次は actual-date compare による role split を別 issue で切る
+3. `current_long_horizon_serving_2025_latest` を first seasonal alias、`current_sep_guard_candidate` を second seasonal fallback として据え置く
 
 Primary next issue draft:
 
-- `docs/next_issue_gate_frame_course_regime_extension.md`
+- `docs/next_issue_gate_frame_course_actual_date_role_split.md`
 
 Primary next issue draft:
 

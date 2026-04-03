@@ -103,6 +103,54 @@ JRA current baseline は `value_blend` なので、direct revision gate train �
 3. stack rebuild
 4. `run_revision_gate.py --skip-train --evaluate-model-artifact-suffix ...`
 
+## Final Read
+
+- revision:
+  - `r20260403_gate_frame_course_regime_extension_v1`
+- feature candidate:
+  - `course_baseline_race_pace_balance_3f`
+- actual used feature set:
+  - win / roi / stack の全てで selected
+  - stack feature count `109`
+
+formal result:
+
+- evaluation summary:
+  - `auc=0.8426169492248933`
+  - `top1_roi=0.8082087836284203`
+  - `ev_top1_roi=0.8213612324672338`
+  - `wf_nested_test_roi_weighted=0.7632385120350111`
+  - `wf_nested_test_bets_total=457`
+  - nested WF: `3/3 portfolio`
+- promotion gate:
+  - `status=pass`
+  - `decision=promote`
+  - held-out formal:
+    - `weighted_roi=1.2311149102465346`
+    - `bets_total=9806`
+    - `feasible_fold_count=3`
+    - `metric_source_counts={'test': 3}`
+
+baseline compare:
+
+- current recommended serving benchmark refresh:
+  - `auc=0.8400959298075428`
+  - `top1_roi=0.8070328660078143`
+  - `ev_top1_roi=0.5568030337853367`
+  - `wf_nested_test_roi_weighted=0.7628366750468021`
+  - `wf_nested_test_bets_total=544`
+
+interpretation:
+
+- first child は formal candidate として成立
+- evaluation top-line は baseline refresh を小幅に上回る
+- held-out formal ROI も `1.2311` と `>1.0` を維持する
+- 一方で actual-date operational role はまだ未読なので、直ちに serving default へ昇格させる段階ではない
+
+next:
+
+- actual-date compare と role split は別 issue で切る
+
 ## Expected Artifacts
 
 - family read summary
