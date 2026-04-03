@@ -29,6 +29,7 @@ NAR separate-universe line は、baseline narrow と `jockey_trainer_combo_repla
 - `#73` で formal benchmark は held-out test metrics に揃えた
 - no-market rerun では old formal `ROI=0.8104` が held-out formal `ROI=0.7234` へ低下した
 - `#74` で local Nankan promotion gate に held-out formal `weighted_roi >= 1.0` の minimal guard を入れた
+- `#67` owner replay は no-op ではなかったが evaluation `3/3 no_bet + bets=0` で reject と確定した
 - したがって current NAR corrective stack は `#72` no-bet short-circuit, `#73` held-out alignment, `#74` threshold realignment まで完了した
 
 Primary completed issues:
@@ -45,12 +46,14 @@ Primary completed issues:
 - <https://github.com/Npieju/nr-learn/issues/73>
 - `#74`
 - <https://github.com/Npieju/nr-learn/issues/74>
+- `#67`
+- <https://github.com/Npieju/nr-learn/issues/67>
 
 Primary next execution order:
 
 1. NAR line の対外 read は held-out formal benchmark を正本に統一する
-2. 次の NAR issue は corrective ではなく new hypothesis に戻す
-3. residual な promotion policy redesign が必要なら新 issue として切り出す
+2. NAR side は new hypothesis を切る前に、primary objective に沿って JRA `#49` に戻る
+3. residual な NAR promotion policy redesign が必要なら新 issue として切り出す
 
 ### 3.0 Current Queue After Tail Micro-Cut Exhaustion
 

@@ -83,3 +83,38 @@ first candidate は `owner_last_50_win_rate` single-feature replay とする。
 - feature gap 上で buildable / selected が確認できた owner family はこの 1 本だった
 - baseline `13 -> 14 features` なので no-op ではない
 - lineage-heavy family に広げる前に、owner 単独の寄与を denominator-first で切り分ける方が defensible
+
+## Final Read
+
+- selected features:
+  - baseline `13 -> 14`
+  - add-on: `owner_last_50_win_rate`
+- train:
+  - `auc=0.8767369642509365`
+  - `logloss=0.19887688245375362`
+  - `best_iteration=127`
+- evaluation:
+  - `auc=0.8758971346059222`
+  - `top1_roi=0.8301863733577758`
+  - `ev_top1_roi=1.0519299317649455`
+  - `wf_nested_test_bets_total=0`
+  - nested WF: `3/3 no_bet`
+  - `stability_assessment=representative`
+
+interpretation:
+
+- owner replay は no-op ではない
+- ただし evaluation 段で `3/3 no_bet + bets=0`
+- current promoted combo line と baseline narrow のどちらも clean challenge できていない
+- `#72` 以後の rule では formal promote 前に `hold` へ short-circuit される shape である
+
+decision:
+
+- owner replay は reject で close
+- 次の本線は owner family widening ではなく、primary objective に沿って JRA `#49` へ戻す
+
+## Artifacts
+
+- `artifacts/reports/evaluation_summary_local_nankan_baseline_model_r20260330_local_nankan_owner_signal_replay_v1.json`
+- `artifacts/reports/train_metrics_local_nankan_r20260330_local_nankan_owner_signal_replay_v1.json`
+- `artifacts/models/local_nankan_baseline_model.manifest_r20260330_local_nankan_owner_signal_replay_v1.json`
