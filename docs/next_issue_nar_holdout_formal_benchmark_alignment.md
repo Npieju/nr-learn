@@ -40,6 +40,44 @@ code read:
 
 つまり current formal benchmark は held-out test benchmark ではなく、valid-selected metrics の aggregate になっている。
 
+## Final Read
+
+implementation:
+
+- `scripts/run_wf_feasibility_diag.py`
+  - valid で選んだ feasible params を fold test に再適用し、`folds[].best_feasible_test` を出力
+- `scripts/run_promotion_gate.py`
+  - formal benchmark は `best_feasible_test` を優先集計
+  - historical artifact だけ `valid_fallback` を許容
+
+local Nankan no-market held-out rerun:
+
+- revision:
+  - `r20260403_local_nankan_baseline_no_market_holdout_audit_v1`
+- evaluation:
+  - `auc=0.7671690217292251`
+  - `top1_roi=0.7877482432019554`
+  - `ev_top1_roi=0.47997759445972094`
+  - `wf_nested_test_roi_weighted=0.6824500434404865`
+  - `wf_nested_test_bets_total=2302`
+- old formal:
+  - `weighted_roi=0.8103764478764478`
+  - `bets_total=8288`
+  - `bet_rate=28.58%`
+- held-out formal:
+  - `weighted_roi=0.7234044858597899`
+  - `bets_total=9229`
+  - `bet_rate=31.83%`
+  - `metric_source_counts={test: 3}`
+
+interpretation:
+
+- held-out alignment で no-market formal ROI は `0.8104 -> 0.7234` に低下
+- したがって、旧 formal benchmark は valid-based な optimistic uplift を含んでいた
+- `metric_source_counts={test: 3}` により、new formal benchmark は fold test のみを source にしている
+- `#72` の short-circuit が入ったため、baseline narrow 自体は held-out formal まで進まない
+- それでも `#73` の corrective 自体は no-market rerun で十分に validation できた
+
 ## In Scope
 
 - `scripts/run_wf_feasibility_diag.py`
@@ -69,3 +107,10 @@ code read:
 
 - held-out alignment だけでは uplift がほぼ消えず、policy search redesign が先に必要と分かる
 - 変更が historical artifact 読みを不必要に壊す
+
+## Artifacts
+
+- `artifacts/reports/evaluation_summary_local_nankan_baseline_model_r20260403_local_nankan_baseline_no_market_holdout_audit_v1.json`
+- `artifacts/reports/wf_feasibility_diag_r20260403_local_nankan_baseline_no_market_holdout_audit_v1.json`
+- `artifacts/reports/promotion_gate_r20260403_local_nankan_baseline_no_market_holdout_audit_v1.json`
+- `artifacts/reports/nar_holdout_formal_compare_no_market_v1.json`

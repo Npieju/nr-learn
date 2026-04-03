@@ -26,7 +26,9 @@ NAR separate-universe line は、baseline narrow と `jockey_trainer_combo_repla
 - no-market ablation でも policy 自体は成立
 - baseline pathfix line は evaluation `3/3 no_bet + bets=0` でも formal 側で uplift していた
 - `#72` で `3/3 no_bet + bets=0` line の formal promote は short-circuit 済み
-- したがって次の本線は feature family 追加ではなく `held-out formal benchmark alignment`
+- `#73` で formal benchmark は held-out test metrics に揃えた
+- no-market rerun では old formal `ROI=0.8104` が held-out formal `ROI=0.7234` へ低下した
+- したがって next NAR audit は `promotion policy` 自体の conservative redesign が論点で、formal source alignment は完了した
 
 Primary completed issues:
 
@@ -38,17 +40,14 @@ Primary completed issues:
 - <https://github.com/Npieju/nr-learn/issues/71>
 - `#72`
 - <https://github.com/Npieju/nr-learn/issues/72>
-
-Primary active issue:
-
 - `#73`
 - <https://github.com/Npieju/nr-learn/issues/73>
 
 Primary next execution order:
 
-1. `wf_summary.best_feasible` と held-out test metrics の差分を formal benchmark source として分離する
-2. `promotion_gate` formal benchmark を held-out test metrics ベースに揃える
-3. baseline narrow path-fixed rerun で old formal ROI と new held-out formal ROI を比較する
+1. `promotion policy` が held-out aligned formal source 上でも過度に optimistic でないか再監査する
+2. `evaluation no_bet` と `formal promote` のズレをさらに狭める conservative redesign を issue 化する
+3. NAR line の対外 read は held-out formal benchmark を正本に統一する
 
 ### 3.0 Current Queue After Tail Micro-Cut Exhaustion
 
