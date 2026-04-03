@@ -145,11 +145,12 @@ interpretation:
 - first child は formal candidate として成立
 - evaluation top-line は baseline refresh を小幅に上回る
 - held-out formal ROI も `1.2311` と `>1.0` を維持する
-- 一方で actual-date operational role はまだ未読なので、直ちに serving default へ昇格させる段階ではない
+- ただし `#80` の actual-date role split で September difficult window は改善した一方、December control window は baseline 劣後と確定した
+- したがって operational role は `analysis-first promoted candidate` に固定し、serving default へは昇格させない
 
 next:
 
-- actual-date compare と role split は別 issue で切る
+- next new hypothesis へ進む
 
 ## Expected Artifacts
 

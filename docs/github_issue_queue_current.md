@@ -70,25 +70,17 @@ Latest reread completions:
 
 - `shared portfolio bottleneck` narrower regime split reread も existing artifact だけで close 可能
 
-Next open work expectation:
+Latest actual-date role split:
 
 1. `#79` gate/frame/course regime extension は formal `pass / promote` まで完了した
-2. 次は actual-date compare による role split を別 issue で切る
-3. `current_long_horizon_serving_2025_latest` を first seasonal alias、`current_sep_guard_candidate` を second seasonal fallback として据え置く
+2. `#80` actual-date role split で、September difficult window は改善したが December control window は baseline 劣後と確定した
+3. したがって `r20260403_gate_frame_course_regime_extension_v1` の operational role は `analysis-first promoted candidate` に固定し、serving default には上げない
+4. `current_long_horizon_serving_2025_latest` を first seasonal alias、`current_sep_guard_candidate` を second seasonal fallback として据え置く
 
-Primary next issue draft:
+Current open-work expectation:
 
-- `docs/next_issue_gate_frame_course_actual_date_role_split.md`
-
-Primary next issue draft:
-
-- `docs/next_issue_surface_plus_class_layoff_exposure_widening.md`
-
-Immediate execution expectation:
-
-1. `surface_plus_class_layoff` promoted line の policy-side widening reread は existing artifact だけで close する
-2. feature family は固定し、widening rerun は正当化しない
-3. 次は JRA の別 hypothesis か serving role ordering 側の issue を切る
+1. JRA 本線は次の new hypothesis issue を切って再開する
+2. `gate/frame/course` extension は compare reference として保持し、default promotion は行わない
 
 ### 3.0 Current Queue After Tail Micro-Cut Exhaustion
 
