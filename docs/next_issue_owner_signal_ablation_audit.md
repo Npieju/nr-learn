@@ -57,3 +57,63 @@ tracked config:
 - actual selected set から owner が外れない
 - component retrain が no-op に近い
 - formal support が baseline 比で明確に崩れ、analysis value も薄い
+
+## Actual Execution Read
+
+first acceptance point:
+
+- win component:
+  - `artifacts/reports/train_metrics_catboost_win_high_coverage_diag_r20260403_owner_signal_ablation_audit_v1.json`
+  - `auc=0.8346368290924392`
+  - `best_iteration=527`
+- roi component:
+  - `artifacts/reports/train_metrics_lightgbm_roi_high_coverage_diag_r20260403_owner_signal_ablation_audit_v1.json`
+  - `top1_roi=0.8901018922852993`
+  - `best_iteration=111`
+
+actual selected set:
+
+- win / roi の両 component で selected features は `108`
+- `owner_last_50_win_rate` は used features から消えた
+- したがって owner ablation は no-op ではない
+
+stack rebuild:
+
+- `artifacts/models/catboost_value_stack_lgbm_roi_high_coverage_tune_roi012_liquidity_regime_hybrid_model_r20260403_owner_signal_ablation_audit_v1.joblib`
+- stack feature count `108`
+
+## Final Read
+
+- revision:
+  - `r20260403_owner_signal_ablation_audit_v1`
+- evaluation summary:
+  - `artifacts/reports/evaluation_summary_catboost_value_stack_lgbm_roi_high_coverage_tune_roi012_liquidity_regime_hybrid_model_r20260403_owner_signal_ablation_audit_v1.json`
+  - `auc=0.8449770387983483`
+  - `top1_roi=0.4597201921069117`
+  - `ev_top1_roi=0.8105412402909629`
+  - nested WF: `no_bet / no_bet / no_bet`
+  - `wf_nested_test_bets_total=0`
+- revision gate:
+  - `artifacts/reports/revision_gate_r20260403_owner_signal_ablation_audit_v1.json`
+  - `decision=hold`
+  - `error_code=evaluation_nested_all_no_bet_short_circuit`
+
+baseline refresh compare:
+
+- baseline refresh:
+  - `auc=0.8400959298075428`
+  - `top1_roi=0.8070328660078143`
+  - `ev_top1_roi=0.5568030337853367`
+  - `wf_nested_test_roi_weighted=0.7628366750468021`
+  - `wf_nested_test_bets_total=544`
+- owner ablation:
+  - `auc` は上
+  - `ev_top1_roi` も上
+  - ただし nested WF は `3/3 no_bet`, `bets_total=0`
+
+decision:
+
+- owner signal を外すと policy viability が壊れる
+- AUC / EV top-line だけでは baseline 置換根拠にならない
+- owner signal は current baseline で prune しない
+- owner family の次手は widening ではなく、baseline keep decision で一旦固定する

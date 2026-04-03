@@ -115,8 +115,7 @@ Primary next issue draft:
 
 Current active issue:
 
-- `#86`
-- owner signal ablation audit
+- none
 
 Latest September fallback compare:
 
@@ -143,7 +142,20 @@ Latest actual-date role split:
 
 Primary next issue draft:
 
-- `docs/next_issue_owner_signal_ablation_audit.md`
+- none
+
+Latest owner signal audit:
+
+1. `#86` で `owner_last_50_win_rate` を current JRA high-coverage baseline から外した selective ablation を formal compare した
+2. win / roi component の selected features は `109 -> 108` となり、owner は actual used set から外れた
+3. evaluation summary:
+   - `auc=0.8449770387983483`
+   - `top1_roi=0.4597201921069117`
+   - `ev_top1_roi=0.8105412402909629`
+   - nested WF `3/3 no_bet`
+   - `wf_nested_test_bets_total=0`
+4. `#72` の short-circuit により revision gate は `hold`
+5. したがって owner signal は current baseline で prune しない
 
 ### 3.0 Current Queue After Tail Micro-Cut Exhaustion
 
