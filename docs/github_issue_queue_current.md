@@ -157,6 +157,17 @@ Latest owner signal audit:
 4. `#72` の short-circuit により revision gate は `hold`
 5. したがって owner signal は current baseline で prune しない
 
+Latest evaluate progress fix:
+
+1. `#87` で JRA `run_evaluate.py` の `inference complete -> leakage audit started` 無音区間を corrective した
+2. `scripts/run_evaluate.py` に `[evaluate post]` progress を追加し、post-inference phase を
+   - `score sources ready`
+   - `summary payload ready`
+   - `post-inference phases finished`
+   に分解した
+3. smoke log `artifacts/logs/evaluate_post_inference_progress_gap_smoke.log` で `1/3 -> 2/3 -> 3/3` を確認した
+4. calibration 自体は small tail single-class で失敗したが、progress fix の確認目的は達成した
+
 ### 3.0 Current Queue After Tail Micro-Cut Exhaustion
 
 2026-03-29 時点で、Kelly runtime family (`#10`, `#11`, `#12`, `#13`)、seasonal ordering (`#14`, `#15`)、runtime broad reduction (`#7`)、supplemental materialization (`#16`)、feature-builder runtime (`#17`) は close 済みである。loader runtime の small safe cuts を進めた `#18` も wrap-up 段階にあり、current operational anchor は引き続き `r20260329_tighter_policy_ratio003_abs90` である。

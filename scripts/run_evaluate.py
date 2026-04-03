@@ -673,6 +673,13 @@ def main() -> int:
         if odds_col is not None:
             pred = add_market_signals(pred, score_col="score", odds_col=odds_col)
         progress.update(message=f"inference complete rows={len(pred):,} races={pred['race_id'].nunique():,}")
+        post_inference_progress = ProgressBar(
+            total=3,
+            prefix="[evaluate post]",
+            logger=log_progress,
+            min_interval_sec=0.0,
+        )
+        post_inference_progress.start("post-inference phases started")
 
         prediction_sources: dict[str, dict[str, Any]] = {
             "default": {
@@ -725,6 +732,7 @@ def main() -> int:
                     f"Loaded override source '{override_name}' from {override_config_path.relative_to(ROOT)} "
                     f"features={len(override_feature_selection.feature_columns):,}"
                 )
+        post_inference_progress.update(message=f"score sources ready count={len(prediction_sources):,}")
 
         score_is_prob = bool(np.nanmin(outputs.score) >= 0.0 and np.nanmax(outputs.score) <= 1.0)
         compute_prob_metrics = task in {"classification", "ranking", "multi_position"}
@@ -806,6 +814,13 @@ def main() -> int:
             "start": args.start_date,
             "end": args.end_date,
         }
+        post_inference_progress.update(
+            message=(
+                f"summary payload ready auc={summary.get('auc')} "
+                f"top1_roi={summary.get('top1_roi')}"
+            )
+        )
+        post_inference_progress.complete(message="post-inference phases finished")
 
         if leakage_enabled:
             with Heartbeat("[evaluate]", "running leakage audit", logger=log_progress):
