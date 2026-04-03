@@ -144,6 +144,18 @@ Primary next issue draft:
 
 - none
 
+Latest breeder signal read:
+
+1. `#88` で `breeder_last_50_win_rate` 単体 add-on を feature-gap で読んだ
+2. result:
+   - `selected=True`
+   - `present=True`
+   - `non_null_ratio=0.18955`
+   - `status=low_coverage`
+3. `low_coverage_force_include_features=['breeder_last_50_win_rate']`
+4. したがって breeder 単体でも current high-coverage line には薄すぎる
+5. lineage family は引き続き primary な next bet に戻さない
+
 Latest owner signal audit:
 
 1. `#86` で `owner_last_50_win_rate` を current JRA high-coverage baseline から外した selective ablation を formal compare した
