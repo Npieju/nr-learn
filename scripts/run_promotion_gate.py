@@ -245,6 +245,39 @@ def _summarize_formal_benchmark(folds: list[dict[str, Any]]) -> dict[str, Any]:
     }
 
 
+def _formal_weighted_roi_check(*, formal_benchmark: dict[str, Any], min_weighted_roi: float | None) -> tuple[dict[str, Any] | None, str | None]:
+    if min_weighted_roi is None:
+        return None, None
+
+    weighted_roi_raw = formal_benchmark.get("weighted_roi")
+    try:
+        weighted_roi = float(weighted_roi_raw)
+    except (TypeError, ValueError):
+        return (
+            _build_check(
+                "formal_benchmark_min_weighted_roi",
+                False,
+                {
+                    "min_formal_weighted_roi": float(min_weighted_roi),
+                    "observed_formal_weighted_roi": weighted_roi_raw,
+                },
+            ),
+            "Formal benchmark weighted ROI is missing or invalid",
+        )
+
+    return (
+        _build_check(
+            "formal_benchmark_min_weighted_roi",
+            weighted_roi >= float(min_weighted_roi),
+            {
+                "min_formal_weighted_roi": float(min_weighted_roi),
+                "observed_formal_weighted_roi": weighted_roi,
+            },
+        ),
+        f"Formal benchmark weighted ROI is below threshold: {weighted_roi:.6f} < {float(min_weighted_roi):.6f}",
+    )
+
+
 def _read_order() -> list[str]:
     return [
         "promotion_gate_report",
@@ -339,6 +372,7 @@ def main() -> int:
     parser.add_argument("--wf-summary", default=None)
     parser.add_argument("--min-feasible-folds", type=int, default=1)
     parser.add_argument("--output", default=DEFAULT_OUTPUT)
+    parser.add_argument("--min-formal-weighted-roi", type=float, default=None)
     args = parser.parse_args()
 
     try:
@@ -496,6 +530,17 @@ def main() -> int:
             policy_constraints=(wf_summary_payload or {}).get("policy_constraints") if isinstance((wf_summary_payload or {}).get("policy_constraints"), dict) else None,
         )
         formal_benchmark = _summarize_formal_benchmark(folds)
+        roi_threshold_check, roi_threshold_error = _formal_weighted_roi_check(
+            formal_benchmark=formal_benchmark,
+            min_weighted_roi=args.min_formal_weighted_roi,
+        )
+        if roi_threshold_check is not None:
+            _append_result(
+                checks,
+                blocking_reasons,
+                roi_threshold_check,
+                roi_threshold_error,
+            )
         if folds and valid_probe_only_count == len(folds) and test_probe_only_count == len(folds):
             warnings.append("All walk-forward valid/test slices are probe_only; use fold-level ROI only as directional evidence.")
         if feasible_fold_count == 0 and wf_diagnostics.get("dominant_failure_reason") is not None:
@@ -534,6 +579,7 @@ def main() -> int:
                 "formal_benchmark_weighted_roi": formal_benchmark.get("weighted_roi"),
                 "formal_benchmark_bets_total": formal_benchmark.get("bets_total"),
                 "formal_benchmark_feasible_fold_count": formal_benchmark.get("feasible_fold_count"),
+                "min_formal_weighted_roi": float(args.min_formal_weighted_roi) if args.min_formal_weighted_roi is not None else None,
                 "auto_resolved_wf_summary": bool(auto_resolved_wf_path),
             },
         }

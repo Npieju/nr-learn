@@ -523,6 +523,7 @@ def _planned_revision_manifest_payload(
     evaluate_wf_mode: str,
     evaluate_wf_scheme: str,
     promotion_min_feasible_folds: int,
+    promotion_min_formal_weighted_roi: float | None,
     promotion_output_path: Path,
     wf_summary_output_path: Path,
     manifest_output_path: Path,
@@ -558,6 +559,7 @@ def _planned_revision_manifest_payload(
         },
         "promotion_gate": {
             "min_feasible_folds": int(promotion_min_feasible_folds),
+            "min_formal_weighted_roi": float(promotion_min_formal_weighted_roi) if promotion_min_formal_weighted_roi is not None else None,
             "output": artifact_display_path(promotion_output_path, workspace_root=ROOT),
             "summary": None,
             "formal_benchmark": None,
@@ -579,12 +581,13 @@ def _planned_revision_manifest_payload(
     }
 
 
-def _planned_promotion_payload(*, output_path: Path, min_feasible_folds: int) -> dict[str, object]:
+def _planned_promotion_payload(*, output_path: Path, min_feasible_folds: int, min_formal_weighted_roi: float | None) -> dict[str, object]:
     return {
         "status": "planned",
         "decision": "not_run",
         "recommended_action": "run_revision_gate",
         "min_feasible_folds": int(min_feasible_folds),
+        "min_formal_weighted_roi": float(min_formal_weighted_roi) if min_formal_weighted_roi is not None else None,
         "output": artifact_display_path(output_path, workspace_root=ROOT),
         "summary": None,
         "formal_benchmark": None,
@@ -796,6 +799,7 @@ def main() -> int:
     parser.add_argument("--wf-max-fold-elapsed-seconds", type=float, default=None)
     parser.add_argument("--allow-wf-soft-block", action="store_true")
     parser.add_argument("--promotion-min-feasible-folds", type=int, default=1)
+    parser.add_argument("--promotion-min-formal-weighted-roi", type=float, default=1.0)
     parser.add_argument("--universe", default=DEFAULT_UNIVERSE)
     parser.add_argument("--source-scope", default=DEFAULT_SOURCE_SCOPE)
     parser.add_argument("--baseline-reference", default=DEFAULT_BASELINE_REFERENCE)
@@ -883,6 +887,7 @@ def main() -> int:
             "evaluate_wf_scheme": args.evaluate_wf_scheme,
             "allow_wf_soft_block": bool(args.allow_wf_soft_block),
             "promotion_min_feasible_folds": int(args.promotion_min_feasible_folds),
+            "promotion_min_formal_weighted_roi": float(args.promotion_min_formal_weighted_roi) if args.promotion_min_formal_weighted_roi is not None else None,
             "race_result_path": args.race_result_path,
             "race_card_path": args.race_card_path,
             "pedigree_path": args.pedigree_path,
@@ -1182,6 +1187,8 @@ def main() -> int:
             args.evaluate_wf_scheme,
             "--promotion-min-feasible-folds",
             str(args.promotion_min_feasible_folds),
+            "--promotion-min-formal-weighted-roi",
+            str(args.promotion_min_formal_weighted_roi),
             "--promotion-output",
             promotion_output,
             "--wf-summary-output",
@@ -1265,6 +1272,8 @@ def main() -> int:
             artifact_display_path(wf_summary_path, workspace_root=ROOT),
             "--min-feasible-folds",
             str(args.promotion_min_feasible_folds),
+            "--min-formal-weighted-roi",
+            str(args.promotion_min_formal_weighted_roi),
             "--output",
             artifact_display_path(promotion_path, workspace_root=ROOT),
         ]
@@ -1300,6 +1309,7 @@ def main() -> int:
                 evaluate_wf_mode=args.evaluate_wf_mode,
                 evaluate_wf_scheme=args.evaluate_wf_scheme,
                 promotion_min_feasible_folds=args.promotion_min_feasible_folds,
+                promotion_min_formal_weighted_roi=args.promotion_min_formal_weighted_roi,
                 promotion_output_path=promotion_path,
                 wf_summary_output_path=wf_summary_path,
                 manifest_output_path=revision_manifest_path,
@@ -1311,6 +1321,7 @@ def main() -> int:
             payload["promotion_payload"] = _planned_promotion_payload(
                 output_path=promotion_path,
                 min_feasible_folds=args.promotion_min_feasible_folds,
+                min_formal_weighted_roi=args.promotion_min_formal_weighted_roi,
             )
             _refresh_summary_fields(payload)
         else:

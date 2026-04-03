@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import unittest
 
-from scripts.run_promotion_gate import _summarize_formal_benchmark
+from scripts.run_promotion_gate import _formal_weighted_roi_check, _summarize_formal_benchmark
 
 
 class PromotionGateFormalBenchmarkTest(unittest.TestCase):
@@ -43,6 +43,29 @@ class PromotionGateFormalBenchmarkTest(unittest.TestCase):
         self.assertAlmostEqual(summary["weighted_roi"], 1.1)
         self.assertEqual(summary["metric_source_counts"], {"valid_fallback": 1})
         self.assertEqual(summary["folds"][0]["metric_source"], "valid_fallback")
+
+    def test_formal_weighted_roi_check_blocks_sub_unit_roi(self) -> None:
+        check, error = _formal_weighted_roi_check(
+            formal_benchmark={"weighted_roi": 0.7234044858597899},
+            min_weighted_roi=1.0,
+        )
+
+        assert check is not None
+        self.assertFalse(check["ok"])
+        self.assertEqual(check["name"], "formal_benchmark_min_weighted_roi")
+        self.assertEqual(check["min_formal_weighted_roi"], 1.0)
+        self.assertAlmostEqual(check["observed_formal_weighted_roi"], 0.7234044858597899)
+        self.assertIn("below threshold", error or "")
+
+    def test_formal_weighted_roi_check_passes_above_threshold(self) -> None:
+        check, error = _formal_weighted_roi_check(
+            formal_benchmark={"weighted_roi": 4.324481148818757},
+            min_weighted_roi=1.0,
+        )
+
+        assert check is not None
+        self.assertTrue(check["ok"])
+        self.assertIsNotNone(error)
 
 
 if __name__ == "__main__":

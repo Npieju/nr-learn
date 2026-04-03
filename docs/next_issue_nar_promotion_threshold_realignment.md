@@ -46,6 +46,42 @@ if current NAR promotion decision is too permissive after held-out alignment, th
 
 という状態で、promotion threshold 自体の整合性が残課題である。
 
+## Final Read
+
+implementation:
+
+- `scripts/run_promotion_gate.py`
+  - `--min-formal-weighted-roi` を追加
+  - held-out formal `weighted_roi` が threshold 未満なら `block / hold`
+- `scripts/run_revision_gate.py`
+  - `--promotion-min-formal-weighted-roi` を追加
+  - child `run_promotion_gate.py` へ pass-through
+- `scripts/run_local_revision_gate.py`
+  - local Nankan wrapper の default を `1.0`
+  - planned payload / child command に threshold を露出
+
+validation:
+
+- unit tests:
+  - sub-unit ROI line が threshold check で block
+  - strong ROI line が threshold check を通過
+- direct artifact replay:
+  - no-market held-out rerun
+    - input formal `weighted_roi=0.7234044858597899`
+    - result: `status=block`, `decision=hold`
+    - blocking reason: `Formal benchmark weighted ROI is below threshold: 0.723404 < 1.000000`
+  - combo replay pathfix
+    - result: `status=pass`, `decision=promote`
+- local wrapper dry-run:
+  - child `run_revision_gate.py` command に `--promotion-min-formal-weighted-roi 1.0`
+  - planned promotion payload に `min_formal_weighted_roi=1.0`
+
+interpretation:
+
+- held-out formal `ROI < 1.0` line は NAR で `promote` されなくなった
+- stronger line は通るので、minimal economic guard として成立した
+- `#72` の no-bet short-circuit と `#73` の held-out alignment の上に、`#74` で promotion threshold の permissiveness を 1 段締めた
+
 ## In Scope
 
 - `scripts/run_promotion_gate.py`
@@ -75,3 +111,9 @@ if current NAR promotion decision is too permissive after held-out alignment, th
 
 - 単純な ROI floor では current stronger line まで壊す
 - threshold decision が JRA/NAR 共通 redesign を要求し、1 issue で閉じない
+
+## Artifacts
+
+- `artifacts/reports/promotion_gate_r20260403_local_nankan_baseline_no_market_holdout_audit_v1_thresholdcheck.json`
+- `artifacts/reports/promotion_gate_r20260330_local_nankan_jockey_trainer_combo_replay_v1_pathfix_thresholdcheck.json`
+- `artifacts/reports/local_revision_gate_r20260403_local_nankan_threshold_realignment_dryrun.json`

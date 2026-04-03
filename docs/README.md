@@ -101,6 +101,7 @@ policy optimism の exact compare 後に conservative short-circuit を入れる
 formal benchmark を held-out test metrics に揃える corrective issue は [next_issue_nar_holdout_formal_benchmark_alignment.md](next_issue_nar_holdout_formal_benchmark_alignment.md) を使う。
 NAR の formal benchmark source は `#73` で held-out test metrics に揃えたため、以後の NAR formal read は valid-side aggregate ではなく held-out aggregate を正本とする。
 held-out formal `ROI < 1.0` でも `promote` になる permissive threshold の corrective issue は [next_issue_nar_promotion_threshold_realignment.md](next_issue_nar_promotion_threshold_realignment.md) を使う。
+local Nankan wrapper は `#74` 以後、promotion gate に held-out formal `weighted_roi >= 1.0` を default で要求する。
 
 tail loader optimization の gate 運用は [tail_loader_equivalence_gate_standard.md](tail_loader_equivalence_gate_standard.md) を使う。
 

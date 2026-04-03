@@ -28,7 +28,8 @@ NAR separate-universe line は、baseline narrow と `jockey_trainer_combo_repla
 - `#72` で `3/3 no_bet + bets=0` line の formal promote は short-circuit 済み
 - `#73` で formal benchmark は held-out test metrics に揃えた
 - no-market rerun では old formal `ROI=0.8104` が held-out formal `ROI=0.7234` へ低下した
-- したがって next NAR audit は `promotion policy` 自体の conservative redesign が論点で、formal source alignment は完了した
+- `#74` で local Nankan promotion gate に held-out formal `weighted_roi >= 1.0` の minimal guard を入れた
+- したがって current NAR corrective stack は `#72` no-bet short-circuit, `#73` held-out alignment, `#74` threshold realignment まで完了した
 
 Primary completed issues:
 
@@ -42,17 +43,14 @@ Primary completed issues:
 - <https://github.com/Npieju/nr-learn/issues/72>
 - `#73`
 - <https://github.com/Npieju/nr-learn/issues/73>
-
-Primary active issue:
-
 - `#74`
 - <https://github.com/Npieju/nr-learn/issues/74>
 
 Primary next execution order:
 
-1. held-out formal `weighted_roi < 1.0` line が `promote` される permissive threshold を corrective issue として切り出す
-2. `run_promotion_gate.py` に minimal economic guard を入れて NAR `pass/promote` を再定義する
-3. NAR line の対外 read は held-out formal benchmark を正本に統一する
+1. NAR line の対外 read は held-out formal benchmark を正本に統一する
+2. 次の NAR issue は corrective ではなく new hypothesis に戻す
+3. residual な promotion policy redesign が必要なら新 issue として切り出す
 
 ### 3.0 Current Queue After Tail Micro-Cut Exhaustion
 

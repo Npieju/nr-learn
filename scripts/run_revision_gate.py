@@ -674,6 +674,7 @@ def _build_manifest_payload(
     promotion_output: Path,
     manifest_output: Path,
     executed_steps: list[dict[str, object]],
+    promotion_min_formal_weighted_roi: float | None = None,
     promotion_report: dict[str, object] | None = None,
     challenger_equivalence: dict[str, object] | None = None,
     error_code: str | None = None,
@@ -710,6 +711,7 @@ def _build_manifest_payload(
         },
         "promotion_gate": {
             "min_feasible_folds": int(promotion_min_feasible_folds),
+            "min_formal_weighted_roi": float(promotion_min_formal_weighted_roi) if promotion_min_formal_weighted_roi is not None else None,
             "output": artifact_display_path(promotion_output, workspace_root=ROOT),
             "summary": (promotion_report or {}).get("summary") if isinstance(promotion_report, dict) else None,
             "formal_benchmark": (promotion_report or {}).get("formal_benchmark") if isinstance(promotion_report, dict) else None,
@@ -764,6 +766,7 @@ def _build_running_manifest_payload(
     promotion_output: Path,
     manifest_output: Path,
     executed_steps: list[dict[str, object]],
+    promotion_min_formal_weighted_roi: float | None = None,
     challenger_equivalence: dict[str, object] | None = None,
 ) -> dict[str, object]:
     initial_phase = "evaluate" if skip_train else "train"
@@ -789,6 +792,7 @@ def _build_running_manifest_payload(
         evaluate_wf_scheme=evaluate_wf_scheme,
         wf_summary_output=wf_summary_output,
         promotion_min_feasible_folds=promotion_min_feasible_folds,
+        promotion_min_formal_weighted_roi=promotion_min_formal_weighted_roi,
         promotion_output=promotion_output,
         manifest_output=manifest_output,
         executed_steps=executed_steps,
@@ -830,6 +834,7 @@ def main() -> int:
     parser.add_argument("--wf-max-silent-seconds", type=float, default=None)
     parser.add_argument("--wf-max-fold-elapsed-seconds", type=float, default=None)
     parser.add_argument("--promotion-min-feasible-folds", type=int, default=1)
+    parser.add_argument("--promotion-min-formal-weighted-roi", type=float, default=None)
     parser.add_argument("--promotion-output", default=None)
     parser.add_argument("--wf-summary-output", default=None)
     parser.add_argument("--manifest-output", default=None)
@@ -983,6 +988,8 @@ def main() -> int:
             "--output",
             artifact_display_path(promotion_output, workspace_root=ROOT),
         ]
+        if args.promotion_min_formal_weighted_roi is not None:
+            promotion_command.extend(["--min-formal-weighted-roi", str(args.promotion_min_formal_weighted_roi)])
 
         started_at = utc_now_iso()
         executed_steps: list[dict[str, object]] = []
@@ -1045,6 +1052,7 @@ def main() -> int:
                 evaluate_wf_scheme=args.evaluate_wf_scheme,
                 wf_summary_output=wf_summary_output,
                 promotion_min_feasible_folds=args.promotion_min_feasible_folds,
+                promotion_min_formal_weighted_roi=args.promotion_min_formal_weighted_roi,
                 promotion_output=promotion_output,
                 manifest_output=manifest_output,
                 executed_steps=executed_steps,
@@ -1097,6 +1105,7 @@ def main() -> int:
                 evaluate_wf_scheme=args.evaluate_wf_scheme,
                 wf_summary_output=wf_summary_output,
                 promotion_min_feasible_folds=args.promotion_min_feasible_folds,
+                promotion_min_formal_weighted_roi=args.promotion_min_formal_weighted_roi,
                 promotion_output=promotion_output,
                 manifest_output=manifest_output,
                 executed_steps=executed_steps,
@@ -1139,6 +1148,7 @@ def main() -> int:
             evaluate_wf_scheme=args.evaluate_wf_scheme,
             wf_summary_output=wf_summary_output,
             promotion_min_feasible_folds=args.promotion_min_feasible_folds,
+            promotion_min_formal_weighted_roi=args.promotion_min_formal_weighted_roi,
             promotion_output=promotion_output,
             manifest_output=manifest_output,
             executed_steps=executed_steps,
@@ -1191,6 +1201,7 @@ def main() -> int:
                     evaluate_wf_scheme=args.evaluate_wf_scheme,
                     wf_summary_output=wf_summary_output,
                     promotion_min_feasible_folds=args.promotion_min_feasible_folds,
+                    promotion_min_formal_weighted_roi=args.promotion_min_formal_weighted_roi,
                     promotion_output=promotion_output,
                     manifest_output=manifest_output,
                     executed_steps=executed_steps,
@@ -1243,6 +1254,7 @@ def main() -> int:
                 evaluate_wf_scheme=args.evaluate_wf_scheme,
                 wf_summary_output=wf_summary_output,
                 promotion_min_feasible_folds=args.promotion_min_feasible_folds,
+                promotion_min_formal_weighted_roi=args.promotion_min_formal_weighted_roi,
                 promotion_output=promotion_output,
                 manifest_output=manifest_output,
                 executed_steps=executed_steps,
@@ -1313,6 +1325,7 @@ def main() -> int:
                         evaluate_wf_scheme=args.evaluate_wf_scheme,
                         wf_summary_output=wf_summary_output,
                         promotion_min_feasible_folds=args.promotion_min_feasible_folds,
+                        promotion_min_formal_weighted_roi=args.promotion_min_formal_weighted_roi,
                         promotion_output=promotion_output,
                         manifest_output=manifest_output,
                         executed_steps=executed_steps,
@@ -1385,6 +1398,7 @@ def main() -> int:
                 evaluate_wf_scheme=args.evaluate_wf_scheme,
                 wf_summary_output=wf_summary_output,
                 promotion_min_feasible_folds=args.promotion_min_feasible_folds,
+                promotion_min_formal_weighted_roi=args.promotion_min_formal_weighted_roi,
                 promotion_output=promotion_output,
                 manifest_output=manifest_output,
                 executed_steps=executed_steps,
@@ -1457,6 +1471,7 @@ def main() -> int:
                     evaluate_wf_scheme=args.evaluate_wf_scheme,
                     wf_summary_output=wf_summary_output,
                     promotion_min_feasible_folds=args.promotion_min_feasible_folds,
+                    promotion_min_formal_weighted_roi=args.promotion_min_formal_weighted_roi,
                     promotion_output=promotion_output,
                     manifest_output=manifest_output,
                     executed_steps=executed_steps,
@@ -1514,6 +1529,7 @@ def main() -> int:
             evaluate_wf_scheme=args.evaluate_wf_scheme,
             wf_summary_output=wf_summary_output,
             promotion_min_feasible_folds=args.promotion_min_feasible_folds,
+            promotion_min_formal_weighted_roi=args.promotion_min_formal_weighted_roi,
             promotion_output=promotion_output,
             manifest_output=manifest_output,
             executed_steps=executed_steps,
