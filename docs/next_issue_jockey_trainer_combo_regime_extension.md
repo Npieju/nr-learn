@@ -50,3 +50,22 @@ tracked config:
 detail:
 
 - `docs/next_issue_jockey_trainer_combo_style_distance_candidate.md`
+
+## Final Read
+
+- first child:
+  - `r20260330_jockey_trainer_combo_style_distance_v1`
+  - formal `pass / promote`
+- role split:
+  - family anchor にはならない
+  - current role は `analysis-first promoted candidate`
+- actual-date read:
+  - September: `5 / 216 races = 2.31%`, `total net -3.6`
+  - December control: `30 / 264 races = 11.36%`, `total net -9.3`
+
+interpretation:
+
+- family の first child は model family としては成立した
+- ただし top-line と actual-date role は既存 strong line を上回らず、family anchor にはならない
+- よって `#49` は hypothesis issue として完了
+- 次回この family を再開する場合は、新しい child hypothesis issue を別途切る
