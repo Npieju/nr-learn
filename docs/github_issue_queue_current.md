@@ -66,14 +66,14 @@ Latest reread completions:
 - `surface_plus_class_layoff` widening reread は close
 - `sep_guard` ordering reread も existing artifact だけで close 可能
 
+Latest reread completions:
+
+- `shared portfolio bottleneck` narrower regime split reread も existing artifact だけで close 可能
+
 Next open work expectation:
 
-1. JRA の次 hypothesis は `shared portfolio bottleneck` の narrower regime split に寄せる
+1. JRA の次 hypothesis は shared portfolio bottleneck ではなく、新しい feature family か policy family に切る
 2. `current_long_horizon_serving_2025_latest` を first seasonal alias、`current_sep_guard_candidate` を second seasonal fallback として据え置く
-
-Primary next issue draft:
-
-- `docs/next_issue_shared_portfolio_bottleneck_regime_split.md`
 
 Primary next issue draft:
 
