@@ -126,6 +126,48 @@ second-cut validation:
   - current backfilled fetch は `post_race_rows=1`, `pre_race_only_rows=0`
   - つまり provenance に基づく strict filtering が働く
 
+## Third Cut Status
+
+small-scope live recrawl で `pre_race` 行の実在を確認した。
+
+- race list discovery:
+  - `2026-04-04 .. 2026-04-10`
+  - race_card target `24 races`
+  - `2026-04-06`, `2026-04-07`
+- live recrawl:
+  - [local_nankan_timestamped_recrawl_apr06_07.log](/workspaces/nr-learn/artifacts/logs/local_nankan_timestamped_recrawl_apr06_07.log)
+  - `requested_ids=24`
+  - `parsed=24`
+  - `failed=0`
+- provenance audit on `race_card` raw:
+  - [local_nankan_race_card_provenance_summary_apr06_07.json](/workspaces/nr-learn/artifacts/reports/local_nankan_race_card_provenance_summary_apr06_07.json)
+  - [local_nankan_race_card_pre_race_only_apr06_07.csv](/workspaces/nr-learn/artifacts/reports/local_nankan_race_card_pre_race_only_apr06_07.csv)
+
+confirmed read:
+
+- `row_count=732222`
+- `pre_race_only_rows=281`
+- `post_race_rows=0`
+- `unknown_rows=731941`
+- `pre_race` rows cover `24 races`
+- dates:
+  - `2026-04-06`
+  - `2026-04-07`
+
+meaning:
+
+- current backfilled benchmark は strict filter で弾ける
+- future / upcoming window では actual `pre_race` snapshot row を保存できる
+- timestamped recrawl path は有効
+
+## Decision Summary
+
+- `timestamped recrawl + provenance columns` は objective を満たした
+- `#100` は close 条件を満たした
+- 次段は strict `pre_race_only` subset を使った benchmark rebuild である
+- execution source:
+  - [next_issue_nar_pre_race_only_benchmark_rebuild.md](/workspaces/nr-learn/docs/next_issue_nar_pre_race_only_benchmark_rebuild.md)
+
 ## Residual Risk
 
 - 既存 backfilled raw には sidecar manifest がないため `cache_legacy` fallback が残る

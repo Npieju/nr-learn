@@ -188,52 +188,36 @@ Latest next feature queue:
 
 Current active issue:
 
-- `#100`
-- <https://github.com/Npieju/nr-learn/issues/100>
+- `#101`
+- <https://github.com/Npieju/nr-learn/issues/101>
 
 Current active read:
 
-1. NAR `odds / popularity` provenance audit を開始した
-2. current raw:
-   - `data/local_nankan/raw/local_nankan_race_card.csv`
-   - `data/local_nankan/raw/local_nankan_primary.csv`
-   には `odds,popularity` はある
-3. ただし row-level provenance 列
-   - `fetch_at`
-   - `post_time`
-   - `odds_snapshot_at`
-   はない
-4. collector は `oddsJS/<race_id>.do` から market columns を取っているが、`last_fetch_at` は pacing 用の in-memory state で、row に保存されない
-5. raw_html filesystem mtime は `2026-03-29 / 2026-03-30` の bulk backfill に集中している
-6. したがって current NAR line は `market-aware backfilled benchmark` と読むのが妥当で、次の corrective は `timestamped recrawl + provenance columns` である
-7. `#100` first cut は実装済み
-8. collector は raw HTML / odds JS ごとに sidecar manifest `*.meta.json` を保存する
-9. `race_card` row-level provenance として
-   - `post_time`
-   - `scheduled_post_at`
-   - `card_*`
-   - `odds_*`
-   を保存する
-10. `local_nankan_primary` にも provenance 列は通る
-11. temp-dir smoke:
-   - [nar_timestamped_odds_rebuild_smoke.log](/workspaces/nr-learn/artifacts/logs/nar_timestamped_odds_rebuild_smoke.log)
-   - `race_card` と `primary` の両方で provenance 列を確認済み
-12. residual は full recrawl ではなく `cache_legacy` raw の再構築である
-13. second cut として provenance audit helper / script も追加した
-14. script:
-    - [run_local_nankan_provenance_audit.py](/workspaces/nr-learn/scripts/run_local_nankan_provenance_audit.py)
-15. strict bucket rule は
-    - `post_race`: card / odds のどちらかが `post_race`
-    - `pre_race`: card / odds の両方が `pre_race`
-    - `unknown`: それ以外
-16. second-cut smoke:
-    - [nar_timestamped_odds_rebuild_second_cut_smoke.log](/workspaces/nr-learn/artifacts/logs/nar_timestamped_odds_rebuild_second_cut_smoke.log)
-    - current backfilled fetch は `post_race_rows=1`, `pre_race_only_rows=0`
-17. したがって current backfilled benchmark を provenance ベースで strict exclude できる
+1. `#100` timestamped odds rebuild は close 条件を満たして close 済み
+2. third cut の live recrawl で、strict `pre_race` row の実在を確認した
+3. race list discovery:
+   - `2026-04-04 .. 2026-04-10`
+   - `24 races`
+   - dates `2026-04-06`, `2026-04-07`
+4. live overwrite recrawl:
+   - [local_nankan_timestamped_recrawl_apr06_07.log](/workspaces/nr-learn/artifacts/logs/local_nankan_timestamped_recrawl_apr06_07.log)
+   - `requested_ids=24`
+   - `parsed=24`
+   - `failed=0`
+5. provenance audit:
+   - [local_nankan_race_card_provenance_summary_apr06_07.json](/workspaces/nr-learn/artifacts/reports/local_nankan_race_card_provenance_summary_apr06_07.json)
+   - [local_nankan_race_card_pre_race_only_apr06_07.csv](/workspaces/nr-learn/artifacts/reports/local_nankan_race_card_pre_race_only_apr06_07.csv)
+6. confirmed read:
+   - `pre_race_only_rows=281`
+   - `post_race_rows=0`
+   - `unknown_rows=731941`
+   - strict `pre_race` rows cover `24 races`
+7. したがって current backfilled benchmark は provenance strict filter で弾ける
+8. 次段の execution source は strict `pre_race_only` subset を使った benchmark rebuild である
 
 Primary next issue draft:
 
-- `docs/next_issue_nar_timestamped_odds_rebuild.md`
+- `docs/next_issue_nar_pre_race_only_benchmark_rebuild.md`
 
 Current active read:
 
