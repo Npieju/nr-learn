@@ -239,7 +239,15 @@ Current active read:
     - `status=not_ready`
     - `current_phase=await_result_arrival`
     - `recommended_action=wait_for_result_ready_pre_race_races`
-17. したがって `#101` の残作業は result arrival 後の first benchmark rerun に narrowed された
+17. fourth cut として bounded wait も追加した
+18. wait smoke:
+    - [nar_pre_race_benchmark_handoff_wait_smoke.log](/workspaces/nr-learn/artifacts/logs/nar_pre_race_benchmark_handoff_wait_smoke.log)
+19. timeout read:
+    - `status=not_ready`
+    - `attempts=1`
+    - `waited_seconds=9`
+    - `timed_out=true`
+20. したがって `#101` の残作業は result arrival 後の first benchmark rerun に narrowed された
 
 Primary next issue draft:
 

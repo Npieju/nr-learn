@@ -141,6 +141,30 @@ meaning:
   を直列実行できる
 - `#101` の remaining work は実データ到着後の first benchmark rerun に narrowed された
 
+## Fourth Cut Status
+
+handoff wrapper に bounded wait も追加した。
+
+- wait flags:
+  - `--wait-for-results`
+  - `--max-wait-seconds`
+  - `--poll-interval-seconds`
+- smoke:
+  - [nar_pre_race_benchmark_handoff_wait_smoke.log](/workspaces/nr-learn/artifacts/logs/nar_pre_race_benchmark_handoff_wait_smoke.log)
+
+confirmed read:
+
+- `status=not_ready`
+- `attempts=1`
+- `waited_seconds=9`
+- `timed_out=true`
+
+meaning:
+
+- result-ready race がまだ無い状態でも、wrapper は bounded timeout で止まる
+- silent wait のまま無制限に走らない
+- `#101` の残差は result arrival 後の first benchmark rerun だけである
+
 ## Stop Condition
 
 - strict `pre_race_only` subset が benchmark run に必要な最小 row/race を満たさない

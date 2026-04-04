@@ -41,6 +41,26 @@ def _read_json_dict(path: Path) -> dict[str, Any]:
     return payload if isinstance(payload, dict) else {}
 
 
+def _build_not_ready_manifest(
+    *,
+    pre_race_summary: dict[str, Any],
+    benchmark_manifest_output: Path,
+    attempts: int,
+    waited_seconds: int,
+    timed_out: bool,
+) -> dict[str, Any]:
+    return {
+        "status": "not_ready",
+        "current_phase": str(pre_race_summary.get("current_phase") or "await_result_arrival"),
+        "recommended_action": str(pre_race_summary.get("recommended_action") or "wait_for_result_ready_pre_race_races"),
+        "pre_race_summary": pre_race_summary,
+        "benchmark_manifest_output": str(benchmark_manifest_output),
+        "attempts": int(attempts),
+        "waited_seconds": int(waited_seconds),
+        "timed_out": bool(timed_out),
+    }
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--data-config", default="configs/data_local_nankan.yaml")
@@ -61,6 +81,9 @@ def main() -> int:
     parser.add_argument("--pre-feature-max-rows", type=int, default=None)
     parser.add_argument("--wf-mode", choices=["off", "fast", "full"], default="off")
     parser.add_argument("--wf-scheme", choices=["single", "nested"], default="nested")
+    parser.add_argument("--wait-for-results", action="store_true")
+    parser.add_argument("--max-wait-seconds", type=int, default=0)
+    parser.add_argument("--poll-interval-seconds", type=int, default=60)
     parser.add_argument("--skip-train", action="store_true")
     parser.add_argument("--skip-evaluate", action="store_true")
     args = parser.parse_args()
@@ -93,21 +116,46 @@ def main() -> int:
             "--summary-output",
             args.pre_race_summary_output,
         ]
-        pre_race_exit = _run_command(label="pre_race_primary", command=pre_race_command)
-        pre_race_summary = _read_json_dict(_resolve_path(args.pre_race_summary_output))
-        progress.update(current=1, message=f"pre-race primary exit_code={pre_race_exit} status={pre_race_summary.get('status')}")
+        benchmark_manifest_output = _resolve_path(args.benchmark_manifest_output)
+        wait_started = time.monotonic()
+        attempts = 0
+        pre_race_exit = 1
+        pre_race_summary: dict[str, Any] = {}
+        while True:
+            attempts += 1
+            pre_race_exit = _run_command(label=f"pre_race_primary attempt={attempts}", command=pre_race_command)
+            pre_race_summary = _read_json_dict(_resolve_path(args.pre_race_summary_output))
+            progress.update(current=1, message=f"pre-race primary attempt={attempts} exit_code={pre_race_exit} status={pre_race_summary.get('status')}")
 
-        if pre_race_exit == 2 or pre_race_summary.get("status") == "not_ready":
-            wrapper_manifest = {
-                "status": "not_ready",
-                "current_phase": str(pre_race_summary.get("current_phase") or "await_result_arrival"),
-                "recommended_action": str(pre_race_summary.get("recommended_action") or "wait_for_result_ready_pre_race_races"),
-                "pre_race_summary": pre_race_summary,
-                "benchmark_manifest_output": str(_resolve_path(args.benchmark_manifest_output)),
-            }
-            write_json(wrapper_manifest_path, wrapper_manifest)
-            progress.complete(message=f"not ready output={wrapper_manifest_path}")
-            return 2
+            if pre_race_exit not in {2} and pre_race_summary.get("status") != "not_ready":
+                break
+
+            waited_seconds = int(max(0, time.monotonic() - wait_started))
+            timed_out = (not args.wait_for_results) or (args.max_wait_seconds >= 0 and waited_seconds >= max(0, args.max_wait_seconds))
+            if timed_out:
+                wrapper_manifest = _build_not_ready_manifest(
+                    pre_race_summary=pre_race_summary,
+                    benchmark_manifest_output=benchmark_manifest_output,
+                    attempts=attempts,
+                    waited_seconds=waited_seconds,
+                    timed_out=True,
+                )
+                write_json(wrapper_manifest_path, wrapper_manifest)
+                progress.complete(message=f"not ready output={wrapper_manifest_path}")
+                return 2
+
+            pending_races = (
+                pre_race_summary.get("materialization_summary", {}).get("pending_result_races")
+                if isinstance(pre_race_summary.get("materialization_summary"), dict)
+                else None
+            )
+            sleep_seconds = max(1, int(args.poll_interval_seconds))
+            print(
+                "[local-nankan-pre-race-handoff] "
+                f"waiting for results pending_races={pending_races} sleep_seconds={sleep_seconds}",
+                flush=True,
+            )
+            time.sleep(sleep_seconds)
 
         if pre_race_exit != 0:
             wrapper_manifest = {
