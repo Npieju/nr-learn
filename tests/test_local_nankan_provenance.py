@@ -12,6 +12,7 @@ from racing_ml.data.local_nankan_provenance import (
     annotate_market_timing_bucket,
     build_pre_race_capture_coverage_summary,
     build_pre_race_capture_date_coverage,
+    build_pre_race_readiness_probe_summary,
     build_pre_race_only_materialization_summary,
     build_provenance_summary,
     filter_pre_race_only,
@@ -155,6 +156,22 @@ class LocalNankanProvenanceTest(unittest.TestCase):
         self.assertEqual(summary["baseline_comparison"]["delta_pre_race_only_races"], 1)
         self.assertEqual(summary["baseline_comparison"]["added_dates"], ["2026-04-07"])
         self.assertEqual(summary["date_coverage"][0]["date"], "2026-04-06")
+
+    def test_build_pre_race_readiness_probe_summary_marks_ready_when_any_ready_race_exists(self) -> None:
+        frame = pd.DataFrame(
+            [
+                {"race_id": "r1", "date": "2026-04-06", "card_snapshot_relation": "pre_race", "odds_snapshot_relation": "pre_race"},
+                {"race_id": "r2", "date": "2026-04-07", "card_snapshot_relation": "pre_race", "odds_snapshot_relation": "pre_race"},
+            ]
+        )
+        result_frame = pd.DataFrame([{"race_id": "r2"}])
+
+        summary = build_pre_race_readiness_probe_summary(frame, result_frame=result_frame)
+
+        self.assertEqual(summary["status"], "ready")
+        self.assertEqual(summary["current_phase"], "ready_for_benchmark_handoff")
+        self.assertEqual(summary["recommended_action"], "run_pre_race_benchmark_handoff")
+        self.assertEqual(summary["materialization_summary"]["result_ready_races"], 1)
 
 
 if __name__ == "__main__":

@@ -188,8 +188,8 @@ Latest next feature queue:
 
 Current active issue:
 
-- `#101`
-- <https://github.com/Npieju/nr-learn/issues/101>
+- `#105`
+- <https://github.com/Npieju/nr-learn/issues/105>
 
 Current active read:
 
@@ -320,6 +320,7 @@ Current active read:
 48. smoke は `status=not_ready` だが、`bootstrap_command_plan=4 steps` と `runtime_configs` を manifest に残せている
 49. したがって current internal blocker は再び external result arrival のみである
 50. active issue は `#101` に戻し、`#103` は result-ready benchmark 到着まで blocked のまま維持する
+51. low-risk monitoring surface として `#105` pre-race readiness probe を追加する
 
 Latest actual-date role split:
 

@@ -139,6 +139,25 @@ def build_pre_race_only_materialization_summary(
     }
 
 
+def build_pre_race_readiness_probe_summary(
+    frame: pd.DataFrame,
+    *,
+    result_frame: pd.DataFrame | None = None,
+) -> dict[str, Any]:
+    materialization_summary = build_pre_race_only_materialization_summary(frame, result_frame=result_frame)
+    ready_races = int(materialization_summary["result_ready_races"])
+    pending_races = int(materialization_summary["pending_result_races"])
+    status = "ready" if ready_races > 0 else "not_ready"
+    current_phase = "ready_for_benchmark_handoff" if ready_races > 0 else "await_result_arrival"
+    recommended_action = "run_pre_race_benchmark_handoff" if ready_races > 0 else "wait_for_result_ready_pre_race_races"
+    return {
+        "status": status,
+        "current_phase": current_phase,
+        "recommended_action": recommended_action,
+        "materialization_summary": materialization_summary,
+    }
+
+
 def _extract_summary_value(summary: dict[str, Any] | None, key: str) -> Any:
     if not isinstance(summary, dict):
         return None
