@@ -54,6 +54,8 @@ feature 実験の優先順位づけには [feature_family_ranking.md](feature_fa
 
 policy 実験の優先順位づけには [policy_family_shortlist.md](policy_family_shortlist.md) を使う。
 
+次の policy 本線 issue 下書きは [next_issue_kelly_runtime_family.md](next_issue_kelly_runtime_family.md) を使う。
+
 次の最有力 experiment の実務下書きは [next_issue_tighter_policy_frontier.md](next_issue_tighter_policy_frontier.md) を使う。
 
 revision gate 前の確認には [revision_gate_candidate_checklist.md](revision_gate_candidate_checklist.md) を使う。

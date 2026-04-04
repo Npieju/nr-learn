@@ -46,3 +46,37 @@ runtime の `kelly` family を、promoted anchor に対する次の defensive co
 - `docs/policy_family_shortlist.md`
 - `docs/kelly_runtime_candidate_matrix.md`
 - `docs/policy_challenger_decision_checklist.md`
+
+## 9. First Read
+
+- issue:
+  - `#92`
+- dry-run revisions:
+  - `r20260404_kelly_runtime_base25_dryrun_v1`
+  - `r20260404_kelly_runtime_minprob003_dryrun_v1`
+  - `r20260404_kelly_runtime_edge005_dryrun_v1`
+- dry-run result:
+  - 3 candidate とも current codepath の `run_revision_gate.py --dry-run` を通過
+  - `skip-train + evaluate-model-artifact-suffix=r20260326_tighter_policy_ratio003` の threshold-only compare 導線も正常
+  - versioned `wf_summary` / `promotion_output` の planned path も candidate ごとに分離されている
+
+historical formal read:
+
+- `promotion_gate_r20260329_kelly_runtime_base25.json`
+  - `weighted_roi=1.1038859989058847`
+  - `bets_total=598`
+  - `feasible_fold_count=5`
+- `promotion_gate_r20260329_kelly_runtime_minprob003.json`
+  - `weighted_roi=1.1038859989058847`
+  - `bets_total=598`
+  - `feasible_fold_count=5`
+- `promotion_gate_r20260329_kelly_runtime_edge005.json`
+  - `weighted_roi=1.1038859989058847`
+  - `bets_total=598`
+  - `feasible_fold_count=5`
+
+interpretation:
+
+- historical top-line は 3 candidate で同値だった
+- したがって first formal candidate は最も解釈しやすい `K1 = kelly_runtime_base25` に固定する
+- `K2` と `K3` は contrast 候補として残すが、initial rerun の優先順位は下げる

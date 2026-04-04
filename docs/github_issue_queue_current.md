@@ -111,11 +111,12 @@ Latest formal completion:
 
 Primary next issue draft:
 
-- `docs/next_issue_pace_closing_fit_actual_date_role_split.md`
+- `docs/next_issue_kelly_runtime_family.md`
 
 Current active issue:
 
-- none
+- `#92`
+- <https://github.com/Npieju/nr-learn/issues/92>
 
 Latest September fallback compare:
 
@@ -216,6 +217,31 @@ Latest owner signal audit:
    - `wf_nested_test_bets_total=0`
 4. `#72` の short-circuit により revision gate は `hold`
 5. したがって owner signal は current baseline で prune しない
+
+Latest Kelly runtime queue:
+
+1. `#92` で `kelly-centered runtime family` を次の JRA policy 本線として再開した
+2. current promoted anchor は `r20260329_tighter_policy_ratio003_abs90`
+3. candidate matrix は 3 本に固定する
+   - `kelly_runtime_base25`
+   - `kelly_runtime_minprob003`
+   - `kelly_runtime_edge005`
+4. first step は 3 candidate の `run_revision_gate.py --dry-run`
+5. 受け入れ基準は
+   - candidate matrix が明文化されている
+   - 3 candidate の dry-run が通る
+   - first formal candidate を 1 本に絞れる
+6. dry-run first read は完了
+   - `r20260404_kelly_runtime_base25_dryrun_v1`
+   - `r20260404_kelly_runtime_minprob003_dryrun_v1`
+   - `r20260404_kelly_runtime_edge005_dryrun_v1`
+   はすべて current codepath で通過した
+7. historical formal top-line は 3 candidate で同値
+   - `weighted_roi=1.1038859989058847`
+   - `bets_total=598`
+   - `feasible_fold_count=5`
+8. したがって first formal candidate は最も解釈しやすい `kelly_runtime_base25` に固定する
+9. current active issue は `#92`
 
 Latest evaluate progress fix:
 
