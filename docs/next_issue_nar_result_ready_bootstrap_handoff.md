@@ -113,3 +113,39 @@ meaning:
   - bootstrap win / ROI train
   - stack build
   - revision gate
+
+## Second Cut
+
+bootstrap surface に revision 固有 runtime config materialization を追加した。
+
+- helper:
+  - [local_nankan_bootstrap.py](/workspaces/nr-learn/src/racing_ml/data/local_nankan_bootstrap.py)
+- wrapper:
+  - [run_local_nankan_result_ready_bootstrap_handoff.py](/workspaces/nr-learn/scripts/run_local_nankan_result_ready_bootstrap_handoff.py)
+- test:
+  - [test_local_nankan_bootstrap.py](/workspaces/nr-learn/tests/test_local_nankan_bootstrap.py)
+
+追加したこと:
+
+- win / ROI / stack config を `artifacts/runtime_configs/` 配下へ revision 固有名で materialize
+- runtime stack config の component 参照を generated win / roi config へ差し替え
+- bootstrap command plan を unsuffixed base config ではなく generated runtime config に向ける
+
+validation:
+
+- `python -m py_compile scripts/run_local_nankan_result_ready_bootstrap_handoff.py src/racing_ml/data/local_nankan_bootstrap.py tests/test_local_nankan_bootstrap.py`
+- `PYTHONPATH=src .venv/bin/python -m unittest tests.test_local_nankan_bootstrap`
+- smoke:
+  - [local_nankan_result_ready_bootstrap_handoff_manifest.json](/workspaces/nr-learn/artifacts/reports/local_nankan_result_ready_bootstrap_handoff_manifest.json)
+
+confirmed read:
+
+- `status=not_ready`
+- `runtime_configs.win_config=artifacts/runtime_configs/model_catboost_win_local_nankan_value_blend_bootstrap_<revision>.yaml`
+- `runtime_configs.roi_config=artifacts/runtime_configs/model_lightgbm_roi_local_nankan_value_blend_bootstrap_<revision>.yaml`
+- `runtime_configs.stack_config=artifacts/runtime_configs/model_value_stack_local_nankan_value_blend_bootstrap_<revision>.yaml`
+
+meaning:
+
+- external result arrival 後の rerun は revision 固有 artifact で隔離できる
+- bootstrap rerun ごとの上書き衝突を避けられる

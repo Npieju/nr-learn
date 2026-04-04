@@ -321,6 +321,8 @@ Current active read:
 50. wrapper:
    - `scripts/run_local_nankan_result_ready_bootstrap_handoff.py`
 51. current smoke は `status=not_ready` だが、`bootstrap_command_plan=4 steps` を manifest に残せている
+52. second cut では revision 固有 runtime config materialization も追加した
+53. generated runtime configs は `artifacts/runtime_configs/` に出し、bootstrap rerun ごとの artifact 衝突を避ける
 
 Latest actual-date role split:
 

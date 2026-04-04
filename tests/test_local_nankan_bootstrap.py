@@ -1,12 +1,15 @@
 from __future__ import annotations
 
 from pathlib import Path
+import tempfile
 import unittest
 
 from racing_ml.data.local_nankan_bootstrap import (
     build_value_blend_bootstrap_command_plan,
+    materialize_local_nankan_bootstrap_runtime_configs,
     resolve_python_executable,
 )
+from racing_ml.common.config import load_yaml
 
 
 class LocalNankanBootstrapTest(unittest.TestCase):
@@ -41,6 +44,29 @@ class LocalNankanBootstrapTest(unittest.TestCase):
         self.assertIn("configs/data_local_nankan_pre_race_ready.yaml", plan[1]["command"])
         self.assertIn("--skip-train", plan[3]["command"])
         self.assertIn("r20260404_local_nankan_value_blend_bootstrap_pre_race_ready_v1", plan[3]["command"])
+
+    def test_materialize_local_nankan_bootstrap_runtime_configs_suffixes_outputs(self) -> None:
+        root = Path("/workspaces/nr-learn")
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            resolved = materialize_local_nankan_bootstrap_runtime_configs(
+                workspace_root=root,
+                revision="r20260404_local_nankan_value_blend_bootstrap_pre_race_ready_v1",
+                win_config="configs/model_catboost_win_high_coverage_diag_local_nankan_value_blend_bootstrap.yaml",
+                roi_config="configs/model_lightgbm_roi_high_coverage_diag_local_nankan_value_blend_bootstrap.yaml",
+                stack_config="configs/model_catboost_value_stack_lgbm_roi_high_coverage_tune_roi012_local_nankan_value_blend_bootstrap.yaml",
+                output_dir=tmpdir,
+            )
+
+            win_cfg = load_yaml(root / resolved["win_config"])
+            roi_cfg = load_yaml(root / resolved["roi_config"])
+            stack_cfg = load_yaml(root / resolved["stack_config"])
+
+            self.assertIn("r20260404_local_nankan_value_blend_bootstrap_pre_race_ready_v1", win_cfg["output"]["model_file"])
+            self.assertIn("r20260404_local_nankan_value_blend_bootstrap_pre_race_ready_v1", roi_cfg["output"]["model_file"])
+            self.assertIn("r20260404_local_nankan_value_blend_bootstrap_pre_race_ready_v1", stack_cfg["output"]["model_file"])
+            self.assertEqual(stack_cfg["components"]["win"], resolved["win_config"])
+            self.assertEqual(stack_cfg["components"]["roi"], resolved["roi_config"])
 
 
 if __name__ == "__main__":

@@ -19,6 +19,7 @@ from racing_ml.common.artifacts import read_json, write_json
 from racing_ml.common.progress import Heartbeat, ProgressBar
 from racing_ml.data.local_nankan_bootstrap import (
     build_value_blend_bootstrap_command_plan,
+    materialize_local_nankan_bootstrap_runtime_configs,
     resolve_python_executable,
 )
 
@@ -67,6 +68,7 @@ def main() -> int:
     parser.add_argument("--max-wait-seconds", type=int, default=0)
     parser.add_argument("--poll-interval-seconds", type=int, default=60)
     parser.add_argument("--run-bootstrap", action="store_true")
+    parser.add_argument("--runtime-config-dir", default="artifacts/runtime_configs")
     parser.add_argument("--bootstrap-feature-config", default="configs/features_catboost_rich_high_coverage_diag_local_nankan_value_blend_bootstrap.yaml")
     parser.add_argument("--bootstrap-win-config", default="configs/model_catboost_win_high_coverage_diag_local_nankan_value_blend_bootstrap.yaml")
     parser.add_argument("--bootstrap-roi-config", default="configs/model_lightgbm_roi_high_coverage_diag_local_nankan_value_blend_bootstrap.yaml")
@@ -81,6 +83,15 @@ def main() -> int:
     try:
         python_executable = resolve_python_executable(workspace_root=ROOT, fallback=args.python_executable or sys.executable)
         progress.start(message="starting result-ready bootstrap handoff")
+
+        runtime_configs = materialize_local_nankan_bootstrap_runtime_configs(
+            workspace_root=ROOT,
+            revision=args.bootstrap_revision,
+            win_config=args.bootstrap_win_config,
+            roi_config=args.bootstrap_roi_config,
+            stack_config=args.bootstrap_stack_config,
+            output_dir=args.runtime_config_dir,
+        )
 
         handoff_command = [
             python_executable,
@@ -134,9 +145,9 @@ def main() -> int:
             python_executable=python_executable,
             data_config=args.data_config,
             feature_config=args.bootstrap_feature_config,
-            win_config=args.bootstrap_win_config,
-            roi_config=args.bootstrap_roi_config,
-            stack_config=args.bootstrap_stack_config,
+            win_config=runtime_configs["win_config"],
+            roi_config=runtime_configs["roi_config"],
+            stack_config=runtime_configs["stack_config"],
             revision=args.bootstrap_revision,
         )
 
@@ -146,6 +157,7 @@ def main() -> int:
                 "current_phase": "await_result_arrival",
                 "recommended_action": "wait_for_result_ready_pre_race_races",
                 "handoff_manifest": handoff_manifest,
+                "runtime_configs": runtime_configs,
                 "bootstrap_command_plan": command_plan,
             }
             write_json(wrapper_manifest_path, manifest)
@@ -158,6 +170,7 @@ def main() -> int:
                 "current_phase": "benchmark_handoff",
                 "recommended_action": "inspect_handoff_manifest",
                 "handoff_manifest": handoff_manifest,
+                "runtime_configs": runtime_configs,
                 "bootstrap_command_plan": command_plan,
             }
             write_json(wrapper_manifest_path, manifest)
@@ -171,6 +184,7 @@ def main() -> int:
                 "current_phase": "bootstrap_pending",
                 "recommended_action": "run_bootstrap_command_plan",
                 "handoff_manifest": handoff_manifest,
+                "runtime_configs": runtime_configs,
                 "bootstrap_command_plan": command_plan,
             }
             write_json(wrapper_manifest_path, manifest)
@@ -193,6 +207,7 @@ def main() -> int:
                     "current_phase": str(step["label"]),
                     "recommended_action": "inspect_bootstrap_child_command",
                     "handoff_manifest": handoff_manifest,
+                    "runtime_configs": runtime_configs,
                     "bootstrap_runs": bootstrap_runs,
                 }
                 write_json(wrapper_manifest_path, manifest)
@@ -203,6 +218,7 @@ def main() -> int:
             "current_phase": "bootstrap_completed",
             "recommended_action": "review_bootstrap_revision_outputs",
             "handoff_manifest": handoff_manifest,
+            "runtime_configs": runtime_configs,
             "bootstrap_runs": bootstrap_runs,
         }
         write_json(wrapper_manifest_path, manifest)
