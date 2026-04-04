@@ -219,6 +219,17 @@ Current active read:
    - [nar_timestamped_odds_rebuild_smoke.log](/workspaces/nr-learn/artifacts/logs/nar_timestamped_odds_rebuild_smoke.log)
    - `race_card` と `primary` の両方で provenance 列を確認済み
 12. residual は full recrawl ではなく `cache_legacy` raw の再構築である
+13. second cut として provenance audit helper / script も追加した
+14. script:
+    - [run_local_nankan_provenance_audit.py](/workspaces/nr-learn/scripts/run_local_nankan_provenance_audit.py)
+15. strict bucket rule は
+    - `post_race`: card / odds のどちらかが `post_race`
+    - `pre_race`: card / odds の両方が `pre_race`
+    - `unknown`: それ以外
+16. second-cut smoke:
+    - [nar_timestamped_odds_rebuild_second_cut_smoke.log](/workspaces/nr-learn/artifacts/logs/nar_timestamped_odds_rebuild_second_cut_smoke.log)
+    - current backfilled fetch は `post_race_rows=1`, `pre_race_only_rows=0`
+17. したがって current backfilled benchmark を provenance ベースで strict exclude できる
 
 Primary next issue draft:
 

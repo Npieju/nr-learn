@@ -96,6 +96,36 @@ first cut は実装済み。
   - raw HTML / odds JS の sidecar meta 作成
   - `primary` に provenance 列通過
 
+## Second Cut Status
+
+`pre-race / unknown / post-race` を実際に読める導線も追加した。
+
+- helper:
+  - [local_nankan_provenance.py](/workspaces/nr-learn/src/racing_ml/data/local_nankan_provenance.py)
+- script:
+  - [run_local_nankan_provenance_audit.py](/workspaces/nr-learn/scripts/run_local_nankan_provenance_audit.py)
+- outputs:
+  - summary JSON
+  - annotated CSV
+  - strict `pre_race_only` subset CSV
+
+strict bucket rule:
+
+- `post_race`: card / odds のどちらかが `post_race`
+- `pre_race`: card / odds の両方が `pre_race`
+- `unknown`: それ以外
+
+second-cut validation:
+
+- unit tests:
+  - `PYTHONPATH=src .venv/bin/python -m unittest tests.test_local_nankan_collect tests.test_local_nankan_primary tests.test_local_nankan_provenance`
+- compile:
+  - `python -m py_compile src/racing_ml/data/local_nankan_provenance.py scripts/run_local_nankan_provenance_audit.py tests/test_local_nankan_provenance.py`
+- smoke:
+  - [nar_timestamped_odds_rebuild_second_cut_smoke.log](/workspaces/nr-learn/artifacts/logs/nar_timestamped_odds_rebuild_second_cut_smoke.log)
+  - current backfilled fetch は `post_race_rows=1`, `pre_race_only_rows=0`
+  - つまり provenance に基づく strict filtering が働く
+
 ## Residual Risk
 
 - 既存 backfilled raw には sidecar manifest がないため `cache_legacy` fallback が残る
