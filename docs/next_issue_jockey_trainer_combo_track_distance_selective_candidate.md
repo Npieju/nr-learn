@@ -116,3 +116,56 @@ interpretation:
 - track-distance quartet は high coverage で clean に build / select される
 - no-op でも low-coverage でもない
 - third child として true component retrain に進めてよい
+
+## Actual Formal Read
+
+- stack compare config:
+  - `configs/model_catboost_value_stack_lgbm_roi_high_coverage_tune_roi012_liquidity_regime_hybrid_june_strict_serving_jockey_trainer_combo_track_distance_selective_compare_v1.yaml`
+- stack manifest:
+  - `artifacts/models/catboost_value_stack_lgbm_roi_high_coverage_tune_roi012_liquidity_regime_hybrid_model.manifest_r20260404_jockey_trainer_combo_track_distance_selective_v1.json`
+- evaluation summary:
+  - `artifacts/reports/evaluation_summary_catboost_value_stack_lgbm_roi_high_coverage_tune_roi012_liquidity_regime_hybrid_model_r20260404_jockey_trainer_combo_track_distance_selective_v1.json`
+- promotion gate:
+  - `artifacts/reports/promotion_gate_r20260404_jockey_trainer_combo_track_distance_selective_v1.json`
+- revision manifest:
+  - `artifacts/reports/revision_gate_r20260404_jockey_trainer_combo_track_distance_selective_v1.json`
+
+evaluation:
+
+- `auc=0.8449560456255405`
+- `top1_roi=0.458794459525301`
+- `ev_top1_roi=0.832437430649735`
+- nested WF: `kelly / no_bet / no_bet`
+- `wf_nested_test_roi_weighted=0.5974478647406058`
+- `wf_nested_test_bets_total=192`
+- `n_races=14367`
+
+formal:
+
+- `status=pass`
+- `decision=promote`
+- `formal_benchmark_weighted_roi=2.1315595528260776`
+- `formal_benchmark_bets_total=1814`
+- `formal_benchmark_feasible_fold_count=2`
+- `metric_source_counts={test: 2}`
+- fold shape:
+  - fold 1: `feasible=0`
+  - fold 2: `kelly`, `test roi=2.1979282179010045`, `bets=1137`
+  - fold 3: `kelly`, `test roi=2.0200954875525303`, `bets=677`
+
+interpretation:
+
+- formal top-line は強い
+- ただし evaluation は `kelly / no_bet / no_bet` で weak shape
+- current read は `formal promoted candidate` であり、serving contender ではない
+- next execution source は actual-date role split
+
+## Decision Summary
+
+`r20260404_jockey_trainer_combo_track_distance_selective_v1` は formal `pass / promote` に到達した。
+
+- quartet は buildable かつ actual used set に乗った
+- evaluation は weak shape で、baseline challenger としては不安定
+- formal では 2 folds の held-out `kelly` が強く、candidate としては残る
+
+したがって、この issue は close 条件を満たす。次は actual-date compare で operational role を固定する。

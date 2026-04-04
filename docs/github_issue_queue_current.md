@@ -186,6 +186,29 @@ Latest next feature queue:
    - `fundamental_enriched` では force include されていたが、current high-coverage rich baseline では未採用
 4. したがって broad history rerun ではなく、上記 pair の narrow selective child を first read とする
 
+Latest combo track-distance selective read:
+
+1. `#98` `jockey / trainer / combo` family の `track-distance` quartet child は formal `pass / promote` まで完了した
+2. revision:
+   - `r20260404_jockey_trainer_combo_track_distance_selective_v1`
+3. evaluation:
+   - `auc=0.8449560456255405`
+   - `top1_roi=0.458794459525301`
+   - `ev_top1_roi=0.832437430649735`
+   - nested WF `kelly / no_bet / no_bet`
+   - `wf_nested_test_roi_weighted=0.5974478647406058`
+   - `wf_nested_test_bets_total=192`
+4. formal:
+   - `weighted_roi=2.1315595528260776`
+   - `bets_total=1814`
+   - `feasible_fold_count=2`
+   - `metric_source_counts={test: 2}`
+5. current judgment:
+   - formal promoted candidate
+   - operational role は未確定
+6. next execution source:
+   - `docs/next_issue_jockey_trainer_combo_track_distance_role_split.md`
+
 Current active issue:
 
 - `#101`
