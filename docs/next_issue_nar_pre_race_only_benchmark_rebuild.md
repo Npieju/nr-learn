@@ -115,6 +115,32 @@ meaning:
 - current capture window だけでは benchmark rerun をまだ始められない
 - 次段は result 到着後の rerun か、capture window 拡張で labeled `pre_race` races を増やすことに narrowed された
 
+## Third Cut Status
+
+result-ready race が出たら同じ entrypoint で benchmark gate まで進める handoff wrapper も追加した。
+
+- script:
+  - [run_local_nankan_pre_race_benchmark_handoff.py](/workspaces/nr-learn/scripts/run_local_nankan_pre_race_benchmark_handoff.py)
+- outputs:
+  - [local_nankan_pre_race_benchmark_handoff_manifest.json](/workspaces/nr-learn/artifacts/reports/local_nankan_pre_race_benchmark_handoff_manifest.json)
+  - [nar_pre_race_benchmark_handoff_smoke.log](/workspaces/nr-learn/artifacts/logs/nar_pre_race_benchmark_handoff_smoke.log)
+
+confirmed read:
+
+- `status=not_ready`
+- `current_phase=await_result_arrival`
+- `recommended_action=wait_for_result_ready_pre_race_races`
+
+meaning:
+
+- current dataset では benchmark gate へ進まずに formal `not_ready` で止まる
+- result-ready race が出たら、同じ wrapper で
+  - strict `pre_race_only` subset filter
+  - primary materialization
+  - benchmark gate
+  を直列実行できる
+- `#101` の remaining work は実データ到着後の first benchmark rerun に narrowed された
+
 ## Stop Condition
 
 - strict `pre_race_only` subset が benchmark run に必要な最小 row/race を満たさない

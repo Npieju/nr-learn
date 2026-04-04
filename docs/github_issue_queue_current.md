@@ -231,7 +231,15 @@ Current active read:
     - `current_phase=await_result_arrival`
     - `result_ready_races=0`
     - `pending_result_races=24`
-14. したがって次段の execution source は strict `pre_race_only` subset 自体ではなく、result arrival 後の relabel / primary materialization である
+14. third cut として benchmark handoff wrapper も追加した
+15. output:
+    - [local_nankan_pre_race_benchmark_handoff_manifest.json](/workspaces/nr-learn/artifacts/reports/local_nankan_pre_race_benchmark_handoff_manifest.json)
+    - [nar_pre_race_benchmark_handoff_smoke.log](/workspaces/nr-learn/artifacts/logs/nar_pre_race_benchmark_handoff_smoke.log)
+16. wrapper read:
+    - `status=not_ready`
+    - `current_phase=await_result_arrival`
+    - `recommended_action=wait_for_result_ready_pre_race_races`
+17. したがって `#101` の残作業は result arrival 後の first benchmark rerun に narrowed された
 
 Primary next issue draft:
 
