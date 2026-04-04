@@ -188,8 +188,8 @@ Latest next feature queue:
 
 Current active issue:
 
-- `#96`
-- <https://github.com/Npieju/nr-learn/issues/96>
+- `#97`
+- <https://github.com/Npieju/nr-learn/issues/97>
 
 Latest September fallback compare:
 
@@ -220,8 +220,8 @@ Primary next issue draft:
 
 Current active issue:
 
-- `#96`
-- <https://github.com/Npieju/nr-learn/issues/96>
+- `#97`
+- <https://github.com/Npieju/nr-learn/issues/97>
 
 Latest tighter policy fallback compare:
 
