@@ -142,12 +142,12 @@ Latest actual-date role split:
 
 Primary next issue draft:
 
-- `docs/next_issue_jockey_trainer_combo_closing_time_selective_candidate.md`
+- `docs/next_issue_jockey_trainer_combo_closing_time_role_split.md`
 
 Current active issue:
 
-- `#90`
-- <https://github.com/Npieju/nr-learn/issues/90>
+- `#91`
+- <https://github.com/Npieju/nr-learn/issues/91>
 
 Latest tighter policy fallback compare:
 
@@ -178,7 +178,18 @@ Latest combo reentry queue:
    - `low_coverage_force_include_features=[]`
    - `jockey_last_30_avg_closing_time_3f non_null_ratio=0.99727`
    - `trainer_last_30_avg_closing_time_3f non_null_ratio=0.99635`
-6. したがって次の execution source は true component retrain である
+6. true component retrain / stack rebuild / formal compare まで完了した
+7. revision `r20260404_jockey_trainer_combo_closing_time_selective_v1` は
+   - `auc=0.8426169492248933`
+   - `top1_roi=0.8082087836284203`
+   - `ev_top1_roi=0.8213612324672338`
+   - `wf_nested_test_roi_weighted=0.7632385120350111`
+   - `wf_nested_test_bets_total=457`
+   - formal `weighted_roi=1.2311149102465346`
+   - `bets / races / bet_rate = 9806 / 57620 = 17.02%`
+   で `pass / promote` に到達した
+8. したがって `#90` は feature child hypothesis issueとして完了し、次は actual-date role split を切る
+9. actual-date role split issue は `#91` として起票済みである
 
 Latest breeder signal read:
 

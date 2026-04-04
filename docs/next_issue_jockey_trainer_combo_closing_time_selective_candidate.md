@@ -110,3 +110,31 @@ interpretation:
 - closing-time pair は high coverage で clean に build / select される
 - no-op でも low-coverage でもない
 - second child として true component retrain に進めてよい
+
+## Final Read
+
+- revision:
+  - `r20260404_jockey_trainer_combo_closing_time_selective_v1`
+- evaluation summary:
+  - `artifacts/reports/evaluation_summary_catboost_value_stack_lgbm_roi_high_coverage_tune_roi012_liquidity_regime_hybrid_model_r20260404_jockey_trainer_combo_closing_time_selective_v1.json`
+  - `auc=0.8426169492248933`
+  - `top1_roi=0.8082087836284203`
+  - `ev_top1_roi=0.8213612324672338`
+  - `wf_nested_test_roi_weighted=0.7632385120350111`
+  - `wf_nested_test_bets_total=457`
+  - nested WF shape は `portfolio / portfolio / portfolio`
+- promotion / formal:
+  - `artifacts/reports/promotion_gate_r20260404_jockey_trainer_combo_closing_time_selective_v1.json`
+  - `status=pass`
+  - `decision=promote`
+  - held-out formal `weighted_roi=1.2311149102465346`
+  - `formal_benchmark_bets_total=9806`
+  - `formal_benchmark_feasible_fold_count=3`
+  - `bets / races / bet_rate = 9806 / 57620 = 17.02%`
+
+interpretation:
+
+- narrow closing-time pair child は no-op ではなく、formal candidate として成立した
+- top-line は current JRA promoted candidates と比較可能な水準まで到達した
+- ただし serving default や seasonal fallback に上げるかは actual-date read が必要
+- したがって `#90` は feature child hypothesis issue として完了し、次は role split issue に進む
