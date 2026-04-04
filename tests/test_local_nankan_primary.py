@@ -70,6 +70,16 @@ class LocalNankanPrimaryMaterializeTest(unittest.TestCase):
                         "weight_change": -2,
                         "carried_weight": 56.0,
                         "popularity": 1,
+                        "post_time": "15:20",
+                        "scheduled_post_at": "2025-01-01T15:20:00+09:00",
+                        "card_source_url": "https://www.nankankeiba.com/syousai/nar001.do",
+                        "card_fetch_mode": "cache_manifest",
+                        "card_snapshot_at": "2025-01-01T05:00:00Z",
+                        "card_snapshot_relation": "pre_race",
+                        "odds_source_url": "https://www.nankankeiba.com/oddsJS/nar001.do",
+                        "odds_fetch_mode": "cache_manifest",
+                        "odds_snapshot_at": "2025-01-01T05:05:00Z",
+                        "odds_snapshot_relation": "pre_race",
                     }
                 ]
             ).to_csv(card_path, index=False)
@@ -109,6 +119,10 @@ class LocalNankanPrimaryMaterializeTest(unittest.TestCase):
             self.assertEqual(str(row["owner_name"]), "Owner A")
             self.assertEqual(str(row["breeder_name"]), "Breeder A")
             self.assertEqual(str(row["sire_name"]), "Sire A")
+            self.assertEqual(str(row["post_time"]), "15:20")
+            self.assertEqual(str(row["card_fetch_mode"]), "cache_manifest")
+            self.assertEqual(str(row["card_snapshot_relation"]), "pre_race")
+            self.assertIn("oddsJS/nar001.do", str(row["odds_source_url"]))
             self.assertEqual(int(str(row["is_win"])), 1)
 
             result_keys = pd.read_csv(result_keys_path)
@@ -117,6 +131,7 @@ class LocalNankanPrimaryMaterializeTest(unittest.TestCase):
 
             self.assertEqual(str(result_keys.loc[0, "horse_key"]), "horse001")
             self.assertEqual(str(race_card_output.loc[0, "horse_id"]), "nar001:1")
+            self.assertEqual(str(race_card_output.loc[0, "card_snapshot_relation"]), "pre_race")
             self.assertEqual(str(pedigree_output.loc[0, "sire_name"]), "Sire A")
 
     def test_materialize_falls_back_to_race_and_horse_key_for_non_runners(self) -> None:

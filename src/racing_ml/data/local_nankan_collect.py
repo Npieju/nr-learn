@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from contextlib import contextmanager
 from dataclasses import dataclass
+from datetime import datetime, timezone
 import json
 import os
 from pathlib import Path
@@ -15,7 +16,7 @@ import requests
 from bs4 import BeautifulSoup
 from bs4.element import Tag
 
-from racing_ml.common.artifacts import display_path, utc_now_iso, write_csv_file, write_json, write_text_file
+from racing_ml.common.artifacts import display_path, read_json, utc_now_iso, write_csv_file, write_json, write_text_file
 from racing_ml.common.progress import ProgressBar
 
 
@@ -31,6 +32,7 @@ GROUND_PATTERN = re.compile(r"馬場\s*:\s*(?:芝|ダート|ダ)?\s*(?P<ground>[
 SEX_AGE_PATTERN = re.compile(r"(?P<sex>[牡牝セ])\s*(?P<age>\d+)")
 NUMERIC_PATTERN = re.compile(r"-?\d+(?:\.\d+)?")
 SAFE_FILENAME_PATTERN = re.compile(r"[^0-9A-Za-z._-]+")
+POST_TIME_PATTERN = re.compile(r"発走時刻\s*(?P<time>\d{1,2}:\d{2})")
 ODDS_TAN_BLOCK_PATTERN = re.compile(r"var\s+odds_tan\s*=\s*\{(?P<body>.*?)\};", re.DOTALL)
 ODDS_ENTRY_PATTERN = re.compile(
     r'"(?P<gate_no>\d+)"\s*:\s*\[\s*"(?P<odds>[^"]+)"\s*,\s*(?P<available>true|false)\s*,\s*\d+\s*,\s*(?P<popularity>\d+)',
@@ -233,6 +235,49 @@ def _extract_distance(soup: BeautifulSoup) -> int | None:
     return None
 
 
+def _extract_post_time(soup: BeautifulSoup) -> str | None:
+    candidates: list[str] = []
+    subtitle = soup.find(class_=re.compile(r"nk23_c-tab1__subtitle"))
+    if subtitle is not None:
+        candidates.append(_normalize_text(subtitle.get_text(" ", strip=True)))
+
+    legacy_header = soup.find(id="race-data01-a")
+    if isinstance(legacy_header, Tag):
+        candidates.append(_normalize_text(legacy_header.get_text(" ", strip=True)))
+
+    for strong in soup.find_all("strong"):
+        if isinstance(strong, Tag):
+            candidates.append(_normalize_text(strong.get_text(" ", strip=True)))
+
+    for text in candidates:
+        match = POST_TIME_PATTERN.search(text)
+        if match is not None:
+            return match.group("time")
+    return None
+
+
+def _build_scheduled_post_at(date_value: str | None, post_time: str | None) -> str | None:
+    if not date_value or not post_time:
+        return None
+    try:
+        return pd.Timestamp(f"{date_value} {post_time}", tz="Asia/Tokyo").isoformat()
+    except Exception:
+        return None
+
+
+def _classify_snapshot_timing(snapshot_at: str | None, scheduled_post_at: str | None) -> str:
+    if not snapshot_at or not scheduled_post_at:
+        return "unknown"
+    try:
+        snapshot_ts = pd.Timestamp(snapshot_at)
+        post_ts = pd.Timestamp(scheduled_post_at)
+    except Exception:
+        return "unknown"
+    if pd.isna(snapshot_ts) or pd.isna(post_ts):
+        return "unknown"
+    return "pre_race" if snapshot_ts <= post_ts else "post_race"
+
+
 def _extract_weather_and_ground(soup: BeautifulSoup) -> tuple[str | None, str | None]:
     candidates: list[str] = []
     for node in soup.find_all(class_=re.compile(r"nk23_c-table01__txt|nk23_c-block01__info__texts")):
@@ -278,14 +323,18 @@ def _extract_race_name(soup: BeautifulSoup) -> str | None:
 
 def _extract_race_metadata(soup: BeautifulSoup, race_id: str) -> dict[str, Any]:
     weather, ground = _extract_weather_and_ground(soup)
+    date_value = _extract_open_date(soup)
+    post_time = _extract_post_time(soup)
     return {
-        "date": _extract_open_date(soup),
+        "date": date_value,
         "race_id": race_id,
         "track": _extract_track(soup),
         "distance": _extract_distance(soup),
         "weather": weather,
         "ground_condition": ground,
         "race_name": _extract_race_name(soup),
+        "post_time": post_time,
+        "scheduled_post_at": _build_scheduled_post_at(date_value, post_time),
     }
 
 
@@ -440,9 +489,16 @@ def _parse_legacy_local_nankan_race_card_table(
     metadata: dict[str, Any],
     race_id: str,
     odds_map: dict[str, dict[str, str]],
+    card_provenance: dict[str, Any] | None = None,
+    odds_provenance: dict[str, Any] | None = None,
 ) -> pd.DataFrame:
     rows: list[dict[str, Any]] = []
     current_frame_no: str | None = None
+    scheduled_post_at = metadata.get("scheduled_post_at")
+    card_provenance = dict(card_provenance or {})
+    odds_provenance = dict(odds_provenance or {})
+    card_snapshot_at = card_provenance.get("snapshot_at")
+    odds_snapshot_at = odds_provenance.get("snapshot_at")
 
     for row_tag in table.find_all("tr"):
         if not isinstance(row_tag, Tag):
@@ -493,6 +549,14 @@ def _parse_legacy_local_nankan_race_card_table(
                 "dam_name": horse_values[3] if len(horse_values) > 3 else None,
                 "owner_name": None,
                 "breeder_name": None,
+                "card_source_url": card_provenance.get("source_url"),
+                "card_fetch_mode": card_provenance.get("fetch_mode"),
+                "card_snapshot_at": card_snapshot_at,
+                "card_snapshot_relation": _classify_snapshot_timing(card_snapshot_at, scheduled_post_at),
+                "odds_source_url": odds_provenance.get("source_url"),
+                "odds_fetch_mode": odds_provenance.get("fetch_mode"),
+                "odds_snapshot_at": odds_snapshot_at,
+                "odds_snapshot_relation": _classify_snapshot_timing(odds_snapshot_at, scheduled_post_at),
             }
         )
 
@@ -523,10 +587,22 @@ def _parse_local_nankan_odds_js(script_text: str | None) -> dict[str, dict[str, 
     return odds_map
 
 
-def parse_local_nankan_race_card_html(html: str, race_id: str, odds_js: str | None = None) -> pd.DataFrame:
+def parse_local_nankan_race_card_html(
+    html: str,
+    race_id: str,
+    odds_js: str | None = None,
+    *,
+    card_provenance: dict[str, Any] | None = None,
+    odds_provenance: dict[str, Any] | None = None,
+) -> pd.DataFrame:
     soup = BeautifulSoup(html, "html.parser")
     metadata = _extract_race_metadata(soup, race_id)
     odds_map = _parse_local_nankan_odds_js(odds_js)
+    card_provenance = dict(card_provenance or {})
+    odds_provenance = dict(odds_provenance or {})
+    scheduled_post_at = metadata.get("scheduled_post_at")
+    card_snapshot_at = card_provenance.get("snapshot_at")
+    odds_snapshot_at = odds_provenance.get("snapshot_at")
     table = soup.select_one(".nk23_c-table23__inner table.nk23_c-table23__table")
     if not isinstance(table, Tag):
         legacy_table = soup.find("table", class_=re.compile(r"tb-shousai"))
@@ -536,6 +612,8 @@ def parse_local_nankan_race_card_html(html: str, race_id: str, odds_js: str | No
                 metadata=metadata,
                 race_id=race_id,
                 odds_map=odds_map,
+                card_provenance=card_provenance,
+                odds_provenance=odds_provenance,
             )
         raise ValueError(f"race card table not found for race_id={race_id}")
 
@@ -589,6 +667,14 @@ def parse_local_nankan_race_card_html(html: str, race_id: str, odds_js: str | No
                 "dam_name": parent_values[1] if len(parent_values) > 1 else None,
                 "owner_name": owner_values[0] if len(owner_values) > 0 else None,
                 "breeder_name": owner_values[1] if len(owner_values) > 1 else None,
+                "card_source_url": card_provenance.get("source_url"),
+                "card_fetch_mode": card_provenance.get("fetch_mode"),
+                "card_snapshot_at": card_snapshot_at,
+                "card_snapshot_relation": _classify_snapshot_timing(card_snapshot_at, scheduled_post_at),
+                "odds_source_url": odds_provenance.get("source_url"),
+                "odds_fetch_mode": odds_provenance.get("fetch_mode"),
+                "odds_snapshot_at": odds_snapshot_at,
+                "odds_snapshot_relation": _classify_snapshot_timing(odds_snapshot_at, scheduled_post_at),
             }
         )
 
@@ -686,9 +772,24 @@ def _load_or_fetch_html(
     output_path: Path,
     settings: RequestSettings,
     last_fetch_at: float | None,
-) -> tuple[str, bool, float | None]:
+) -> tuple[str, bool, float | None, dict[str, Any]]:
+    metadata_path = output_path.with_name(f"{output_path.name}.meta.json")
     if output_path.exists() and not settings.overwrite:
-        return output_path.read_text(encoding="utf-8"), False, last_fetch_at
+        payload: dict[str, Any] = {}
+        if metadata_path.exists():
+            loaded = read_json(metadata_path)
+            if isinstance(loaded, dict):
+                payload = dict(loaded)
+        snapshot_at = payload.get("fetched_at")
+        if not snapshot_at:
+            snapshot_at = datetime.fromtimestamp(output_path.stat().st_mtime, tz=timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+        provenance = {
+            "source_url": payload.get("source_url", url),
+            "fetch_mode": "cache_manifest" if payload.get("fetched_at") else "cache_legacy",
+            "snapshot_at": snapshot_at,
+            "metadata_path": display_path(metadata_path, workspace_root=Path.cwd()),
+        }
+        return output_path.read_text(encoding="utf-8"), False, last_fetch_at, provenance
 
     if last_fetch_at is not None and settings.delay_sec > 0:
         elapsed = time.perf_counter() - last_fetch_at
@@ -698,7 +799,23 @@ def _load_or_fetch_html(
 
     html = _fetch_html(session, url, settings)
     write_text_file(output_path, html, label="raw html output")
-    return html, True, time.perf_counter()
+    fetched_at = utc_now_iso()
+    write_json(
+        metadata_path,
+        {
+            "artifact_schema_version": 1,
+            "source_url": url,
+            "cache_path": output_path.as_posix(),
+            "fetched_at": fetched_at,
+        },
+    )
+    provenance = {
+        "source_url": url,
+        "fetch_mode": "fetched",
+        "snapshot_at": fetched_at,
+        "metadata_path": display_path(metadata_path, workspace_root=Path.cwd()),
+    }
+    return html, True, time.perf_counter(), provenance
 
 
 def _dedupe_frame(frame: pd.DataFrame, dedupe_on: list[str]) -> pd.DataFrame:
@@ -1053,7 +1170,7 @@ def collect_local_nankan_from_config(
                 raw_html_path = raw_html_dir / target_name / f"{_safe_filename(entity_id)}.html"
                 url = urljoin(settings.base_url + "/", f"{endpoint}/{entity_id}.do")
                 try:
-                    html, fetched, last_fetch_at = _load_or_fetch_html(
+                    html, fetched, last_fetch_at, card_provenance = _load_or_fetch_html(
                         session=session,
                         url=url,
                         output_path=raw_html_path,
@@ -1066,8 +1183,9 @@ def collect_local_nankan_from_config(
                         odds_js: str | None = None
                         odds_path = raw_html_dir / "race_card_odds" / f"{_safe_filename(entity_id)}.js"
                         odds_url = urljoin(settings.base_url + "/", f"oddsJS/{entity_id}.do")
+                        odds_provenance: dict[str, Any] = {"source_url": odds_url, "fetch_mode": "missing", "snapshot_at": None}
                         try:
-                            odds_js, odds_fetched, last_fetch_at = _load_or_fetch_html(
+                            odds_js, odds_fetched, last_fetch_at, odds_provenance = _load_or_fetch_html(
                                 session=session,
                                 url=odds_url,
                                 output_path=odds_path,
@@ -1078,7 +1196,16 @@ def collect_local_nankan_from_config(
                                 fetched_count += 1
                         except Exception as error:
                             failures.append({"id": entity_id, "stage": "race_card_odds", "error": str(error)})
-                        frames.append(parse_local_nankan_race_card_html(html, entity_id, odds_js=odds_js))
+                            odds_provenance = {"source_url": odds_url, "fetch_mode": "failed", "snapshot_at": None}
+                        frames.append(
+                            parse_local_nankan_race_card_html(
+                                html,
+                                entity_id,
+                                odds_js=odds_js,
+                                card_provenance=card_provenance,
+                                odds_provenance=odds_provenance,
+                            )
+                        )
                     else:
                         frames.append(parser(html, entity_id))
                 except Exception as error:

@@ -206,6 +206,19 @@ Current active read:
 4. collector は `oddsJS/<race_id>.do` から market columns を取っているが、`last_fetch_at` は pacing 用の in-memory state で、row に保存されない
 5. raw_html filesystem mtime は `2026-03-29 / 2026-03-30` の bulk backfill に集中している
 6. したがって current NAR line は `market-aware backfilled benchmark` と読むのが妥当で、次の corrective は `timestamped recrawl + provenance columns` である
+7. `#100` first cut は実装済み
+8. collector は raw HTML / odds JS ごとに sidecar manifest `*.meta.json` を保存する
+9. `race_card` row-level provenance として
+   - `post_time`
+   - `scheduled_post_at`
+   - `card_*`
+   - `odds_*`
+   を保存する
+10. `local_nankan_primary` にも provenance 列は通る
+11. temp-dir smoke:
+   - [nar_timestamped_odds_rebuild_smoke.log](/workspaces/nr-learn/artifacts/logs/nar_timestamped_odds_rebuild_smoke.log)
+   - `race_card` と `primary` の両方で provenance 列を確認済み
+12. residual は full recrawl ではなく `cache_legacy` raw の再構築である
 
 Primary next issue draft:
 

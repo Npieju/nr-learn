@@ -197,7 +197,7 @@ def discover_local_nankan_race_ids_from_calendar(
         source_page_url = CALENDAR_URL_TEMPLATE.format(calendar_key=calendar_key)
         cache_path = calendar_dir / f"{calendar_key}.html"
         try:
-            html, fetched, last_fetch_at = _load_or_fetch_html(
+            html, fetched, last_fetch_at, _ = _load_or_fetch_html(
                 session=session,
                 url=source_page_url,
                 output_path=cache_path,
@@ -242,7 +242,7 @@ def discover_local_nankan_race_ids_from_calendar(
         source_page_url = PROGRAM_URL_TEMPLATE.format(meeting_id=meeting_id)
         cache_path = program_dir / f"{meeting_id}.html"
         try:
-            html, fetched, last_fetch_at = _load_or_fetch_html(
+            html, fetched, last_fetch_at, _ = _load_or_fetch_html(
                 session=session,
                 url=source_page_url,
                 output_path=cache_path,

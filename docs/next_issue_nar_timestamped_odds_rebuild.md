@@ -61,3 +61,43 @@ if collector が card HTML / odds JS の取得時刻と race post time を保存
 - source site から発走前 provenance を取得できない
 - collector 変更だけでは `pre-race / post-race` の判定が不能
 - その場合は NAR market columns exclusion を default にする別 corrective へ切り替える
+
+## First Cut Status
+
+first cut は実装済み。
+
+- collector:
+  - `src/racing_ml/data/local_nankan_collect.py`
+  - raw HTML / odds JS ごとに sidecar manifest `*.meta.json` を保存
+  - cached reuse 時は sidecar `fetched_at` を優先し、legacy cache は file mtime fallback
+- row-level provenance:
+  - `post_time`
+  - `scheduled_post_at`
+  - `card_source_url`
+  - `card_fetch_mode`
+  - `card_snapshot_at`
+  - `card_snapshot_relation`
+  - `odds_source_url`
+  - `odds_fetch_mode`
+  - `odds_snapshot_at`
+  - `odds_snapshot_relation`
+- downstream:
+  - `src/racing_ml/data/local_nankan_primary.py` で primary / supplemental raw に通過
+
+## Validation
+
+- unit tests:
+  - `PYTHONPATH=src .venv/bin/python -m unittest tests.test_local_nankan_collect tests.test_local_nankan_primary`
+- compile:
+  - `python -m py_compile src/racing_ml/data/local_nankan_collect.py src/racing_ml/data/local_nankan_primary.py src/racing_ml/data/local_nankan_race_list.py tests/test_local_nankan_collect.py tests/test_local_nankan_primary.py`
+- temp-dir smoke:
+  - [nar_timestamped_odds_rebuild_smoke.log](/workspaces/nr-learn/artifacts/logs/nar_timestamped_odds_rebuild_smoke.log)
+  - `race_card` に provenance 列出力
+  - raw HTML / odds JS の sidecar meta 作成
+  - `primary` に provenance 列通過
+
+## Residual Risk
+
+- 既存 backfilled raw には sidecar manifest がないため `cache_legacy` fallback が残る
+- `pre_race / post_race` 判定は `scheduled_post_at` と `snapshot_at` 比較であり、発走遅延や update lag までは表現しない
+- full historical recrawl と pre-race only rebuild は次段
