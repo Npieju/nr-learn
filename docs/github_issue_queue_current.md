@@ -133,6 +133,24 @@ Current active issue:
 
 - none
 
+Latest next feature queue:
+
+1. next JRA feature hypothesis は `class / rest / surface` family の conditional selective child とする
+2. issue source:
+   - `docs/next_issue_class_rest_surface_conditional_selective_candidate.md`
+3. rationale:
+   - current baseline では family 本体は中核に残っている
+   - ただし conditional interaction 群
+     - `horse_surface_switch_short_turnaround`
+     - `horse_surface_switch_long_layoff`
+     - `horse_class_up_short_turnaround`
+     - `horse_class_down_short_turnaround`
+     - `horse_class_up_long_layoff`
+     - `horse_class_down_long_layoff`
+     は builder / force-include には存在するのに actual used set には残っていない
+4. したがって broad family rerun ではなく、上記 interaction 群の selective child を first read とする
+5. current active issue は `#94`
+
 Latest September fallback compare:
 
 1. `#85` で `r20260403_pace_closing_fit_selective_v1` と `current_sep_guard_candidate_2025_latest` を broad September / late-September で比較した
