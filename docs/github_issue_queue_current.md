@@ -61,6 +61,22 @@ Primary next execution order:
 2. `tighter policy search` family は `abs90` anchor を維持し、near-par challenger は reference 扱いに留める
 3. NAR side は held-out formal benchmark を正本に維持し、新 hypothesis は必要時に別 issue で切る
 
+Latest promoted-candidate ordering:
+
+1. `#93` で JRA `analysis-first promoted candidate` 群の横断順位を existing artifact だけで固定した
+2. first operator reference:
+   - `r20260330_surface_plus_class_layoff_interactions_v1`
+3. secondary difficult-regime specialist:
+   - `r20260403_pace_closing_fit_selective_v1`
+4. compare-reference only:
+   - `r20260403_gate_frame_course_regime_extension_v1`
+   - `r20260404_jockey_trainer_combo_closing_time_selective_v1`
+5. 理由は次のとおり
+   - `surface_plus_class_layoff` は low-exposure だが、September downside control と December positive carry を同時に残す唯一の line
+   - `pace_closing_fit` は formal top-line は弱いが、September difficult-regime specialist として最も clean で、December に実損を作らない
+   - `gate_frame_course` と `combo_closing_time` は formal top-line は高いが、December control window を loss に反転させる
+6. serving default と September fallback ordering は変えない
+
 Latest reread completions:
 
 - `surface_plus_class_layoff` widening reread は close

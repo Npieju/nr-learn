@@ -64,6 +64,8 @@ revision gate 前の確認には [revision_gate_candidate_checklist.md](revision
 
 promoted anchor に対する challenger 判定には [policy_challenger_decision_checklist.md](policy_challenger_decision_checklist.md) を使う。
 
+non-default promoted line の operator ordering を確認するときは [next_issue_analysis_first_promoted_candidate_ordering.md](next_issue_analysis_first_promoted_candidate_ordering.md) を使う。
+
 次の serving / seasonal 本線 issue 下書きは [next_issue_seasonal_derisk_long_horizon.md](next_issue_seasonal_derisk_long_horizon.md) を使う。
 
 seasonal de-risk の判断標準は [seasonal_derisk_decision_standard.md](seasonal_derisk_decision_standard.md) を使う。
