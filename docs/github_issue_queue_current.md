@@ -188,8 +188,18 @@ Latest next feature queue:
 
 Current active issue:
 
-- `#97`
-- <https://github.com/Npieju/nr-learn/issues/97>
+- none
+
+Latest actual-date role split:
+
+1. `#97` recent-history track-distance role split は December control compare まで確定した
+2. broad September:
+   - baseline `32 bets / -27.3 / pure bankroll 0.2958869306148325`
+   - candidate `28 bets / -28.0 / pure bankroll 0.30568644833662867`
+3. December control:
+   - baseline `45 bets / +21.8 / pure bankroll 1.6711564921099862`
+   - candidate `121 bets / +2.1999999999999957 / pure bankroll 0.4147571870121275`
+4. したがって `r20260404_recent_history_track_distance_selective_v1` は formal `pass / promote` だが、operational role は `compare reference` に近く、serving default / seasonal fallback のどちらにも上げない
 
 Latest September fallback compare:
 
@@ -216,12 +226,7 @@ Latest actual-date role split:
 
 Primary next issue draft:
 
-- `docs/next_issue_jockey_trainer_combo_closing_time_role_split.md`
-
-Current active issue:
-
-- `#97`
-- <https://github.com/Npieju/nr-learn/issues/97>
+- none
 
 Latest tighter policy fallback compare:
 

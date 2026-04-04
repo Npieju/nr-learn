@@ -45,6 +45,19 @@ if `r20260404_recent_history_track_distance_selective_v1` が September difficul
   - `weighted_roi=2.1315595528260776`
   - `bets_total=1814`
   - `feasible_fold_count=2`
+- broad September actual-date compare:
+  - baseline `current_recommended_serving_2025_latest`
+    - `32 bets`
+    - `total net = -27.3`
+    - `pure bankroll = 0.2958869306148325`
+  - candidate `r20260404_recent_history_track_distance_selective_v1`
+    - `28 bets`
+    - `total net = -28.0`
+    - `pure bankroll = 0.30568644833662867`
+  - diff:
+    - `bets -4`
+    - `total net -0.7`
+    - `pure bankroll +0.009799517721796158`
 
 ## In Scope
 
@@ -78,3 +91,39 @@ if `r20260404_recent_history_track_distance_selective_v1` が September difficul
 - actual-date compare で current operational default に一貫して劣後
 - control window を壊し、serving contender を主張できない
 
+## Interim Read
+
+- broad September では candidate は baseline とほぼ同値
+- `total net` はわずかに悪化
+- `pure bankroll` はわずかに改善
+- したがって September difficult-regime specialist とまでは言えない
+- role 判定は December control compare 待ち
+
+## Final Read
+
+- broad September
+  - baseline `current_recommended_serving_2025_latest`
+    - `32 bets`
+    - `total net = -27.3`
+    - `pure bankroll = 0.2958869306148325`
+  - candidate `r20260404_recent_history_track_distance_selective_v1`
+    - `28 bets`
+    - `total net = -28.0`
+    - `pure bankroll = 0.30568644833662867`
+- December control
+  - baseline `current_recommended_serving_2025_latest`
+    - `45 bets`
+    - `total net = +21.8`
+    - `pure bankroll = 1.6711564921099862`
+  - candidate `r20260404_recent_history_track_distance_selective_v1`
+    - `121 bets`
+    - `total net = +2.1999999999999957`
+    - `pure bankroll = 0.4147571870121275`
+
+## Decision
+
+- `r20260404_recent_history_track_distance_selective_v1` は formal `pass / promote`
+- ただし operational role は `analysis-first promoted candidate` ではなく `compare reference` に近い
+- September difficult window では baseline に対して明確な upside を作れない
+- December control window では `bets` を過剰に増やし、`total net` と `pure bankroll` の両方で大きく劣後する
+- したがって serving default / seasonal fallback のどちらにも上げない
