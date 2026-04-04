@@ -115,8 +115,7 @@ Primary next issue draft:
 
 Current active issue:
 
-- `#92`
-- <https://github.com/Npieju/nr-learn/issues/92>
+- none
 
 Latest September fallback compare:
 
@@ -241,7 +240,18 @@ Latest Kelly runtime queue:
    - `bets_total=598`
    - `feasible_fold_count=5`
 8. したがって first formal candidate は最も解釈しやすい `kelly_runtime_base25` に固定する
-9. current active issue は `#92`
+9. first formal candidate `r20260404_kelly_runtime_base25_v1` は完了
+   - evaluation top-line は anchor と同値
+   - held-out formal `weighted_roi=0.8702925541408022`
+   - `bets_total=993`
+   - `feasible_fold_count=5`
+10. anchor `r20260329_tighter_policy_ratio003_abs90` 比では
+    - held-out formal `weighted_roi=1.1042287961989103`
+    - `bets_total=598`
+    - `feasible_fold_count=5`
+11. support は維持し bets は増えたが、primary KPI の formal ROI が明確に劣後した
+12. したがって `#92` の判断は `reject as anchor challenger`
+13. current active issue は `none`
 
 Latest evaluate progress fix:
 

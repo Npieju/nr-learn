@@ -80,3 +80,36 @@ interpretation:
 - historical top-line は 3 candidate で同値だった
 - したがって first formal candidate は最も解釈しやすい `K1 = kelly_runtime_base25` に固定する
 - `K2` と `K3` は contrast 候補として残すが、initial rerun の優先順位は下げる
+
+## 10. Final Read
+
+- revision:
+  - `r20260404_kelly_runtime_base25_v1`
+- evaluation summary:
+  - `artifacts/reports/evaluation_summary_catboost_value_stack_lgbm_roi_high_coverage_tune_roi012_liquidity_regime_hybrid_model_r20260404_kelly_runtime_base25_v1_wf_full_nested.json`
+  - `auc=0.8400959298075428`
+  - `top1_roi=0.8070328660078143`
+  - `ev_top1_roi=0.5568030337853367`
+  - `wf_nested_test_roi_weighted=0.916134557600003`
+  - `wf_nested_test_bets_total=410`
+- promotion / formal:
+  - `artifacts/reports/promotion_gate_r20260404_kelly_runtime_base25_v1.json`
+  - `status=pass`
+  - `decision=promote`
+  - held-out formal `weighted_roi=0.8702925541408022`
+  - `formal_benchmark_bets_total=993`
+  - `formal_benchmark_feasible_fold_count=5`
+- anchor comparison:
+  - anchor `r20260329_tighter_policy_ratio003_abs90`
+  - held-out formal `weighted_roi=1.1042287961989103`
+  - `bets_total=598`
+  - `feasible_fold_count=5`
+
+interpretation:
+
+- evaluation top-line は anchor と実質同値だった
+- formal support は `5/5` を維持し、`bets_total` は `598 -> 993` に増えた
+- ただし primary KPI の held-out formal ROI は `1.1042 -> 0.8703` で明確に劣後した
+- したがって anchor replacement には失敗
+- 現時点の判断は `keep as candidate` ではなく `reject as anchor challenger`
+- runtime kelly family 自体の存在価値は確認できたが、current promoted anchor を置き換える根拠にはならない
