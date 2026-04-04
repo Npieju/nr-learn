@@ -172,9 +172,24 @@ Latest next feature queue:
       - candidate `30 bets / -9.3 / pure bankroll 0.7513642270122226`
 13. したがって `r20260404_class_rest_surface_conditional_selective_v1` は formal `pass / promote` だが、operational role は `analysis-first promoted candidate` に固定し、serving default には上げない
 
+Latest next feature queue:
+
+1. next JRA feature hypothesis は `recent form / history` family の track-distance selective child とする
+2. issue source:
+   - `docs/next_issue_recent_history_track_distance_selective_candidate.md`
+3. rationale:
+   - `recent form / history` family は Tier B で、baseline core として残っている
+   - builder には
+     - `horse_track_distance_last_3_avg_rank`
+     - `horse_track_distance_last_5_win_rate`
+     が既にある
+   - `fundamental_enriched` では force include されていたが、current high-coverage rich baseline では未採用
+4. したがって broad history rerun ではなく、上記 pair の narrow selective child を first read とする
+
 Current active issue:
 
-- none
+- `#96`
+- <https://github.com/Npieju/nr-learn/issues/96>
 
 Latest September fallback compare:
 
@@ -205,7 +220,8 @@ Primary next issue draft:
 
 Current active issue:
 
-- none
+- `#96`
+- <https://github.com/Npieju/nr-learn/issues/96>
 
 Latest tighter policy fallback compare:
 

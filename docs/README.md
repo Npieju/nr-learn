@@ -114,6 +114,7 @@ pace / closing-fit selective replay の formal read は [next_issue_pace_closing
 pace / closing-fit selective line の September fallback compare は [next_issue_pace_closing_fit_september_fallback_compare.md](next_issue_pace_closing_fit_september_fallback_compare.md) を使う。
 tighter policy の September fallback ordering を再確認するときは [next_issue_tighter_policy_september_fallback_compare.md](next_issue_tighter_policy_september_fallback_compare.md) を使う。
 JRA baseline に対する owner signal の marginal contribution を切り分けるときは [next_issue_owner_signal_ablation_audit.md](next_issue_owner_signal_ablation_audit.md) を使う。
+recent form / history family の narrow child を再開するときは [next_issue_recent_history_track_distance_selective_candidate.md](next_issue_recent_history_track_distance_selective_candidate.md) を使う。
 
 tail loader optimization の gate 運用は [tail_loader_equivalence_gate_standard.md](tail_loader_equivalence_gate_standard.md) を使う。
 
