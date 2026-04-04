@@ -59,3 +59,78 @@ if NAR strict `pre_race_only` benchmark 上で JRA-style `value_blend` architect
 - `#101` / `#102` が未完了で provenance-defensible benchmark が無い
 - strict `pre_race_only` benchmark の row / race support が architecture compare に足りない
 - その場合はこの issue は blocked 扱いで維持する
+
+## First Read
+
+`#102` は negative read で close したため、current blocker は `#101` の result-ready strict `pre_race_only` benchmark rerun のみである。
+
+ただし architecture 側は、JRA current standard をそのまま NAR に落とせば済むわけではない。`rich_high_coverage_diag` を local Nankan に対して feature-gap した結果、bootstrap の block は sample support だけでなく feature schema mismatch も含むと確定した。
+
+実行:
+
+- data config: `configs/data_local_nankan.yaml`
+- feature config: `configs/features_catboost_rich_high_coverage_diag.yaml`
+- model config: `configs/model_catboost_win_high_coverage_diag.yaml`
+- `max_rows=50000`
+- output:
+  - [feature_gap_summary_nar_value_blend_bootstrap_first_read.json](/workspaces/nr-learn/artifacts/reports/feature_gap_summary_nar_value_blend_bootstrap_first_read.json)
+  - [feature_gap_feature_coverage_nar_value_blend_bootstrap_first_read.csv](/workspaces/nr-learn/artifacts/reports/feature_gap_feature_coverage_nar_value_blend_bootstrap_first_read.csv)
+  - [feature_gap_raw_column_coverage_nar_value_blend_bootstrap_first_read.csv](/workspaces/nr-learn/artifacts/reports/feature_gap_raw_column_coverage_nar_value_blend_bootstrap_first_read.csv)
+
+confirmed read:
+
+- template raw columns:
+  - `25 / 25 present`
+  - `priority_missing_raw_columns=[]`
+- feature frame:
+  - `feature_columns_total=87`
+  - `selected_feature_count=52`
+  - `categorical_feature_count=9`
+- missing force-include features:
+  - `course_gate_bucket_last_100_avg_rank`
+  - `course_gate_bucket_last_100_win_rate`
+  - `horse_class_change`
+  - `horse_class_down_long_layoff`
+  - `horse_class_down_short_turnaround`
+  - `horse_class_up_long_layoff`
+  - `horse_class_up_short_turnaround`
+  - `horse_is_class_down`
+  - `horse_is_class_up`
+  - `horse_last_class_score`
+  - `horse_surface_switch`
+  - `horse_surface_switch_long_layoff`
+  - `horse_surface_switch_short_turnaround`
+  - `race_class_score`
+- low coverage force-include features:
+  - `[]`
+
+一方で、次は rich config の中でも NAR にそのまま乗る。
+
+- `horse_last_3_avg_rank`
+- `horse_last_5_win_rate`
+- `horse_days_since_last_race`
+- `horse_weight_change`
+- `horse_distance_change`
+- `jockey_last_30_win_rate`
+- `trainer_last_30_win_rate`
+- `jockey_trainer_combo_last_50_win_rate`
+- `jockey_trainer_combo_last_50_avg_rank`
+- `gate_ratio`
+- `frame_ratio`
+- `owner_last_50_win_rate`
+
+meaning:
+
+- `#103` の block は strict `pre_race_only` benchmark readiness だけではない
+- current local Nankan では、JRA `rich_high_coverage_diag` の full parity config をそのまま one-shot で持ち込むと force-include mismatch が残る
+- したがって post-readiness の first bootstrap は
+  - JRA stack / gate / artifact discipline を再利用しつつ
+  - NAR buildable subset に narrowed した win / ROI / stack config
+  から始めるのが妥当である
+
+next cut:
+
+- `#101` result-ready benchmark ができたら
+  - NAR `value_blend` bootstrap 用の narrowed feature config
+  - NAR 用 win / ROI / stack config
+  を scaffold する
