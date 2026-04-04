@@ -152,3 +152,26 @@ current judgment:
 
 - selective child は no-op ではない
 - 次段は ROI component retrain
+
+## Second Acceptance Point
+
+- roi component:
+  - `artifacts/reports/train_metrics_lightgbm_roi_high_coverage_diag_r20260404_jockey_trainer_combo_style_distance_selective_v1.json`
+  - `artifacts/models/lightgbm_roi_high_coverage_diag_model.manifest_r20260404_jockey_trainer_combo_style_distance_selective_v1.json`
+- train metrics:
+  - `top1_roi=0.7817685589519648`
+  - `best_iteration=197`
+- selected features:
+  - `109`
+- focal 8 features は ROI actual used set に全て入った
+
+stack configs:
+
+- `configs/model_catboost_win_high_coverage_diag_jockey_trainer_combo_style_distance_selective_v1.yaml`
+- `configs/model_lightgbm_roi_high_coverage_diag_jockey_trainer_combo_style_distance_selective_v1.yaml`
+- `configs/model_catboost_value_stack_lgbm_roi_high_coverage_tune_roi012_liquidity_regime_hybrid_june_strict_serving_jockey_trainer_combo_style_distance_selective_v1.yaml`
+
+current judgment:
+
+- selective child は win / ROI の両 component で no-op ではない
+- 次段は stack build
