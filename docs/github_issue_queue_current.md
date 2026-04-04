@@ -142,11 +142,12 @@ Latest actual-date role split:
 
 Primary next issue draft:
 
-- none
+- `docs/next_issue_jockey_trainer_combo_closing_time_selective_candidate.md`
 
 Current active issue:
 
-- none
+- `#90`
+- <https://github.com/Npieju/nr-learn/issues/90>
 
 Latest tighter policy fallback compare:
 
@@ -161,6 +162,23 @@ Latest tighter policy fallback compare:
 5. pure bankroll は両 window で `sep_guard` が明確に上だった
 6. したがって fallback ordering は変えない
 7. `current_sep_guard_candidate` を second seasonal fallback のまま据え置き、`current_tighter_policy_search_candidate_2025_latest` は third defensive option に留める
+
+Latest combo reentry queue:
+
+1. `#90` で JRA `jockey / trainer / combo` family を second child として再開した
+2. first child `style + track-distance` は formal `pass / promote` まで到達したが、actual-date role は `analysis-first promoted candidate` に留まった
+3. したがって broad child を繰り返さず、`closing_time_3f` pair
+   - `jockey_last_30_avg_closing_time_3f`
+   - `trainer_last_30_avg_closing_time_3f`
+   だけを追加する narrow selective candidate を first execution source とする
+4. first read は feature-gap / coverage で、low-coverage や no-op なら true component retrain へは進めない
+5. `#90` の first read は clean
+   - `priority_missing_raw_columns=[]`
+   - `missing_force_include_features=[]`
+   - `low_coverage_force_include_features=[]`
+   - `jockey_last_30_avg_closing_time_3f non_null_ratio=0.99727`
+   - `trainer_last_30_avg_closing_time_3f non_null_ratio=0.99635`
+6. したがって次の execution source は true component retrain である
 
 Latest breeder signal read:
 
