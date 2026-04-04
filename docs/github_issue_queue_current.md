@@ -188,8 +188,8 @@ Latest next feature queue:
 
 Current active issue:
 
-- `#101`
-- <https://github.com/Npieju/nr-learn/issues/101>
+- `#104`
+- <https://github.com/Npieju/nr-learn/issues/104>
 
 Current active read:
 
@@ -312,6 +312,15 @@ Current active read:
 42. `#102` は negative read で close し、capture expansion は stop する
 43. NAR provenance-defensible benchmark の primary path は `#101` result-arrival handoff に戻す
 44. post-readiness architecture parity は引き続き `#103` を block で維持する
+45. current internal next step は `#104` result-ready bootstrap handoff automation である
+46. objective は `#101` handoff と `#103` value-blend bootstrap scaffold を single resume surface に束ねること
+47. dedicated pre-race-ready data config と bootstrap command plan を追加し、result-ready 到着後の ad hoc command recall を不要にする
+48. first cut は完了
+49. dedicated config:
+   - `configs/data_local_nankan_pre_race_ready.yaml`
+50. wrapper:
+   - `scripts/run_local_nankan_result_ready_bootstrap_handoff.py`
+51. current smoke は `status=not_ready` だが、`bootstrap_command_plan=4 steps` を manifest に残せている
 
 Latest actual-date role split:
 

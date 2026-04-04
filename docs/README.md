@@ -125,6 +125,7 @@ strict `pre_race` pool の current accumulation を読む artifact は `local_na
 bounded repeated recrawl と pass snapshot は `run_local_nankan_pre_race_capture_loop.py` と `local_nankan_pre_race_capture_loop_manifest.json` を正本とする。
 NAR を JRA と同水準の model-development surface へ上げる issue ladder は [nar_jra_parity_issue_ladder.md](nar_jra_parity_issue_ladder.md) を使う。
 post-readiness の first architecture parity issue は [next_issue_nar_value_blend_architecture_bootstrap.md](next_issue_nar_value_blend_architecture_bootstrap.md) を使う。
+result-ready 到着後の `#101 -> #103` resume orchestration は [next_issue_nar_result_ready_bootstrap_handoff.md](next_issue_nar_result_ready_bootstrap_handoff.md) を使う。
 
 tail loader optimization の gate 運用は [tail_loader_equivalence_gate_standard.md](tail_loader_equivalence_gate_standard.md) を使う。
 
