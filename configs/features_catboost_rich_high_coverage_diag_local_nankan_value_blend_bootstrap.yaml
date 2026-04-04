@@ -1,0 +1,53 @@
+features:
+  base: []
+  history: []
+
+selection:
+  mode: "all_safe"
+  exclude_columns:
+    - "date"
+    - "race_id"
+    - "rank"
+    - "is_win"
+    - "horse_id"
+    - "horse_history_key"
+    - "horse_history_key_source"
+    - "horse_name"
+  exclude_keywords:
+    - "タイム"
+    - "着差"
+    - "コーナー"
+    - "上り"
+    - "賞金"
+    - "払戻"
+    - "配当"
+    - "payout"
+    - "passing_order"
+  force_include_columns:
+    - "horse_last_3_avg_rank"
+    - "horse_last_5_win_rate"
+    - "horse_days_since_last_race"
+    - "horse_days_since_last_race_log1p"
+    - "horse_is_short_turnaround"
+    - "horse_is_long_layoff"
+    - "horse_weight_change"
+    - "horse_weight_change_abs"
+    - "horse_distance_change"
+    - "horse_distance_change_abs"
+    - "jockey_last_30_win_rate"
+    - "trainer_last_30_win_rate"
+    - "jockey_trainer_combo_last_50_win_rate"
+    - "jockey_trainer_combo_last_50_avg_rank"
+    - "gate_ratio"
+    - "frame_ratio"
+    - "owner_last_50_win_rate"
+    - "race_year"
+    - "race_month"
+    - "race_dayofweek"
+  force_categorical_columns:
+    - "jockey_id"
+    - "trainer_id"
+    - "track"
+    - "weather"
+    - "ground_condition"
+    - "sex"

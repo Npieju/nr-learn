@@ -134,3 +134,59 @@ next cut:
   - NAR `value_blend` bootstrap 用の narrowed feature config
   - NAR 用 win / ROI / stack config
   を scaffold する
+
+## First Cut
+
+result-ready benchmark 到着前に、post-readiness rerun でそのまま使う narrowed scaffold config を追加した。
+
+- feature config:
+  - [features_catboost_rich_high_coverage_diag_local_nankan_value_blend_bootstrap.yaml](/workspaces/nr-learn/configs/features_catboost_rich_high_coverage_diag_local_nankan_value_blend_bootstrap.yaml)
+- win config:
+  - [model_catboost_win_high_coverage_diag_local_nankan_value_blend_bootstrap.yaml](/workspaces/nr-learn/configs/model_catboost_win_high_coverage_diag_local_nankan_value_blend_bootstrap.yaml)
+- roi config:
+  - [model_lightgbm_roi_high_coverage_diag_local_nankan_value_blend_bootstrap.yaml](/workspaces/nr-learn/configs/model_lightgbm_roi_high_coverage_diag_local_nankan_value_blend_bootstrap.yaml)
+- stack config:
+  - [model_catboost_value_stack_lgbm_roi_high_coverage_tune_roi012_local_nankan_value_blend_bootstrap.yaml](/workspaces/nr-learn/configs/model_catboost_value_stack_lgbm_roi_high_coverage_tune_roi012_local_nankan_value_blend_bootstrap.yaml)
+
+scaffold rule:
+
+- JRA stack / gate / artifact discipline は再利用する
+- force-include mismatch が出た class / surface / course-gate-bucket 群は入れない
+- current local Nankan で buildable と確認できた subset に narrow する
+- policy / policy_search は current local Nankan formal line に近い conservative setting を使う
+
+included bootstrap subset:
+
+- `horse_last_3_avg_rank`
+- `horse_last_5_win_rate`
+- `horse_days_since_last_race`
+- `horse_weight_change`
+- `horse_distance_change`
+- `jockey_last_30_win_rate`
+- `trainer_last_30_win_rate`
+- `jockey_trainer_combo_last_50_win_rate`
+- `jockey_trainer_combo_last_50_avg_rank`
+- `gate_ratio`
+- `frame_ratio`
+- `owner_last_50_win_rate`
+
+remaining blocker:
+
+- まだ strict `pre_race_only` result-ready benchmark が無いので、train / evaluate 実行はしていない
+- `#101` が ready になったら、この scaffold を起点に component retrain と stack bundle に入る
+
+validation:
+
+- config parse:
+  - all 4 scaffold YAML files loaded successfully
+- narrowed feature-gap:
+  - [feature_gap_summary_nar_value_blend_bootstrap_narrowed_v1.json](/workspaces/nr-learn/artifacts/reports/feature_gap_summary_nar_value_blend_bootstrap_narrowed_v1.json)
+  - [feature_gap_feature_coverage_nar_value_blend_bootstrap_narrowed_v1.csv](/workspaces/nr-learn/artifacts/reports/feature_gap_feature_coverage_nar_value_blend_bootstrap_narrowed_v1.csv)
+  - `priority_missing_raw_columns=[]`
+  - `missing_force_include_features=[]`
+  - `low_coverage_force_include_features=[]`
+
+meaning:
+
+- `#103` の first cut scaffold は local Nankan schema に整合している
+- post-readiness rerun の blocker は config mismatch ではなく、strict `pre_race_only` result-ready benchmark 未到着だけになった
