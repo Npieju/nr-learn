@@ -287,6 +287,24 @@ Current active read:
     - `added_dates=[]`
 34. したがって operator read は `await_result_arrival` だけでなく `capturing_pre_race_pool` まで上がった
 35. 次段は repeated recrawl cadence 自体を bounded loop / snapshot artifact として入れること
+36. `#102` third cut として bounded repeated recrawl wrapper を追加した
+37. script:
+    - [run_local_nankan_pre_race_capture_loop.py](/workspaces/nr-learn/scripts/run_local_nankan_pre_race_capture_loop.py)
+38. output:
+    - [local_nankan_pre_race_capture_loop_manifest.json](/workspaces/nr-learn/artifacts/reports/local_nankan_pre_race_capture_loop_manifest.json)
+    - [pass_001_coverage_summary.json](/workspaces/nr-learn/artifacts/reports/local_nankan_pre_race_capture_snapshots/pass_001_coverage_summary.json)
+    - [pass_001_date_coverage.csv](/workspaces/nr-learn/artifacts/reports/local_nankan_pre_race_capture_snapshots/pass_001_date_coverage.csv)
+    - [nar_pre_race_capture_loop_smoke.log](/workspaces/nr-learn/artifacts/logs/nar_pre_race_capture_loop_smoke.log)
+39. smoke read:
+    - `prepare rows=24`
+    - `collect requested_ids=24 parsed=24 failed=0`
+    - latest summary `pre_race_only_rows=562`
+    - `pre_race_only_races=24`
+    - `delta_pre_race_only_rows=281`
+    - `delta_pre_race_only_races=0`
+    - `added_dates=[]`
+40. したがって repeated recrawl cadence は動くが、current source horizon では unique race support を増やしていない
+41. 次の判断点は `#102` を negative read で close するか、multi-snapshot 同一 race の扱いだけ追加で固定するかである
 
 Latest actual-date role split:
 

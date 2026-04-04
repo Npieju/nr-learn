@@ -127,6 +127,53 @@ next cut:
 - repeated recrawl cadence 自体を bounded loop / snapshot output として実装する
 - recrawl のたびに coverage summary を残し、pool growth が本当に起きるか small-scope で確認する
 
+## Third Cut
+
+repeated recrawl cadence 自体を bounded loop として実装し、pass ごとの snapshot artifact を残せるようにした。
+
+- script:
+  - [run_local_nankan_pre_race_capture_loop.py](/workspaces/nr-learn/scripts/run_local_nankan_pre_race_capture_loop.py)
+- output:
+  - [local_nankan_pre_race_capture_loop_manifest.json](/workspaces/nr-learn/artifacts/reports/local_nankan_pre_race_capture_loop_manifest.json)
+  - [pass_001_coverage_summary.json](/workspaces/nr-learn/artifacts/reports/local_nankan_pre_race_capture_snapshots/pass_001_coverage_summary.json)
+  - [pass_001_date_coverage.csv](/workspaces/nr-learn/artifacts/reports/local_nankan_pre_race_capture_snapshots/pass_001_date_coverage.csv)
+  - [nar_pre_race_capture_loop_smoke.log](/workspaces/nr-learn/artifacts/logs/nar_pre_race_capture_loop_smoke.log)
+
+smoke conditions:
+
+- `start_date=2026-04-04`
+- `end_date=2026-04-10`
+- `target=race_card`
+- `max_passes=1`
+- `include_completed=true`
+
+confirmed read:
+
+- pass 1:
+  - `prepare rows=24`
+  - `collect requested_ids=24 parsed=24 failed=0`
+- loop manifest:
+  - `status=capturing`
+  - `current_phase=capturing_pre_race_pool`
+  - `completed_passes=1`
+- snapshot compare:
+  - `pre_race_only_rows=562`
+  - `pre_race_only_races=24`
+  - `delta_pre_race_only_rows=281`
+  - `delta_pre_race_only_races=0`
+  - `added_dates=[]`
+
+meaning:
+
+- bounded repeated recrawl / snapshot 導線そのものは成立した
+- ただし増えたのは row 数だけで、unique race support は増えていない
+- current source horizon では、repeated recrawl は「新しい labeled race の獲得」より「同一 upcoming races の追加 snapshot」を作っている可能性が高い
+
+next decision:
+
+- `#102` を negative read で close して `#101` result-arrival path を primary に戻すか
+- あるいは multi-snapshot 同一 race の扱いを明示する read を 1 本だけ足してから stop するか
+
 ## Stop Condition
 
 - source 側で upcoming race discovery が 24 races 以上に広がらない
