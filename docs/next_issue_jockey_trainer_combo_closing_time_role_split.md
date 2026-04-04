@@ -65,3 +65,55 @@ if `r20260404_jockey_trainer_combo_closing_time_selective_v1` が September diff
 
 - actual-date compare で current operational default に一貫して劣後
 - control window を壊し、serving contender を主張できない
+
+## Actual-Date Read
+
+Actual-date compare は `current_recommended_serving_2025_latest` を baseline にし、right side だけ `r20260404_jockey_trainer_combo_closing_time_selective_v1` の true retrain suffix を fresh 推論で読んだ。
+
+September difficult window:
+
+- compare manifest:
+  - `artifacts/reports/serving_smoke_profile_compare_sep25_combo_ct_base_vs_sep25_combo_ct_cand.json`
+- dashboard summary:
+  - `artifacts/reports/dashboard/serving_compare_dashboard_sep25_combo_ct_base_vs_sep25_combo_ct_cand.json`
+- baseline:
+  - `32 bets`
+  - `total net = -27.3`
+  - `pure bankroll = 0.2958869306148325`
+- candidate:
+  - `5 bets`
+  - `total net = -3.6`
+  - `pure bankroll = 0.8808888460219477`
+
+December control window:
+
+- compare manifest:
+  - `artifacts/reports/serving_smoke_profile_compare_dec25_combo_ct_base_vs_dec25_combo_ct_cand.json`
+- dashboard summary:
+  - `artifacts/reports/dashboard/serving_compare_dashboard_dec25_combo_ct_base_vs_dec25_combo_ct_cand.json`
+- baseline:
+  - `45 bets`
+  - `total net = +21.8`
+  - `pure bankroll = 1.6711564921099862`
+- candidate:
+  - `30 bets`
+  - `total net = -9.3`
+  - `pure bankroll = 0.7513642270122226`
+
+補足:
+
+- late-September narrow window は追加で切らなかった
+- broad September と December control の split だけで operational role は十分に固定できる
+
+## Decision Summary
+
+`r20260404_jockey_trainer_combo_closing_time_selective_v1` は formal `pass / promote` だが、actual-date role は serving contender ではない。
+
+- September difficult window では baseline より strong downside control
+- December control window では baseline の upside を明確に壊す
+
+したがって operational role は `analysis-first promoted candidate` に据え置く。
+
+- serving default は引き続き `current_recommended_serving_2025_latest`
+- this line は `jockey / trainer / combo` family の compare reference として保持する
+- broad replacement / default promotion は行わない

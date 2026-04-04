@@ -146,8 +146,7 @@ Primary next issue draft:
 
 Current active issue:
 
-- `#91`
-- <https://github.com/Npieju/nr-learn/issues/91>
+- none
 
 Latest tighter policy fallback compare:
 
@@ -190,6 +189,8 @@ Latest combo reentry queue:
    で `pass / promote` に到達した
 8. したがって `#90` は feature child hypothesis issueとして完了し、次は actual-date role split を切る
 9. actual-date role split issue は `#91` として起票済みである
+10. `#91` actual-date role split では、September difficult window は baseline 比で strong downside control だった一方、December control window は baseline に明確劣後した
+11. したがって `r20260404_jockey_trainer_combo_closing_time_selective_v1` の operational role は `analysis-first promoted candidate` に固定し、serving default には上げない
 
 Latest breeder signal read:
 
