@@ -223,10 +223,37 @@ Latest combo track-distance role split:
 
 Current active issue:
 
-- `#101`
-- <https://github.com/Npieju/nr-learn/issues/101>
+- `#108`
+- <https://github.com/Npieju/nr-learn/issues/108>
 
 Current active read:
+
+1. `#108` `jockey / trainer / combo` family の `style + track-distance` selective child を開始した
+2. config:
+   - `configs/features_catboost_rich_high_coverage_diag_jockey_trainer_combo_regime_extension.yaml`
+3. feature gap summary:
+   - `artifacts/reports/feature_gap_summary_jockey_trainer_combo_style_distance_selective_v1.json`
+4. feature-gap read:
+   - `priority_missing_raw_columns=[]`
+   - `missing_force_include_features=[]`
+   - `low_coverage_force_include_features=[]`
+5. focal 8 features は全て `selected=True`, `present=True`, `status=ok`
+6. coverage:
+   - style pair `0.92133 - 0.92175`
+   - track-distance quartet `0.92386`
+7. current judgment:
+   - selective child は buildable
+   - no-op risk は低い
+8. next execution source:
+   - true component retrain
+
+Blocked parallel track:
+
+1. `#101` timestamped strict `pre_race_only` benchmark handoff は外部結果待ち
+2. `result_ready_races=0`
+3. NAR side の next move は result arrival 待ち
+
+Background read:
 
 1. `#100` timestamped odds rebuild は close 条件を満たして close 済み
 2. third cut の live recrawl で、strict `pre_race` row の実在を確認した

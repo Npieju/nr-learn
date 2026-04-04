@@ -58,6 +58,20 @@ tracked config:
 
 - `configs/features_catboost_rich_high_coverage_diag_jockey_trainer_combo_regime_extension.yaml`
 
+## In Scope
+
+- `jockey / trainer / combo` richer side 8 本の selective child
+- feature-gap / coverage read
+- true component retrain flow
+- formal compare
+
+## Non-Goals
+
+- 新しい builder 実装の追加
+- broad policy redesign
+- serving role split の先回り
+- NAR readiness / benchmark work
+
 ## Execution Standard
 
 前回の feature family と同じ true component retrain flow を使う。
@@ -72,3 +86,51 @@ tracked config:
 - current promoted line に対して formal compare できる candidate が 1 本立つ
 - support が極端に崩れない
 - `jockey / trainer / combo` family の richer side が alpha source かどうかを family 単位で判断できる
+
+## Validation Plan
+
+1. feature-gap / coverage read
+2. win component retrain
+3. ROI component retrain
+4. stack rebuild
+5. `run_revision_gate.py --skip-train` で formal compare
+
+## Stop Condition
+
+- focal 8 本の coverage が低く、selective child 自体が buildable でない
+- actual used set に乗らず no-op と判定される
+- evaluation / formal のどちらかで support が崩れ、family の next child として残す根拠が弱い
+
+## First Read
+
+- issue:
+  - `#108`
+- config:
+  - `configs/features_catboost_rich_high_coverage_diag_jockey_trainer_combo_regime_extension.yaml`
+- feature gap summary:
+  - `artifacts/reports/feature_gap_summary_jockey_trainer_combo_style_distance_selective_v1.json`
+- feature coverage csv:
+  - `artifacts/reports/feature_gap_feature_coverage_jockey_trainer_combo_style_distance_selective_v1.csv`
+
+summary:
+
+- `priority_missing_raw_columns=[]`
+- `missing_force_include_features=[]`
+- `low_coverage_force_include_features=[]`
+
+focal 8 features:
+
+- `jockey_last_30_avg_corner_gain_2_to_4`: `selected=True`, `present=True`, `non_null_ratio=0.92175`
+- `trainer_last_30_avg_corner_gain_2_to_4`: `selected=True`, `present=True`, `non_null_ratio=0.92134`
+- `jockey_last_30_avg_closing_time_3f`: `selected=True`, `present=True`, `non_null_ratio=0.92171`
+- `trainer_last_30_avg_closing_time_3f`: `selected=True`, `present=True`, `non_null_ratio=0.92133`
+- `jockey_track_distance_last_50_win_rate`: `selected=True`, `present=True`, `non_null_ratio=0.92386`
+- `jockey_track_distance_last_50_avg_rank`: `selected=True`, `present=True`, `non_null_ratio=0.92386`
+- `trainer_track_distance_last_50_win_rate`: `selected=True`, `present=True`, `non_null_ratio=0.92386`
+- `trainer_track_distance_last_50_avg_rank`: `selected=True`, `present=True`, `non_null_ratio=0.92386`
+
+current read:
+
+- selective child は buildable
+- no-op risk は低い
+- 次段は true component retrain
