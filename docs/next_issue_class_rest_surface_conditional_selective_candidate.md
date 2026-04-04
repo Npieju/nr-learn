@@ -44,6 +44,44 @@ if current baseline で未採用の conditional interaction 群を narrow select
 - ただし current baseline actual used set では、conditional interaction 群は未採用
 - direct rerun だけでは no-op risk があるため、先に selective child として issue を切る必要がある
 
+## Result
+
+- focal 6 列は feature-gap で全て buildable
+  - `selected=True`
+  - `present=True`
+  - `status=ok`
+  - `non_null_ratio=0.68878`
+- win / roi component の actual used set に focal 6 列は全て入った
+- formal compare は `pass / promote`
+
+主要値:
+
+- evaluation
+  - `auc=0.8426169492248933`
+  - `top1_roi=0.8082087836284203`
+  - `ev_top1_roi=0.8213612324672338`
+  - nested WF: `3/3 portfolio`
+  - `wf_nested_test_roi_weighted=0.7632385120350111`
+  - `wf_nested_test_bets_total=457`
+- formal
+  - `weighted_roi=1.2311149102465346`
+  - `bets_total=9806`
+  - `feasible_fold_count=3`
+  - metric source: `test=3`
+
+formal benchmark fold winner:
+
+- fold 1: `kelly`, `roi=0.9775776609688788`, `bets=4745`
+- fold 2: `kelly`, `roi=1.5410960940613454`, `bets=3408`
+- fold 3: `kelly`, `roi=1.3198132607496211`, `bets=1653`
+
+Decision:
+
+- selective child は no-op ではなかった
+- baseline refresh 比で evaluation は小幅改善
+- held-out formal `weighted_roi > 1.20` を満たした
+- 次段は actual-date role split を切る
+
 ## In Scope
 
 - current baseline used feature inventory の確認

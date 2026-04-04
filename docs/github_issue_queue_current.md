@@ -129,10 +129,6 @@ Primary next issue draft:
 
 - `docs/next_issue_kelly_runtime_family.md`
 
-Current active issue:
-
-- none
-
 Latest next feature queue:
 
 1. next JRA feature hypothesis は `class / rest / surface` family の conditional selective child とする
@@ -149,7 +145,25 @@ Latest next feature queue:
      - `horse_class_down_long_layoff`
      は builder / force-include には存在するのに actual used set には残っていない
 4. したがって broad family rerun ではなく、上記 interaction 群の selective child を first read とする
-5. current active issue は `#94`
+5. `#94` の selective child は formal `pass / promote` まで完了した
+6. focal 6 列は feature-gap / actual used set の両方で成立し、no-op ではなかった
+7. revision `r20260404_class_rest_surface_conditional_selective_v1` は
+   - `auc=0.8426169492248933`
+   - `top1_roi=0.8082087836284203`
+   - `ev_top1_roi=0.8213612324672338`
+   - `wf_nested_test_roi_weighted=0.7632385120350111`
+   - `wf_nested_test_bets_total=457`
+   - held-out formal `weighted_roi=1.2311149102465346`
+   - `formal_benchmark_bets_total=9806`
+   - `formal_benchmark_feasible_fold_count=3`
+8. next execution source は actual-date role split
+9. issue source:
+   - `docs/next_issue_class_rest_surface_conditional_actual_date_role_split.md`
+
+Current active issue:
+
+- `#95`
+- <https://github.com/Npieju/nr-learn/issues/95>
 
 Latest September fallback compare:
 
