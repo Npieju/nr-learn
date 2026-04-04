@@ -209,6 +209,18 @@ Latest combo track-distance selective read:
 6. next execution source:
    - `docs/next_issue_jockey_trainer_combo_track_distance_role_split.md`
 
+Latest combo track-distance role split:
+
+1. `#107` actual-date role split は確定した
+2. broad September:
+   - baseline `32 bets / -27.3 / pure bankroll 0.2958869306148325`
+   - candidate `28 bets / -28.0 / pure bankroll 0.30568644833662867`
+3. December control:
+   - baseline `45 bets / +21.8 / pure bankroll 1.6711564921099862`
+   - candidate `121 bets / +2.1999999999999957 / pure bankroll 0.4147571870121275`
+4. したがって `r20260404_jockey_trainer_combo_track_distance_selective_v1` は formal `pass / promote` だが、operational role は `compare reference` に固定する
+5. 理由は、broad September では near-flat で明確な difficult-window de-risk を示せず、December control では exposure 増加とともに `total net` / `pure bankroll` の両方で大きく劣後するため
+
 Current active issue:
 
 - `#101`

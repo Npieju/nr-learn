@@ -68,3 +68,19 @@ if `r20260404_jockey_trainer_combo_track_distance_selective_v1` が September di
 - actual-date compare で baseline に一貫して劣後
 - difficult window 改善が弱く、formal uplift だけで role を主張する形になる
 
+## Actual-Date Read
+
+- broad September:
+  - baseline `32 bets / -27.3 / pure bankroll 0.2958869306148325`
+  - candidate `28 bets / -28.0 / pure bankroll 0.30568644833662867`
+- December control:
+  - baseline `45 bets / +21.8 / pure bankroll 1.6711564921099862`
+  - candidate `121 bets / +2.1999999999999957 / pure bankroll 0.4147571870121275`
+
+## Decision Summary
+
+- `r20260404_jockey_trainer_combo_track_distance_selective_v1` は formal `pass / promote`
+- ただし operational role は `compare reference`
+- broad September では baseline に対して near-flat で、明確な difficult-window de-risk を示せない
+- December control では exposure が `45 -> 121` に増え、`total net` と `pure bankroll` の両方で大きく劣後する
+- したがって serving default / seasonal fallback / analysis-first promoted candidate には上げない
