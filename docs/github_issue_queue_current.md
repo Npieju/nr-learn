@@ -188,8 +188,8 @@ Latest next feature queue:
 
 Current active issue:
 
-- `#102`
-- <https://github.com/Npieju/nr-learn/issues/102>
+- `#101`
+- <https://github.com/Npieju/nr-learn/issues/101>
 
 Current active read:
 
@@ -303,8 +303,15 @@ Current active read:
     - `delta_pre_race_only_rows=281`
     - `delta_pre_race_only_races=0`
     - `added_dates=[]`
-40. したがって repeated recrawl cadence は動くが、current source horizon では unique race support を増やしていない
-41. 次の判断点は `#102` を negative read で close するか、multi-snapshot 同一 race の扱いだけ追加で固定するかである
+40. fourth cut の duplicate read:
+    - strict `pre_race` full pool `562 rows / 24 races / 281 horses`
+    - `races_with_duplicate_rows=24`
+    - `mean_duplicate_factor=2.0`
+    - latest-only dedupe `281 rows / 24 races`
+41. したがって repeated recrawl cadence は current source horizon で unique race support を増やしていない
+42. `#102` は negative read で close し、capture expansion は stop する
+43. NAR provenance-defensible benchmark の primary path は `#101` result-arrival handoff に戻す
+44. post-readiness architecture parity は引き続き `#103` を block で維持する
 
 Latest actual-date role split:
 

@@ -174,6 +174,43 @@ next decision:
 - `#102` を negative read で close して `#101` result-arrival path を primary に戻すか
 - あるいは multi-snapshot 同一 race の扱いを明示する read を 1 本だけ足してから stop するか
 
+## Fourth Cut
+
+multi-snapshot 同一 race の扱いを raw で確認した。
+
+confirmed read:
+
+- strict `pre_race` full pool:
+  - `rows=562`
+  - `races=24`
+  - `horses=281`
+- race-level duplicate summary:
+  - `races_with_duplicate_rows=24`
+  - `mean_duplicate_factor=2.0`
+  - 全 race で `rows = 2 x unique_horses`
+  - 全 race で `unique_card_snapshots=2`, `unique_odds_snapshots=2`
+- latest-only dedupe:
+  - `latest_rows=281`
+  - `latest_races=24`
+  - `delta_rows_vs_full=281`
+  - date coverage:
+    - `2026-04-06: 136 rows / 12 races`
+    - `2026-04-07: 145 rows / 12 races`
+
+meaning:
+
+- repeated recrawl で増えた `281 rows` は、新しい race support ではなく同一 24 races の second snapshot そのもの
+- latest-only に戻すと second cut の `281 rows / 24 races / 2 dates` と完全一致する
+- したがって `#102` の stop condition は満たされた
+  - repeated recrawl でも strict `pre_race` race count は増えない
+  - current source horizon では labeled sample pool expansion は成立しない
+
+decision summary:
+
+- `#102` は negative read で close する
+- NAR provenance-defensible benchmark の primary path は `#101` result-arrival handoff に戻す
+- post-readiness architecture parity は引き続き `#103` を使う
+
 ## Stop Condition
 
 - source 側で upcoming race discovery が 24 races 以上に広がらない
