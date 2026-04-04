@@ -97,3 +97,31 @@ def build_provenance_summary(frame: pd.DataFrame) -> dict[str, Any]:
         "unknown_rows": int(bucket_counts.get(RELATION_UNKNOWN, 0)),
     }
     return summary
+
+
+def build_pre_race_only_materialization_summary(
+    frame: pd.DataFrame,
+    *,
+    result_frame: pd.DataFrame | None = None,
+) -> dict[str, Any]:
+    pre_race_only = filter_pre_race_only(frame)
+    race_ids = sorted({str(value) for value in pre_race_only.get("race_id", pd.Series([], dtype="object")).dropna().tolist()})
+    dates = sorted({str(value) for value in pre_race_only.get("date", pd.Series([], dtype="object")).dropna().tolist()})
+    result_race_ids: set[str] = set()
+    if result_frame is not None and "race_id" in result_frame.columns:
+        result_race_ids = {str(value) for value in result_frame["race_id"].dropna().tolist()}
+    ready_race_ids = sorted(set(race_ids) & result_race_ids)
+    pending_race_ids = sorted(set(race_ids) - result_race_ids)
+    row_race_ids = pre_race_only.get("race_id", pd.Series([], dtype="object")).astype(str)
+    ready_row_count = int(row_race_ids.isin(ready_race_ids).sum()) if len(pre_race_only) else 0
+    pending_row_count = int(row_race_ids.isin(pending_race_ids).sum()) if len(pre_race_only) else 0
+    return {
+        "pre_race_only_rows": int(len(pre_race_only)),
+        "pre_race_only_races": int(len(race_ids)),
+        "pre_race_only_dates": dates,
+        "result_ready_races": int(len(ready_race_ids)),
+        "pending_result_races": int(len(pending_race_ids)),
+        "result_ready_rows": ready_row_count,
+        "pending_result_rows": pending_row_count,
+        "ready_for_benchmark_rerun": bool(len(pre_race_only) > 0 and len(pending_race_ids) == 0),
+    }

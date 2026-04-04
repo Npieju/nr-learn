@@ -58,6 +58,34 @@ if strict `pre_race_only` subset だけで local Nankan raw / primary / evaluati
 3. subset を使った small-scope market-aware rerun を 1 本回す
 4. 必要なら no-market rerun も 1 本合わせて、market dependency を provenance-defensible な universe で再確認する
 
+## First Cut Status
+
+subset materialization 導線は実装済み。
+
+- script:
+  - [run_materialize_local_nankan_pre_race_only.py](/workspaces/nr-learn/scripts/run_materialize_local_nankan_pre_race_only.py)
+- helper:
+  - [local_nankan_provenance.py](/workspaces/nr-learn/src/racing_ml/data/local_nankan_provenance.py)
+- outputs:
+  - [local_nankan_pre_race_only_materialize_summary.json](/workspaces/nr-learn/artifacts/reports/local_nankan_pre_race_only_materialize_summary.json)
+  - [nar_pre_race_only_materialize_smoke.log](/workspaces/nr-learn/artifacts/logs/nar_pre_race_only_materialize_smoke.log)
+  - default subset path: `data/local_nankan/raw/local_nankan_race_card_pre_race_only.csv`
+
+confirmed read:
+
+- `pre_race_only_rows=281`
+- `pre_race_only_races=24`
+- `pre_race_only_dates=['2026-04-06', '2026-04-07']`
+- `result_ready_races=0`
+- `pending_result_races=24`
+- `ready_for_benchmark_rerun=false`
+
+meaning:
+
+- strict `pre_race_only` subset の materialization 自体は成立した
+- ただし current subset は future races だけなので、benchmark rerun はまだ開始できない
+- 次段は result arrival 後の relabel / primary materialization か、より広い pre-race capture window の確保である
+
 ## Stop Condition
 
 - strict `pre_race_only` subset が benchmark run に必要な最小 row/race を満たさない

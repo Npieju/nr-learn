@@ -213,7 +213,17 @@ Current active read:
    - `unknown_rows=731941`
    - strict `pre_race` rows cover `24 races`
 7. したがって current backfilled benchmark は provenance strict filter で弾ける
-8. 次段の execution source は strict `pre_race_only` subset を使った benchmark rebuild である
+8. `#101` first cut で strict subset materialization も通った
+9. output:
+   - [local_nankan_pre_race_only_materialize_summary.json](/workspaces/nr-learn/artifacts/reports/local_nankan_pre_race_only_materialize_summary.json)
+   - [local_nankan_race_card_pre_race_only.csv](/workspaces/nr-learn/data/local_nankan/raw/local_nankan_race_card_pre_race_only.csv)
+10. materialization read:
+   - `pre_race_only_rows=281`
+   - `pre_race_only_races=24`
+   - `result_ready_races=0`
+   - `pending_result_races=24`
+   - `ready_for_benchmark_rerun=false`
+11. したがって次段の execution source は strict `pre_race_only` subset 自体ではなく、result arrival 後の relabel / primary materialization である
 
 Primary next issue draft:
 

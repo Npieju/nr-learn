@@ -10,6 +10,7 @@ from racing_ml.data.local_nankan_provenance import (
     RELATION_PRE_RACE,
     RELATION_UNKNOWN,
     annotate_market_timing_bucket,
+    build_pre_race_only_materialization_summary,
     build_provenance_summary,
     filter_pre_race_only,
 )
@@ -61,6 +62,28 @@ class LocalNankanProvenanceTest(unittest.TestCase):
         self.assertEqual(summary["bucket_counts"][RELATION_PRE_RACE], 2)
         self.assertEqual(summary["bucket_counts"][RELATION_UNKNOWN], 1)
         self.assertEqual(summary["bucket_counts"][RELATION_POST_RACE], 1)
+
+    def test_build_pre_race_only_materialization_summary_reports_label_readiness(self) -> None:
+        frame = pd.DataFrame(
+            [
+                {"race_id": "r1", "date": "2026-04-06", "card_snapshot_relation": "pre_race", "odds_snapshot_relation": "pre_race"},
+                {"race_id": "r1", "date": "2026-04-06", "card_snapshot_relation": "pre_race", "odds_snapshot_relation": "pre_race"},
+                {"race_id": "r2", "date": "2026-04-07", "card_snapshot_relation": "pre_race", "odds_snapshot_relation": "pre_race"},
+                {"race_id": "r3", "date": "2026-04-07", "card_snapshot_relation": "unknown", "odds_snapshot_relation": "unknown"},
+            ]
+        )
+        result_frame = pd.DataFrame([{"race_id": "r1"}])
+
+        summary = build_pre_race_only_materialization_summary(frame, result_frame=result_frame)
+
+        self.assertEqual(summary["pre_race_only_rows"], 3)
+        self.assertEqual(summary["pre_race_only_races"], 2)
+        self.assertEqual(summary["pre_race_only_dates"], ["2026-04-06", "2026-04-07"])
+        self.assertEqual(summary["result_ready_races"], 1)
+        self.assertEqual(summary["pending_result_races"], 1)
+        self.assertEqual(summary["result_ready_rows"], 2)
+        self.assertEqual(summary["pending_result_rows"], 1)
+        self.assertFalse(summary["ready_for_benchmark_rerun"])
 
 
 if __name__ == "__main__":
