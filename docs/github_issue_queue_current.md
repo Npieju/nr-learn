@@ -188,8 +188,8 @@ Latest next feature queue:
 
 Current active issue:
 
-- `#99`
-- <https://github.com/Npieju/nr-learn/issues/99>
+- `#100`
+- <https://github.com/Npieju/nr-learn/issues/100>
 
 Current active read:
 
@@ -204,11 +204,12 @@ Current active read:
    - `odds_snapshot_at`
    はない
 4. collector は `oddsJS/<race_id>.do` から market columns を取っているが、`last_fetch_at` は pacing 用の in-memory state で、row に保存されない
-5. 次は corrective を `timestamped recrawl / provenance columns / odds exclusion rerun` のどれに絞るかを確定する
+5. raw_html filesystem mtime は `2026-03-29 / 2026-03-30` の bulk backfill に集中している
+6. したがって current NAR line は `market-aware backfilled benchmark` と読むのが妥当で、次の corrective は `timestamped recrawl + provenance columns` である
 
 Primary next issue draft:
 
-- `docs/next_issue_nar_odds_provenance_audit.md`
+- `docs/next_issue_nar_timestamped_odds_rebuild.md`
 
 Current active read:
 

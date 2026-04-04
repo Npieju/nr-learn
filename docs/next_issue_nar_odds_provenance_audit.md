@@ -37,6 +37,20 @@ if current local Nankan `odds / popularity` は発走前 snapshot として prov
   - 発走前だったか
   - card HTML と odds JS が同時点か
   を row / race 単位で再現できない
+- filesystem mtime の分布は bulk backfill を示す
+  - `race_card_odds`: `33141 files @ 2026-03-29`, `29637 files @ 2026-03-30`
+  - `race_card`: `33142 files @ 2026-03-29`, `29636 files @ 2026-03-30`
+- サンプルでも race_id と無関係に 2026-03-29/30 mtime が付いている
+  - `2025092919070101.{html,js}`
+  - `2025100520100101.{html,js}`
+  - `2006111319080110.{html,js}`
+
+## Interim Conclusion
+
+- current local Nankan `odds / popularity` raw は historical pre-race snapshot としては defensible ではない
+- direct leak の証拠とはまだ言わないが、少なくとも provenance は不足している
+- current benchmark read は `market-aware backfilled benchmark` として扱うべきで、pure pre-race market snapshot benchmark とは扱わない
+- corrective の第一候補は `timestamped recrawl + provenance column persistence` である
 
 ## In Scope
 
