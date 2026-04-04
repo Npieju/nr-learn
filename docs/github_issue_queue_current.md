@@ -188,7 +188,30 @@ Latest next feature queue:
 
 Current active issue:
 
-- none
+- `#98`
+- <https://github.com/Npieju/nr-learn/issues/98>
+
+Primary next issue draft:
+
+- `docs/next_issue_jockey_trainer_combo_track_distance_selective_candidate.md`
+
+Current active read:
+
+1. `#98` jockey-trainer-combo track-distance selective child の first read は clean
+2. feature-gap:
+   - `priority_missing_raw_columns=[]`
+   - `missing_force_include_features=[]`
+   - `low_coverage_force_include_features=[]`
+3. focal quartet:
+   - `jockey_track_distance_last_50_win_rate`
+   - `jockey_track_distance_last_50_avg_rank`
+   - `trainer_track_distance_last_50_win_rate`
+   - `trainer_track_distance_last_50_avg_rank`
+4. 4 本とも
+   - `selected=True`
+   - `present=True`
+   - `non_null_ratio=0.92386`
+5. したがって no-op / low-coverage risk は弱く、次の execution source は true component retrain である
 
 Latest actual-date role split:
 

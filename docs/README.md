@@ -116,6 +116,7 @@ tighter policy の September fallback ordering を再確認するときは [next
 JRA baseline に対する owner signal の marginal contribution を切り分けるときは [next_issue_owner_signal_ablation_audit.md](next_issue_owner_signal_ablation_audit.md) を使う。
 recent form / history family の narrow child を再開するときは [next_issue_recent_history_track_distance_selective_candidate.md](next_issue_recent_history_track_distance_selective_candidate.md) を使う。
 recent form / history track-distance child の role decision は [next_issue_recent_history_track_distance_actual_date_role_split.md](next_issue_recent_history_track_distance_actual_date_role_split.md) を使う。
+次の JRA feature hypothesis は [next_issue_jockey_trainer_combo_track_distance_selective_candidate.md](next_issue_jockey_trainer_combo_track_distance_selective_candidate.md) を使う。
 
 tail loader optimization の gate 運用は [tail_loader_equivalence_gate_standard.md](tail_loader_equivalence_gate_standard.md) を使う。
 
