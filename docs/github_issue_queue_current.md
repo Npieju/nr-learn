@@ -188,12 +188,27 @@ Latest next feature queue:
 
 Current active issue:
 
-- `#98`
-- <https://github.com/Npieju/nr-learn/issues/98>
+- `#99`
+- <https://github.com/Npieju/nr-learn/issues/99>
+
+Current active read:
+
+1. NAR `odds / popularity` provenance audit を開始した
+2. current raw:
+   - `data/local_nankan/raw/local_nankan_race_card.csv`
+   - `data/local_nankan/raw/local_nankan_primary.csv`
+   には `odds,popularity` はある
+3. ただし row-level provenance 列
+   - `fetch_at`
+   - `post_time`
+   - `odds_snapshot_at`
+   はない
+4. collector は `oddsJS/<race_id>.do` から market columns を取っているが、`last_fetch_at` は pacing 用の in-memory state で、row に保存されない
+5. 次は corrective を `timestamped recrawl / provenance columns / odds exclusion rerun` のどれに絞るかを確定する
 
 Primary next issue draft:
 
-- `docs/next_issue_jockey_trainer_combo_track_distance_selective_candidate.md`
+- `docs/next_issue_nar_odds_provenance_audit.md`
 
 Current active read:
 
