@@ -142,12 +142,25 @@ Latest actual-date role split:
 
 Primary next issue draft:
 
-- `docs/next_issue_tighter_policy_september_fallback_compare.md`
+- none
 
 Current active issue:
 
-- `#89`
-- <https://github.com/Npieju/nr-learn/issues/89>
+- none
+
+Latest tighter policy fallback compare:
+
+1. `#89` で `current_tighter_policy_search_candidate_2025_latest` と `current_sep_guard_candidate_2025_latest` を broad September / late-September で比較した
+2. broad September:
+   - sep guard `9 bets / -4.3 / pure bankroll 0.9995842542264094`
+   - tighter policy `9 bets / -4.3 / pure bankroll 0.8394653592417107`
+3. late-September:
+   - sep guard `6 bets / -6.0 / pure bankroll 0.9857901270555528`
+   - tighter policy `6 bets / -6.0 / pure bankroll 0.7701189959490742`
+4. `bets` と `total net` は両 window で同値だった
+5. pure bankroll は両 window で `sep_guard` が明確に上だった
+6. したがって fallback ordering は変えない
+7. `current_sep_guard_candidate` を second seasonal fallback のまま据え置き、`current_tighter_policy_search_candidate_2025_latest` は third defensive option に留める
 
 Latest breeder signal read:
 
