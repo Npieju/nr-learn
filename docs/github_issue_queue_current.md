@@ -188,8 +188,8 @@ Latest next feature queue:
 
 Current active issue:
 
-- `#101`
-- <https://github.com/Npieju/nr-learn/issues/101>
+- `#102`
+- <https://github.com/Npieju/nr-learn/issues/102>
 
 Current active read:
 
@@ -248,10 +248,13 @@ Current active read:
     - `waited_seconds=9`
     - `timed_out=true`
 20. したがって `#101` の残作業は result arrival 後の first benchmark rerun に narrowed された
+21. 並行 next issue は `pre_race` capture window expansion である
+22. execution source:
+    - [next_issue_nar_pre_race_capture_window_expansion.md](/workspaces/nr-learn/docs/next_issue_nar_pre_race_capture_window_expansion.md)
 
 Primary next issue draft:
 
-- `docs/next_issue_nar_pre_race_only_benchmark_rebuild.md`
+- `docs/next_issue_nar_pre_race_capture_window_expansion.md`
 
 Current active read:
 

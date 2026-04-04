@@ -120,6 +120,7 @@ recent form / history track-distance child の role decision は [next_issue_rec
 NAR の `odds / popularity` provenance を監査するときは [next_issue_nar_odds_provenance_audit.md](next_issue_nar_odds_provenance_audit.md) を使う。
 NAR market columns を provenance 付きで rebuild するときは [next_issue_nar_timestamped_odds_rebuild.md](next_issue_nar_timestamped_odds_rebuild.md) を使う。
 strict `pre_race_only` subset で NAR benchmark を読み直す次段は [next_issue_nar_pre_race_only_benchmark_rebuild.md](next_issue_nar_pre_race_only_benchmark_rebuild.md) を使う。
+strict `pre_race` row の capture pool 自体を広げる次段は [next_issue_nar_pre_race_capture_window_expansion.md](next_issue_nar_pre_race_capture_window_expansion.md) を使う。
 
 tail loader optimization の gate 運用は [tail_loader_equivalence_gate_standard.md](tail_loader_equivalence_gate_standard.md) を使う。
 
