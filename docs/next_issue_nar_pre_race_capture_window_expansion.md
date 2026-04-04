@@ -81,6 +81,52 @@ next cut:
 - repeated recrawl を回したときの coverage accumulation artifact を追加する
 - operator が `capturing_pre_race_pool` を日次で読める summary を作る
 
+## Second Cut
+
+repeated recrawl cadence の operator read を固定するため、strict `pre_race` pool の coverage artifact を追加した。
+
+- script:
+  - [run_local_nankan_pre_race_capture_coverage.py](/workspaces/nr-learn/scripts/run_local_nankan_pre_race_capture_coverage.py)
+- helper:
+  - [local_nankan_provenance.py](/workspaces/nr-learn/src/racing_ml/data/local_nankan_provenance.py)
+- tests:
+  - [test_local_nankan_provenance.py](/workspaces/nr-learn/tests/test_local_nankan_provenance.py)
+
+出力:
+
+- [local_nankan_pre_race_capture_coverage_summary.json](/workspaces/nr-learn/artifacts/reports/local_nankan_pre_race_capture_coverage_summary.json)
+- [local_nankan_pre_race_capture_date_coverage.csv](/workspaces/nr-learn/artifacts/reports/local_nankan_pre_race_capture_date_coverage.csv)
+- [nar_pre_race_capture_coverage_smoke.log](/workspaces/nr-learn/artifacts/logs/nar_pre_race_capture_coverage_smoke.log)
+
+confirmed read:
+
+- `status=capturing`
+- `current_phase=capturing_pre_race_pool`
+- `pre_race_only_rows=281`
+- `pre_race_only_races=24`
+- `result_ready_races=0`
+- `pending_result_races=24`
+- date coverage:
+  - `2026-04-06: 136 rows / 12 races`
+  - `2026-04-07: 145 rows / 12 races`
+- baseline compare:
+  - `delta_pre_race_only_rows=0`
+  - `delta_pre_race_only_races=0`
+  - `added_dates=[]`
+
+meaning:
+
+- `#102` の success metric のうち
+  - capture coverage の artifact 化
+  - operator read を `capturing_pre_race_pool` に上げる
+  は満たした
+- 一方で pool 自体はまだ `2 dates / 24 races / 281 rows` に留まっており、window expansion の本題は未解決
+
+next cut:
+
+- repeated recrawl cadence 自体を bounded loop / snapshot output として実装する
+- recrawl のたびに coverage summary を残し、pool growth が本当に起きるか small-scope で確認する
+
 ## Stop Condition
 
 - source 側で upcoming race discovery が 24 races 以上に広がらない

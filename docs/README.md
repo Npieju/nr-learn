@@ -121,6 +121,7 @@ NAR の `odds / popularity` provenance を監査するときは [next_issue_nar_
 NAR market columns を provenance 付きで rebuild するときは [next_issue_nar_timestamped_odds_rebuild.md](next_issue_nar_timestamped_odds_rebuild.md) を使う。
 strict `pre_race_only` subset で NAR benchmark を読み直す次段は [next_issue_nar_pre_race_only_benchmark_rebuild.md](next_issue_nar_pre_race_only_benchmark_rebuild.md) を使う。
 strict `pre_race` row の capture pool 自体を広げる次段は [next_issue_nar_pre_race_capture_window_expansion.md](next_issue_nar_pre_race_capture_window_expansion.md) を使う。
+strict `pre_race` pool の current accumulation を読む artifact は `local_nankan_pre_race_capture_coverage_summary.json` と `local_nankan_pre_race_capture_date_coverage.csv` を正本とする。
 NAR を JRA と同水準の model-development surface へ上げる issue ladder は [nar_jra_parity_issue_ladder.md](nar_jra_parity_issue_ladder.md) を使う。
 post-readiness の first architecture parity issue は [next_issue_nar_value_blend_architecture_bootstrap.md](next_issue_nar_value_blend_architecture_bootstrap.md) を使う。
 

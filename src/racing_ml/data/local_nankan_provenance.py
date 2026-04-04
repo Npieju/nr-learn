@@ -137,3 +137,140 @@ def build_pre_race_only_materialization_summary(
         "pending_result_rows": pending_row_count,
         "ready_for_benchmark_rerun": bool(len(pre_race_only) > 0 and len(pending_race_ids) == 0),
     }
+
+
+def _extract_summary_value(summary: dict[str, Any] | None, key: str) -> Any:
+    if not isinstance(summary, dict):
+        return None
+    if key in summary:
+        return summary.get(key)
+    materialization = summary.get("materialization_summary")
+    if isinstance(materialization, dict) and key in materialization:
+        return materialization.get(key)
+    return None
+
+
+def build_pre_race_capture_date_coverage(
+    frame: pd.DataFrame,
+    *,
+    result_frame: pd.DataFrame | None = None,
+) -> pd.DataFrame:
+    pre_race_only = filter_pre_race_only(frame)
+    coverage_columns = [
+        "date",
+        "pre_race_rows",
+        "pre_race_races",
+        "result_ready_races",
+        "pending_result_races",
+        "result_ready_rows",
+        "pending_result_rows",
+    ]
+    if len(pre_race_only) == 0:
+        return pd.DataFrame(columns=coverage_columns)
+
+    working = pre_race_only.copy()
+    if "date" not in working.columns:
+        working["date"] = RELATION_UNKNOWN
+    working["date"] = working["date"].fillna(RELATION_UNKNOWN).astype(str)
+    if "race_id" not in working.columns:
+        working["race_id"] = ""
+    working["race_id"] = working["race_id"].fillna("").astype(str)
+
+    ready_race_ids: set[str] = set()
+    if result_frame is not None and "race_id" in result_frame.columns:
+        ready_race_ids = {str(value) for value in result_frame["race_id"].dropna().tolist()}
+
+    records: list[dict[str, Any]] = []
+    for date_value, date_frame in working.groupby("date", dropna=False):
+        race_ids = {str(value) for value in date_frame["race_id"].dropna().tolist() if str(value)}
+        ready_ids = sorted(race_ids & ready_race_ids)
+        pending_ids = sorted(race_ids - ready_race_ids)
+        records.append(
+            {
+                "date": str(date_value),
+                "pre_race_rows": int(len(date_frame)),
+                "pre_race_races": int(len(race_ids)),
+                "result_ready_races": int(len(ready_ids)),
+                "pending_result_races": int(len(pending_ids)),
+                "result_ready_rows": int(date_frame["race_id"].isin(ready_ids).sum()),
+                "pending_result_rows": int(date_frame["race_id"].isin(pending_ids).sum()),
+            }
+        )
+
+    return pd.DataFrame.from_records(records, columns=coverage_columns).sort_values("date").reset_index(drop=True)
+
+
+def build_pre_race_capture_coverage_summary(
+    frame: pd.DataFrame,
+    *,
+    result_frame: pd.DataFrame | None = None,
+    previous_summary: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    materialization_summary = build_pre_race_only_materialization_summary(frame, result_frame=result_frame)
+    date_coverage = build_pre_race_capture_date_coverage(frame, result_frame=result_frame)
+
+    if materialization_summary["pre_race_only_rows"] <= 0:
+        status = "empty"
+        current_phase = "capture_empty"
+        recommended_action = "expand_capture_window_or_wait_for_upcoming_cards"
+    elif materialization_summary["ready_for_benchmark_rerun"]:
+        status = "ready"
+        current_phase = "ready_for_benchmark_rerun"
+        recommended_action = "run_pre_race_benchmark_handoff"
+    else:
+        status = "capturing"
+        current_phase = "capturing_pre_race_pool"
+        recommended_action = "continue_recrawl_cadence_and_wait_for_results"
+
+    current_dates = materialization_summary["pre_race_only_dates"]
+    previous_rows = _extract_summary_value(previous_summary, "pre_race_only_rows")
+    previous_races = _extract_summary_value(previous_summary, "pre_race_only_races")
+    previous_ready_races = _extract_summary_value(previous_summary, "result_ready_races")
+    previous_pending_races = _extract_summary_value(previous_summary, "pending_result_races")
+    previous_dates_raw = _extract_summary_value(previous_summary, "pre_race_only_dates")
+    previous_dates = [str(value) for value in previous_dates_raw] if isinstance(previous_dates_raw, list) else []
+
+    return {
+        "status": status,
+        "current_phase": current_phase,
+        "recommended_action": recommended_action,
+        "pre_race_only_rows": int(materialization_summary["pre_race_only_rows"]),
+        "pre_race_only_races": int(materialization_summary["pre_race_only_races"]),
+        "pre_race_only_dates": list(current_dates),
+        "date_count": int(len(current_dates)),
+        "result_ready_races": int(materialization_summary["result_ready_races"]),
+        "pending_result_races": int(materialization_summary["pending_result_races"]),
+        "result_ready_rows": int(materialization_summary["result_ready_rows"]),
+        "pending_result_rows": int(materialization_summary["pending_result_rows"]),
+        "ready_for_benchmark_rerun": bool(materialization_summary["ready_for_benchmark_rerun"]),
+        "date_coverage": date_coverage.to_dict(orient="records"),
+        "baseline_comparison": {
+            "available": previous_summary is not None,
+            "previous_pre_race_only_rows": int(previous_rows) if previous_rows is not None else None,
+            "previous_pre_race_only_races": int(previous_races) if previous_races is not None else None,
+            "previous_result_ready_races": int(previous_ready_races) if previous_ready_races is not None else None,
+            "previous_pending_result_races": int(previous_pending_races) if previous_pending_races is not None else None,
+            "delta_pre_race_only_rows": (
+                int(materialization_summary["pre_race_only_rows"]) - int(previous_rows)
+                if previous_rows is not None
+                else None
+            ),
+            "delta_pre_race_only_races": (
+                int(materialization_summary["pre_race_only_races"]) - int(previous_races)
+                if previous_races is not None
+                else None
+            ),
+            "delta_result_ready_races": (
+                int(materialization_summary["result_ready_races"]) - int(previous_ready_races)
+                if previous_ready_races is not None
+                else None
+            ),
+            "delta_pending_result_races": (
+                int(materialization_summary["pending_result_races"]) - int(previous_pending_races)
+                if previous_pending_races is not None
+                else None
+            ),
+            "added_dates": sorted(set(current_dates) - set(previous_dates)),
+            "removed_dates": sorted(set(previous_dates) - set(current_dates)),
+        },
+    }

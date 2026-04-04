@@ -264,28 +264,29 @@ Current active read:
       - `2026-04-06: 136`
       - `2026-04-07: 145`
 27. したがって capture expansion の本丸は wider date range ではなく repeated recrawl cadence と coverage accumulation artifact である
-
-Primary next issue draft:
-
-- `docs/next_issue_nar_pre_race_capture_window_expansion.md`
-
-Current active read:
-
-1. `#98` jockey-trainer-combo track-distance selective child の first read は clean
-2. feature-gap:
-   - `priority_missing_raw_columns=[]`
-   - `missing_force_include_features=[]`
-   - `low_coverage_force_include_features=[]`
-3. focal quartet:
-   - `jockey_track_distance_last_50_win_rate`
-   - `jockey_track_distance_last_50_avg_rank`
-   - `trainer_track_distance_last_50_win_rate`
-   - `trainer_track_distance_last_50_avg_rank`
-4. 4 本とも
-   - `selected=True`
-   - `present=True`
-   - `non_null_ratio=0.92386`
-5. したがって no-op / low-coverage risk は弱く、次の execution source は true component retrain である
+28. `#102` second cut として capture coverage artifact を追加した
+29. script:
+    - [run_local_nankan_pre_race_capture_coverage.py](/workspaces/nr-learn/scripts/run_local_nankan_pre_race_capture_coverage.py)
+30. output:
+    - [local_nankan_pre_race_capture_coverage_summary.json](/workspaces/nr-learn/artifacts/reports/local_nankan_pre_race_capture_coverage_summary.json)
+    - [local_nankan_pre_race_capture_date_coverage.csv](/workspaces/nr-learn/artifacts/reports/local_nankan_pre_race_capture_date_coverage.csv)
+    - [nar_pre_race_capture_coverage_smoke.log](/workspaces/nr-learn/artifacts/logs/nar_pre_race_capture_coverage_smoke.log)
+31. confirmed read:
+    - `status=capturing`
+    - `current_phase=capturing_pre_race_pool`
+    - `pre_race_only_rows=281`
+    - `pre_race_only_races=24`
+    - `result_ready_races=0`
+    - `pending_result_races=24`
+32. date coverage:
+    - `2026-04-06: 136 rows / 12 races`
+    - `2026-04-07: 145 rows / 12 races`
+33. baseline compare:
+    - `delta_pre_race_only_rows=0`
+    - `delta_pre_race_only_races=0`
+    - `added_dates=[]`
+34. したがって operator read は `await_result_arrival` だけでなく `capturing_pre_race_pool` まで上がった
+35. 次段は repeated recrawl cadence 自体を bounded loop / snapshot artifact として入れること
 
 Latest actual-date role split:
 

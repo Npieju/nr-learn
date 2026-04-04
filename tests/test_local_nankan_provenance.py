@@ -10,6 +10,8 @@ from racing_ml.data.local_nankan_provenance import (
     RELATION_PRE_RACE,
     RELATION_UNKNOWN,
     annotate_market_timing_bucket,
+    build_pre_race_capture_coverage_summary,
+    build_pre_race_capture_date_coverage,
     build_pre_race_only_materialization_summary,
     build_provenance_summary,
     filter_pre_race_only,
@@ -100,6 +102,59 @@ class LocalNankanProvenanceTest(unittest.TestCase):
 
         self.assertEqual(len(filtered), 1)
         self.assertEqual(str(filtered.loc[0, "race_id"]), "r2")
+
+    def test_build_pre_race_capture_date_coverage_groups_by_date(self) -> None:
+        frame = pd.DataFrame(
+            [
+                {"race_id": "r1", "date": "2026-04-06", "card_snapshot_relation": "pre_race", "odds_snapshot_relation": "pre_race"},
+                {"race_id": "r1", "date": "2026-04-06", "card_snapshot_relation": "pre_race", "odds_snapshot_relation": "pre_race"},
+                {"race_id": "r2", "date": "2026-04-07", "card_snapshot_relation": "pre_race", "odds_snapshot_relation": "pre_race"},
+                {"race_id": "r3", "date": "2026-04-07", "card_snapshot_relation": "unknown", "odds_snapshot_relation": "unknown"},
+            ]
+        )
+        result_frame = pd.DataFrame([{"race_id": "r1"}])
+
+        coverage = build_pre_race_capture_date_coverage(frame, result_frame=result_frame)
+
+        self.assertEqual(coverage["date"].tolist(), ["2026-04-06", "2026-04-07"])
+        self.assertEqual(coverage["pre_race_rows"].tolist(), [2, 1])
+        self.assertEqual(coverage["result_ready_races"].tolist(), [1, 0])
+        self.assertEqual(coverage["pending_result_races"].tolist(), [0, 1])
+
+    def test_build_pre_race_capture_coverage_summary_sets_capturing_phase_and_delta(self) -> None:
+        frame = pd.DataFrame(
+            [
+                {"race_id": "r1", "date": "2026-04-06", "card_snapshot_relation": "pre_race", "odds_snapshot_relation": "pre_race"},
+                {"race_id": "r1", "date": "2026-04-06", "card_snapshot_relation": "pre_race", "odds_snapshot_relation": "pre_race"},
+                {"race_id": "r2", "date": "2026-04-07", "card_snapshot_relation": "pre_race", "odds_snapshot_relation": "pre_race"},
+            ]
+        )
+        result_frame = pd.DataFrame([{"race_id": "r1"}])
+        previous_summary = {
+            "materialization_summary": {
+                "pre_race_only_rows": 2,
+                "pre_race_only_races": 1,
+                "pre_race_only_dates": ["2026-04-06"],
+                "result_ready_races": 1,
+                "pending_result_races": 0,
+            }
+        }
+
+        summary = build_pre_race_capture_coverage_summary(
+            frame,
+            result_frame=result_frame,
+            previous_summary=previous_summary,
+        )
+
+        self.assertEqual(summary["status"], "capturing")
+        self.assertEqual(summary["current_phase"], "capturing_pre_race_pool")
+        self.assertEqual(summary["recommended_action"], "continue_recrawl_cadence_and_wait_for_results")
+        self.assertEqual(summary["pre_race_only_rows"], 3)
+        self.assertEqual(summary["pre_race_only_races"], 2)
+        self.assertEqual(summary["baseline_comparison"]["delta_pre_race_only_rows"], 1)
+        self.assertEqual(summary["baseline_comparison"]["delta_pre_race_only_races"], 1)
+        self.assertEqual(summary["baseline_comparison"]["added_dates"], ["2026-04-07"])
+        self.assertEqual(summary["date_coverage"][0]["date"], "2026-04-06")
 
 
 if __name__ == "__main__":
