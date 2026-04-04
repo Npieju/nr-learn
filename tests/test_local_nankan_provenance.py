@@ -13,6 +13,7 @@ from racing_ml.data.local_nankan_provenance import (
     build_pre_race_only_materialization_summary,
     build_provenance_summary,
     filter_pre_race_only,
+    filter_result_ready_pre_race_only,
 )
 
 
@@ -84,6 +85,21 @@ class LocalNankanProvenanceTest(unittest.TestCase):
         self.assertEqual(summary["result_ready_rows"], 2)
         self.assertEqual(summary["pending_result_rows"], 1)
         self.assertFalse(summary["ready_for_benchmark_rerun"])
+
+    def test_filter_result_ready_pre_race_only_keeps_only_labeled_races(self) -> None:
+        frame = pd.DataFrame(
+            [
+                {"race_id": "r1", "horse_id": "r1:1", "card_snapshot_relation": "pre_race", "odds_snapshot_relation": "pre_race"},
+                {"race_id": "r2", "horse_id": "r2:1", "card_snapshot_relation": "pre_race", "odds_snapshot_relation": "pre_race"},
+                {"race_id": "r3", "horse_id": "r3:1", "card_snapshot_relation": "unknown", "odds_snapshot_relation": "unknown"},
+            ]
+        )
+        result_frame = pd.DataFrame([{"race_id": "r2"}])
+
+        filtered = filter_result_ready_pre_race_only(frame, result_frame)
+
+        self.assertEqual(len(filtered), 1)
+        self.assertEqual(str(filtered.loc[0, "race_id"]), "r2")
 
 
 if __name__ == "__main__":

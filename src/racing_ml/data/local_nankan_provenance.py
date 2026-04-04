@@ -57,6 +57,18 @@ def filter_pre_race_only(frame: pd.DataFrame) -> pd.DataFrame:
     return annotated.loc[annotated[MARKET_TIMING_BUCKET_COLUMN] == RELATION_PRE_RACE].reset_index(drop=True)
 
 
+def filter_result_ready_pre_race_only(
+    frame: pd.DataFrame,
+    result_frame: pd.DataFrame | None,
+) -> pd.DataFrame:
+    pre_race_only = filter_pre_race_only(frame)
+    if result_frame is None or "race_id" not in result_frame.columns or "race_id" not in pre_race_only.columns:
+        return pre_race_only.iloc[0:0].copy()
+    ready_race_ids = {str(value) for value in result_frame["race_id"].dropna().tolist()}
+    race_ids = pre_race_only["race_id"].astype(str)
+    return pre_race_only.loc[race_ids.isin(ready_race_ids)].reset_index(drop=True)
+
+
 def build_provenance_summary(frame: pd.DataFrame) -> dict[str, Any]:
     annotated = annotate_market_timing_bucket(frame)
     bucket_counts = annotated[MARKET_TIMING_BUCKET_COLUMN].fillna(RELATION_UNKNOWN).value_counts().to_dict()

@@ -216,14 +216,22 @@ Current active read:
 8. `#101` first cut で strict subset materialization も通った
 9. output:
    - [local_nankan_pre_race_only_materialize_summary.json](/workspaces/nr-learn/artifacts/reports/local_nankan_pre_race_only_materialize_summary.json)
-   - [local_nankan_race_card_pre_race_only.csv](/workspaces/nr-learn/data/local_nankan/raw/local_nankan_race_card_pre_race_only.csv)
 10. materialization read:
    - `pre_race_only_rows=281`
    - `pre_race_only_races=24`
    - `result_ready_races=0`
    - `pending_result_races=24`
    - `ready_for_benchmark_rerun=false`
-11. したがって次段の execution source は strict `pre_race_only` subset 自体ではなく、result arrival 後の relabel / primary materialization である
+11. second cut として result-ready subset / primary materialize 導線も追加した
+12. output:
+    - [local_nankan_pre_race_ready_summary.json](/workspaces/nr-learn/artifacts/reports/local_nankan_pre_race_ready_summary.json)
+    - [nar_pre_race_primary_materialize_smoke.log](/workspaces/nr-learn/artifacts/logs/nar_pre_race_primary_materialize_smoke.log)
+13. confirmed read:
+    - `status=not_ready`
+    - `current_phase=await_result_arrival`
+    - `result_ready_races=0`
+    - `pending_result_races=24`
+14. したがって次段の execution source は strict `pre_race_only` subset 自体ではなく、result arrival 後の relabel / primary materialization である
 
 Primary next issue draft:
 

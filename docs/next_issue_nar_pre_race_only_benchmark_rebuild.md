@@ -86,6 +86,35 @@ meaning:
 - ただし current subset は future races だけなので、benchmark rerun はまだ開始できない
 - 次段は result arrival 後の relabel / primary materialization か、より広い pre-race capture window の確保である
 
+## Second Cut Status
+
+result-ready subset と primary materialization までの導線も追加した。
+
+- script:
+  - [run_materialize_local_nankan_pre_race_primary.py](/workspaces/nr-learn/scripts/run_materialize_local_nankan_pre_race_primary.py)
+- outputs:
+  - [local_nankan_pre_race_ready_summary.json](/workspaces/nr-learn/artifacts/reports/local_nankan_pre_race_ready_summary.json)
+  - [nar_pre_race_primary_materialize_smoke.log](/workspaces/nr-learn/artifacts/logs/nar_pre_race_primary_materialize_smoke.log)
+  - default paths:
+    - `data/local_nankan/raw/local_nankan_race_card_pre_race_ready.csv`
+    - `data/local_nankan/raw/local_nankan_race_result_pre_race_ready.csv`
+    - `data/local_nankan/raw/local_nankan_primary_pre_race_ready.csv`
+
+confirmed read:
+
+- `status=not_ready`
+- `current_phase=await_result_arrival`
+- `result_ready_races=0`
+- `pending_result_races=24`
+- `result_ready_rows=0`
+- `pending_result_rows=281`
+
+meaning:
+
+- result arrival 後にそのまま strict `pre_race_only` primary まで通す導線はできた
+- current capture window だけでは benchmark rerun をまだ始められない
+- 次段は result 到着後の rerun か、capture window 拡張で labeled `pre_race` races を増やすことに narrowed された
+
 ## Stop Condition
 
 - strict `pre_race_only` subset が benchmark run に必要な最小 row/race を満たさない
