@@ -251,6 +251,12 @@ Current active read:
 21. 並行 next issue は `pre_race` capture window expansion である
 22. execution source:
     - [next_issue_nar_pre_race_capture_window_expansion.md](/workspaces/nr-learn/docs/next_issue_nar_pre_race_capture_window_expansion.md)
+23. NAR を JRA と同水準の model-development surface へ上げる中期 ladder は
+    - [nar_jra_parity_issue_ladder.md](/workspaces/nr-learn/docs/nar_jra_parity_issue_ladder.md)
+24. post-readiness の first architecture issue は `#103`
+    - <https://github.com/Npieju/nr-learn/issues/103>
+25. execution source:
+    - [next_issue_nar_value_blend_architecture_bootstrap.md](/workspaces/nr-learn/docs/next_issue_nar_value_blend_architecture_bootstrap.md)
 
 Primary next issue draft:
 
