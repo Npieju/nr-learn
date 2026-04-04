@@ -159,11 +159,22 @@ Latest next feature queue:
 8. next execution source は actual-date role split
 9. issue source:
    - `docs/next_issue_class_rest_surface_conditional_actual_date_role_split.md`
+10. broad September read は先に確定済み
+    - baseline `32 bets / -27.3 / pure bankroll 0.2958869306148325`
+    - candidate `5 bets / -3.6 / pure bankroll 0.8808888460219477`
+11. したがって current judgment は `September difficult-regime positive`, role finalization は December / latest control read 待ち
+12. `#95` actual-date role split は確定
+    - broad September:
+      - baseline `32 bets / -27.3 / pure bankroll 0.2958869306148325`
+      - candidate `5 bets / -3.6 / pure bankroll 0.8808888460219477`
+    - December control:
+      - baseline `45 bets / +21.8 / pure bankroll 1.6711564921099862`
+      - candidate `30 bets / -9.3 / pure bankroll 0.7513642270122226`
+13. したがって `r20260404_class_rest_surface_conditional_selective_v1` は formal `pass / promote` だが、operational role は `analysis-first promoted candidate` に固定し、serving default には上げない
 
 Current active issue:
 
-- `#95`
-- <https://github.com/Npieju/nr-learn/issues/95>
+- none
 
 Latest September fallback compare:
 
