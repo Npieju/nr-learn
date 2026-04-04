@@ -188,8 +188,8 @@ Latest next feature queue:
 
 Current active issue:
 
-- `#101`
-- <https://github.com/Npieju/nr-learn/issues/101>
+- `#106`
+- <https://github.com/Npieju/nr-learn/issues/106>
 
 Current active read:
 
@@ -326,6 +326,7 @@ Current active read:
    - `artifacts/reports/local_nankan_pre_race_readiness_probe_summary.json`
    を正本に使う
 53. active issue は `#101` に戻す
+54. next automation step は `#106` watcher handoff である
 
 Latest actual-date role split:
 
