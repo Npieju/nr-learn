@@ -30,6 +30,13 @@ if current local Nankan `odds / popularity` は発走前 snapshot として prov
   - `post_time`
   - `odds_snapshot_at`
 - collector の `last_fetch_at` は request pacing 用の in-memory state であり、row provenance として保存されていない
+- `data/external/local_nankan/raw_html/race_card_odds/` には odds JS 自体は残っている
+- ただし、少なくとも現行確認範囲では crawl manifest / fetch manifest の structured JSON は見当たらない
+- したがって current evidence だけでは
+  - いつ取得したか
+  - 発走前だったか
+  - card HTML と odds JS が同時点か
+  を row / race 単位で再現できない
 
 ## In Scope
 
