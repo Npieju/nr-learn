@@ -245,7 +245,11 @@ Current active read:
    - selective child は buildable
    - no-op risk は低い
 8. next execution source:
-   - true component retrain
+   - ROI component retrain
+9. first acceptance point:
+   - win component `auc=0.8345232157261651`
+   - `selected features=109`
+   - focal 8 features は actual used set に全て入った
 
 Blocked parallel track:
 

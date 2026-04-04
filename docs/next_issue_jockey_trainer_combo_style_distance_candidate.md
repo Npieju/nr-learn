@@ -134,3 +134,21 @@ current read:
 - selective child は buildable
 - no-op risk は低い
 - 次段は true component retrain
+
+## First Acceptance Point
+
+- win component:
+  - `artifacts/reports/train_metrics_catboost_win_high_coverage_diag_r20260404_jockey_trainer_combo_style_distance_selective_v1.json`
+  - `artifacts/models/catboost_win_high_coverage_diag_model.manifest_r20260404_jockey_trainer_combo_style_distance_selective_v1.json`
+- train metrics:
+  - `auc=0.8345232157261651`
+  - `logloss=0.20221578593508155`
+  - `best_iteration=548`
+- selected features:
+  - `109`
+- focal 8 features は actual used set に全て入った
+
+current judgment:
+
+- selective child は no-op ではない
+- 次段は ROI component retrain
