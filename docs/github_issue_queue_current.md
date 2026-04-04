@@ -257,6 +257,13 @@ Current active read:
     - <https://github.com/Npieju/nr-learn/issues/103>
 25. execution source:
     - [next_issue_nar_value_blend_architecture_bootstrap.md](/workspaces/nr-learn/docs/next_issue_nar_value_blend_architecture_bootstrap.md)
+26. `#102` first read:
+    - race-list discovery を `2026-04-30` まで広げても `24 races` のまま
+    - strict `pre_race` pool は `281 rows / 24 races`
+    - dates:
+      - `2026-04-06: 136`
+      - `2026-04-07: 145`
+27. したがって capture expansion の本丸は wider date range ではなく repeated recrawl cadence と coverage accumulation artifact である
 
 Primary next issue draft:
 

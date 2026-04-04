@@ -50,6 +50,37 @@ if pre-race recrawl をより広い date window / cadence で回し、strict `pr
 3. coverage summary artifact を出す
 4. `pre_race` races の accumulation が増えるかを small-scope で確認する
 
+## First Read
+
+current source horizon は `2026-04-30` まで広げても `24 races` のまま頭打ちだった。
+
+- race-list discovery:
+  - `2026-04-04 .. 2026-04-30`
+  - `rows=24`
+  - dates:
+    - `2026-04-06`
+    - `2026-04-07`
+- strict `pre_race` pool:
+  - `rows=281`
+  - `races=24`
+  - date coverage:
+    - `2026-04-06: 136`
+    - `2026-04-07: 145`
+
+meaning:
+
+- current source で即時に広げられる upcoming horizon は 2 dates / 24 races まで
+- したがって capture window expansion の本丸は date range を広げること自体ではなく
+  - repeated recrawl cadence
+  - 日次 coverage artifact
+  - result-ready への accumulation handoff
+  の設計になる
+
+next cut:
+
+- repeated recrawl を回したときの coverage accumulation artifact を追加する
+- operator が `capturing_pre_race_pool` を日次で読める summary を作る
+
 ## Stop Condition
 
 - source 側で upcoming race discovery が 24 races 以上に広がらない
