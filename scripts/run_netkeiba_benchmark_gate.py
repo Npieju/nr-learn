@@ -29,7 +29,7 @@ DEFAULT_PEDIGREE_PATH = "data/external/netkeiba/pedigree/netkeiba_pedigree_crawl
 
 def _healthy_table_status(status: object, *, optional: bool) -> bool:
     normalized = str(status or "")
-    if normalized == "ok":
+    if normalized in {"ok", "ok_materialized"}:
         return True
     return optional and normalized == "optional_missing"
 

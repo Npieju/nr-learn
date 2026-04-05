@@ -143,14 +143,24 @@ def _derive_status(
     backfill: dict[str, object],
     snapshot: dict[str, object],
     handoff: dict[str, object],
+    benchmark_gate: dict[str, object],
 ) -> tuple[str, str, str]:
     handoff_status = str(handoff.get("status") or "")
     handoff_phase = str(handoff.get("current_phase") or "")
     handoff_action = str(handoff.get("recommended_action") or "inspect_live_handoff_manifest")
+    benchmark_status = str(benchmark_gate.get("status") or "")
+    benchmark_phase = str(benchmark_gate.get("current_phase") or "")
+    benchmark_action = str(benchmark_gate.get("recommended_action") or "inspect_2026_benchmark_gate_manifest")
     readiness = _dict_payload(snapshot.get("readiness"))
     progress = _dict_payload(snapshot.get("progress"))
     backfill_status = str(backfill.get("stopped_reason") or backfill.get("status") or "")
 
+    if handoff_status == "completed" and benchmark_status == "completed":
+        return "completed", benchmark_phase or "benchmark_gate_completed", benchmark_action
+    if handoff_status == "completed" and benchmark_status in {"running", "planned"}:
+        return "running", benchmark_phase or "benchmark_gate_running", benchmark_action
+    if handoff_status == "completed" and benchmark_status in {"not_ready", "snapshot_failed", "train_failed", "evaluate_failed", "failed", "interrupted"}:
+        return "partial", benchmark_phase or "benchmark_gate_blocked", benchmark_action
     if handoff_status == "completed":
         return "completed", handoff_phase or "live_predict_completed", handoff_action
     if handoff_status in {"handoff_failed", "failed"}:
@@ -201,6 +211,7 @@ def main() -> int:
         backfill=backfill_payload,
         snapshot=snapshot_payload,
         handoff=handoff_payload,
+        benchmark_gate=benchmark_gate_payload,
     )
     snapshot_readiness = _dict_payload(snapshot_payload.get("readiness"))
     snapshot_progress = _dict_payload(snapshot_payload.get("progress"))
