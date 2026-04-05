@@ -355,6 +355,7 @@ def _find_table_with_classes(soup: BeautifulSoup, required_classes: list[str]) -
 
 def _extract_mobile_race_metadata(soup: BeautifulSoup, race_id: str) -> dict[str, Any]:
     page_text = _normalize_text(soup.get_text(" ", strip=True))
+    title_text = _normalize_text(soup.title.get_text(" ", strip=True) if soup.title is not None else "")
     year = race_id[:4]
 
     date_value = None
@@ -364,9 +365,20 @@ def _extract_mobile_race_metadata(soup: BeautifulSoup, race_id: str) -> dict[str
         month = int(date_match.group("month"))
         day = int(date_match.group("day"))
         date_value = f"{year}-{month:02d}-{day:02d}"
+    if date_value is None:
+        canonical_date_match = DATE_PATTERN.search(title_text) or DATE_PATTERN.search(page_text)
+        if canonical_date_match is not None:
+            date_value = (
+                f"{int(canonical_date_match.group('year')):04d}-"
+                f"{int(canonical_date_match.group('month')):02d}-"
+                f"{int(canonical_date_match.group('day')):02d}"
+            )
     track_match = MOBILE_TRACK_PATTERN.search(page_text)
     if track_match is not None:
         track = track_match.group("track")
+    if track is None:
+        track_source_text = title_text or page_text
+        track = next((venue_name for venue_name in JRA_VENUES if venue_name in track_source_text), None)
 
     info_match = MOBILE_RACE_INFO_PATTERN.search(page_text)
     condition = None
@@ -383,6 +395,34 @@ def _extract_mobile_race_metadata(soup: BeautifulSoup, race_id: str) -> dict[str
         weather = info_match.group("weather")
         ground = info_match.group("ground")
         direction = info_match.group("direction")
+
+    race_data = soup.find("div", class_="Race_Data")
+    race_data_text = _normalize_text(race_data.get_text(" ", strip=True) if race_data is not None else "")
+    if surface is None and race_data is not None:
+        if race_data.find("span", class_="Turf") is not None:
+            surface = "芝"
+        elif race_data.find("span", class_="Dirt") is not None:
+            surface = "ダート"
+    if distance is None:
+        distance_match = DISTANCE_PATTERN.search(race_data_text)
+        if distance_match is not None:
+            distance = distance_match.group("distance")
+    if weather is None and race_data is not None:
+        weather_tag = race_data.find("span", class_="WeatherData")
+        weather_text = _normalize_text(weather_tag.get_text(" ", strip=True) if weather_tag is not None else "")
+        weather_match = re.search(r"(晴|曇|雨|雪)", weather_text)
+        if weather_match is not None:
+            weather = weather_match.group(1)
+    if ground is None and race_data is not None:
+        ground_tag = race_data.find("span", class_="Item03")
+        ground_text = _normalize_text(ground_tag.get_text(" ", strip=True) if ground_tag is not None else "")
+        ground_match = re.search(r"(良|稍重|重|不良)", ground_text)
+        if ground_match is not None:
+            ground = ground_match.group(1)
+    if direction is None:
+        direction_match = re.search(r"\((?P<direction>右|左|直線)", race_data_text)
+        if direction_match is not None:
+            direction = direction_match.group("direction")
 
     for heading in soup.find_all("h1"):
         heading_text = _normalize_text(heading.get_text(" ", strip=True))

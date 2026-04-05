@@ -85,6 +85,7 @@ docs の索引と更新ルールは [docs/README.md](docs/README.md) にあり�
 - 学習: [scripts/run_train.py](scripts/run_train.py)
 - 評価: [scripts/run_evaluate.py](scripts/run_evaluate.py)
 - 予測: [scripts/run_predict.py](scripts/run_predict.py)
+- 当日 JRA live 予測: [scripts/run_jra_live_predict.py](scripts/run_jra_live_predict.py)
 - バックテスト: [scripts/run_backtest.py](scripts/run_backtest.py)
 - revision gate: [scripts/run_revision_gate.py](scripts/run_revision_gate.py)
 - serving smoke: [scripts/run_serving_smoke.py](scripts/run_serving_smoke.py)
@@ -113,7 +114,10 @@ docs の索引と更新ルールは [docs/README.md](docs/README.md) にあり�
 /workspaces/nr-learn/.venv/bin/python scripts/run_train.py --profile current_best_eval_2025_latest
 /workspaces/nr-learn/.venv/bin/python scripts/run_evaluate.py --profile current_best_eval_2025_latest --max-rows 120000
 /workspaces/nr-learn/.venv/bin/python scripts/run_predict.py --profile current_recommended_serving_2025_latest --race-date 2025-12-28
+/workspaces/nr-learn/.venv/bin/python scripts/run_jra_live_predict.py --profile current_recommended_serving_2025_latest --race-date 2026-04-05 --headline-contains 大阪杯 --refresh
 ```
+
+`run_jra_live_predict.py` は、当日の race_list から JRA race_id を発見し、live racecard と pedigree を一時ディレクトリへ crawl した上で、現時点 odds を使って prediction CSV / summary / markdown report を出力する。標準出力先は `artifacts/predictions/predictions_<date>_jra_live.*`。
 
 詳しいコマンドは [docs/command_reference.md](docs/command_reference.md) を参照してください。
 

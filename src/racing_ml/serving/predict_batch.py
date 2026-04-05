@@ -146,7 +146,8 @@ def run_predict_from_frame(
     race_date: str | None = None,
     profile_name: str | None = None,
     model_artifact_suffix: str | None = None,
-) -> None:
+    output_file_suffix: str | None = None,
+) -> dict[str, Any]:
     workspace_root = Path.cwd()
     resolved_model_config_path = _resolve_workspace_path(model_config_path, workspace_root)
     resolved_feature_config_path = _resolve_workspace_path(feature_config_path, workspace_root)
@@ -242,13 +243,19 @@ def run_predict_from_frame(
         )
     progress.update(message=f"inference complete rows={len(pred_frame):,}")
 
-    columns = ["date", "race_id", "horse_id"]
+    columns = ["date", "race_id"]
+    for extra_col in ["race_no", "headline", "track", "distance"]:
+        if extra_col in pred_frame.columns:
+            columns.append(extra_col)
+    columns.append("horse_id")
     if "horse_name" in pred_frame.columns:
         columns.append("horse_name")
     if "rank" in pred_frame.columns:
         columns.append("rank")
     if odds_col is not None and odds_col in pred_frame.columns:
         columns.append(odds_col)
+    if "popularity" in pred_frame.columns:
+        columns.append("popularity")
     columns += ["score_source", "score_source_model_config", "score", "pred_rank"]
     for extra_col in [
         "policy_name",
@@ -290,9 +297,11 @@ def run_predict_from_frame(
     out_dir.mkdir(parents=True, exist_ok=True)
 
     date_tag = pd.Timestamp(target_date).strftime("%Y%m%d")
-    csv_path = out_dir / f"predictions_{date_tag}.csv"
-    png_path = out_dir / f"predictions_{date_tag}.png"
-    summary_path = out_dir / f"predictions_{date_tag}.summary.json"
+    normalized_output_suffix = str(output_file_suffix or "").strip()
+    file_suffix = f"_{normalized_output_suffix}" if normalized_output_suffix else ""
+    csv_path = out_dir / f"predictions_{date_tag}{file_suffix}.csv"
+    png_path = out_dir / f"predictions_{date_tag}{file_suffix}.png"
+    summary_path = out_dir / f"predictions_{date_tag}{file_suffix}.summary.json"
 
     with Heartbeat("[predict]", "writing prediction outputs", logger=log_progress):
         output = pred_frame[columns].sort_values(["race_id", "pred_rank"]).reset_index(drop=True)
@@ -330,6 +339,7 @@ def run_predict_from_frame(
     if manifest_path.exists():
         print(f"[predict] manifest: {manifest_path}")
     print(f"[predict] records: {len(output)}")
+    return prediction_summary
 
 
 def run_predict(
@@ -339,9 +349,9 @@ def run_predict(
     race_date: str | None = None,
     profile_name: str | None = None,
     model_artifact_suffix: str | None = None,
-) -> None:
+) -> dict[str, Any]:
     frame = prepare_prediction_frame(data_config_path)
-    run_predict_from_frame(
+    return run_predict_from_frame(
         model_config_path=model_config_path,
         feature_config_path=feature_config_path,
         frame=frame,
