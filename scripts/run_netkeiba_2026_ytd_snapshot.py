@@ -20,6 +20,7 @@ DEFAULT_RACE_RESULT_MANIFEST = "artifacts/reports/netkeiba_crawl_manifest_2026_y
 DEFAULT_RACE_CARD_MANIFEST = "artifacts/reports/netkeiba_crawl_manifest_2026_ytd_race_card.json"
 DEFAULT_PEDIGREE_MANIFEST = "artifacts/reports/netkeiba_crawl_manifest_2026_ytd_pedigree.json"
 DEFAULT_CRAWL_LOCK = "artifacts/reports/netkeiba_crawl_manifest_2026_ytd.json.lock"
+DEFAULT_STATUS_BOARD_COMMAND = f"{sys.executable} {ROOT / 'scripts' / 'run_netkeiba_2026_status_board.py'}"
 
 
 def log_progress(message: str) -> None:
@@ -40,6 +41,8 @@ def main() -> int:
     parser.add_argument("--race-card-manifest", default=DEFAULT_RACE_CARD_MANIFEST)
     parser.add_argument("--pedigree-manifest", default=DEFAULT_PEDIGREE_MANIFEST)
     parser.add_argument("--crawl-lock-path", default=DEFAULT_CRAWL_LOCK)
+    parser.add_argument("--status-board-command", default=DEFAULT_STATUS_BOARD_COMMAND)
+    parser.add_argument("--skip-status-board", action="store_true")
     args = parser.parse_args()
 
     command = [
@@ -77,6 +80,11 @@ def main() -> int:
         if result.returncode != 0:
             print(f"[netkeiba-2026-snapshot] failed: exit_code={result.returncode}")
             return int(result.returncode)
+        if not args.skip_status_board:
+            board_result = subprocess.run(args.status_board_command, cwd=ROOT, shell=True, check=False)
+            if board_result.returncode != 0:
+                print(f"[netkeiba-2026-snapshot] status board update failed: exit_code={board_result.returncode}")
+                return int(board_result.returncode)
         print(f"[netkeiba-2026-snapshot] output: {ROOT / args.output}")
         return 0
     except KeyboardInterrupt:

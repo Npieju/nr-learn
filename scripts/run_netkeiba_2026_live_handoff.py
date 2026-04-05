@@ -28,6 +28,7 @@ DEFAULT_WRAPPER_MANIFEST = "artifacts/reports/netkeiba_2026_live_handoff_manifes
 DEFAULT_PROFILE = "current_recommended_serving_2025_latest"
 DEFAULT_RACE_RESULT_PATH = "data/external/netkeiba/results/netkeiba_race_result_crawled.csv"
 DEFAULT_RACE_CARD_PATH = "data/external/netkeiba/racecard/netkeiba_racecard_crawled.csv"
+DEFAULT_STATUS_BOARD_SCRIPT = "scripts/run_netkeiba_2026_status_board.py"
 
 
 def log_progress(message: str) -> None:
@@ -164,6 +165,13 @@ def _write_waiting_manifest(
     write_json(wrapper_manifest_path, manifest)
 
 
+def _refresh_status_board(*, python_executable: str, status_board_script: str) -> int:
+    command = [python_executable, str(_resolve_path(status_board_script))]
+    print(f"[netkeiba-2026-live-handoff] refreshing status board: {shlex.join(command)}", flush=True)
+    result = subprocess.run(command, cwd=ROOT, check=False)
+    return int(result.returncode)
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--python-executable", default=sys.executable)
@@ -182,6 +190,7 @@ def main() -> int:
     parser.add_argument("--refresh-live-crawl", action="store_true")
     parser.add_argument("--race-result-path", default=DEFAULT_RACE_RESULT_PATH)
     parser.add_argument("--race-card-path", default=DEFAULT_RACE_CARD_PATH)
+    parser.add_argument("--status-board-script", default=DEFAULT_STATUS_BOARD_SCRIPT)
     args = parser.parse_args()
 
     wrapper_manifest_path = _resolve_path(args.wrapper_manifest_output)
@@ -251,6 +260,10 @@ def main() -> int:
                 snapshot_consistent=snapshot_consistent,
                 history_dates_ready=history_dates_ready,
             )
+            _refresh_status_board(
+                python_executable=str(args.python_executable),
+                status_board_script=args.status_board_script,
+            )
 
             if ready:
                 live_exit = _run_command(label="live_predict", command=live_command)
@@ -277,6 +290,10 @@ def main() -> int:
                     live_report_file=report_file,
                 )
                 write_json(wrapper_manifest_path, manifest)
+                _refresh_status_board(
+                    python_executable=str(args.python_executable),
+                    status_board_script=args.status_board_script,
+                )
                 progress.complete(message=f"handoff completed output={wrapper_manifest_path}")
                 return 0 if live_exit == 0 else 1
 
