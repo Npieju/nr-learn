@@ -706,6 +706,7 @@ backfill:
 - `run_netkeiba_2026_live_handoff.py` も polling ごとに status board を更新するので、board を一次参照にして current phase を追える。
 - `run_netkeiba_2026_status_board.py` は、`artifacts/reports/netkeiba_backfill_manifest_2026_ytd.json`、`artifacts/reports/netkeiba_coverage_snapshot_2026_ytd.json`、`artifacts/reports/netkeiba_2026_live_handoff_manifest.json` を束ね、`status`、`current_phase`、`recommended_action`、`highlights` を 1 回で読めるようにする。進行中は crawl target manifest と実 lock file から `active_cycle`、各 target の `processed_ids`、`rows_written`、live `crawl_lock` を反映し、history frontier は外部 result/racecard CSV の max date を直接読む。`race_result_gap_days`、`race_card_gap_days`、`limiting_history_target` により target date までの残日数も確認でき、completed 後は live summary/runtime manifest から `policy_selected_rows` と `num_races` も表示する。
 - `run_netkeiba_2026_backfill_rollover.py` は、target manifest を見て running target が 0 本になる cycle 境界を待ち、lock の `pid` に `SIGINT` を送って旧 backfill を止めたあと、新しい `run_netkeiba_2026_ytd_backfill.py` を別 log で起動する one-shot rollover watcher である。`--dry-run` で safe boundary 判定だけ先に確認できる。
+- `run_netkeiba_2026_same_day_ops.py` は、2026 same-day serving の orchestration 入口で、まず status board を refresh し、未完了なら backfill / handoff / rollover の各 background action を重複起動なしで arm する。completed 済みなら `artifacts/reports/netkeiba_2026_same_day_ops_manifest.json` に `already_completed` を書いて即終了する。
 
 補足:
 
