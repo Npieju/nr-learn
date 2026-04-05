@@ -674,10 +674,17 @@ backfill:
   --max-cycles 1
 ```
 
+進行中または直後の 2026 YTD readiness を見るときの wrapper:
+
+```bash
+/workspaces/nr-learn/.venv/bin/python scripts/run_netkeiba_2026_ytd_snapshot.py
+```
+
 補足:
 
 - 既定では `configs/data_2025_latest.yaml` と `configs/crawl_netkeiba_backfill_2026_ytd.yaml` を使い、`2026-01-01..today` を `race_list` 起点かつ `date-order=asc` で進める。
 - 長時間 run に切り替えるときは `--max-cycles 0` のまま使い、必要なら `--post-cycle-command` で snapshot/gate を束ねる。
+- `run_netkeiba_2026_ytd_snapshot.py` は、2026 YTD 専用の `race_result` / `race_card` / `pedigree` manifest と crawl lock を見にいくので、default snapshot を上書きせずに進捗を読める。
 
 補足:
 

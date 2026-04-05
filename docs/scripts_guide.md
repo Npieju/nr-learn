@@ -188,6 +188,8 @@ serving 系の重い script は、smoke 本体、replay、bankroll sweep、dashb
   - 期間を切って backfill を進める。
 - [../scripts/run_netkeiba_2026_ytd_backfill.py](../scripts/run_netkeiba_2026_ytd_backfill.py)
   - 2026-01-01 から当日までを race_list 起点で backfill する same-day serving 向け wrapper。
+- [../scripts/run_netkeiba_2026_ytd_snapshot.py](../scripts/run_netkeiba_2026_ytd_snapshot.py)
+  - 2026 YTD backfill の専用 manifest / lock を見ながら readiness snapshot を出す wrapper。
 - [../scripts/run_netkeiba_benchmark_gate.py](../scripts/run_netkeiba_benchmark_gate.py)
   - coverage と readiness を見て benchmark 再実行可否を判定する。
 - [../scripts/run_local_coverage_snapshot.py](../scripts/run_local_coverage_snapshot.py)
