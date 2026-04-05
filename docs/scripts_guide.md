@@ -198,6 +198,8 @@ serving 系の重い script は、smoke 本体、replay、bankroll sweep、dashb
   - 進行中 target が 0 本になる cycle 境界で旧 2026 backfill を止め、最新コードの backfill を再起動する one-shot watcher。
 - [../scripts/run_netkeiba_2026_same_day_ops.py](../scripts/run_netkeiba_2026_same_day_ops.py)
   - 2026 same-day serving の運用入口。status board を更新し、必要なら backfill / handoff / rollover を background 起動し、completed 済みなら summary manifest を返して終了する。
+- [../scripts/run_netkeiba_2026_benchmark_gate.py](../scripts/run_netkeiba_2026_benchmark_gate.py)
+  - same-day serving 完了後に 2026 YTD netkeiba データで enriched benchmark rerun を呼ぶ wrapper。専用 manifest 名を束ね、完了後に status board も更新する。
 - [../scripts/run_netkeiba_benchmark_gate.py](../scripts/run_netkeiba_benchmark_gate.py)
   - coverage と readiness を見て benchmark 再実行可否を判定する。
 - [../scripts/run_local_coverage_snapshot.py](../scripts/run_local_coverage_snapshot.py)

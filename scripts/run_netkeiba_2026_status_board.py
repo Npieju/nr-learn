@@ -21,6 +21,7 @@ from racing_ml.common.progress import Heartbeat, ProgressBar
 DEFAULT_BACKFILL_MANIFEST = "artifacts/reports/netkeiba_backfill_manifest_2026_ytd.json"
 DEFAULT_SNAPSHOT = "artifacts/reports/netkeiba_coverage_snapshot_2026_ytd.json"
 DEFAULT_HANDOFF = "artifacts/reports/netkeiba_2026_live_handoff_manifest.json"
+DEFAULT_BENCHMARK_GATE = "artifacts/reports/netkeiba_2026_benchmark_gate.json"
 DEFAULT_OUTPUT = "artifacts/reports/netkeiba_2026_status_board.json"
 DEFAULT_RACE_RESULT_PATH = "data/external/netkeiba/results/netkeiba_race_result_crawled.csv"
 DEFAULT_RACE_CARD_PATH = "data/external/netkeiba/racecard/netkeiba_racecard_crawled.csv"
@@ -170,6 +171,7 @@ def main() -> int:
     parser.add_argument("--backfill-manifest", default=DEFAULT_BACKFILL_MANIFEST)
     parser.add_argument("--snapshot", default=DEFAULT_SNAPSHOT)
     parser.add_argument("--handoff-manifest", default=DEFAULT_HANDOFF)
+    parser.add_argument("--benchmark-gate-manifest", default=DEFAULT_BENCHMARK_GATE)
     parser.add_argument("--race-result-path", default=DEFAULT_RACE_RESULT_PATH)
     parser.add_argument("--race-card-path", default=DEFAULT_RACE_CARD_PATH)
     parser.add_argument("--race-result-manifest", default=DEFAULT_RACE_RESULT_MANIFEST)
@@ -189,6 +191,7 @@ def main() -> int:
         backfill_payload = _read_json(_resolve_path(args.backfill_manifest))
         snapshot_payload = _read_json(_resolve_path(args.snapshot))
         handoff_payload = _read_json(_resolve_path(args.handoff_manifest))
+        benchmark_gate_payload = _read_json(_resolve_path(args.benchmark_gate_manifest))
         race_result_target_payload = _read_json(_resolve_path(args.race_result_manifest))
         race_card_target_payload = _read_json(_resolve_path(args.race_card_manifest))
         pedigree_target_payload = _read_json(_resolve_path(args.pedigree_manifest))
@@ -234,6 +237,7 @@ def main() -> int:
     prediction_file = handoff_payload.get("live_prediction_file")
     live_summary_payload = _read_json(_derive_live_artifact_path(prediction_file, ".summary.json")) if prediction_file else {}
     live_runtime_payload = _read_json(_derive_live_artifact_path(prediction_file, ".live.json")) if prediction_file else {}
+    benchmark_gate_status = str(benchmark_gate_payload.get("status") or "")
 
     payload = {
         "started_at": utc_now_iso(),
@@ -245,6 +249,7 @@ def main() -> int:
             "backfill_manifest": args.backfill_manifest,
             "snapshot": args.snapshot,
             "handoff_manifest": args.handoff_manifest,
+            "benchmark_gate_manifest": args.benchmark_gate_manifest,
             "status_board": args.output,
         },
         "backfill": {
@@ -301,6 +306,16 @@ def main() -> int:
             "records": live_summary_payload.get("records") or live_runtime_payload.get("record_count"),
             "num_races": live_summary_payload.get("num_races") or live_runtime_payload.get("race_count"),
         },
+        "benchmark_gate": {
+            "status": benchmark_gate_payload.get("status"),
+            "current_phase": benchmark_gate_payload.get("current_phase"),
+            "recommended_action": benchmark_gate_payload.get("recommended_action"),
+            "manifest": args.benchmark_gate_manifest,
+            "completed_step": benchmark_gate_payload.get("completed_step"),
+            "train_status": _dict_payload(benchmark_gate_payload.get("train")).get("status"),
+            "evaluate_status": _dict_payload(benchmark_gate_payload.get("evaluate")).get("status"),
+            "readiness": _dict_payload(benchmark_gate_payload.get("readiness")),
+        },
         "highlights": [
             f"status={status}",
             f"current_phase={current_phase}",
@@ -314,6 +329,7 @@ def main() -> int:
             f"history_gap_days_result={race_result_gap_days}",
             f"history_gap_days_race_card={race_card_gap_days}",
             f"limiting_history_target={limiting_history_target}",
+            f"benchmark_gate_status={benchmark_gate_status or 'not_run'}",
             f"policy_selected_rows={live_summary_payload.get('policy_selected_rows')}",
             f"live_num_races={live_summary_payload.get('num_races') or live_runtime_payload.get('race_count')}",
         ],
