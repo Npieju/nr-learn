@@ -5,6 +5,8 @@ import json
 from pathlib import Path
 import sys
 
+import pandas as pd
+
 ROOT = Path(__file__).resolve().parents[1]
 SRC = ROOT / "src"
 if str(SRC) not in sys.path:
@@ -19,6 +21,8 @@ DEFAULT_BACKFILL_MANIFEST = "artifacts/reports/netkeiba_backfill_manifest_2026_y
 DEFAULT_SNAPSHOT = "artifacts/reports/netkeiba_coverage_snapshot_2026_ytd.json"
 DEFAULT_HANDOFF = "artifacts/reports/netkeiba_2026_live_handoff_manifest.json"
 DEFAULT_OUTPUT = "artifacts/reports/netkeiba_2026_status_board.json"
+DEFAULT_RACE_RESULT_PATH = "data/external/netkeiba/results/netkeiba_race_result_crawled.csv"
+DEFAULT_RACE_CARD_PATH = "data/external/netkeiba/racecard/netkeiba_racecard_crawled.csv"
 
 
 def log_progress(message: str) -> None:
@@ -46,6 +50,22 @@ def _dict_payload(value: object) -> dict[str, object]:
 
 def _list_payload(value: object) -> list[object]:
     return value if isinstance(value, list) else []
+
+
+def _extract_external_max_date(path: Path) -> str | None:
+    if not path.exists():
+        return None
+    try:
+        header = pd.read_csv(path, nrows=0)
+    except pd.errors.EmptyDataError:
+        return None
+    if "date" not in header.columns:
+        return None
+    frame = pd.read_csv(path, usecols=["date"], low_memory=False)
+    dates = pd.to_datetime(frame["date"], errors="coerce")
+    if dates.notna().any():
+        return str(dates.max().normalize().date())
+    return None
 
 
 def _target_summary(target_state: dict[str, object]) -> dict[str, object]:
@@ -94,6 +114,8 @@ def main() -> int:
     parser.add_argument("--backfill-manifest", default=DEFAULT_BACKFILL_MANIFEST)
     parser.add_argument("--snapshot", default=DEFAULT_SNAPSHOT)
     parser.add_argument("--handoff-manifest", default=DEFAULT_HANDOFF)
+    parser.add_argument("--race-result-path", default=DEFAULT_RACE_RESULT_PATH)
+    parser.add_argument("--race-card-path", default=DEFAULT_RACE_CARD_PATH)
     parser.add_argument("--output", default=DEFAULT_OUTPUT)
     args = parser.parse_args()
 
@@ -119,6 +141,8 @@ def main() -> int:
     external_outputs = _dict_payload(snapshot_payload.get("external_outputs"))
     target_states = _dict_payload(snapshot_payload.get("target_states"))
     crawl_lock = _dict_payload(snapshot_payload.get("crawl_lock"))
+    live_race_result_max_date = _extract_external_max_date(_resolve_path(args.race_result_path))
+    live_race_card_max_date = _extract_external_max_date(_resolve_path(args.race_card_path))
     cycles = _list_payload(backfill_payload.get("cycles"))
     last_cycle = _dict_payload(cycles[-1]) if cycles else {}
     completed_cycles = int(backfill_payload.get("completed_cycles") or 0)
@@ -175,8 +199,8 @@ def main() -> int:
             "recommended_action": handoff_payload.get("recommended_action"),
             "race_date": handoff_payload.get("race_date"),
             "history_ready_date": handoff_payload.get("history_ready_date"),
-            "race_result_max_date": handoff_payload.get("race_result_max_date"),
-            "race_card_max_date": handoff_payload.get("race_card_max_date"),
+            "race_result_max_date": live_race_result_max_date or handoff_payload.get("race_result_max_date"),
+            "race_card_max_date": live_race_card_max_date or handoff_payload.get("race_card_max_date"),
             "live_prediction_file": handoff_payload.get("live_prediction_file"),
             "live_report_file": handoff_payload.get("live_report_file"),
         },
@@ -188,8 +212,8 @@ def main() -> int:
             f"active_cycle={active_cycle}",
             f"snapshot_stage={snapshot_progress.get('current_stage')}",
             f"running_targets={','.join(running_target_names) if running_target_names else 'none'}",
-            f"history_frontier_result={handoff_payload.get('race_result_max_date')}",
-            f"history_frontier_race_card={handoff_payload.get('race_card_max_date')}",
+            f"history_frontier_result={live_race_result_max_date or handoff_payload.get('race_result_max_date')}",
+            f"history_frontier_race_card={live_race_card_max_date or handoff_payload.get('race_card_max_date')}",
         ],
     }
 
