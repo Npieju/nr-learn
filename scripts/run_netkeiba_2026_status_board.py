@@ -48,6 +48,19 @@ def _list_payload(value: object) -> list[object]:
     return value if isinstance(value, list) else []
 
 
+def _target_summary(target_state: dict[str, object]) -> dict[str, object]:
+    return {
+        "status": target_state.get("status"),
+        "requested_ids": target_state.get("requested_ids"),
+        "processed_ids": target_state.get("processed_ids"),
+        "parsed_ids": target_state.get("parsed_ids"),
+        "failure_count": target_state.get("failure_count"),
+        "rows_written": target_state.get("rows_written"),
+        "started_at": target_state.get("started_at"),
+        "finished_at": target_state.get("finished_at"),
+    }
+
+
 def _derive_status(
     *,
     backfill: dict[str, object],
@@ -104,8 +117,15 @@ def main() -> int:
     snapshot_readiness = _dict_payload(snapshot_payload.get("readiness"))
     snapshot_progress = _dict_payload(snapshot_payload.get("progress"))
     external_outputs = _dict_payload(snapshot_payload.get("external_outputs"))
+    target_states = _dict_payload(snapshot_payload.get("target_states"))
+    crawl_lock = _dict_payload(snapshot_payload.get("crawl_lock"))
     cycles = _list_payload(backfill_payload.get("cycles"))
     last_cycle = _dict_payload(cycles[-1]) if cycles else {}
+    completed_cycles = int(backfill_payload.get("completed_cycles") or 0)
+    running_target_names = [
+        name for name, payload in target_states.items() if _dict_payload(payload).get("status") == "running"
+    ]
+    active_cycle = completed_cycles + 1 if running_target_names else None
 
     payload = {
         "started_at": utc_now_iso(),
@@ -121,8 +141,20 @@ def main() -> int:
         },
         "backfill": {
             "stopped_reason": backfill_payload.get("stopped_reason"),
-            "completed_cycles": backfill_payload.get("completed_cycles"),
+            "completed_cycles": completed_cycles,
+            "active_cycle": active_cycle,
             "date_window": backfill_payload.get("date_window"),
+            "crawl_lock": {
+                "present": crawl_lock.get("present"),
+                "pid": crawl_lock.get("pid"),
+                "pid_running": crawl_lock.get("pid_running"),
+                "started_at": crawl_lock.get("started_at"),
+            },
+            "current_targets": {
+                "race_result": _target_summary(_dict_payload(target_states.get("race_result"))),
+                "race_card": _target_summary(_dict_payload(target_states.get("race_card"))),
+                "pedigree": _target_summary(_dict_payload(target_states.get("pedigree"))),
+            },
             "last_cycle": {
                 "cycle": last_cycle.get("cycle"),
                 "finished_at": last_cycle.get("finished_at"),
@@ -152,8 +184,10 @@ def main() -> int:
             f"status={status}",
             f"current_phase={current_phase}",
             f"recommended_action={recommended_action}",
-            f"completed_cycles={backfill_payload.get('completed_cycles')}",
+            f"completed_cycles={completed_cycles}",
+            f"active_cycle={active_cycle}",
             f"snapshot_stage={snapshot_progress.get('current_stage')}",
+            f"running_targets={','.join(running_target_names) if running_target_names else 'none'}",
             f"history_frontier_result={handoff_payload.get('race_result_max_date')}",
             f"history_frontier_race_card={handoff_payload.get('race_card_max_date')}",
         ],
