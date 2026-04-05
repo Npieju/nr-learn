@@ -68,6 +68,14 @@ def _extract_external_max_date(path: Path) -> str | None:
     return None
 
 
+def _date_gap_days(max_date_text: str | None, target_date_text: str | None) -> int | None:
+    if not max_date_text or not target_date_text:
+        return None
+    max_date = pd.Timestamp(max_date_text)
+    target_date = pd.Timestamp(target_date_text)
+    return max(int((target_date - max_date).days), 0)
+
+
 def _target_summary(target_state: dict[str, object]) -> dict[str, object]:
     return {
         "status": target_state.get("status"),
@@ -143,6 +151,19 @@ def main() -> int:
     crawl_lock = _dict_payload(snapshot_payload.get("crawl_lock"))
     live_race_result_max_date = _extract_external_max_date(_resolve_path(args.race_result_path))
     live_race_card_max_date = _extract_external_max_date(_resolve_path(args.race_card_path))
+    history_ready_date = str(handoff_payload.get("history_ready_date") or "") or None
+    race_result_gap_days = _date_gap_days(live_race_result_max_date or handoff_payload.get("race_result_max_date"), history_ready_date)
+    race_card_gap_days = _date_gap_days(live_race_card_max_date or handoff_payload.get("race_card_max_date"), history_ready_date)
+    history_dates_ready = (
+        race_result_gap_days == 0 and race_card_gap_days == 0
+        if race_result_gap_days is not None and race_card_gap_days is not None
+        else False
+    )
+    limiting_history_target = None
+    if race_result_gap_days is not None or race_card_gap_days is not None:
+        result_gap = race_result_gap_days if race_result_gap_days is not None else -1
+        card_gap = race_card_gap_days if race_card_gap_days is not None else -1
+        limiting_history_target = "race_result" if result_gap >= card_gap else "race_card"
     cycles = _list_payload(backfill_payload.get("cycles"))
     last_cycle = _dict_payload(cycles[-1]) if cycles else {}
     completed_cycles = int(backfill_payload.get("completed_cycles") or 0)
@@ -198,9 +219,13 @@ def main() -> int:
             "current_phase": handoff_payload.get("current_phase"),
             "recommended_action": handoff_payload.get("recommended_action"),
             "race_date": handoff_payload.get("race_date"),
-            "history_ready_date": handoff_payload.get("history_ready_date"),
+            "history_ready_date": history_ready_date,
             "race_result_max_date": live_race_result_max_date or handoff_payload.get("race_result_max_date"),
             "race_card_max_date": live_race_card_max_date or handoff_payload.get("race_card_max_date"),
+            "race_result_gap_days": race_result_gap_days,
+            "race_card_gap_days": race_card_gap_days,
+            "history_dates_ready": history_dates_ready,
+            "limiting_history_target": limiting_history_target,
             "live_prediction_file": handoff_payload.get("live_prediction_file"),
             "live_report_file": handoff_payload.get("live_report_file"),
         },
@@ -214,6 +239,9 @@ def main() -> int:
             f"running_targets={','.join(running_target_names) if running_target_names else 'none'}",
             f"history_frontier_result={live_race_result_max_date or handoff_payload.get('race_result_max_date')}",
             f"history_frontier_race_card={live_race_card_max_date or handoff_payload.get('race_card_max_date')}",
+            f"history_gap_days_result={race_result_gap_days}",
+            f"history_gap_days_race_card={race_card_gap_days}",
+            f"limiting_history_target={limiting_history_target}",
         ],
     }
 
