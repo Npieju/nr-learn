@@ -688,6 +688,12 @@ backfill:
   --headline-contains 大阪杯
 ```
 
+現在地を 1 本の board で読みたいときの wrapper:
+
+```bash
+/workspaces/nr-learn/.venv/bin/python scripts/run_netkeiba_2026_status_board.py
+```
+
 補足:
 
 - 既定では `configs/data_2025_latest.yaml` と `configs/crawl_netkeiba_backfill_2026_ytd.yaml` を使い、`2026-01-01..today` を `race_list` 起点かつ `date-order=asc` で進める。
@@ -695,6 +701,7 @@ backfill:
 - 独自の `--post-cycle-command` を使いたいときは `--skip-post-cycle-snapshot` を付ける。
 - `run_netkeiba_2026_ytd_snapshot.py` は、2026 YTD 専用の `race_result` / `race_card` / `pedigree` manifest と crawl lock を見にいくので、default snapshot を上書きせずに進捗を読める。
 - `run_netkeiba_2026_live_handoff.py` は、snapshot consistency、race_result/race_card の completed 状態、および外部 CSV の `max_date >= race_date - history_lag_days` を ready 条件に使う。未達時は waiting manifest を `artifacts/reports/netkeiba_2026_live_handoff_manifest.json` に残す。
+- `run_netkeiba_2026_status_board.py` は、`artifacts/reports/netkeiba_backfill_manifest_2026_ytd.json`、`artifacts/reports/netkeiba_coverage_snapshot_2026_ytd.json`、`artifacts/reports/netkeiba_2026_live_handoff_manifest.json` を束ね、`status`、`current_phase`、`recommended_action`、`highlights` を 1 回で読めるようにする。
 
 補足:
 

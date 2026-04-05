@@ -192,6 +192,8 @@ serving 系の重い script は、smoke 本体、replay、bankroll sweep、dashb
   - 2026 YTD backfill の専用 manifest / lock を見ながら readiness snapshot を出す wrapper。
 - [../scripts/run_netkeiba_2026_live_handoff.py](../scripts/run_netkeiba_2026_live_handoff.py)
   - 2026 YTD backfill/snapshot の ready 条件を見て JRA live prediction へ handoff する wrapper。
+- [../scripts/run_netkeiba_2026_status_board.py](../scripts/run_netkeiba_2026_status_board.py)
+  - 2026 YTD backfill / snapshot / handoff の状態を 1 本の status board manifest に集約する wrapper。
 - [../scripts/run_netkeiba_benchmark_gate.py](../scripts/run_netkeiba_benchmark_gate.py)
   - coverage と readiness を見て benchmark 再実行可否を判定する。
 - [../scripts/run_local_coverage_snapshot.py](../scripts/run_local_coverage_snapshot.py)
