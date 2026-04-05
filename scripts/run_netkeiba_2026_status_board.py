@@ -92,6 +92,15 @@ def _target_summary(target_state: dict[str, object]) -> dict[str, object]:
     }
 
 
+def _derive_live_artifact_path(prediction_file: str | None, suffix: str) -> Path | None:
+    if not prediction_file:
+        return None
+    path = _resolve_path(prediction_file)
+    if path.suffix:
+        return path.with_suffix(suffix)
+    return None
+
+
 def _derive_status(
     *,
     backfill: dict[str, object],
@@ -185,6 +194,9 @@ def main() -> int:
         name for name, payload in live_target_states.items() if _dict_payload(payload).get("status") == "running"
     ]
     active_cycle = completed_cycles + 1 if running_target_names else None
+    prediction_file = handoff_payload.get("live_prediction_file")
+    live_summary_payload = _read_json(_derive_live_artifact_path(prediction_file, ".summary.json")) if prediction_file else {}
+    live_runtime_payload = _read_json(_derive_live_artifact_path(prediction_file, ".live.json")) if prediction_file else {}
 
     payload = {
         "started_at": utc_now_iso(),
@@ -243,6 +255,15 @@ def main() -> int:
             "live_prediction_file": handoff_payload.get("live_prediction_file"),
             "live_report_file": handoff_payload.get("live_report_file"),
         },
+        "live_outputs": {
+            "prediction_file": prediction_file,
+            "summary_file": live_summary_payload.get("summary_file") or str(_derive_live_artifact_path(prediction_file, ".summary.json").relative_to(ROOT)) if prediction_file and _derive_live_artifact_path(prediction_file, ".summary.json") is not None else None,
+            "runtime_manifest_file": str(_derive_live_artifact_path(prediction_file, ".live.json").relative_to(ROOT)) if prediction_file and _derive_live_artifact_path(prediction_file, ".live.json") is not None else None,
+            "policy_name": live_summary_payload.get("policy_name"),
+            "policy_selected_rows": live_summary_payload.get("policy_selected_rows"),
+            "records": live_summary_payload.get("records") or live_runtime_payload.get("record_count"),
+            "num_races": live_summary_payload.get("num_races") or live_runtime_payload.get("race_count"),
+        },
         "highlights": [
             f"status={status}",
             f"current_phase={current_phase}",
@@ -256,6 +277,8 @@ def main() -> int:
             f"history_gap_days_result={race_result_gap_days}",
             f"history_gap_days_race_card={race_card_gap_days}",
             f"limiting_history_target={limiting_history_target}",
+            f"policy_selected_rows={live_summary_payload.get('policy_selected_rows')}",
+            f"live_num_races={live_summary_payload.get('num_races') or live_runtime_payload.get('race_count')}",
         ],
     }
 
