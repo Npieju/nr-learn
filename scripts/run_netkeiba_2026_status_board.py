@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 from pathlib import Path
 import sys
 
@@ -26,6 +27,7 @@ DEFAULT_RACE_CARD_PATH = "data/external/netkeiba/racecard/netkeiba_racecard_craw
 DEFAULT_RACE_RESULT_MANIFEST = "artifacts/reports/netkeiba_crawl_manifest_2026_ytd_race_result.json"
 DEFAULT_RACE_CARD_MANIFEST = "artifacts/reports/netkeiba_crawl_manifest_2026_ytd_race_card.json"
 DEFAULT_PEDIGREE_MANIFEST = "artifacts/reports/netkeiba_crawl_manifest_2026_ytd_pedigree.json"
+DEFAULT_CRAWL_LOCK_PATH = "artifacts/reports/netkeiba_crawl_manifest_2026_ytd.json.lock"
 
 
 def log_progress(message: str) -> None:
@@ -69,6 +71,40 @@ def _extract_external_max_date(path: Path) -> str | None:
     if dates.notna().any():
         return str(dates.max().normalize().date())
     return None
+
+
+def _pid_running(pid: int | None) -> bool:
+    if pid is None or pid <= 0:
+        return False
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        return True
+    return True
+
+
+def _read_live_crawl_lock(path: Path) -> dict[str, object]:
+    if not path.exists():
+        return {
+            "present": False,
+            "pid": None,
+            "pid_running": False,
+            "started_at": None,
+        }
+    payload = _read_json(path)
+    raw_pid = payload.get("pid")
+    try:
+        pid = int(raw_pid) if raw_pid is not None else None
+    except (TypeError, ValueError):
+        pid = None
+    return {
+        "present": True,
+        "pid": pid,
+        "pid_running": _pid_running(pid),
+        "started_at": payload.get("started_at"),
+    }
 
 
 def _date_gap_days(max_date_text: str | None, target_date_text: str | None) -> int | None:
@@ -139,6 +175,7 @@ def main() -> int:
     parser.add_argument("--race-result-manifest", default=DEFAULT_RACE_RESULT_MANIFEST)
     parser.add_argument("--race-card-manifest", default=DEFAULT_RACE_CARD_MANIFEST)
     parser.add_argument("--pedigree-manifest", default=DEFAULT_PEDIGREE_MANIFEST)
+    parser.add_argument("--crawl-lock-path", default=DEFAULT_CRAWL_LOCK_PATH)
     parser.add_argument("--output", default=DEFAULT_OUTPUT)
     args = parser.parse_args()
 
@@ -171,7 +208,7 @@ def main() -> int:
         "race_card": race_card_target_payload or _dict_payload(target_states.get("race_card")),
         "pedigree": pedigree_target_payload or _dict_payload(target_states.get("pedigree")),
     }
-    crawl_lock = _dict_payload(snapshot_payload.get("crawl_lock"))
+    crawl_lock = _read_live_crawl_lock(_resolve_path(args.crawl_lock_path))
     live_race_result_max_date = _extract_external_max_date(_resolve_path(args.race_result_path))
     live_race_card_max_date = _extract_external_max_date(_resolve_path(args.race_card_path))
     history_ready_date = str(handoff_payload.get("history_ready_date") or "") or None
