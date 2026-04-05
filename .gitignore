@@ -15,3 +15,4 @@ data/external/
 
 artifacts/*
 !artifacts/.gitkeep
+.codex

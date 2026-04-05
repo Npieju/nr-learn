@@ -667,6 +667,18 @@ backfill:
   --pedigree-batch-size 500
 ```
 
+2026 YTD を same-day serving 用に追いかけるときの既定 wrapper:
+
+```bash
+/workspaces/nr-learn/.venv/bin/python scripts/run_netkeiba_2026_ytd_backfill.py \
+  --max-cycles 1
+```
+
+補足:
+
+- 既定では `configs/data_2025_latest.yaml` と `configs/crawl_netkeiba_backfill_2026_ytd.yaml` を使い、`2026-01-01..today` を `race_list` 起点かつ `date-order=asc` で進める。
+- 長時間 run に切り替えるときは `--max-cycles 0` のまま使い、必要なら `--post-cycle-command` で snapshot/gate を束ねる。
+
 補足:
 
 - netkeiba 系の `run_prepare_netkeiba_ids.py`、`run_collect_netkeiba.py`、`run_backfill_netkeiba.py`、`run_netkeiba_benchmark_gate.py` は、いずれも進捗または heartbeat を出す。
