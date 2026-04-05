@@ -249,17 +249,6 @@ def run_netkeiba_backfill_from_config(
                     )
                     cycle_report["pedigree"] = _extract_target(pedigree_summary, "pedigree")
 
-            post_cycle_failed = False
-            if post_cycle_command:
-                post_cycle_report = _run_post_cycle_command(
-                    command=post_cycle_command,
-                    base_dir=base_dir,
-                    cycle=cycle,
-                    manifest_path=manifest_path,
-                )
-                cycle_report["post_cycle_command"] = post_cycle_report
-                post_cycle_failed = int(post_cycle_report.get("exit_code", 1)) != 0
-
             cycle_report["finished_at"] = time.strftime("%Y-%m-%dT%H:%M:%S")
             cycle_reports.append(cycle_report)
             _write_json(
@@ -282,6 +271,37 @@ def run_netkeiba_backfill_from_config(
                     cycle_reports=cycle_reports,
                 ),
             )
+
+            post_cycle_failed = False
+            if post_cycle_command:
+                post_cycle_report = _run_post_cycle_command(
+                    command=post_cycle_command,
+                    base_dir=base_dir,
+                    cycle=cycle,
+                    manifest_path=manifest_path,
+                )
+                cycle_report["post_cycle_command"] = post_cycle_report
+                post_cycle_failed = int(post_cycle_report.get("exit_code", 1)) != 0
+                _write_json(
+                    manifest_path,
+                    _build_summary(
+                        started_at=started_at,
+                        finished_at=None,
+                        start_date=start_date,
+                        end_date=end_date,
+                        date_order=date_order,
+                        race_id_source=race_id_source,
+                        race_batch_size=race_batch_size,
+                        pedigree_batch_size=pedigree_batch_size,
+                        include_race_card=include_race_card,
+                        include_pedigree=include_pedigree,
+                        max_cycles=max_cycles,
+                        post_cycle_command=post_cycle_command,
+                        stop_on_post_cycle_failure=stop_on_post_cycle_failure,
+                        stopped_reason=stopped_reason,
+                        cycle_reports=cycle_reports,
+                    ),
+                )
 
             _log_progress(
                 f"cycle={cycle} done pending_race_ids={pending_race_ids} pending_pedigree_ids={pending_pedigree_ids}"
