@@ -683,7 +683,8 @@ backfill:
 補足:
 
 - 既定では `configs/data_2025_latest.yaml` と `configs/crawl_netkeiba_backfill_2026_ytd.yaml` を使い、`2026-01-01..today` を `race_list` 起点かつ `date-order=asc` で進める。
-- 長時間 run に切り替えるときは `--max-cycles 0` のまま使い、必要なら `--post-cycle-command` で snapshot/gate を束ねる。
+- 長時間 run に切り替えるときは `--max-cycles 0` のまま使う。既定では各 cycle 後に `run_netkeiba_2026_ytd_snapshot.py` を自動実行する。
+- 独自の `--post-cycle-command` を使いたいときは `--skip-post-cycle-snapshot` を付ける。
 - `run_netkeiba_2026_ytd_snapshot.py` は、2026 YTD 専用の `race_result` / `race_card` / `pedigree` manifest と crawl lock を見にいくので、default snapshot を上書きせずに進捗を読める。
 
 補足:
