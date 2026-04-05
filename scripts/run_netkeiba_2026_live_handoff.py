@@ -172,6 +172,18 @@ def _refresh_status_board(*, python_executable: str, status_board_script: str) -
     return int(result.returncode)
 
 
+def _completed_handoff_reusable(*, manifest: dict[str, Any], race_date: str) -> bool:
+    if str(manifest.get("status") or "") != "completed":
+        return False
+    if str(manifest.get("race_date") or "") != str(race_date):
+        return False
+    prediction_file = manifest.get("live_prediction_file")
+    report_file = manifest.get("live_report_file")
+    if not prediction_file or not report_file:
+        return False
+    return _resolve_path(str(prediction_file)).exists() and _resolve_path(str(report_file)).exists()
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--python-executable", default=sys.executable)
@@ -191,6 +203,7 @@ def main() -> int:
     parser.add_argument("--race-result-path", default=DEFAULT_RACE_RESULT_PATH)
     parser.add_argument("--race-card-path", default=DEFAULT_RACE_CARD_PATH)
     parser.add_argument("--status-board-script", default=DEFAULT_STATUS_BOARD_SCRIPT)
+    parser.add_argument("--force", action="store_true")
     args = parser.parse_args()
 
     wrapper_manifest_path = _resolve_path(args.wrapper_manifest_output)
@@ -215,6 +228,19 @@ def main() -> int:
             live_command.extend(["--limit", str(args.limit)])
         if args.refresh_live_crawl:
             live_command.append("--refresh")
+
+        existing_manifest = _read_json_dict(wrapper_manifest_path)
+        if not args.force and _completed_handoff_reusable(manifest=existing_manifest, race_date=args.race_date):
+            print(
+                "[netkeiba-2026-live-handoff] completed outputs already exist; skipping rerun "
+                f"prediction_file={existing_manifest.get('live_prediction_file')}",
+                flush=True,
+            )
+            _refresh_status_board(
+                python_executable=str(args.python_executable),
+                status_board_script=args.status_board_script,
+            )
+            return 0
 
         wait_started = time.monotonic()
         attempts = 0
