@@ -128,6 +128,42 @@ def _build_manifest(
     }
 
 
+def _write_waiting_manifest(
+    *,
+    wrapper_manifest_path: Path,
+    attempts: int,
+    waited_seconds: int,
+    race_date: str,
+    history_ready_date: pd.Timestamp,
+    snapshot_payload: dict[str, Any],
+    race_result_max_date: pd.Timestamp | None,
+    race_card_max_date: pd.Timestamp | None,
+    live_command: list[str],
+    snapshot_exit: int,
+    race_targets_completed: bool,
+    snapshot_consistent: bool,
+    history_dates_ready: bool,
+) -> None:
+    manifest = _build_manifest(
+        status="waiting",
+        current_phase="await_history_ready",
+        recommended_action="wait_for_2026_history_frontier",
+        attempts=attempts,
+        waited_seconds=waited_seconds,
+        race_date=race_date,
+        history_ready_date=str(history_ready_date.date()),
+        snapshot_payload=snapshot_payload,
+        race_result_max_date=str(race_result_max_date.date()) if race_result_max_date is not None else None,
+        race_card_max_date=str(race_card_max_date.date()) if race_card_max_date is not None else None,
+        live_command=live_command,
+        error=(
+            f"snapshot_exit={snapshot_exit} race_targets_completed={race_targets_completed} "
+            f"snapshot_consistent={snapshot_consistent} history_dates_ready={history_dates_ready}"
+        ),
+    )
+    write_json(wrapper_manifest_path, manifest)
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--python-executable", default=sys.executable)
@@ -200,6 +236,21 @@ def main() -> int:
                     f"snapshot_consistent={snapshot_consistent} result_max={race_result_max_date} race_card_max={race_card_max_date}"
                 ),
             )
+            _write_waiting_manifest(
+                wrapper_manifest_path=wrapper_manifest_path,
+                attempts=attempts,
+                waited_seconds=waited_seconds,
+                race_date=args.race_date,
+                history_ready_date=history_ready_date,
+                snapshot_payload=snapshot_payload,
+                race_result_max_date=race_result_max_date,
+                race_card_max_date=race_card_max_date,
+                live_command=live_command,
+                snapshot_exit=snapshot_exit,
+                race_targets_completed=race_targets_completed,
+                snapshot_consistent=snapshot_consistent,
+                history_dates_ready=history_dates_ready,
+            )
 
             if ready:
                 live_exit = _run_command(label="live_predict", command=live_command)
@@ -233,24 +284,6 @@ def main() -> int:
                 args.max_wait_seconds > 0 and waited_seconds >= int(args.max_wait_seconds)
             )
             if timed_out:
-                manifest = _build_manifest(
-                    status="waiting",
-                    current_phase="await_history_ready",
-                    recommended_action="wait_for_2026_history_frontier",
-                    attempts=attempts,
-                    waited_seconds=waited_seconds,
-                    race_date=args.race_date,
-                    history_ready_date=str(history_ready_date.date()),
-                    snapshot_payload=snapshot_payload,
-                    race_result_max_date=str(race_result_max_date.date()) if race_result_max_date is not None else None,
-                    race_card_max_date=str(race_card_max_date.date()) if race_card_max_date is not None else None,
-                    live_command=live_command,
-                    error=(
-                        f"snapshot_exit={snapshot_exit} race_targets_completed={race_targets_completed} "
-                        f"snapshot_consistent={snapshot_consistent} history_dates_ready={history_dates_ready}"
-                    ),
-                )
-                write_json(wrapper_manifest_path, manifest)
                 progress.complete(message=f"not ready output={wrapper_manifest_path}")
                 return 2
 
