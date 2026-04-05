@@ -23,6 +23,9 @@ DEFAULT_HANDOFF = "artifacts/reports/netkeiba_2026_live_handoff_manifest.json"
 DEFAULT_OUTPUT = "artifacts/reports/netkeiba_2026_status_board.json"
 DEFAULT_RACE_RESULT_PATH = "data/external/netkeiba/results/netkeiba_race_result_crawled.csv"
 DEFAULT_RACE_CARD_PATH = "data/external/netkeiba/racecard/netkeiba_racecard_crawled.csv"
+DEFAULT_RACE_RESULT_MANIFEST = "artifacts/reports/netkeiba_crawl_manifest_2026_ytd_race_result.json"
+DEFAULT_RACE_CARD_MANIFEST = "artifacts/reports/netkeiba_crawl_manifest_2026_ytd_race_card.json"
+DEFAULT_PEDIGREE_MANIFEST = "artifacts/reports/netkeiba_crawl_manifest_2026_ytd_pedigree.json"
 
 
 def log_progress(message: str) -> None:
@@ -124,6 +127,9 @@ def main() -> int:
     parser.add_argument("--handoff-manifest", default=DEFAULT_HANDOFF)
     parser.add_argument("--race-result-path", default=DEFAULT_RACE_RESULT_PATH)
     parser.add_argument("--race-card-path", default=DEFAULT_RACE_CARD_PATH)
+    parser.add_argument("--race-result-manifest", default=DEFAULT_RACE_RESULT_MANIFEST)
+    parser.add_argument("--race-card-manifest", default=DEFAULT_RACE_CARD_MANIFEST)
+    parser.add_argument("--pedigree-manifest", default=DEFAULT_PEDIGREE_MANIFEST)
     parser.add_argument("--output", default=DEFAULT_OUTPUT)
     args = parser.parse_args()
 
@@ -137,6 +143,9 @@ def main() -> int:
         backfill_payload = _read_json(_resolve_path(args.backfill_manifest))
         snapshot_payload = _read_json(_resolve_path(args.snapshot))
         handoff_payload = _read_json(_resolve_path(args.handoff_manifest))
+        race_result_target_payload = _read_json(_resolve_path(args.race_result_manifest))
+        race_card_target_payload = _read_json(_resolve_path(args.race_card_manifest))
+        pedigree_target_payload = _read_json(_resolve_path(args.pedigree_manifest))
     progress.update(message="inputs loaded")
 
     status, current_phase, recommended_action = _derive_status(
@@ -148,6 +157,11 @@ def main() -> int:
     snapshot_progress = _dict_payload(snapshot_payload.get("progress"))
     external_outputs = _dict_payload(snapshot_payload.get("external_outputs"))
     target_states = _dict_payload(snapshot_payload.get("target_states"))
+    live_target_states = {
+        "race_result": race_result_target_payload or _dict_payload(target_states.get("race_result")),
+        "race_card": race_card_target_payload or _dict_payload(target_states.get("race_card")),
+        "pedigree": pedigree_target_payload or _dict_payload(target_states.get("pedigree")),
+    }
     crawl_lock = _dict_payload(snapshot_payload.get("crawl_lock"))
     live_race_result_max_date = _extract_external_max_date(_resolve_path(args.race_result_path))
     live_race_card_max_date = _extract_external_max_date(_resolve_path(args.race_card_path))
@@ -168,7 +182,7 @@ def main() -> int:
     last_cycle = _dict_payload(cycles[-1]) if cycles else {}
     completed_cycles = int(backfill_payload.get("completed_cycles") or 0)
     running_target_names = [
-        name for name, payload in target_states.items() if _dict_payload(payload).get("status") == "running"
+        name for name, payload in live_target_states.items() if _dict_payload(payload).get("status") == "running"
     ]
     active_cycle = completed_cycles + 1 if running_target_names else None
 
@@ -196,9 +210,9 @@ def main() -> int:
                 "started_at": crawl_lock.get("started_at"),
             },
             "current_targets": {
-                "race_result": _target_summary(_dict_payload(target_states.get("race_result"))),
-                "race_card": _target_summary(_dict_payload(target_states.get("race_card"))),
-                "pedigree": _target_summary(_dict_payload(target_states.get("pedigree"))),
+                "race_result": _target_summary(_dict_payload(live_target_states.get("race_result"))),
+                "race_card": _target_summary(_dict_payload(live_target_states.get("race_card"))),
+                "pedigree": _target_summary(_dict_payload(live_target_states.get("pedigree"))),
             },
             "last_cycle": {
                 "cycle": last_cycle.get("cycle"),
