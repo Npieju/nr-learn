@@ -1023,6 +1023,25 @@ def _load_existing_output_frame(output_file: Path) -> pd.DataFrame:
         return pd.DataFrame()
 
 
+def _concat_preserving_columns(frames: list[pd.DataFrame]) -> pd.DataFrame:
+    if not frames:
+        return pd.DataFrame()
+
+    all_columns = list(dict.fromkeys(column for frame in frames for column in frame.columns))
+    filtered_frames: list[pd.DataFrame] = []
+    for frame in frames:
+        if frame.empty:
+            continue
+        keep_columns = [column for column in frame.columns if not frame[column].isna().all()]
+        filtered_frames.append(frame.loc[:, keep_columns])
+
+    if not filtered_frames:
+        return pd.DataFrame(columns=all_columns)
+
+    combined = pd.concat(filtered_frames, ignore_index=True, sort=False)
+    return combined.reindex(columns=all_columns)
+
+
 def _write_cumulative_output(output_file: Path, batch_frame: pd.DataFrame, dedupe_on: list[str]) -> tuple[pd.DataFrame, int]:
     existing = _load_existing_output_frame(output_file)
     existing_rows = int(len(existing))
@@ -1031,7 +1050,7 @@ def _write_cumulative_output(output_file: Path, batch_frame: pd.DataFrame, dedup
     elif batch_frame.empty:
         combined = existing.copy()
     else:
-        combined = pd.concat([existing, batch_frame], ignore_index=True, sort=False)
+        combined = _concat_preserving_columns([existing, batch_frame])
         columns = [column for column in dedupe_on if column in combined.columns]
         if columns:
             dedupe_keys: list[str] = []
@@ -1052,7 +1071,7 @@ def _write_cumulative_output(output_file: Path, batch_frame: pd.DataFrame, dedup
 def _build_checkpoint_batch_frame(frames: list[pd.DataFrame], dedupe_on: list[str]) -> pd.DataFrame:
     if not frames:
         return pd.DataFrame()
-    batch_frame = pd.concat(frames, ignore_index=True, sort=False)
+    batch_frame = _concat_preserving_columns(frames)
     return _dedupe_frame(batch_frame, dedupe_on)
 
 
