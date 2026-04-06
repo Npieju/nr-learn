@@ -29,7 +29,7 @@
 
 Current reading:
 
-1. JRA 本線は `#118` を current active experiment として再開した。
+1. JRA 本線は `#118` first read を close し、current active experiment は再び空になった。
 2. `recent_history_track_distance_selective` は `#96`, role split は `#97` まで進み、next candidate ではなく historical completed reference である。
 3. `owner_signal_ablation_audit` は actual execution と hold decision まで確定しており、secondary draft ではなく historical decision reference である。
 4. `jockey-trainer combo style-distance` は `#108` の formal child と `#115` の role split まで完了しており、historical completed reference である。
@@ -99,9 +99,9 @@ Latest fallback compare:
 
 Current open-work expectation:
 
-1. JRA 本線の current active issue は `#118` gate-frame-course pace decomposition selective child read である
+1. JRA 本線の current active issue は空である
 2. latest completed JRA policy issue は `#117` であり、`abs90` anchor 維持・`minprob005` / `odds25` reject まで確定した
-3. `#118` の next move は `course_baseline_race_pace_front3f` / `course_baseline_race_pace_back3f` の coverage / buildability を current high-coverage baseline 上で first read することである
+3. latest completed JRA feature read は `#118` であり、`course_baseline_race_pace_front3f` / `course_baseline_race_pace_back3f` は low coverage reject と確定した
 4. `gate/frame/course`, `pace/closing-fit`, `kelly runtime`, `class-rest-surface conditional`, `recent-history track-distance`, `deque_trim promotion decision`, `tighter policy seasonal narrowing` はこの節では next queue ではなく completed / historical reference として扱う
 5. `current_sep_guard_candidate` は September seasonal fallback のまま据え置く
 6. NAR side の open issue は `#101`, `#103` のみであり、current JRA queue とは混在させない
@@ -118,17 +118,17 @@ Historical note:
 
 Primary next issue draft:
 
-- current JRA primary next issue draft は `docs/next_issue_gate_frame_course_pace_decomposition_selective_candidate.md` である
+- current JRA primary next issue draft は未固定である
 - `docs/next_issue_tighter_policy_seasonal_regime_narrowing.md` は `#117` 完了後の historical issue source として保持する
-- JRA 本線は `#118 [experiment] Gate-frame-course pace decomposition selective child read` を active issue として進める
+- `docs/next_issue_gate_frame_course_pace_decomposition_selective_candidate.md` は `#118` close 後の historical issue source として保持する
 - NAR residual unissued draft library は `docs/next_issue_nar_class_rest_surface_replay.md` のみである
 - ただし NAR residual draft は current next issue ではなく、`#101` と `#103` の後段候補である
 
 Latest next feature queue:
 
-1. `#117` 完了後の再選定結果として、current JRA next issue は `#118` gate-frame-course pace decomposition selective child read に固定した
+1. `#118` first read により current JRA next issue は再選定待ちへ戻った
 2. `tighter policy search` family の season-aware narrowing 自体は close し、strict anchor `abs90` 維持で判断が終わった
-3. 次段は `course_baseline_race_pace_front3f` / `course_baseline_race_pace_back3f` pair を narrow selective child として読み、gate/frame/course family の second child になりうるかを判定する
+3. `course_baseline_race_pace_front3f` / `course_baseline_race_pace_back3f` pair は `non_null_ratio=0.08897` で low coverage reject と確定したため、再開時は別 family を含めて 1 measurable hypothesis を切り直す
 
 Latest combo track-distance selective read:
 
@@ -167,8 +167,7 @@ Latest combo track-distance role split:
 
 Current active issue:
 
-- JRA 本線の active issue は `#118`
-- <https://github.com/Npieju/nr-learn/issues/118>
+- JRA 本線の active issue は空である
 - latest completed JRA issue は `#117`
 - <https://github.com/Npieju/nr-learn/issues/117>
 - latest completed role split は `#115`
@@ -176,12 +175,12 @@ Current active issue:
 
 Current active read:
 
-1. current active JRA issue は `#118` gate-frame-course pace decomposition selective child read である
-2. hypothesis は `course_baseline_race_pace_balance_3f` 単体 child の再実行ではなく、`course_baseline_race_pace_front3f` / `course_baseline_race_pace_back3f` の pair を narrow selective child として独立に読むことである
-3. rationale は、gate/frame/course family の first child は formal `pass / promote` でも actual-date role が compare reference に留まり、front/back 分解はまだ independent issue として未評価だからである
-4. first execution は heavy compare ではなく feature-gap / coverage read から始める
-5. `#117` で strict policy anchor は `r20260329_tighter_policy_ratio003_abs90` に維持されたため、same-family threshold narrowing は reopen しない
-6. したがって current next move は gate/frame/course family の second child hypothesis を 1 issue で検証し、buildable / no-op / rerun-worthy のいずれかへ固定することである
+1. latest completed JRA feature issue は `#118` gate-frame-course pace decomposition selective child read である
+2. first read では `course_baseline_race_pace_front3f` / `course_baseline_race_pace_back3f` の pair を current high-coverage baseline 上で feature-gap だけ確認した
+3. result は `priority_missing_raw_columns=[]`, `missing_force_include_features=[]` だが、`low_coverage_force_include_features=['course_baseline_race_pace_back3f', 'course_baseline_race_pace_front3f']` だった
+4. focal pair の `non_null_ratio` は両方とも `0.08897` で、current high-coverage line の first gate を通さない
+5. completed decision は `#118` を low coverage reject で close し、gate/frame/course family の次 child hypothesis は別軸で切り直すことである
+6. したがって current next move は same-family pace decomposition の継続ではなく、別の 1 measurable hypothesis を再選定することである
 
 Blocked parallel track:
 

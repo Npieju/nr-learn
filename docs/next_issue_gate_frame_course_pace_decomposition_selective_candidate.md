@@ -91,3 +91,41 @@ tracked config:
 - current queue は「`abs90` anchor を reference に据えた別 hypothesis を 1 issue で切り直す」段階である
 - existing draft library の多くは historical close 済みで、未読かつ builder-ready な JRA child hypothesis が必要
 - course-conditioned pace front/back 分解は、その条件を満たす最小の fresh hypothesis である
+
+## First Read
+
+first read は `configs/data_2025_latest.yaml` の tail `100,000` rows を使って取得した。
+
+- feature-gap:
+   - `artifacts/reports/feature_gap_summary_gate_frame_course_pace_decomposition_selective_v1.json`
+   - `artifacts/reports/feature_gap_feature_coverage_gate_frame_course_pace_decomposition_selective_v1.csv`
+   - `artifacts/reports/feature_gap_raw_column_coverage_gate_frame_course_pace_decomposition_selective_v1.csv`
+- rows evaluated: `100000`
+- selected feature count: `109`
+- categorical feature count: `37`
+- `priority_missing_raw_columns=[]`
+- `missing_force_include_features=[]`
+- `low_coverage_force_include_features=['course_baseline_race_pace_back3f', 'course_baseline_race_pace_front3f']`
+- focal pair:
+   - `course_baseline_race_pace_front3f`
+      - `selected=True`
+      - `present=True`
+      - `non_null_ratio=0.08897`
+      - `status=low_coverage`
+   - `course_baseline_race_pace_back3f`
+      - `selected=True`
+      - `present=True`
+      - `non_null_ratio=0.08897`
+      - `status=low_coverage`
+
+interpretation:
+
+- focal pair は missing ではない
+- ただし current high-coverage line に対しては coverage が薄すぎる
+- `balance_3f` child より sharper hypothesis には見えるが、first gate を通すだけの support がない
+
+## Decision
+
+- gate-frame-course pace decomposition selective candidate は reject
+- `course_baseline_race_pace_front3f` / `course_baseline_race_pace_back3f` を current JRA high-coverage line の次 child に進めない
+- `gate / frame / course` family は引き続き `r20260403_gate_frame_course_regime_extension_v1` を compare reference として保持し、新しい child hypothesis は別軸で切り直す
