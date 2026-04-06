@@ -99,10 +99,10 @@ Latest fallback compare:
 
 Current open-work expectation:
 
-1. JRA 本線の current active issue は `#117` である
-2. 最有力の next JRA hypothesis source は `docs/next_issue_tighter_policy_seasonal_regime_narrowing.md` である
-3. hypothesis は `tighter policy search` family の season-aware narrowing を narrow に読む policy issue である
-4. `gate/frame/course`, `pace/closing-fit`, `kelly runtime`, `class-rest-surface conditional`, `recent-history track-distance`, `deque_trim promotion decision` はこの節では next queue ではなく completed / historical reference として扱う
+1. JRA 本線の current active issue は空である
+2. latest completed JRA policy issue は `#117` であり、`abs90` anchor 維持・`minprob005` / `odds25` reject まで確定した
+3. したがって next JRA move は `abs90` anchor を reference に据えた別 hypothesis を 1 issue で切り直すことである
+4. `gate/frame/course`, `pace/closing-fit`, `kelly runtime`, `class-rest-surface conditional`, `recent-history track-distance`, `deque_trim promotion decision`, `tighter policy seasonal narrowing` はこの節では next queue ではなく completed / historical reference として扱う
 5. `current_sep_guard_candidate` は September seasonal fallback のまま据え置く
 6. NAR side の open issue は `#101`, `#103` のみであり、current JRA queue とは混在させない
 7. `docs/next_issue_nar_class_rest_surface_replay.md` は Stage 2 feature-family parity の future option であり、`#103` の後段に置く
@@ -118,24 +118,17 @@ Historical note:
 
 Primary next issue draft:
 
-- `docs/next_issue_tighter_policy_seasonal_regime_narrowing.md`
-- GitHub issue:
-   - `#117`
-   - <https://github.com/Npieju/nr-learn/issues/117>
-- JRA 本線の再開はこの 1 hypothesis を起点にする
+- current JRA primary next issue draft は未固定である
+- `docs/next_issue_tighter_policy_seasonal_regime_narrowing.md` は `#117` 完了後の historical issue source として保持する
+- JRA 本線の再開は `abs90` anchor を reference に据えた別の 1 measurable hypothesis issue を新規に切ってから進める
 - NAR residual unissued draft library は `docs/next_issue_nar_class_rest_surface_replay.md` のみである
 - ただし NAR residual draft は current next issue ではなく、`#101` と `#103` の後段候補である
 
 Latest next feature queue:
 
-1. JRA 本線の次 issue は `tighter policy search` family の season-aware narrowing とする
-2. issue source:
-   - `docs/next_issue_tighter_policy_seasonal_regime_narrowing.md`
-3. rationale:
-   - feature family の broad widening より execution risk が低い
-   - existing formal support が strongest policy family にある
-   - September downside と December control を 1 issue 1 hypothesis で読み分けられる
-4. 再開時はこの 1 measurable hypothesis だけを GitHub issue に起こす
+1. `#117` 完了により current JRA next issue は再選定待ちである
+2. `tighter policy search` family の season-aware narrowing 自体は close し、strict anchor `abs90` 維持で判断が終わった
+3. 再開時は別 family を含めて 1 measurable hypothesis を切り直す
 
 Latest combo track-distance selective read:
 
@@ -174,21 +167,27 @@ Latest combo track-distance role split:
 
 Current active issue:
 
-- JRA 本線の active issue は `#117`
+- JRA 本線の active issue は空である
+- latest completed JRA issue は `#117`
 - <https://github.com/Npieju/nr-learn/issues/117>
 - latest completed role split は `#115`
 - <https://github.com/Npieju/nr-learn/issues/115>
 
 Current active read:
 
-1. `#117` seasonal regime narrowing on tighter-policy anchor を開始した
+1. latest completed JRA issue は `#117` seasonal regime narrowing on tighter-policy anchor である
 2. first pass threshold sweep では `r20260329_tighter_policy_ratio003_abs90` が依然として strictest defensible `5/5` anchor と再確認された
-3. new frontier read:
-   - `0.03 / 100 -> 4/5 feasible folds`
-   - `0.03 / 90 -> 5/5 feasible folds`
-   - `0.03 / 80 -> 5/5 feasible folds`
-4. dominant blocking reason は引き続き `min_bets` である
-5. したがって current next move は broad frontier reopening ではなく、September / December compare を使った season-aware role read である
+3. second pass seasonal compare では `abs90_minprob005` と `abs90_odds25` の 16-date backtest を集計し、どちらも near-par challenger にはならないと確定した
+4. September same-source compare:
+   - baseline `33 bets / -20.0 / pure bankroll 0.3939`
+   - `abs90_minprob005` `6 bets / -1.3 / 0.7833`
+   - `abs90_odds25` `5 bets / -0.3 / 0.94`
+5. December same-source compare:
+   - baseline `17 bets / -5.2 / pure bankroll 0.6941`
+   - `abs90_minprob005` `4 bets / -4.0 / 0.0 / zero-bet dates 6/8`
+   - `abs90_odds25` `4 bets / -4.0 / 0.0 / zero-bet dates 6/8`
+6. completed decision は `r20260329_tighter_policy_ratio003_abs90` を strictest defensible anchor のまま維持し、`minprob005` / `odds25` は reject することである
+7. したがって current next move は same-family threshold narrowing の継続ではなく、`abs90` anchor を reference に据えた別 hypothesis を 1 issue で切り直すことである
 
 Blocked parallel track:
 

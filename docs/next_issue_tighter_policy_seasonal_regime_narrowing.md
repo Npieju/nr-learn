@@ -226,3 +226,53 @@ current starting baseline for seasonal read:
 next action:
 
 - `abs90` anchor を starting point に維持したまま、September downside control と December carry preservation を criterion にして season-aware compare 候補を narrow に読む
+
+## Seasonal Compare Read
+
+2026-04-06 second pass では、重い再実行を追加せず、既に生成済みの `issue117` backtest artifact を集計して season-aware compare を固定した。
+
+- source:
+  - `artifacts/reports/issue117/seasonal_compare_summary.json`
+- compare basis:
+  - baseline は `artifacts/reports/backtest_<date>_issue117_baseline_<date>.json` の 16 日分
+  - challenger は `artifacts/reports/backtest_<date>_issue117_abs90_minprob005_<date>.json` と `artifacts/reports/backtest_<date>_issue117_abs90_odds25_<date>.json` の 16 日分
+- note:
+  - この read は `issue117` 用に残っていた config-direct backtest 群の相対比較である
+  - `docs/project_overview.md` の baseline / tighter-policy 読みとは source が異なるため、top-line の絶対値は混ぜず、同一 source 内の relative compare だけを判断根拠に使う
+
+September difficult window:
+
+- baseline:
+  - `33 bets / total net -20.0 / pure bankroll 0.3939 / zero-bet dates 0/8`
+- `abs90_minprob005`:
+  - `6 bets / total net -1.3 / pure bankroll 0.7833 / zero-bet dates 4/8`
+- `abs90_odds25`:
+  - `5 bets / total net -0.3 / pure bankroll 0.94 / zero-bet dates 4/8`
+
+December control window:
+
+- baseline:
+  - `17 bets / total net -5.2 / pure bankroll 0.6941 / zero-bet dates 2/8`
+- `abs90_minprob005`:
+  - `4 bets / total net -4.0 / pure bankroll 0.0 / zero-bet dates 6/8`
+- `abs90_odds25`:
+  - `4 bets / total net -4.0 / pure bankroll 0.0 / zero-bet dates 6/8`
+
+interpretation:
+
+- `minprob005` と `odds25` はどちらも September downside を縮めるが、改善の大部分は exposure compression に依存している
+- December control では 2 variant とも `6/8` zero-bet dates まで縮み、carry preservation を満たさない
+- `odds25` は September の same-source relative compare では `minprob005` よりわずかに良いが、December profile は同一であり、strict anchor を更新する理由にならない
+
+## Final Decision
+
+- `r20260329_tighter_policy_ratio003_abs90` を strictest defensible anchor のまま維持する
+- `abs90_minprob005` は reject する
+- `abs90_odds25` も reject する
+- current judgment は `season-aware narrowing failed to produce a keep-worthy near-par challenger` である
+
+reason:
+
+- September difficult window での net 改善は確認できるが、bet suppression が強すぎる
+- December control window で carry preservation を示せない
+- したがって next move は same-family threshold narrowing の継続ではなく、`abs90` anchor を reference に据えた別 hypothesis へ戻すことである
