@@ -17,3 +17,7 @@
 - review で繰り返し出る指摘は、その場限りで済ませず docs / instructions / tests に昇格する。
 - 短窓の良い結果だけで promote しない。formal gate と artifact を優先する。
 - デフォルトブランチへ直接反映する前に、必ず差分とリスクを明文化する。
+- Git の更新を長く滞らせない。同じ変更単位の code / config / script / docs は意味のある小さめの batch にまとめ、issue の進捗と乖離しないタイミングで commit / push する。
+- Pylance の code snippet execution は軽い probe / 集計 / 単発確認に限る。train / evaluate / revision gate / serving compare / backfill / multi-date replay などの重い Python script を Pylance で回さない。
+- 重い Python script を実行するときは、先に workspace の Python environment を整えたうえで terminal 実行に切り替え、必ず外部ログファイルを残す。script 自身に `--log-file` があればそれを使い、無ければ shell redirect や `tee` で `artifacts/logs/...` に保存し、その path をユーザーへ明示する。
+- Python 実行が import / interpreter / package / environment 起因で落ちた場合は、すぐ別手段へ迂回せず、まず Python environment を修復・確認する。少なくとも interpreter、主要 package、実行コマンドを確認してから再実行する。

@@ -14,6 +14,7 @@ import pandas as pd
 from sklearn.metrics import log_loss, roc_auc_score
 
 ROOT = Path(__file__).resolve().parents[1]
+NO_MODEL_ARTIFACT_SUFFIX = "__NO_MODEL_ARTIFACT_SUFFIX__"
 SRC = ROOT / "src"
 if str(SRC) not in sys.path:
     sys.path.append(str(SRC))
@@ -553,13 +554,18 @@ def main() -> int:
         model_cfg = load_yaml(ROOT / model_config_path)
         data_cfg = load_yaml(ROOT / data_config_path)
         feature_cfg = load_yaml(ROOT / feature_config_path)
+        explicit_no_model_artifact_suffix = args.model_artifact_suffix == NO_MODEL_ARTIFACT_SUFFIX
+        resolved_model_artifact_suffix = args.model_artifact_suffix
+        if explicit_no_model_artifact_suffix:
+            resolved_model_artifact_suffix = None
+
         progress = ProgressBar(total=9, prefix="[evaluate]", logger=log_progress, min_interval_sec=0.0)
         progress.start(
             message=(
                 f"configs loaded profile={resolved_profile or 'custom'} config={model_config_path} "
                 f"data_config={data_config_path} feature_config={feature_config_path} "
                 f"artifact_suffix={args.artifact_suffix or 'none'} "
-                f"model_artifact_suffix={args.model_artifact_suffix or args.artifact_suffix or 'none'}"
+                f"model_artifact_suffix={resolved_model_artifact_suffix if not explicit_no_model_artifact_suffix else 'none'}"
             )
         )
 
@@ -584,7 +590,7 @@ def main() -> int:
         output_artifacts = resolve_output_artifacts(output_cfg)
 
         load_output_cfg = dict(model_cfg.get("output", {}))
-        load_artifact_suffix = args.model_artifact_suffix or args.artifact_suffix
+        load_artifact_suffix = None if explicit_no_model_artifact_suffix else (resolved_model_artifact_suffix or args.artifact_suffix)
         if load_artifact_suffix:
             load_output_cfg["model_file"] = append_suffix_to_file_name(
                 str(load_output_cfg.get("model_file", "baseline_model.joblib")),
@@ -793,7 +799,7 @@ def main() -> int:
             "categorical_feature_count": int(len(feature_selection.categorical_columns)),
             "score_source_count": int(len(prediction_sources)),
             "artifact_suffix": args.artifact_suffix,
-            "model_artifact_suffix": args.model_artifact_suffix or args.artifact_suffix,
+            "model_artifact_suffix": None if explicit_no_model_artifact_suffix else (resolved_model_artifact_suffix or args.artifact_suffix),
             "artifact_manifest": load_artifacts.manifest_path.as_posix() if (ROOT / load_artifacts.manifest_path).exists() else None,
         }
         summary["feature_coverage"] = feature_coverage

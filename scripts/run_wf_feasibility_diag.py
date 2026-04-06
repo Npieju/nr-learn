@@ -13,6 +13,7 @@ import joblib
 import pandas as pd
 
 ROOT = Path(__file__).resolve().parents[1]
+NO_MODEL_ARTIFACT_SUFFIX = "__NO_MODEL_ARTIFACT_SUFFIX__"
 SRC = ROOT / "src"
 if str(SRC) not in sys.path:
     sys.path.append(str(SRC))
@@ -23,6 +24,7 @@ from racing_ml.common.artifacts import ensure_output_file_path as artifact_ensur
 from racing_ml.common.artifacts import resolve_output_artifacts
 from racing_ml.common.artifacts import write_csv_file, write_text_file
 from racing_ml.common.config import load_yaml
+from racing_ml.common.model_profiles import format_model_run_profiles, resolve_model_run_profile
 from racing_ml.common.progress import Heartbeat, ProgressBar
 from racing_ml.data.dataset_loader import load_training_table_for_feature_build
 from racing_ml.evaluation.policy import (
@@ -700,6 +702,7 @@ def _summarize_fold_candidates(
 
 def main() -> int:
     parser = argparse.ArgumentParser()
+    parser.add_argument("--profile", default=None, help="Named model run profile. Available:\n" + format_model_run_profiles())
     parser.add_argument("--config", default="configs/model_catboost_value_stack_lgbm_roi_high_coverage_diag.yaml")
     parser.add_argument("--data-config", default="configs/data.yaml")
     parser.add_argument("--feature-config", default="configs/features_catboost_rich_high_coverage_diag.yaml")
@@ -718,15 +721,21 @@ def main() -> int:
 
     try:
         progress = ProgressBar(total=6, prefix="[wf-feasibility]", logger=log_progress, min_interval_sec=0.0)
-        model_cfg = load_yaml(ROOT / args.config)
-        data_cfg = load_yaml(ROOT / args.data_config)
-        feature_cfg = load_yaml(ROOT / args.feature_config)
+        resolved_profile, config_path, data_config_path, feature_config_path = resolve_model_run_profile(
+            args.profile,
+            default_model_config=args.config,
+            default_data_config=args.data_config,
+            default_feature_config=args.feature_config,
+        )
+        model_cfg = load_yaml(ROOT / config_path)
+        data_cfg = load_yaml(ROOT / data_config_path)
+        feature_cfg = load_yaml(ROOT / feature_config_path)
         dataset_cfg = data_cfg.get("dataset", {})
         label_col = str(model_cfg.get("label", "is_win"))
         evaluation_cfg = model_cfg.get("evaluation", {})
         search_config = evaluation_cfg.get("policy_search", {})
         constraints = PolicyConstraints.from_config(evaluation_cfg)
-        progress.start(message="configs loaded")
+        progress.start(message=f"configs loaded profile={resolved_profile or 'custom'}")
 
         print("[wf-feasibility] loading training table")
         with Heartbeat("[wf-feasibility]", "loading training table", logger=log_progress):
@@ -753,6 +762,11 @@ def main() -> int:
         frame = _filter_frame_by_date_window(frame, start_date=args.start_date, end_date=args.end_date)
         progress.update(message=f"features ready rows={len(frame):,}")
 
+        explicit_no_model_artifact_suffix = args.model_artifact_suffix == NO_MODEL_ARTIFACT_SUFFIX
+        resolved_model_artifact_suffix = args.model_artifact_suffix
+        if explicit_no_model_artifact_suffix:
+            resolved_model_artifact_suffix = None
+
         output_cfg = dict(model_cfg.get("output", {}))
         if args.artifact_suffix:
             output_cfg["model_file"] = append_suffix_to_file_name(
@@ -762,7 +776,7 @@ def main() -> int:
         output_artifacts = resolve_output_artifacts(output_cfg)
 
         load_output_cfg = dict(model_cfg.get("output", {}))
-        load_artifact_suffix = args.model_artifact_suffix or args.artifact_suffix
+        load_artifact_suffix = None if explicit_no_model_artifact_suffix else (resolved_model_artifact_suffix or args.artifact_suffix)
         if load_artifact_suffix:
             load_output_cfg["model_file"] = append_suffix_to_file_name(
                 str(load_output_cfg.get("model_file", "baseline_model.joblib")),
@@ -868,7 +882,7 @@ def main() -> int:
         report_dir.mkdir(parents=True, exist_ok=True)
         summary_path, detail_path = _resolve_feasibility_output_paths(
             report_dir=report_dir,
-            config_path=args.config,
+            config_path=config_path,
             model_path=model_path,
             wf_mode=args.wf_mode,
             wf_scheme=args.wf_scheme,
@@ -882,9 +896,10 @@ def main() -> int:
 
         summary_payload = {
             "run_context": {
-                "config": str(args.config),
-                "data_config": str(args.data_config),
-                "feature_config": str(args.feature_config),
+                "profile": resolved_profile,
+                "config": str(config_path),
+                "data_config": str(data_config_path),
+                "feature_config": str(feature_config_path),
                 "loaded_rows": loaded_rows,
                 "data_load_strategy": data_load_strategy,
                 "primary_source_rows_total": int(primary_source_rows_total) if primary_source_rows_total is not None else None,
@@ -899,7 +914,7 @@ def main() -> int:
                 "feature_count": int(len(feature_selection.feature_columns)),
                 "categorical_feature_count": int(len(feature_selection.categorical_columns)),
                 "artifact_suffix": str(args.artifact_suffix or ""),
-                "model_artifact_suffix": str(args.model_artifact_suffix or args.artifact_suffix or ""),
+                "model_artifact_suffix": str("" if explicit_no_model_artifact_suffix else (resolved_model_artifact_suffix or args.artifact_suffix or "")),
                 "model_path": artifact_display_path(model_path, workspace_root=ROOT),
             },
             "policy_constraints": constraints.to_dict(),

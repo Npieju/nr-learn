@@ -1,5 +1,10 @@
 # Next Issue: Feature Builder History Runtime
 
+Historical note:
+
+- この draft は `#17` として runtime 改善まで完了している。
+- feature builder history runtime は completed runtime reference として扱い、この文書は historical issue source / implementation reference として使う。
+
 ## GitHub Issue
 
 - `#17`

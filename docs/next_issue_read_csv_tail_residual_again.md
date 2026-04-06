@@ -1,5 +1,10 @@
 # Next Issue: `read_csv_tail` Residual After Append Wrap-Up
 
+Historical note:
+
+- この draft は `#35` として residual decision まで完了している。
+- `read_csv_tail` residual after append wrap-up は completed runtime reference として扱い、この文書は historical issue source / profiling reference として使う。
+
 ## Summary
 
 `#34` では append parser residual を parser option レベルで切り分けたが、current mainline に勝つ narrow exact-safe candidate は見つからなかった。

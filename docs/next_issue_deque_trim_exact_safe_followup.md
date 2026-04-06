@@ -1,5 +1,10 @@
 # Next Issue: Deque Trim Exact-Safe Follow-Up
 
+Historical note:
+
+- この draft は `#116` の decision により superseded されている。
+- `deque_trim` は `analysis-only retention` に固定され、専用の exact-safe follow-up issue は起こさない判断が確定したため、この文書は historical exploration reference として使う。
+
 ## Summary
 
 `#20` の結論として、`deque_trim` は 2026-03-29 時点では `canonical` pass / `exact` fail の candidate であり、analysis-only に据え置く。

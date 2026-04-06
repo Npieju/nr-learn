@@ -1,5 +1,10 @@
 # Next Issue: Supplemental Dominant Phase Revisit
 
+Historical note:
+
+- この draft は `#28` として dominant-phase revisit の decision まで完了している。
+- supplemental dominant phase revisit は completed runtime reference として扱い、この文書は historical issue source / artifact reference として使う。
+
 ## Summary
 
 `#27` の revisit で、`_read_csv_tail` の known exact-safe candidate は current mainline にほぼ吸収済みだと確認できた。`compact_reset_late`, `compact_iterable`, `single_chunk_fastpath` はすべて tail equivalence exact gate を通ったが、source diff と repeated A/B の読みでは meaningful remaining gap は見えない。

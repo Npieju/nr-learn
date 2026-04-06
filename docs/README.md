@@ -42,6 +42,8 @@ progress 不足の棚卸しは [progress_coverage_audit.md](progress_coverage_au
 
 現在 GitHub に起こすべき案件の直近キューは [github_issue_queue_current.md](github_issue_queue_current.md) を使う。
 
+2026-04-05 時点では、active queue は [github_issue_queue_current.md](github_issue_queue_current.md) の `3.0` と `Execution Order` を正本にする。以下に並ぶ `next_issue_*.md` は draft/reference library を多く含むため、そのまま current priority と読まず、issue 化する 1 hypothesis だけを queue から選ぶ。
+
 ML モデル開発プロセスを迷わず進めるには、[ml_model_development_standard.md](ml_model_development_standard.md) を正本として使う。
 
 `ROI > 1.20` の success 条件を参照するときは、[roi120_kpi_definition.md](roi120_kpi_definition.md) を使う。
@@ -54,11 +56,11 @@ feature 実験の優先順位づけには [feature_family_ranking.md](feature_fa
 
 policy 実験の優先順位づけには [policy_family_shortlist.md](policy_family_shortlist.md) を使う。
 
-次の policy 本線 issue 下書きは [next_issue_kelly_runtime_family.md](next_issue_kelly_runtime_family.md) を使う。
+policy family の draft library を参照するときは [next_issue_kelly_runtime_family.md](next_issue_kelly_runtime_family.md) を使う。
 
 class / rest / surface conditional selective line の actual-date role split 結果は [next_issue_class_rest_surface_conditional_actual_date_role_split.md](next_issue_class_rest_surface_conditional_actual_date_role_split.md) を使う。
 
-次の最有力 experiment の実務下書きは [next_issue_tighter_policy_frontier.md](next_issue_tighter_policy_frontier.md) を使う。
+legacy frontier draft を参照するときは [next_issue_tighter_policy_frontier.md](next_issue_tighter_policy_frontier.md) を使う。
 
 revision gate 前の確認には [revision_gate_candidate_checklist.md](revision_gate_candidate_checklist.md) を使う。
 
@@ -114,9 +116,10 @@ pace / closing-fit selective replay の formal read は [next_issue_pace_closing
 pace / closing-fit selective line の September fallback compare は [next_issue_pace_closing_fit_september_fallback_compare.md](next_issue_pace_closing_fit_september_fallback_compare.md) を使う。
 tighter policy の September fallback ordering を再確認するときは [next_issue_tighter_policy_september_fallback_compare.md](next_issue_tighter_policy_september_fallback_compare.md) を使う。
 JRA baseline に対する owner signal の marginal contribution を切り分けるときは [next_issue_owner_signal_ablation_audit.md](next_issue_owner_signal_ablation_audit.md) を使う。
-recent form / history family の narrow child を再開するときは [next_issue_recent_history_track_distance_selective_candidate.md](next_issue_recent_history_track_distance_selective_candidate.md) を使う。
+owner signal ablation は hold decision まで読了済みなので、同文書は historical decision reference として扱う。
+recent form / history family の narrow child は `#96` / `#97` まで完了しているため、[next_issue_recent_history_track_distance_selective_candidate.md](next_issue_recent_history_track_distance_selective_candidate.md) は historical issue source として扱う。
 recent form / history track-distance child の role decision は [next_issue_recent_history_track_distance_actual_date_role_split.md](next_issue_recent_history_track_distance_actual_date_role_split.md) を使う。
-次の JRA feature hypothesis は [next_issue_jockey_trainer_combo_track_distance_selective_candidate.md](next_issue_jockey_trainer_combo_track_distance_selective_candidate.md) を使う。
+current active JRA feature issue は空で、latest completed role split source は [next_issue_jockey_trainer_combo_style_distance_actual_date_role_split.md](next_issue_jockey_trainer_combo_style_distance_actual_date_role_split.md) である。
 NAR の `odds / popularity` provenance を監査するときは [next_issue_nar_odds_provenance_audit.md](next_issue_nar_odds_provenance_audit.md) を使う。
 NAR market columns を provenance 付きで rebuild するときは [next_issue_nar_timestamped_odds_rebuild.md](next_issue_nar_timestamped_odds_rebuild.md) を使う。
 strict `pre_race_only` subset で NAR benchmark を読み直す次段は [next_issue_nar_pre_race_only_benchmark_rebuild.md](next_issue_nar_pre_race_only_benchmark_rebuild.md) を使う。
@@ -126,8 +129,9 @@ bounded repeated recrawl と pass snapshot は `run_local_nankan_pre_race_captur
 NAR を JRA と同水準の model-development surface へ上げる issue ladder は [nar_jra_parity_issue_ladder.md](nar_jra_parity_issue_ladder.md) を使う。
 post-readiness の first architecture parity issue は [next_issue_nar_value_blend_architecture_bootstrap.md](next_issue_nar_value_blend_architecture_bootstrap.md) を使う。
 result-ready 到着後の `#101 -> #103` resume orchestration は [next_issue_nar_result_ready_bootstrap_handoff.md](next_issue_nar_result_ready_bootstrap_handoff.md) を使う。
-result 到着だけを side-effect なしで監視するときは [next_issue_nar_pre_race_readiness_probe.md](next_issue_nar_pre_race_readiness_probe.md) を使う。
-probe を bounded polling し、`ready` なら handoff を起動する next step は [next_issue_nar_readiness_watcher_handoff.md](next_issue_nar_readiness_watcher_handoff.md) を使う。
+result 到着だけを side-effect なしで監視する operator reference は [next_issue_nar_pre_race_readiness_probe.md](next_issue_nar_pre_race_readiness_probe.md) を使う。
+probe を bounded polling し、`ready` なら handoff を起動する operator reference は [next_issue_nar_readiness_watcher_handoff.md](next_issue_nar_readiness_watcher_handoff.md) を使う。
+ただし current blocker を読む一次参照は `local_nankan_data_status_board.json` であり、coverage/backfill だけでなく probe / handoff / watcher の readiness surface もここにまとめて読む。
 
 tail loader optimization の gate 運用は [tail_loader_equivalence_gate_standard.md](tail_loader_equivalence_gate_standard.md) を使う。
 

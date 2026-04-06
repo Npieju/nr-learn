@@ -1,5 +1,10 @@
 # Next Issue: NAR Policy Optimism Audit
 
+Historical note:
+
+- この draft は `#70` として optimism diagnosis まで完了している。
+- NAR policy optimism audit は completed diagnostic reference として扱い、この文書は historical issue source / artifact reference として使う。
+
 ## Summary
 
 `#69` の evaluation integrity audit で、local Nankan line の高 AUC / 高 EV ROI の大部分は `odds / popularity` 依存であることが確認できた。一方で no-market ablation でも policy 自体は成立したため、残る主論点は `promotion / wf_feasibility` 側の optimism である。

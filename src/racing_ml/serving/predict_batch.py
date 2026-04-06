@@ -20,7 +20,7 @@ from racing_ml.data.dataset_loader import load_training_table
 from racing_ml.evaluation.scoring import generate_prediction_outputs, predict_target_values, prepare_scored_frame, resolve_odds_column
 from racing_ml.features.builder import build_features
 from racing_ml.features.selection import prepare_model_input_frame, resolve_feature_selection, resolve_model_feature_selection
-from racing_ml.serving.runtime_policy import annotate_runtime_policy, resolve_runtime_policy
+from racing_ml.serving.runtime_policy import annotate_runtime_policy, resolve_runtime_policy, summarize_policy_diagnostics
 
 
 def log_progress(message: str) -> None:
@@ -264,6 +264,8 @@ def run_predict_from_frame(
         "policy_stage_index",
         "policy_stage_trace",
         "policy_stage_fallback_reasons",
+        "policy_reject_reason_primary",
+        "policy_reject_reasons",
         "policy_selected_strategy_kind",
         "policy_selected",
         "policy_selection_rank",
@@ -307,6 +309,7 @@ def run_predict_from_frame(
         output = pred_frame[columns].sort_values(["race_id", "pred_rank"]).reset_index(drop=True)
         write_csv_file(csv_path, output, index=False, label="prediction output")
         _plot_predictions(output, png_path)
+        policy_diagnostics = summarize_policy_diagnostics(output) if "policy_selected" in output.columns else None
         prediction_summary = {
             "profile": profile_name,
             "target_date": str(pd.Timestamp(target_date).date()),
@@ -318,6 +321,7 @@ def run_predict_from_frame(
             "policy_name": policy_name,
             "policy_strategy_kind": policy_strategy_kind,
             "policy_selected_rows": int(output["policy_selected"].fillna(False).sum()) if "policy_selected" in output.columns else 0,
+            "policy_diagnostics": policy_diagnostics,
             "records": int(len(output)),
             "num_races": int(output["race_id"].nunique()),
             "manifest_file": _display_path(manifest_path, workspace_root) if manifest_path.exists() else None,

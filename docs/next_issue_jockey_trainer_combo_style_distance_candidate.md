@@ -1,5 +1,10 @@
 # Next Issue: Jockey Trainer Combo Style-Distance Candidate
 
+Historical note:
+
+- この hypothesis は `#108` として formal `pass / promote` まで完了している。
+- current active issue は `#115` の actual-date role split であり、この文書は historical issue source / artifact reference として使う。
+
 ## Summary
 
 `jockey / trainer / combo` family は Tier A 次順位で、current strong family に一貫して残っている。
@@ -116,18 +121,23 @@ summary:
 
 - `priority_missing_raw_columns=[]`
 - `missing_force_include_features=[]`
+- `empty_force_include_features=[]`
 - `low_coverage_force_include_features=[]`
+- `template_columns_present=32/32`
+- `force_include_total=42`
+- `selected_feature_count=109`
+- `categorical_feature_count=37`
 
 focal 8 features:
 
-- `jockey_last_30_avg_corner_gain_2_to_4`: `selected=True`, `present=True`, `non_null_ratio=0.92175`
-- `trainer_last_30_avg_corner_gain_2_to_4`: `selected=True`, `present=True`, `non_null_ratio=0.92134`
-- `jockey_last_30_avg_closing_time_3f`: `selected=True`, `present=True`, `non_null_ratio=0.92171`
-- `trainer_last_30_avg_closing_time_3f`: `selected=True`, `present=True`, `non_null_ratio=0.92133`
-- `jockey_track_distance_last_50_win_rate`: `selected=True`, `present=True`, `non_null_ratio=0.92386`
-- `jockey_track_distance_last_50_avg_rank`: `selected=True`, `present=True`, `non_null_ratio=0.92386`
-- `trainer_track_distance_last_50_win_rate`: `selected=True`, `present=True`, `non_null_ratio=0.92386`
-- `trainer_track_distance_last_50_avg_rank`: `selected=True`, `present=True`, `non_null_ratio=0.92386`
+- `jockey_last_30_avg_corner_gain_2_to_4`: `selected=True`, `present=True`, `non_null_ratio=0.98734`
+- `trainer_last_30_avg_corner_gain_2_to_4`: `selected=True`, `present=True`, `non_null_ratio=0.98817`
+- `jockey_last_30_avg_closing_time_3f`: `selected=True`, `present=True`, `non_null_ratio=0.99629`
+- `trainer_last_30_avg_closing_time_3f`: `selected=True`, `present=True`, `non_null_ratio=0.99501`
+- `jockey_track_distance_last_50_win_rate`: `selected=True`, `present=True`, `non_null_ratio=1.0`
+- `jockey_track_distance_last_50_avg_rank`: `selected=True`, `present=True`, `non_null_ratio=1.0`
+- `trainer_track_distance_last_50_win_rate`: `selected=True`, `present=True`, `non_null_ratio=1.0`
+- `trainer_track_distance_last_50_avg_rank`: `selected=True`, `present=True`, `non_null_ratio=1.0`
 
 current read:
 
@@ -141,9 +151,9 @@ current read:
   - `artifacts/reports/train_metrics_catboost_win_high_coverage_diag_r20260404_jockey_trainer_combo_style_distance_selective_v1.json`
   - `artifacts/models/catboost_win_high_coverage_diag_model.manifest_r20260404_jockey_trainer_combo_style_distance_selective_v1.json`
 - train metrics:
-  - `auc=0.8345232157261651`
-  - `logloss=0.20221578593508155`
-  - `best_iteration=548`
+  - `auc=0.8397296191222723`
+  - `logloss=0.2027975460526154`
+  - `best_iteration=531`
 - selected features:
   - `109`
 - focal 8 features は actual used set に全て入った
@@ -159,8 +169,8 @@ current judgment:
   - `artifacts/reports/train_metrics_lightgbm_roi_high_coverage_diag_r20260404_jockey_trainer_combo_style_distance_selective_v1.json`
   - `artifacts/models/lightgbm_roi_high_coverage_diag_model.manifest_r20260404_jockey_trainer_combo_style_distance_selective_v1.json`
 - train metrics:
-  - `top1_roi=0.7817685589519648`
-  - `best_iteration=197`
+  - `top1_roi=0.9386975397973951`
+  - `best_iteration=66`
 - selected features:
   - `109`
 - focal 8 features は ROI actual used set に全て入った
@@ -174,4 +184,34 @@ stack configs:
 current judgment:
 
 - selective child は win / ROI の両 component で no-op ではない
-- 次段は stack build
+- stack build は完了した
+- 次段は formal compare
+
+## Final Read
+
+- revision:
+  - `r20260404_jockey_trainer_combo_style_distance_selective_v1`
+- evaluation summary:
+  - `artifacts/reports/evaluation_summary_catboost_value_stack_lgbm_roi_high_coverage_tune_roi012_liquidity_regime_hybrid_model_r20260404_jockey_trainer_combo_style_distance_selective_v1_r20260404_jockey_trainer_combo_style_distance_selective_v1_wf_full_nested.json`
+  - `auc=0.8377559190837222`
+  - `top1_roi=0.8022312793589389`
+  - `ev_top1_roi=0.7669936446532192`
+  - `wf_nested_test_roi_weighted=1.168363624344555`
+  - `wf_nested_test_bets_total=966`
+- promotion / formal:
+  - `artifacts/reports/promotion_gate_r20260404_jockey_trainer_combo_style_distance_selective_v1.json`
+  - `status=pass`
+  - `decision=promote`
+  - held-out formal `weighted_roi=1.023657866236539`
+  - `formal_benchmark_bets_total=1040`
+  - `formal_benchmark_feasible_fold_count=4`
+
+current judgment:
+
+- `style + track-distance` selective child は formal candidate として成立した
+- `jockey / trainer / combo` family の richer side は no-op ではなく、support も極端には崩れていない
+- 次段は actual-date role split を別 issue として切り、operational role を固定する
+
+next execution source:
+
+- `docs/next_issue_jockey_trainer_combo_style_distance_actual_date_role_split.md`

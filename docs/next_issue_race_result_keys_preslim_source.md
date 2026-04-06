@@ -1,5 +1,10 @@
 # Next Issue: Pre-Slim Race-Result-Keys Source Candidate
 
+Historical note:
+
+- この draft は `#31` として pre-slim race-result-keys source evaluation まで完了している。
+- pre-slim race-result-keys source candidate は completed runtime reference として扱い、この文書は historical issue source / artifact reference として使う。
+
 ## Summary
 
 `#30` で `netkeiba_race_card` の pre-slim / materialized source は default 昇格に到達した。これにより supplemental residual の主対象は次に `netkeiba_race_result_keys` 側へ移る。

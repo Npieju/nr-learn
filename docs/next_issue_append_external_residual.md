@@ -1,5 +1,10 @@
 # Next Issue: Append-External Residual Reduction
 
+Historical note:
+
+- この draft は `#25` として exact-safe residual cut まで完了している。
+- append-external residual reduction は completed runtime reference として扱い、この文書は historical issue source / artifact reference として使う。
+
 ## Summary
 
 `#24` では `_ensure_minimum_columns` に対して 2 本の exact-safe cut を landing できた。

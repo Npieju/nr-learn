@@ -1,5 +1,10 @@
 # Next Issue: Pre-Slim Race-Card Source Candidate
 
+Historical note:
+
+- この draft は `#30` として pre-slim race-card source evaluation まで完了している。
+- pre-slim race-card source candidate は completed runtime reference として扱い、この文書は historical issue source / artifact reference として使う。
+
 ## Summary
 
 `#29` で `netkeiba_race_card` residual を parser / pre-read に切り分けた結果、残差の本体は parser 側だと分かった。一方で、small exact-safe parser tweak は durable win にならなかった。

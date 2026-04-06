@@ -1,5 +1,10 @@
 # Next Issue: Post-Runtime Benchmark Refresh And Experiment Reentry
 
+Historical note:
+
+- この draft は `#39` として完了している。
+- runtime queue から experiment-first queue への handoff は完了済みであり、この文書は historical issue source として使う。
+
 ## Summary
 
 runtime queue で primary tail cache まで default mainline に昇格したので、次は速度改善後の土台で benchmark refresh と experiment queue を再開する段階に戻る。

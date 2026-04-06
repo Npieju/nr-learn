@@ -1,5 +1,10 @@
 # Next Issue: Supplemental Merge Residual Reduction
 
+Historical note:
+
+- この draft は `#23` として exact-safe residual cut の landing まで完了している。
+- supplemental merge residual reduction は completed runtime reference として扱い、この文書は historical issue source / artifact reference として使う。
+
 ## Summary
 
 `#22` の profiling で、`tail_training_table` loading の residual は次の順に大きいと分かった。

@@ -1,5 +1,10 @@
 # Next Issue: Class Rest Surface Interaction Strengthening
 
+Historical note:
+
+- この draft は `#41` として first interaction candidate の execution まで完了している。
+- class-rest-surface interaction strengthening は completed feature reference として扱い、この文書は historical issue source / artifact reference として使う。
+
 ## Summary
 
 `#40` で runtime 後の experiment queue を `tighter policy search` に戻して artifact を読み直した結果、same-family widening をさらに続ける理由は弱いと判断した。次の primary experiment line は、feature ranking の Tier A / Rank 1 である `class / rest / surface change` family に移す。

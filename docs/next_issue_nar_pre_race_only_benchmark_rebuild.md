@@ -29,6 +29,24 @@ if strict `pre_race_only` subset だけで local Nankan raw / primary / evaluati
 - ただし現状の benchmark run は `unknown` を大量に含む historical raw を前提にしている
 - したがって次に必要なのは collector corrective ではなく subset rebuild と benchmark rerun である
 
+blocked 中の canonical read は次である。
+
+- board:
+  - [local_nankan_data_status_board.json](/workspaces/nr-learn/artifacts/reports/local_nankan_data_status_board.json)
+- primary fields:
+  - `status`
+  - `current_phase`
+  - `recommended_action`
+  - `readiness_surfaces.readiness_probe`
+  - `readiness_surfaces.pre_race_handoff`
+  - `readiness_surfaces.bootstrap_handoff`
+  - `readiness_surfaces.readiness_watcher`
+
+rule:
+
+- board が `status=partial`, `current_phase=await_result_arrival` の間は `#101` は external result arrival 待ちのままと読む
+- detail が必要なときだけ、この文書の個別 manifest / smoke artifact に降りる
+
 ## In Scope
 
 - `src/racing_ml/data/local_nankan_provenance.py`
@@ -164,6 +182,31 @@ meaning:
 - result-ready race がまだ無い状態でも、wrapper は bounded timeout で止まる
 - silent wait のまま無制限に走らない
 - `#101` の残差は result arrival 後の first benchmark rerun だけである
+
+## Current Canonical Read
+
+current canonical board read:
+
+- `status=partial`
+- `current_phase=await_result_arrival`
+- `recommended_action=wait_for_result_ready_pre_race_races`
+- readiness probe:
+  - `result_ready_races=0`
+  - `pending_result_races=24`
+  - `race_card_rows=562`
+- pre-race handoff:
+  - `status=not_ready`
+- bootstrap handoff:
+  - `status=not_ready`
+- readiness watcher:
+  - `status=not_ready`
+  - `attempts=2`
+  - `timed_out=true`
+
+meaning:
+
+- `#101` は依然として external result arrival のみで blocked している
+- `#103` も同じ readiness 条件の後段 blocker として維持する
 
 ## Stop Condition
 

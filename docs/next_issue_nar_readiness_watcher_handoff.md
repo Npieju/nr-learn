@@ -1,5 +1,10 @@
 # Next Issue: NAR Readiness Watcher Handoff
 
+Historical note:
+
+- この draft は `#106` として close 条件を満たしている。
+- bounded watcher handoff は completed orchestration reference として扱い、この文書は historical issue source / operator reference として使う。
+
 ## Summary
 
 `#105` で read-only readiness probe、`#104` で result-ready bootstrap handoff は揃った。残る gap は、人手で probe を回して `ready` を見つけたあとに handoff を起動する運用だけである。

@@ -8,6 +8,141 @@ from racing_ml.common.regime import resolve_regime_override
 from racing_ml.evaluation.policy import blend_prob, compute_market_prob
 
 
+def _append_reject_reason(reject_reasons: dict[Any, list[str]], indexer: pd.Index, reason: str) -> None:
+    for index in indexer:
+        reject_reasons[index].append(reason)
+
+
+def _finalize_reject_reason_columns(
+    annotated: pd.DataFrame,
+    reject_reasons: dict[Any, list[str]],
+) -> pd.DataFrame:
+    primary_values: list[object] = []
+    all_values: list[object] = []
+    for index in annotated.index:
+        reasons = reject_reasons.get(index, [])
+        if reasons:
+            primary_values.append(reasons[0])
+            all_values.append("|".join(reasons))
+        else:
+            primary_values.append(pd.NA)
+            all_values.append(pd.NA)
+    annotated["policy_reject_reason_primary"] = pd.Series(primary_values, index=annotated.index, dtype="object")
+    annotated["policy_reject_reasons"] = pd.Series(all_values, index=annotated.index, dtype="object")
+    return annotated
+
+
+def _split_reason_tokens(value: object) -> list[str]:
+    if value is None or pd.isna(value):
+        return []
+    return [token for token in str(value).split("|") if token]
+
+
+def summarize_policy_diagnostics(frame: pd.DataFrame) -> dict[str, Any]:
+    selected_mask = frame["policy_selected"].fillna(False).astype(bool) if "policy_selected" in frame.columns else pd.Series(False, index=frame.index)
+    diagnostics_available = any(
+        column in frame.columns
+        for column in ["policy_reject_reason_primary", "policy_reject_reasons", "policy_stage_fallback_reasons"]
+    )
+    result: dict[str, Any] = {
+        "available": diagnostics_available,
+        "policy_selected_rows": int(selected_mask.sum()),
+        "policy_selected_races": int(frame.loc[selected_mask, "race_id"].nunique()) if "race_id" in frame.columns and selected_mask.any() else 0,
+        "rejected_rows": int((~selected_mask).sum()),
+        "unselected_rows_without_reason": 0,
+        "likely_blocker_reason": None,
+        "primary_reject_reason_counts": {},
+        "primary_reject_reason_race_counts": {},
+        "primary_reject_reason_examples": {},
+        "stage_fallback_reason_counts": {},
+        "race_diagnostics": [],
+    }
+    if frame.empty:
+        return result
+
+    unselected = frame.loc[~selected_mask].copy()
+    primary_col = (
+        unselected["policy_reject_reason_primary"].astype("string")
+        if "policy_reject_reason_primary" in unselected.columns
+        else pd.Series(pd.NA, index=unselected.index, dtype="string")
+    )
+    primary_counts_series = primary_col.dropna().value_counts()
+    result["primary_reject_reason_counts"] = {str(key): int(value) for key, value in primary_counts_series.to_dict().items()}
+    result["unselected_rows_without_reason"] = int((~primary_col.notna()).sum())
+    if "race_id" in unselected.columns and not primary_counts_series.empty:
+        reason_frame = unselected.loc[primary_col.notna(), ["race_id"]].copy()
+        reason_frame["policy_reject_reason_primary"] = primary_col.loc[primary_col.notna()].astype(str)
+        result["primary_reject_reason_race_counts"] = {
+            str(key): int(value)
+            for key, value in reason_frame.groupby("policy_reject_reason_primary")["race_id"].nunique().to_dict().items()
+        }
+
+    if not primary_counts_series.empty:
+        result["likely_blocker_reason"] = str(primary_counts_series.index[0])
+        for reason in primary_counts_series.index[:5]:
+            reason_rows = unselected.loc[primary_col == str(reason)].head(3)
+            examples: list[dict[str, Any]] = []
+            for _, row in reason_rows.iterrows():
+                pred_rank = pd.to_numeric(row.get("pred_rank"), errors="coerce")
+                expected_value = pd.to_numeric(row.get("expected_value"), errors="coerce")
+                examples.append(
+                    {
+                        "race_id": None if pd.isna(row.get("race_id")) else str(row.get("race_id")),
+                        "headline": None if pd.isna(row.get("headline")) else str(row.get("headline")),
+                        "horse_name": None if pd.isna(row.get("horse_name")) else str(row.get("horse_name")),
+                        "pred_rank": None if pd.isna(pred_rank) else int(pred_rank),
+                        "expected_value": None if pd.isna(expected_value) else float(expected_value),
+                    }
+                )
+            result["primary_reject_reason_examples"][str(reason)] = examples
+
+    stage_reason_counts: dict[str, int] = {}
+    if "policy_stage_fallback_reasons" in unselected.columns:
+        for raw_value in unselected["policy_stage_fallback_reasons"].dropna():
+            for token in _split_reason_tokens(raw_value):
+                stage_reason_counts[token] = stage_reason_counts.get(token, 0) + 1
+    result["stage_fallback_reason_counts"] = dict(sorted(stage_reason_counts.items(), key=lambda item: (-item[1], item[0])))
+    if result["likely_blocker_reason"] is None and result["stage_fallback_reason_counts"]:
+        result["likely_blocker_reason"] = next(iter(result["stage_fallback_reason_counts"]))
+
+    if "race_id" not in frame.columns:
+        return result
+
+    for race_id, race_frame in frame.groupby("race_id", sort=True):
+        race_selected_mask = race_frame["policy_selected"].fillna(False).astype(bool) if "policy_selected" in race_frame.columns else pd.Series(False, index=race_frame.index)
+        race_primary = (
+            race_frame.loc[~race_selected_mask, "policy_reject_reason_primary"].astype("string")
+            if "policy_reject_reason_primary" in race_frame.columns
+            else pd.Series(pd.NA, index=race_frame.index, dtype="string")
+        )
+        race_primary_counts = race_primary.dropna().value_counts()
+        race_stage_counts: dict[str, int] = {}
+        if "policy_stage_fallback_reasons" in race_frame.columns:
+            for raw_value in race_frame.loc[~race_selected_mask, "policy_stage_fallback_reasons"].dropna():
+                for token in _split_reason_tokens(raw_value):
+                    race_stage_counts[token] = race_stage_counts.get(token, 0) + 1
+        headline = None
+        if "headline" in race_frame.columns:
+            for value in race_frame["headline"]:
+                if pd.notna(value) and str(value).strip():
+                    headline = str(value)
+                    break
+        result["race_diagnostics"].append(
+            {
+                "race_id": str(race_id),
+                "headline": headline,
+                "row_count": int(len(race_frame)),
+                "selected_rows": int(race_selected_mask.sum()),
+                "top_primary_reject_reasons": [
+                    {"reason": str(reason), "rows": int(count)}
+                    for reason, count in race_primary_counts.head(3).items()
+                ],
+                "stage_fallback_reason_counts": dict(sorted(race_stage_counts.items(), key=lambda item: (-item[1], item[0]))[:3]),
+            }
+        )
+    return result
+
+
 def _initialize_policy_columns(annotated: pd.DataFrame, *, policy_name: str, strategy_kind: str) -> pd.DataFrame:
     annotated["policy_name"] = str(policy_name)
     annotated["policy_strategy_kind"] = strategy_kind
@@ -32,6 +167,8 @@ def _initialize_policy_columns(annotated: pd.DataFrame, *, policy_name: str, str
     annotated["policy_stage_trace"] = pd.NA
     annotated["policy_stage_fallback_reasons"] = pd.NA
     annotated["policy_selected_strategy_kind"] = pd.NA
+    annotated["policy_reject_reason_primary"] = pd.NA
+    annotated["policy_reject_reasons"] = pd.NA
     return annotated
 
 
@@ -111,13 +248,18 @@ def _annotate_single_runtime_policy(
     odds_max = float(policy_config.get("odds_max", 999.0))
 
     annotated = _initialize_policy_columns(annotated, policy_name=policy_name, strategy_kind=strategy_kind)
+    reject_reasons: dict[Any, list[str]] = {index: [] for index in annotated.index}
     annotated["policy_blend_weight"] = blend_weight
     annotated["policy_min_prob"] = min_prob
     annotated["policy_odds_min"] = odds_min
     annotated["policy_odds_max"] = odds_max
 
-    if odds_col is None or odds_col not in annotated.columns or "race_id" not in annotated.columns:
-        return annotated
+    if odds_col is None or odds_col not in annotated.columns:
+        _append_reject_reason(reject_reasons, annotated.index, "missing_odds_column")
+        return _finalize_reject_reason_columns(annotated, reject_reasons)
+    if "race_id" not in annotated.columns:
+        _append_reject_reason(reject_reasons, annotated.index, "missing_race_id")
+        return _finalize_reject_reason_columns(annotated, reject_reasons)
 
     annotated[score_col] = pd.to_numeric(annotated[score_col], errors="coerce")
     annotated[odds_col] = pd.to_numeric(annotated[odds_col], errors="coerce")
@@ -130,6 +272,22 @@ def _annotate_single_runtime_policy(
     annotated["policy_expected_value"] = annotated["policy_prob"] * annotated[odds_col]
     annotated["policy_edge"] = annotated["policy_expected_value"] - 1.0
 
+    valid_metric_mask = annotated["policy_prob"].notna() & annotated[odds_col].notna()
+    _append_reject_reason(reject_reasons, annotated.index[~valid_metric_mask], "missing_prob_or_odds")
+    eligible_mask = valid_metric_mask.copy()
+
+    below_min_odds_mask = valid_metric_mask & (annotated[odds_col] <= odds_min)
+    _append_reject_reason(reject_reasons, annotated.index[below_min_odds_mask], "odds_at_or_below_min")
+    eligible_mask &= ~below_min_odds_mask
+
+    above_max_odds_mask = valid_metric_mask & (annotated[odds_col] > odds_max)
+    _append_reject_reason(reject_reasons, annotated.index[above_max_odds_mask], "odds_above_max")
+    eligible_mask &= ~above_max_odds_mask
+
+    below_min_prob_mask = valid_metric_mask & (annotated["policy_prob"] < min_prob)
+    _append_reject_reason(reject_reasons, annotated.index[below_min_prob_mask], "prob_below_min_prob")
+    eligible_mask &= ~below_min_prob_mask
+
     if strategy_kind == "kelly":
         min_edge = float(policy_config.get("min_edge", 0.03))
         fractional_kelly = float(policy_config.get("fractional_kelly", 0.5))
@@ -138,22 +296,22 @@ def _annotate_single_runtime_policy(
         annotated["policy_fractional_kelly"] = fractional_kelly
         annotated["policy_max_fraction"] = max_fraction
 
+        b = annotated[odds_col] - 1.0
+        raw_kelly = ((b * annotated["policy_prob"]) - (1.0 - annotated["policy_prob"])) / b.where(b != 0)
+        edge_below_min_mask = eligible_mask & (annotated["policy_edge"] < min_edge)
+        _append_reject_reason(reject_reasons, annotated.index[edge_below_min_mask], "edge_below_min_edge")
+        eligible_mask &= ~edge_below_min_mask
+
+        nonpositive_kelly_mask = eligible_mask & ~(raw_kelly > 0.0)
+        _append_reject_reason(reject_reasons, annotated.index[nonpositive_kelly_mask], "nonpositive_kelly")
+        eligible_mask &= ~nonpositive_kelly_mask
+
         for _, group in annotated.groupby("race_id", sort=False):
-            eligible = group[
-                group["policy_prob"].notna()
-                & group[odds_col].notna()
-                & (group[odds_col] > odds_min)
-                & (group[odds_col] <= odds_max)
-                & (group["policy_prob"] >= min_prob)
-            ].copy()
+            eligible = group.loc[eligible_mask.loc[group.index]].copy()
             if eligible.empty:
                 continue
 
-            b = eligible[odds_col] - 1.0
-            eligible["policy_raw_kelly"] = ((b * eligible["policy_prob"]) - (1.0 - eligible["policy_prob"])) / b.where(b != 0)
-            eligible = eligible[(eligible["policy_edge"] >= min_edge) & (eligible["policy_raw_kelly"] > 0.0)]
-            if eligible.empty:
-                continue
+            eligible = eligible.assign(policy_raw_kelly=raw_kelly.loc[eligible.index])
 
             pick = eligible.sort_values(["policy_edge", "policy_prob"], ascending=False).iloc[0]
             pick_index = pick.name
@@ -164,21 +322,20 @@ def _annotate_single_runtime_policy(
                 max_fraction,
             )
             annotated.loc[pick_index, "policy_selected_strategy_kind"] = strategy_kind
+            remaining_eligible = eligible.index.difference(pd.Index([pick_index]))
+            _append_reject_reason(reject_reasons, remaining_eligible, "not_top_edge_candidate")
     elif strategy_kind == "portfolio":
         top_k = int(policy_config.get("top_k", 1))
         min_expected_value = float(policy_config.get("min_expected_value", 1.0))
         annotated["policy_top_k"] = top_k
         annotated["policy_min_expected_value"] = min_expected_value
 
+        below_min_ev_mask = eligible_mask & (annotated["policy_expected_value"] < min_expected_value)
+        _append_reject_reason(reject_reasons, annotated.index[below_min_ev_mask], "expected_value_below_min_expected_value")
+        eligible_mask &= ~below_min_ev_mask
+
         for _, group in annotated.groupby("race_id", sort=False):
-            eligible = group[
-                group["policy_prob"].notna()
-                & group[odds_col].notna()
-                & (group[odds_col] > odds_min)
-                & (group[odds_col] <= odds_max)
-                & (group["policy_prob"] >= min_prob)
-                & (group["policy_expected_value"] >= min_expected_value)
-            ].copy()
+            eligible = group.loc[eligible_mask.loc[group.index]].copy()
             if eligible.empty:
                 continue
 
@@ -193,7 +350,10 @@ def _annotate_single_runtime_policy(
                 annotated.loc[pick_index, "policy_weight"] = pick_weight
                 annotated.loc[pick_index, "policy_selected_strategy_kind"] = strategy_kind
 
-    return annotated
+            unselected_eligible = eligible.index.difference(picks.index)
+            _append_reject_reason(reject_reasons, unselected_eligible, "ranked_below_top_k")
+
+    return _finalize_reject_reason_columns(annotated, reject_reasons)
 
 
 def _annotate_staged_runtime_policy(
@@ -252,6 +412,8 @@ def _annotate_staged_runtime_policy(
         "policy_selected",
         "policy_selection_rank",
         "policy_weight",
+        "policy_reject_reason_primary",
+        "policy_reject_reasons",
         "policy_selected_strategy_kind",
     ]
 
@@ -284,6 +446,10 @@ def _annotate_staged_runtime_policy(
         annotated.loc[race_index, "policy_stage_fallback_reasons"] = fallback_reason_text
 
         if selected_stage is None:
+            _, _, _, _, stage_result, _ = stage_results[-1]
+            stage_race = stage_result.loc[race_index]
+            for column in policy_columns:
+                annotated.loc[race_index, column] = stage_race[column]
             continue
 
         stage_index, stage_name, _, stage_policy, stage_result, _ = selected_stage

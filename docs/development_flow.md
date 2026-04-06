@@ -123,6 +123,24 @@ evaluation と promotion gate の具体的な読み方は [evaluation_guide.md](
   --evaluate-wf-mode full
 ```
 
+`current_best_eval_2025_latest` のような value_blend family を既存学習済み artifact 再利用で formal compare したいときは、wrapper からそのまま次も渡せる。
+
+```bash
+/workspaces/nr-learn/.venv/bin/python scripts/run_netkeiba_latest_revision_gate.py \
+  --revision r20260405_2025latest_refresh_reuse \
+  --skip-train \
+  --train-artifact-suffix r20260405_2025latest_refresh_reuse \
+  --evaluate-model-artifact-suffix r20260325_current_best_eval_2025_latest_benchmark_refresh \
+  --evaluate-pre-feature-max-rows 300000 \
+  --evaluate-max-rows 200000 \
+  --evaluate-wf-mode full \
+  --evaluate-wf-scheme nested
+```
+
+新 suffix の component model が存在しない value_blend family では、`--skip-train` を付けずに wrapper をそのまま回すと train step が component artifact 解決で失敗する。threshold-only / benchmark-refresh 系の compare は `--evaluate-model-artifact-suffix` で既存学習済み artifact を明示 reuse する。
+
+config 側の output file 名に revision suffix が既に入っている compare では、latest wrapper からも `--evaluate-no-model-artifact-suffix` をそのまま渡して child evaluate / WF の二重 suffix を避けてよい。
+
 この wrapper は次を直列で行う。
 
 - 2025 backfill 用 manifest を明示指定した coverage snapshot を実行する。

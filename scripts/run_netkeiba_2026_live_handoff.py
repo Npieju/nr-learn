@@ -129,9 +129,12 @@ def _build_manifest(
     }
 
 
-def _write_waiting_manifest(
+def _write_readiness_manifest(
     *,
     wrapper_manifest_path: Path,
+    status: str,
+    current_phase: str,
+    recommended_action: str,
     attempts: int,
     waited_seconds: int,
     race_date: str,
@@ -144,11 +147,12 @@ def _write_waiting_manifest(
     race_targets_completed: bool,
     snapshot_consistent: bool,
     history_dates_ready: bool,
+    reason: str,
 ) -> None:
     manifest = _build_manifest(
-        status="waiting",
-        current_phase="await_history_ready",
-        recommended_action="wait_for_2026_history_frontier",
+        status=status,
+        current_phase=current_phase,
+        recommended_action=recommended_action,
         attempts=attempts,
         waited_seconds=waited_seconds,
         race_date=race_date,
@@ -158,6 +162,7 @@ def _write_waiting_manifest(
         race_card_max_date=str(race_card_max_date.date()) if race_card_max_date is not None else None,
         live_command=live_command,
         error=(
+            f"reason={reason} "
             f"snapshot_exit={snapshot_exit} race_targets_completed={race_targets_completed} "
             f"snapshot_consistent={snapshot_consistent} history_dates_ready={history_dates_ready}"
         ),
@@ -271,8 +276,11 @@ def main() -> int:
                     f"snapshot_consistent={snapshot_consistent} result_max={race_result_max_date} race_card_max={race_card_max_date}"
                 ),
             )
-            _write_waiting_manifest(
+            _write_readiness_manifest(
                 wrapper_manifest_path=wrapper_manifest_path,
+                status="waiting",
+                current_phase="await_history_ready",
+                recommended_action="wait_for_2026_history_frontier",
                 attempts=attempts,
                 waited_seconds=waited_seconds,
                 race_date=args.race_date,
@@ -285,6 +293,7 @@ def main() -> int:
                 race_targets_completed=race_targets_completed,
                 snapshot_consistent=snapshot_consistent,
                 history_dates_ready=history_dates_ready,
+                reason="history_frontier_not_ready",
             )
             _refresh_status_board(
                 python_executable=str(args.python_executable),
@@ -327,6 +336,30 @@ def main() -> int:
                 args.max_wait_seconds > 0 and waited_seconds >= int(args.max_wait_seconds)
             )
             if timed_out:
+                timeout_reason = "wait_for_ready_disabled" if not args.wait_for_ready else "max_wait_seconds_exceeded"
+                _write_readiness_manifest(
+                    wrapper_manifest_path=wrapper_manifest_path,
+                    status="timeout",
+                    current_phase="await_history_ready_timeout",
+                    recommended_action="rerun_when_2026_history_frontier_ready",
+                    attempts=attempts,
+                    waited_seconds=waited_seconds,
+                    race_date=args.race_date,
+                    history_ready_date=history_ready_date,
+                    snapshot_payload=snapshot_payload,
+                    race_result_max_date=race_result_max_date,
+                    race_card_max_date=race_card_max_date,
+                    live_command=live_command,
+                    snapshot_exit=snapshot_exit,
+                    race_targets_completed=race_targets_completed,
+                    snapshot_consistent=snapshot_consistent,
+                    history_dates_ready=history_dates_ready,
+                    reason=timeout_reason,
+                )
+                _refresh_status_board(
+                    python_executable=str(args.python_executable),
+                    status_board_script=args.status_board_script,
+                )
                 progress.complete(message=f"not ready output={wrapper_manifest_path}")
                 return 2
 

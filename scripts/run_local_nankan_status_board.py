@@ -19,6 +19,10 @@ from racing_ml.common.progress import Heartbeat, ProgressBar
 DEFAULT_COVERAGE_SNAPSHOT = "artifacts/reports/coverage_snapshot_local_nankan_current.json"
 DEFAULT_BACKFILL_AGGREGATE = "artifacts/reports/local_nankan_backfill_race_card_20y.json"
 DEFAULT_ARCHIVE_RUN = "artifacts/reports/local_nankan_archive_run.json"
+DEFAULT_READINESS_PROBE_SUMMARY = "artifacts/reports/local_nankan_pre_race_readiness_probe_summary.json"
+DEFAULT_PRE_RACE_HANDOFF_MANIFEST = "artifacts/reports/local_nankan_pre_race_benchmark_handoff_manifest.json"
+DEFAULT_BOOTSTRAP_HANDOFF_MANIFEST = "artifacts/reports/local_nankan_result_ready_bootstrap_handoff_manifest.json"
+DEFAULT_READINESS_WATCHER_MANIFEST = "artifacts/reports/local_nankan_readiness_watcher_manifest.json"
 DEFAULT_OUTPUT = "artifacts/reports/local_nankan_data_status_board.json"
 BACKFILL_AGGREGATE_CANDIDATES = [
     "artifacts/reports/local_nankan_backfill_race_card_20y.json",
@@ -113,6 +117,98 @@ def _build_live_collect_progress() -> dict[str, object]:
     return payload
 
 
+def _build_readiness_surfaces(
+    *,
+    readiness_probe_summary: dict[str, object],
+    pre_race_handoff_manifest: dict[str, object],
+    bootstrap_handoff_manifest: dict[str, object],
+    readiness_watcher_manifest: dict[str, object],
+) -> dict[str, object]:
+    probe_materialization = _dict_payload(readiness_probe_summary.get("materialization_summary"))
+    probe_result_ready_races = readiness_probe_summary.get("result_ready_races")
+    if probe_result_ready_races is None:
+        probe_result_ready_races = probe_materialization.get("result_ready_races")
+    probe_pending_result_races = readiness_probe_summary.get("pending_result_races")
+    if probe_pending_result_races is None:
+        probe_pending_result_races = probe_materialization.get("pending_result_races")
+    probe_race_card_rows = readiness_probe_summary.get("race_card_rows")
+    if probe_race_card_rows is None:
+        probe_race_card_rows = probe_materialization.get("pre_race_only_rows")
+
+    return {
+        "readiness_probe": {
+            "status": readiness_probe_summary.get("status"),
+            "recommended_action": readiness_probe_summary.get("recommended_action"),
+            "result_ready_races": probe_result_ready_races,
+            "pending_result_races": probe_pending_result_races,
+            "race_card_rows": probe_race_card_rows,
+        },
+        "pre_race_handoff": {
+            "status": pre_race_handoff_manifest.get("status"),
+            "current_phase": pre_race_handoff_manifest.get("current_phase"),
+            "recommended_action": pre_race_handoff_manifest.get("recommended_action"),
+        },
+        "bootstrap_handoff": {
+            "status": bootstrap_handoff_manifest.get("status"),
+            "current_phase": bootstrap_handoff_manifest.get("current_phase"),
+            "recommended_action": bootstrap_handoff_manifest.get("recommended_action"),
+        },
+        "readiness_watcher": {
+            "status": readiness_watcher_manifest.get("status"),
+            "current_phase": readiness_watcher_manifest.get("current_phase"),
+            "recommended_action": readiness_watcher_manifest.get("recommended_action"),
+            "attempts": readiness_watcher_manifest.get("attempts"),
+            "timed_out": readiness_watcher_manifest.get("timed_out"),
+        },
+    }
+
+
+def _derive_board_state(
+    *,
+    coverage: dict[str, object],
+    backfill: dict[str, object],
+    readiness_surfaces: dict[str, object],
+) -> tuple[str, str, str | None]:
+    probe_payload = _dict_payload(readiness_surfaces.get("readiness_probe"))
+    pre_race_handoff = _dict_payload(readiness_surfaces.get("pre_race_handoff"))
+    bootstrap_handoff = _dict_payload(readiness_surfaces.get("bootstrap_handoff"))
+
+    probe_status = str(probe_payload.get("status") or "")
+    pre_race_handoff_status = str(pre_race_handoff.get("status") or "")
+    bootstrap_handoff_status = str(bootstrap_handoff.get("status") or "")
+
+    if probe_status == "not_ready" or pre_race_handoff_status == "not_ready" or bootstrap_handoff_status == "not_ready":
+        current_phase = str(
+            bootstrap_handoff.get("current_phase")
+            or pre_race_handoff.get("current_phase")
+            or probe_payload.get("current_phase")
+            or "await_result_arrival"
+        )
+        recommended_action = str(
+            bootstrap_handoff.get("recommended_action")
+            or pre_race_handoff.get("recommended_action")
+            or probe_payload.get("recommended_action")
+            or "wait_for_result_ready_pre_race_races"
+        )
+        return "partial", current_phase, recommended_action
+
+    if bootstrap_handoff_status == "benchmark_ready":
+        return (
+            "partial",
+            str(bootstrap_handoff.get("current_phase") or "bootstrap_pending"),
+            str(bootstrap_handoff.get("recommended_action") or "run_bootstrap_command_plan"),
+        )
+
+    if bootstrap_handoff_status == "completed":
+        return (
+            "completed",
+            str(bootstrap_handoff.get("current_phase") or "bootstrap_completed"),
+            str(bootstrap_handoff.get("recommended_action") or "review_bootstrap_revision_outputs"),
+        )
+
+    return _derive_status(coverage=coverage, backfill=backfill)
+
+
 def _merge_live_target_states(
     target_states: dict[str, object],
     live_collect_progress: dict[str, object],
@@ -175,6 +271,10 @@ def main() -> int:
     parser.add_argument("--coverage-snapshot", default=DEFAULT_COVERAGE_SNAPSHOT)
     parser.add_argument("--backfill-aggregate", default=DEFAULT_BACKFILL_AGGREGATE)
     parser.add_argument("--archive-run", default=DEFAULT_ARCHIVE_RUN)
+    parser.add_argument("--readiness-probe-summary", default=DEFAULT_READINESS_PROBE_SUMMARY)
+    parser.add_argument("--pre-race-handoff-manifest", default=DEFAULT_PRE_RACE_HANDOFF_MANIFEST)
+    parser.add_argument("--bootstrap-handoff-manifest", default=DEFAULT_BOOTSTRAP_HANDOFF_MANIFEST)
+    parser.add_argument("--readiness-watcher-manifest", default=DEFAULT_READINESS_WATCHER_MANIFEST)
     parser.add_argument("--output", default=DEFAULT_OUTPUT)
     args = parser.parse_args()
 
@@ -189,6 +289,10 @@ def main() -> int:
         backfill_path = _resolve_backfill_aggregate(args.backfill_aggregate)
         backfill_payload = _read_json(backfill_path)
         archive_payload = _read_json(_resolve_path(args.archive_run))
+        readiness_probe_summary = _read_json(_resolve_path(args.readiness_probe_summary))
+        pre_race_handoff_manifest = _read_json(_resolve_path(args.pre_race_handoff_manifest))
+        bootstrap_handoff_manifest = _read_json(_resolve_path(args.bootstrap_handoff_manifest))
+        readiness_watcher_manifest = _read_json(_resolve_path(args.readiness_watcher_manifest))
     progress.update(message="inputs loaded")
 
     readiness = _dict_payload(coverage_payload.get("readiness"))
@@ -200,7 +304,17 @@ def main() -> int:
     backfill_process_state, backfill_stale_reason, backfill_pid = _backfill_process_state(backfill_payload)
     live_collect_progress = _build_live_collect_progress()
     target_states = _merge_live_target_states(target_states, live_collect_progress)
-    status, current_phase, recommended_action = _derive_status(coverage=coverage_payload, backfill=backfill_payload)
+    readiness_surfaces = _build_readiness_surfaces(
+        readiness_probe_summary=readiness_probe_summary,
+        pre_race_handoff_manifest=pre_race_handoff_manifest,
+        bootstrap_handoff_manifest=bootstrap_handoff_manifest,
+        readiness_watcher_manifest=readiness_watcher_manifest,
+    )
+    status, current_phase, recommended_action = _derive_board_state(
+        coverage=coverage_payload,
+        backfill=backfill_payload,
+        readiness_surfaces=readiness_surfaces,
+    )
 
     payload = {
         "started_at": utc_now_iso(),
@@ -212,6 +326,10 @@ def main() -> int:
             "coverage_snapshot": args.coverage_snapshot,
             "backfill_aggregate": str(backfill_path.relative_to(ROOT)) if backfill_path.is_relative_to(ROOT) else str(backfill_path),
             "archive_run": args.archive_run,
+            "readiness_probe_summary": args.readiness_probe_summary,
+            "pre_race_handoff_manifest": args.pre_race_handoff_manifest,
+            "bootstrap_handoff_manifest": args.bootstrap_handoff_manifest,
+            "readiness_watcher_manifest": args.readiness_watcher_manifest,
             "status_board": args.output,
         },
         "target_progress": progress_payload,
@@ -242,6 +360,7 @@ def main() -> int:
             "current_phase": archive_payload.get("current_phase"),
             "archive_report_count": len(archive_reports),
         },
+        "readiness_surfaces": readiness_surfaces,
         "readiness": readiness,
         "highlights": [
             f"current_phase={current_phase}",
@@ -252,6 +371,10 @@ def main() -> int:
             f"active_window={backfill_payload.get('active_window')}",
             f"race_card_processed_ids={_dict_payload(live_collect_progress.get('race_card')).get('processed_ids')}",
             f"remaining_windows={backfill_payload.get('remaining_window_count')}",
+            f"probe_status={readiness_surfaces['readiness_probe'].get('status')}",
+            f"handoff_status={readiness_surfaces['pre_race_handoff'].get('status')}",
+            f"bootstrap_status={readiness_surfaces['bootstrap_handoff'].get('status')}",
+            f"watcher_status={readiness_surfaces['readiness_watcher'].get('status')}",
         ],
     }
 

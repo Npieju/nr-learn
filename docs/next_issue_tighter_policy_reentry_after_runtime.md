@@ -1,5 +1,10 @@
 # Next Issue: Tighter Policy Reentry After Runtime Refresh
 
+Historical note:
+
+- この draft は `#40` として experiment reentry decision まで完了している。
+- runtime refresh 後の tighter policy reentry は completed queue-transition reference として扱い、この文書は historical issue source として使う。
+
 ## Summary
 
 runtime queue で primary tail cache まで default mainline に昇格し、current baseline smoke は faster path 上でも drift なく再確認できた。次は experiment queue を再開し、formal support が最も強い `tighter policy search` family に戻る。

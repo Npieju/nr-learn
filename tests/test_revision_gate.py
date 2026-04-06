@@ -4,9 +4,12 @@ import json
 import os
 from pathlib import Path
 import subprocess
+import sys
 import tempfile
 import unittest
+from unittest.mock import patch
 
+import scripts.run_revision_gate as revision_gate_script
 from scripts.run_revision_gate import (
     _acquire_run_lock,
     _build_evaluation_promotion_alignment_report,
@@ -232,6 +235,50 @@ class RevisionGateRunningManifestTest(unittest.TestCase):
             self.assertEqual(overwritten["decision"], "in_progress")
             self.assertEqual(overwritten["current_phase"], "train")
             self.assertEqual(overwritten["recommended_action"], "wait_for_revision_gate_completion")
+
+    def test_dry_run_propagates_no_model_artifact_suffix_to_evaluate_and_wf(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmp = Path(tmpdir)
+            manifest_output = tmp / "revision_gate_test.json"
+            wf_summary_output = tmp / "wf_summary.json"
+            promotion_output = tmp / "promotion_gate.json"
+            log_file = tmp / "revision_gate.log"
+
+            with patch.object(
+                sys,
+                "argv",
+                [
+                    "run_revision_gate.py",
+                    "--revision",
+                    "r_test",
+                    "--config",
+                    "configs/model_catboost_value_stack_lgbm_roi_high_coverage_diag.yaml",
+                    "--data-config",
+                    "configs/data.yaml",
+                    "--feature-config",
+                    "configs/features_catboost_rich_high_coverage_diag.yaml",
+                    "--evaluate-no-model-artifact-suffix",
+                    "--manifest-output",
+                    str(manifest_output),
+                    "--wf-summary-output",
+                    str(wf_summary_output),
+                    "--promotion-output",
+                    str(promotion_output),
+                    "--log-file",
+                    str(log_file),
+                    "--dry-run",
+                ],
+            ):
+                exit_code = revision_gate_script.main()
+
+            self.assertEqual(exit_code, 0)
+            payload = json.loads(manifest_output.read_text(encoding="utf-8"))
+            evaluate_step = next(step for step in payload["steps"] if step["name"] == "evaluate")
+            wf_step = next(step for step in payload["steps"] if step["name"] == "wf_feasibility")
+            self.assertIn("--model-artifact-suffix", evaluate_step["command"])
+            self.assertIn(revision_gate_script.NO_MODEL_ARTIFACT_SUFFIX, evaluate_step["command"])
+            self.assertIn("--model-artifact-suffix", wf_step["command"])
+            self.assertIn(revision_gate_script.NO_MODEL_ARTIFACT_SUFFIX, wf_step["command"])
 
 
 if __name__ == "__main__":

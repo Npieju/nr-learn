@@ -1,5 +1,10 @@
 # Next Issue: Minimum-Columns Residual Reduction
 
+Historical note:
+
+- この draft は `#24` として exact-safe residual cut の landing まで完了している。
+- minimum-columns residual reduction は completed runtime reference として扱い、この文書は historical issue source / artifact reference として使う。
+
 ## Summary
 
 `#23` では `_merge_supplemental_tables` に対して複数の exact-safe cut を landing できた。

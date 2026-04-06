@@ -1,5 +1,10 @@
 # Next Issue: Role Split For Surface Plus Class-Layoff Promoted Line
 
+Historical note:
+
+- この draft は `#48` として role split decision まで完了している。
+- promoted surface-plus-class-layoff line の role split は確定済みであり、この文書は historical decision reference として使う。
+
 ## Summary
 
 `#47` の first two policy-side probes では、promoted feature line の exposure widening はできなかった。

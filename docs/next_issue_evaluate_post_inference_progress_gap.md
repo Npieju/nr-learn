@@ -1,5 +1,10 @@
 # Next Issue: Evaluate Post-Inference Progress Gap
 
+Historical note:
+
+- この draft は `#87` として corrective 実装まで完了している。
+- JRA evaluate post-inference phase の bounded progress 追加は完了済みであり、この文書は historical issue source / corrective reference として使う。
+
 ## Summary
 
 JRA `run_evaluate.py` では `inference complete` の後、`running leakage audit started` が出るまでに 60 秒超の no-output 区間が残ることがある。2026-04-03 の `r20260403_owner_signal_ablation_audit_v1` でも同症状を再確認した。

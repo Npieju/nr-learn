@@ -49,3 +49,32 @@
 - decision comment on whether `deque_trim` stays analysis-only
 - optional follow-up issue for exact-safe tail optimization
 - if no follow-up is warranted, explicit abandon / park decision
+
+## Final Read
+
+- recheck validation:
+	- `PYTHONPATH=src .venv/bin/python scripts/run_tail_loader_equivalence.py --raw-dir data/raw --tail-rows 10000 --left-reader current --right-reader deque_trim --manifest-file artifacts/tmp/deque_trim_exact_recheck.json --fail-on-diff --fail-gate exact`
+	- `exit_code=2`
+	- raw / normalized `exact_equal=false`
+	- raw / normalized `canonical_dtype_only_difference=true`
+- canonical recheck:
+	- `PYTHONPATH=src .venv/bin/python scripts/run_tail_loader_equivalence.py --raw-dir data/raw --tail-rows 10000 --left-reader current --right-reader deque_trim --manifest-file artifacts/tmp/deque_trim_canonical_recheck.json --fail-on-diff --fail-gate canonical`
+	- `exit_code=0`
+	- raw / normalized `canonical_dtype_only_difference=true`
+- current drift surface:
+	- value difference count `0`
+	- downstream summary equivalence `exact_equal=true`
+	- dtype drift は `all_null` な `レース記号/*` 列と `斤量` の `numeric_integral_equivalent` に限られる
+
+## Decision
+
+- `deque_trim` の current status は `analysis-only retention` とする
+- `exact-safe follow-up` は新 issue に切らない
+- `explicit abandon` にもせず、canonical-only optimization candidate として reference に留める
+
+Reason:
+
+- gate standard では promotion-ready は `exact` pass が前提であり、current recheck でも `exact` fail が再現した
+- 一方で `canonical` / `value` は安定して pass し、downstream summary drift も見えていない
+- したがって unsafe / valueless candidate ではないが、default replacement を正当化する根拠も足りない
+- 追加の issue を切るなら generic `deque_trim` 昇格ではなく、別の exact-safe residual candidate を 1 hypothesis で切るべきである

@@ -67,11 +67,12 @@ formal な evaluation 導線は、[evaluation_guide.md](evaluation_guide.md) を
 
 ### 5.1 現在の採用位置づけ
 
-2026-03-27 時点の current position は次のとおりである。
+2026-04-05 時点の current position は次のとおりである。
 
 | 区分 | profile | formal status | 実務上の扱い |
 | --- | --- | --- | --- |
 | operational baseline | `current_recommended_serving_2025_latest` | `pass / promote` | 既定運用 profile |
+| evaluation mainline reference | `current_best_eval_2025_latest` | `pass / promote` | latest formal refresh の再現確認用 reference |
 | seasonal de-risk variant | `current_long_horizon_serving_2025_latest` | actual-date compare で有効 | September 系の保守候補 |
 | formal improvement candidate | `current_tighter_policy_search_candidate_2025_latest` | `pass / promote` | September difficult window 向けの analysis-first 防御候補 |
 | promoted feature candidate | `r20260330_surface_plus_class_layoff_interactions_v1` | `pass / promote` | actual-date では low-frequency conservative candidate |
@@ -81,6 +82,7 @@ formal な evaluation 導線は、[evaluation_guide.md](evaluation_guide.md) を
 
 - `pass / promote` は「formal gate を通過した」ことを意味する。
 - それだけでは baseline 置換を意味しない。
+- `current_best_eval_2025_latest` は latest holdout の evaluation 参照線として formal refresh を維持するが、score source が 2 本のため operational baseline には置かない。
 - operational 採用は actual-date compare と role の単純さも含めて別途判断する。
 - low bet-rate の candidate は `bets / races` と `bets / rows` を明示して、exposure compression 依存の win ではないかを追加で確認する。
 - recent-heavy family は profile 名だけでは true retrain にならないため、component artifact を同一 suffix で再学習した run だけを正式比較対象として扱う。
@@ -126,15 +128,16 @@ row ごとの情報を実行 plan にまとめたいときは `mixed_universe_le
 
 ### 5.2 latest 2025 の formal snapshot
 
-latest 2025 split で直近に formal に通過した run は次の 2 本である。
+latest 2025 split で直近に formal に通過した run は次の 4 本である。
 
 | revision | profile | decision | 主要値 |
 | --- | --- | --- | --- |
 | `r20260325_current_recommended_serving_2025_latest_benchmark_refresh` | `current_recommended_serving_2025_latest` | `pass / promote` | AUC `0.8401`, nested WF weighted test ROI `0.7628`, bets `544` |
+| `r20260405_2025latest_refresh_reuse_runtimecfg_wfprofilefix` | `current_best_eval_2025_latest` | `pass / promote` | AUC `0.8364`, nested WF weighted test ROI `0.9157`, formal benchmark weighted ROI `0.8372`, feasible folds `5/5`, bets `2364` |
 | `r20260326_tighter_policy_ratio003` | `current_tighter_policy_search_candidate_2025_latest` | `pass / promote` | AUC `0.8401`, nested WF weighted test ROI `0.9092`, formal benchmark weighted ROI `1.1728`, feasible folds `4/5`, bets `424` |
 | `r20260327_tighter_policy_ratio003_abs80` | `current_tighter_policy_search_candidate_2025_latest` | `pass / promote` | AUC `0.8401`, nested WF weighted test ROI `0.9115`, formal benchmark weighted ROI `1.1042`, feasible folds `5/5`, bets `598` |
 
-読み方としては、baseline は latest 2025 の既定運用 profile として formal gate を通過済みであり、tighter policy candidate は support 改善の証拠を持つ追加候補である。
+読み方としては、baseline は latest 2025 の既定運用 profile として formal gate を通過済みであり、`current_best_eval_2025_latest` は latest holdout の evaluation 参照線として formal refresh を維持している。tighter policy candidate は support 改善の証拠を持つ追加候補である。
 
 ### 5.3 tighter policy actual-date snapshot
 

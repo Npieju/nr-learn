@@ -14,11 +14,12 @@ import requests
 from racing_ml.common.artifacts import display_path, write_csv_file, write_json, write_text_file
 from racing_ml.common.config import load_yaml
 from racing_ml.common.progress import Heartbeat, ProgressBar
-from racing_ml.data.dataset_loader import load_training_table
+from racing_ml.data.dataset_loader import load_training_table_for_feature_build
 from racing_ml.data.netkeiba_crawler import crawl_netkeiba_from_config
 from racing_ml.data.netkeiba_race_list import discover_netkeiba_race_ids_from_race_list
 from racing_ml.features.builder import build_features
 from racing_ml.serving.predict_batch import run_predict_from_frame
+from racing_ml.serving.runtime_policy import summarize_policy_diagnostics
 
 
 def log_live_progress(message: str) -> None:
@@ -43,6 +44,39 @@ def _normalize_race_id_list(race_ids: list[str] | None) -> list[str]:
         seen.add(token)
         normalized.append(token)
     return normalized
+
+
+def _resolve_live_pre_feature_max_rows(
+    dataset_config: dict[str, Any] | None,
+    *,
+    workspace_root: Path,
+) -> int | None:
+    if not isinstance(dataset_config, dict):
+        return None
+
+    manifest_file = dataset_config.get("primary_tail_cache_manifest_file")
+    if not manifest_file:
+        return None
+
+    manifest_path = _resolve_workspace_path(str(manifest_file), workspace_root)
+    if not manifest_path.exists() or not manifest_path.is_file():
+        return None
+
+    try:
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    except Exception:
+        return None
+
+    tail_rows = manifest.get("tail_rows")
+    if tail_rows is None:
+        return None
+    try:
+        resolved_tail_rows = int(tail_rows)
+    except (TypeError, ValueError):
+        return None
+    if resolved_tail_rows <= 0:
+        return None
+    return resolved_tail_rows
 
 
 def _build_runtime_dir(workspace_root: Path, race_date: str) -> Path:
@@ -218,6 +252,175 @@ def _format_metric(value: object, digits: int = 3) -> str:
     return f"{float(value):.{digits}f}"
 
 
+def _history_ratio_label(non_null: int, total: int) -> str:
+    if total <= 0:
+        return "0/0"
+    return f"{non_null}/{total} ({non_null / total:.2f})"
+
+
+def _resolve_runner_history_feature_groups(
+    feature_frame: pd.DataFrame,
+    feature_config: dict[str, Any] | None = None,
+) -> dict[str, list[str]]:
+    configured_columns: set[str] = set()
+    if isinstance(feature_config, dict):
+        selection_cfg = feature_config.get("selection", {})
+        if isinstance(selection_cfg, dict):
+            for key in ["force_include_columns", "exclude_columns"]:
+                values = selection_cfg.get(key)
+                if isinstance(values, list):
+                    configured_columns.update(str(value) for value in values)
+
+    horse_candidates = [
+        "horse_last_3_avg_rank",
+        "horse_last_5_win_rate",
+        "horse_days_since_last_race",
+        "horse_days_since_last_race_log1p",
+        "horse_is_short_turnaround",
+        "horse_is_long_layoff",
+        "horse_weight_change",
+        "horse_weight_change_abs",
+        "horse_distance_change",
+        "horse_distance_change_abs",
+        "horse_surface_switch",
+        "horse_surface_switch_short_turnaround",
+        "horse_surface_switch_long_layoff",
+        "horse_last_class_score",
+        "horse_class_change",
+        "horse_is_class_up",
+        "horse_is_class_down",
+        "horse_class_up_short_turnaround",
+        "horse_class_down_short_turnaround",
+        "horse_class_up_long_layoff",
+        "horse_class_down_long_layoff",
+        "horse_last_3_avg_closing_time_3f",
+        "horse_last_3_avg_corner_gain_2_to_4",
+    ]
+    pedigree_candidates = [
+        "owner_last_50_win_rate",
+        "breeder_last_50_win_rate",
+        "sire_last_100_win_rate",
+        "sire_last_100_avg_rank",
+        "damsire_last_100_win_rate",
+        "sire_track_distance_last_80_win_rate",
+    ]
+
+    available_columns = set(feature_frame.columns)
+
+    def _select_candidates(candidates: list[str]) -> list[str]:
+        selected: list[str] = []
+        for column in candidates:
+            if column in available_columns and (not configured_columns or column in configured_columns or column.startswith("horse_last_")):
+                selected.append(column)
+        return selected
+
+    return {
+        "horse_history": _select_candidates(horse_candidates),
+        "pedigree_history": _select_candidates(pedigree_candidates),
+    }
+
+
+def summarize_runner_history_coverage(
+    feature_frame: pd.DataFrame,
+    *,
+    feature_config: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    if feature_frame.empty:
+        return {
+            "available": False,
+            "runner_count": 0,
+            "group_columns": {"horse_history": [], "pedigree_history": []},
+            "profile_counts": {},
+            "race_diagnostics": [],
+            "runners": [],
+        }
+
+    group_columns = _resolve_runner_history_feature_groups(feature_frame, feature_config)
+    horse_columns = group_columns["horse_history"]
+    pedigree_columns = group_columns["pedigree_history"]
+    available = bool(horse_columns or pedigree_columns)
+    if not available:
+        return {
+            "available": False,
+            "runner_count": int(len(feature_frame)),
+            "group_columns": group_columns,
+            "profile_counts": {},
+            "race_diagnostics": [],
+            "runners": [],
+        }
+
+    runners: list[dict[str, Any]] = []
+    for _, row in feature_frame.iterrows():
+        horse_non_null = int(row[horse_columns].notna().sum()) if horse_columns else 0
+        pedigree_non_null = int(row[pedigree_columns].notna().sum()) if pedigree_columns else 0
+        horse_total = len(horse_columns)
+        pedigree_total = len(pedigree_columns)
+        horse_ratio = float(horse_non_null / horse_total) if horse_total else None
+        pedigree_ratio = float(pedigree_non_null / pedigree_total) if pedigree_total else None
+        combined_parts = [value for value in [horse_ratio, pedigree_ratio] if value is not None]
+        combined_ratio = float(sum(combined_parts) / len(combined_parts)) if combined_parts else 0.0
+        if combined_ratio >= 0.67:
+            history_profile = "history_rich"
+        elif combined_ratio <= 0.33:
+            history_profile = "history_poor"
+        else:
+            history_profile = "history_mixed"
+        runners.append(
+            {
+                "race_id": None if pd.isna(row.get("race_id")) else str(row.get("race_id")),
+                "horse_id": None if pd.isna(row.get("horse_id")) else str(row.get("horse_id")),
+                "horse_name": None if pd.isna(row.get("horse_name")) else str(row.get("horse_name")),
+                "horse_history_key_source": None if pd.isna(row.get("horse_history_key_source")) else str(row.get("horse_history_key_source")),
+                "horse_history_non_null": horse_non_null,
+                "horse_history_total": horse_total,
+                "horse_history_ratio": horse_ratio,
+                "pedigree_history_non_null": pedigree_non_null,
+                "pedigree_history_total": pedigree_total,
+                "pedigree_history_ratio": pedigree_ratio,
+                "history_profile": history_profile,
+            }
+        )
+
+    runner_frame = pd.DataFrame(runners)
+    profile_counts = {
+        str(key): int(value)
+        for key, value in runner_frame["history_profile"].value_counts(dropna=False).to_dict().items()
+    }
+    race_diagnostics: list[dict[str, Any]] = []
+    for race_id, race_frame in runner_frame.groupby("race_id", sort=True):
+        profile_count_map = {
+            str(key): int(value)
+            for key, value in race_frame["history_profile"].value_counts(dropna=False).to_dict().items()
+        }
+        race_diagnostics.append(
+            {
+                "race_id": str(race_id),
+                "runner_count": int(len(race_frame)),
+                "profile_counts": profile_count_map,
+                "horse_history_ratio_mean": None if race_frame["horse_history_ratio"].dropna().empty else float(race_frame["horse_history_ratio"].dropna().mean()),
+                "pedigree_history_ratio_mean": None if race_frame["pedigree_history_ratio"].dropna().empty else float(race_frame["pedigree_history_ratio"].dropna().mean()),
+            }
+        )
+
+    return {
+        "available": True,
+        "runner_count": int(len(runners)),
+        "group_columns": group_columns,
+        "profile_counts": profile_counts,
+        "race_diagnostics": race_diagnostics,
+        "runners": runners,
+    }
+
+
+def _normalize_history_merge_keys(frame: pd.DataFrame) -> pd.DataFrame:
+    normalized = frame.copy()
+    for column in ["race_id", "horse_id", "horse_name"]:
+        if column in normalized.columns:
+            normalized[column] = normalized[column].where(normalized[column].notna(), pd.NA)
+            normalized[column] = normalized[column].astype("string")
+    return normalized
+
+
 def summarize_live_prediction_tradeoff(predictions: pd.DataFrame) -> dict[str, Any]:
     if predictions.empty:
         return {
@@ -276,18 +479,68 @@ def summarize_live_prediction_tradeoff(predictions: pd.DataFrame) -> dict[str, A
     }
 
 
-def build_live_prediction_report(predictions: pd.DataFrame, *, race_date: str, odds_available_rows: int) -> str:
+def build_live_prediction_report(
+    predictions: pd.DataFrame,
+    *,
+    race_date: str,
+    odds_available_rows: int,
+    runner_history_coverage: dict[str, Any] | None = None,
+) -> str:
+    policy_diagnostics = summarize_policy_diagnostics(predictions)
+    history_coverage = runner_history_coverage if isinstance(runner_history_coverage, dict) else {"available": False, "runners": []}
     lines = [
         f"# JRA live prediction report {race_date}",
         "",
         f"- records: {len(predictions)}",
         f"- races: {predictions['race_id'].nunique()}",
         f"- odds_available_rows: {odds_available_rows}",
-        "",
     ]
+    if policy_diagnostics.get("available"):
+        lines.append(f"- policy_selected_rows: {policy_diagnostics.get('policy_selected_rows', 0)}")
+        lines.append(f"- policy_selected_races: {policy_diagnostics.get('policy_selected_races', 0)}")
+        likely_blocker_reason = policy_diagnostics.get("likely_blocker_reason")
+        if likely_blocker_reason:
+            lines.append(f"- likely_blocker_reason: {likely_blocker_reason}")
+    lines.append("")
+
+    if policy_diagnostics.get("available"):
+        lines.append("## Policy Diagnostics")
+        lines.append("")
+        primary_reason_counts = policy_diagnostics.get("primary_reject_reason_counts", {})
+        if primary_reason_counts:
+            lines.append("### Overall Reject Reasons")
+            lines.append("")
+            for reason, count in primary_reason_counts.items():
+                race_count = policy_diagnostics.get("primary_reject_reason_race_counts", {}).get(reason)
+                suffix = f" races={race_count}" if race_count is not None else ""
+                lines.append(f"- {reason}: rows={count}{suffix}")
+            lines.append("")
+        stage_reason_counts = policy_diagnostics.get("stage_fallback_reason_counts", {})
+        if stage_reason_counts:
+            lines.append("### Stage Fallback Reasons")
+            lines.append("")
+            for reason, count in stage_reason_counts.items():
+                lines.append(f"- {reason}: rows={count}")
+            lines.append("")
+
+    if history_coverage.get("available"):
+        lines.append("## Runner History Coverage")
+        lines.append("")
+        profile_counts = history_coverage.get("profile_counts", {})
+        if profile_counts:
+            lines.append("- profiles: " + ", ".join(f"{key}={value}" for key, value in profile_counts.items()))
+        horse_columns = history_coverage.get("group_columns", {}).get("horse_history", [])
+        pedigree_columns = history_coverage.get("group_columns", {}).get("pedigree_history", [])
+        lines.append(f"- horse_history_features: {len(horse_columns)}")
+        lines.append(f"- pedigree_history_features: {len(pedigree_columns)}")
+        lines.append("")
+
+    history_runner_frame = pd.DataFrame(history_coverage.get("runners", [])) if history_coverage.get("available") else pd.DataFrame()
+    if not history_runner_frame.empty:
+        history_runner_frame = _normalize_history_merge_keys(history_runner_frame)
 
     for race_id, race_frame in predictions.groupby("race_id", sort=True):
-        race_frame = race_frame.copy()
+        race_frame = _normalize_history_merge_keys(race_frame)
         race_frame["score"] = pd.to_numeric(race_frame.get("score"), errors="coerce")
         race_frame["expected_value"] = pd.to_numeric(race_frame.get("expected_value"), errors="coerce")
         race_frame["pred_rank"] = pd.to_numeric(race_frame.get("pred_rank"), errors="coerce")
@@ -339,10 +592,72 @@ def build_live_prediction_report(predictions: pd.DataFrame, *, race_date: str, o
         lines.append(f"- largest rank divergence: {largest_gap_row.get('horse_name', '')} pred_rank={'' if pd.isna(largest_gap_row.get('pred_rank')) else int(largest_gap_row.get('pred_rank'))} ev_rank={'' if pd.isna(largest_gap_row.get('ev_rank')) else int(largest_gap_row.get('ev_rank'))} gap={_format_metric(largest_gap_row.get('rank_gap'), 0)} quadrant={largest_gap_row.get('tradeoff_quadrant', '')}")
         lines.append(f"- quadrant counts: {', '.join(f'{key}={value}' for key, value in race_frame['tradeoff_quadrant'].value_counts().to_dict().items())}")
         lines.append("")
+        race_policy_summary = next(
+            (item for item in policy_diagnostics.get("race_diagnostics", []) if item.get("race_id") == str(race_id)),
+            None,
+        )
+        if race_policy_summary is not None:
+            lines.append("### Policy Diagnostics")
+            lines.append("")
+            lines.append(f"- selected_rows: {race_policy_summary.get('selected_rows', 0)}")
+            top_reasons = race_policy_summary.get("top_primary_reject_reasons", [])
+            if top_reasons:
+                lines.append(
+                    "- top reject reasons: "
+                    + ", ".join(f"{item['reason']}={item['rows']}" for item in top_reasons)
+                )
+            stage_reasons = race_policy_summary.get("stage_fallback_reason_counts", {})
+            if stage_reasons:
+                lines.append(
+                    "- stage fallback reasons: "
+                    + ", ".join(f"{reason}={count}" for reason, count in stage_reasons.items())
+                )
+            lines.append("")
+        if not history_runner_frame.empty:
+            history_race = history_runner_frame[history_runner_frame["race_id"] == str(race_id)].copy()
+            if not history_race.empty:
+                lookup_columns = [column for column in ["race_id", "horse_id", "horse_name"] if column in history_race.columns]
+                merge_keys = [key for key in ["race_id", "horse_id"] if key in race_frame.columns and key in history_race.columns]
+                if not merge_keys and "horse_name" in race_frame.columns and "horse_name" in history_race.columns:
+                    merge_keys = ["race_id", "horse_name"]
+                if merge_keys:
+                    extra_history_columns = [
+                        column for column in lookup_columns if column not in merge_keys and column != "horse_name"
+                    ]
+                    race_history_view = race_frame.merge(history_race[merge_keys + extra_history_columns + [
+                        "horse_history_key_source",
+                        "horse_history_non_null",
+                        "horse_history_total",
+                        "pedigree_history_non_null",
+                        "pedigree_history_total",
+                        "history_profile",
+                    ]], on=merge_keys, how="left", sort=False)
+                    lines.append("### Runner History Coverage")
+                    lines.append("")
+                    lines.append("| pred_rank | horse_name | horse_history | pedigree_history | key_source | profile |")
+                    lines.append("| --- | --- | --- | --- | --- | --- |")
+                    for _, history_row in race_history_view.sort_values(["pred_rank", "score"], ascending=[True, False]).iterrows():
+                        lines.append(
+                            "| {pred_rank} | {horse_name} | {horse_history} | {pedigree_history} | {key_source} | {profile} |".format(
+                                pred_rank="" if pd.isna(history_row.get("pred_rank")) else int(history_row.get("pred_rank")),
+                                horse_name=str(history_row.get("horse_name", "")),
+                                horse_history=_history_ratio_label(
+                                    int(history_row.get("horse_history_non_null") or 0),
+                                    int(history_row.get("horse_history_total") or 0),
+                                ),
+                                pedigree_history=_history_ratio_label(
+                                    int(history_row.get("pedigree_history_non_null") or 0),
+                                    int(history_row.get("pedigree_history_total") or 0),
+                                ),
+                                key_source="" if pd.isna(history_row.get("horse_history_key_source")) else str(history_row.get("horse_history_key_source")),
+                                profile="" if pd.isna(history_row.get("history_profile")) else str(history_row.get("history_profile")),
+                            )
+                        )
+                    lines.append("")
         lines.append("### Accuracy-First")
         lines.append("")
-        lines.append("| pred_rank | horse_name | score | odds | popularity | expected_value | policy_selected |")
-        lines.append("| --- | --- | --- | --- | --- | --- | --- |")
+        lines.append("| pred_rank | horse_name | score | odds | popularity | expected_value | policy_selected | reject_reason |")
+        lines.append("| --- | --- | --- | --- | --- | --- | --- | --- |")
         for _, row in race_frame.head(5).iterrows():
             pred_rank = row.get("pred_rank")
             score = row.get("score")
@@ -350,8 +665,9 @@ def build_live_prediction_report(predictions: pd.DataFrame, *, race_date: str, o
             popularity = row.get("popularity")
             expected_value = row.get("expected_value")
             policy_selected = row.get("policy_selected", False)
+            reject_reason = row.get("policy_reject_reason_primary")
             lines.append(
-                "| {pred_rank} | {horse_name} | {score} | {odds} | {popularity} | {expected_value} | {policy_selected} |".format(
+                "| {pred_rank} | {horse_name} | {score} | {odds} | {popularity} | {expected_value} | {policy_selected} | {reject_reason} |".format(
                     pred_rank="" if pd.isna(pred_rank) else int(pred_rank),
                     horse_name=str(row.get("horse_name", "")),
                     score="" if pd.isna(score) else f"{float(score):.6f}",
@@ -359,6 +675,7 @@ def build_live_prediction_report(predictions: pd.DataFrame, *, race_date: str, o
                     popularity="" if pd.isna(popularity) else popularity,
                     expected_value="" if pd.isna(expected_value) else f"{float(expected_value):.3f}",
                     policy_selected="yes" if bool(policy_selected) else "no",
+                    reject_reason="" if pd.isna(reject_reason) else str(reject_reason),
                 )
             )
         lines.append("")
@@ -419,6 +736,7 @@ def run_jra_live_predict(
     refresh: bool = False,
 ) -> dict[str, Any]:
     workspace_root = Path.cwd()
+    start_time = time.perf_counter()
     resolved_data_config_path = _resolve_workspace_path(data_config_path, workspace_root)
     resolved_model_config_path = _resolve_workspace_path(model_config_path, workspace_root)
     resolved_feature_config_path = _resolve_workspace_path(feature_config_path, workspace_root)
@@ -508,8 +826,17 @@ def run_jra_live_predict(
     data_config = load_yaml(resolved_data_config_path)
     dataset_cfg = data_config.get("dataset", {})
     raw_dir = dataset_cfg.get("raw_dir", "data/raw")
+    live_pre_feature_max_rows = _resolve_live_pre_feature_max_rows(dataset_cfg, workspace_root=workspace_root)
+    historical_load_started = time.perf_counter()
     with Heartbeat("[jra-live]", "loading historical training table", logger=log_live_progress):
-        historical_frame = load_training_table(raw_dir, dataset_config=dataset_cfg, base_dir=workspace_root)
+        historical_load = load_training_table_for_feature_build(
+            raw_dir,
+            pre_feature_max_rows=live_pre_feature_max_rows,
+            dataset_config=dataset_cfg,
+            base_dir=workspace_root,
+        )
+    historical_load_seconds = float(time.perf_counter() - historical_load_started)
+    historical_frame = historical_load.frame
 
     live_frame = _merge_live_racecard_with_pedigree(
         live_racecard,
@@ -524,11 +851,18 @@ def run_jra_live_predict(
     if sort_columns:
         combined_frame = combined_frame.sort_values(sort_columns).reset_index(drop=True)
 
+    feature_build_started = time.perf_counter()
     with Heartbeat("[jra-live]", "building features on combined frame", logger=log_live_progress):
         featured_frame = build_features(combined_frame)
+    feature_build_seconds = float(time.perf_counter() - feature_build_started)
     if "date" in featured_frame.columns:
         featured_frame["date"] = pd.to_datetime(featured_frame["date"], errors="coerce").dt.normalize()
-    progress.update(message=f"features built rows={len(featured_frame)}")
+    progress.update(
+        message=(
+            f"features built rows={len(featured_frame)} load_strategy={historical_load.data_load_strategy} "
+            f"historical_rows={historical_load.loaded_rows}"
+        )
+    )
 
     prediction_summary = run_predict_from_frame(
         model_config_path=resolved_model_config_path,
@@ -540,8 +874,17 @@ def run_jra_live_predict(
     )
     prediction_path = workspace_root / str(prediction_summary["prediction_file"])
     predictions = pd.read_csv(prediction_path, low_memory=False)
+    feature_config = load_yaml(resolved_feature_config_path)
+    live_feature_frame = featured_frame[featured_frame["race_id"].astype(str).isin(selected_race_ids)].copy()
+    runner_history_coverage = summarize_runner_history_coverage(live_feature_frame, feature_config=feature_config)
     tradeoff_summary = summarize_live_prediction_tradeoff(predictions)
-    report_text = build_live_prediction_report(predictions, race_date=race_date, odds_available_rows=odds_available_rows)
+    policy_diagnostics = summarize_policy_diagnostics(predictions)
+    report_text = build_live_prediction_report(
+        predictions,
+        race_date=race_date,
+        odds_available_rows=odds_available_rows,
+        runner_history_coverage=runner_history_coverage,
+    )
     report_path = prediction_path.with_suffix(".report.md")
     live_summary_path = prediction_path.with_suffix(".live.json")
     write_text_file(report_path, report_text, label="live prediction report")
@@ -560,7 +903,21 @@ def run_jra_live_predict(
         "odds_available_rows": int(odds_available_rows),
         "odds_missing_rows": int(len(live_racecard) - odds_available_rows),
         "odds_official_datetime_max": str(live_racecard["odds_official_datetime"].dropna().max()) if "odds_official_datetime" in live_racecard.columns and live_racecard["odds_official_datetime"].notna().any() else None,
+        "historical_data_load": {
+            "pre_feature_max_rows": int(live_pre_feature_max_rows) if live_pre_feature_max_rows is not None else None,
+            "data_load_strategy": historical_load.data_load_strategy,
+            "loaded_rows": int(historical_load.loaded_rows),
+            "pre_feature_rows": int(historical_load.pre_feature_rows),
+            "primary_source_rows_total": int(historical_load.primary_source_rows_total) if historical_load.primary_source_rows_total is not None else None,
+        },
+        "timings": {
+            "historical_load_seconds": historical_load_seconds,
+            "feature_build_seconds": feature_build_seconds,
+            "total_seconds": float(time.perf_counter() - start_time),
+        },
         "tradeoff_summary": tradeoff_summary,
+        "policy_diagnostics": policy_diagnostics,
+        "runner_history_coverage": runner_history_coverage,
         "race_list_report": race_list_report,
     }
     write_json(live_summary_path, live_summary)

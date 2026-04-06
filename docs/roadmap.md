@@ -32,7 +32,7 @@
 
 ## 3. 現在地
 
-2026-03-27 時点の到達点は次のとおりである。
+2026-04-05 時点の到達点は次のとおりである。
 
 - netkeiba 2025 backfill は完了している。
 - `configs/data_2025_latest.yaml` により、2025 を validation 末尾に含む latest split が使える。
@@ -40,6 +40,9 @@
 - `_2025_latest` profile で train / evaluate / predict / backtest を呼べる。
 - latest の formal 評価では `current_best_eval_2025_latest` と `current_recommended_serving_2025_latest` のトップラインが実質同一だった。
 - latest の正式判断では、`current_recommended_serving_2025_latest` が matching WF を含めて `pass / promote` に到達した。
+- `current_best_eval_2025_latest` についても、reuse-compare 前提の latest revision gate wrapper を end-to-end で再実行できる状態になった。
+- `r20260405_2025latest_refresh_reuse_runtimecfg_wfprofilefix` では、`--skip-train` と historical model artifact reuse を使った formal rerun が `pass / promote` で整合し、`AUC=0.8364`、`nested WF weighted test ROI=0.9157`、`formal_benchmark_weighted_roi=0.8372`、`formal_benchmark_feasible_fold_count=5` を確認した。
+- これにより latest 2025 mainline は、operational baseline と evaluation mainline reference の両方で wrapper / revision gate / promotion gate の再現導線が揃った。
 - `current_recommended_serving_2025_latest` の actual-date 運用確認として、`2025-12-28` の predict / serving smoke は正常完了した。
 - その後 `2025-12` 末尾 8 日 window の serving smoke も完了し、`2025-12-06`、`2025-12-20`、`2025-12-27` では `policy_bets=1` を確認した。
 - `r20260325_latest_serving_candidate_v2` の latest revision gate wrapper 実行は完了し、wrapper manifest / revision manifest / promotion report はすべて `pass / promote` で整合している。
@@ -201,6 +204,13 @@
 - promotion gate は `pass / promote` で、`formal_benchmark_feasible_fold_count=5/5`、`formal_benchmark_weighted_roi=1.1042287961989103`、`formal_benchmark_bets_total=598` だった。
 - fold 2 の best feasible は既存 frontier 読みと一致し、`kelly blend_weight=0.8 / min_prob=0.03 / odds_max=25 / bets=98 / ROI=0.7542 / final_bankroll=0.9199 / max_drawdown=0.1098` だった。
 - したがって `0.03/80` は frontier 上の読みだけでなく formal revision としても成立する。一方で December control で baseline 優位という operational role は変わらないため、位置づけは broad serving replacement ではなく「formal に通過した tighter defensive variant」のままとする。
+
+### 4.17 latest eval mainline の formal refresh 完了
+
+- `current_best_eval_2025_latest` を latest revision gate wrapper で再実行すると、`value_blend` family 固有の component artifact suffix 不整合、historical runtime config 依存、`wf_feasibility_diag` の `--profile` 非互換が順に顕在化した。
+- そこで wrapper に `--skip-train`、`--train-artifact-suffix`、`--evaluate-model-artifact-suffix` を通し、missing runtime config を復元し、`run_wf_feasibility_diag.py` を profile 解決対応に揃えた。
+- その結果、`r20260405_2025latest_refresh_reuse_runtimecfg_wfprofilefix` は `pass / promote` で整合し、`AUC=0.8364`、`logloss=0.2048`、`top1_roi=0.7994`、`nested WF weighted test ROI=0.9157`、`formal_benchmark_weighted_roi=0.8372`、`formal_benchmark_feasible_fold_count=5/5`、`formal_benchmark_bets_total=2364` を確認した。
+- この run は baseline 置換の根拠ではなく、latest 2025 の evaluation mainline reference が formal artifact まで再現可能であることを示す evidence として扱う。
 
 ## 5. 完了済みマイルストーン
 
@@ -417,6 +427,12 @@
 - `data_extension.md` に、地方-only coverage snapshot / benchmark gate の推奨 step 名と `completed_step` の読み方を追記した。
 - あわせて operator error / readiness block / execution failure の 3 層で failure taxonomy を整理し、`status`, `completed_step`, `error_code`, `recommended_action` の最小 contract を固定した。
 - `scripts_guide.md` にも step 系列を補足し、将来 CLI を足すときの進捗表示と停止点の読み方を揃えた。
+
+### M37a. latest eval mainline formal refresh の再現導線整備
+
+- `scripts/run_netkeiba_latest_revision_gate.py` に reuse-compare pass-through を追加し、`current_best_eval_2025_latest` のような `value_blend` family でも latest wrapper から train skip / artifact reuse を明示できるようにした。
+- `run_wf_feasibility_diag.py` は `--profile` を受けて config / data / feature config を解決できるように揃え、revision gate との CLI 契約を一致させた。
+- `r20260405_2025latest_refresh_reuse_runtimecfg_wfprofilefix` により latest eval mainline reference の revision gate / promotion gate が `pass / promote` で整合し、docs からも再開できる状態になった。
 
 ### M38. `netkeiba_*` snapshot / gate の universe-aware 契約実装
 
@@ -839,6 +855,8 @@
 ## 6. 実行中の優先事項
 
 `current_tighter_policy_search_candidate_2025_latest` の `0.03/80` formalization は M17 で完了した。続いて seasonal / recent-heavy の運用境界整理、latest compare artifact map、actual-date compare 再開導線の同期監査、地方競馬 feasibility の設計チェックリスト・artifact 方針・benchmark 完了条件・payload schema・CLI 引数契約・step/failure taxonomy の具体化、既存 `netkeiba_*` snapshot / gate への universe-aware 契約実装、local-only snapshot / gate 雛形の追加、local-only integrity / feature gap / evaluation 入口の追加、local-only orchestration manifest の追加、および local-only revision lineage の追加まで完了した。
+
+さらに `current_best_eval_2025_latest` の latest formal refresh も、reuse-compare 前提の wrapper / revision gate / promotion gate まで end-to-end で整合した。latest mainline の formal pass は current baseline と evaluation reference の両側で再現可能になっている。
 
 以後の active priority は、public / internal docs の定期点検と future option の切り分けに絞る。
 

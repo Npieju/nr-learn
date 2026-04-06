@@ -1,5 +1,10 @@
 # Next Issue: Training Table Load Residuals After Tail Cuts
 
+Historical note:
+
+- この draft は `#26` として phase-budget attribution まで完了している。
+- training-table load residual attribution は completed runtime reference として扱い、この文書は historical issue source / profiling reference として使う。
+
 ## Summary
 
 `#21` では `_read_csv_tail` に対して small exact-safe cut を複数 landing し、tail equivalence harness でも `exact` を維持できた。

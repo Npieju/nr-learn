@@ -1,5 +1,10 @@
 # Next Issue: Append Parser Residual After Logic Cuts
 
+Historical note:
+
+- この draft は `#34` として parser/read-path residual の decision まで完了している。
+- append parser residual は completed runtime reference として扱い、この文書は historical issue source / artifact reference として使う。
+
 ## Summary
 
 `#33` では append loader logic residual を 4 本の exact-safe cut で削った。

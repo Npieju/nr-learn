@@ -1,5 +1,10 @@
 # Next Issue: Class Rest Surface Support Hardening
 
+Historical note:
+
+- この draft は `#42` として support-hardening execution まで完了している。
+- class-rest-surface support hardening は completed feature reference として扱い、この文書は historical issue source / artifact reference として使う。
+
 ## Summary
 
 `#41` の `r20260330_class_rest_surface_interactions_v1` は、evaluation summary では A anchor と明確に異なり、`auc=0.8417`、`ev_top1_roi=0.6837`、`wf_nested_test_roi_weighted=1.1003` と強い値を出した。一方で matching WF feasibility は `1/5` feasible folds に留まり、promotion gate は support block になった。

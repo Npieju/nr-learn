@@ -1,5 +1,10 @@
 # Next Issue: Resource-Safe Execution For Jockey Trainer Combo Candidate
 
+Historical note:
+
+- この draft は `#51` として resource-safe execution corrective まで完了している。
+- jockey-trainer-combo candidate の resource-safe execution は completed execution reference として扱い、この文書は historical issue source / operational reference として使う。
+
 ## Summary
 
 `#50` の first candidate `r20260330_jockey_trainer_combo_style_distance_v1` は、feature 仮説そのものではなく execution capacity で止まっている。

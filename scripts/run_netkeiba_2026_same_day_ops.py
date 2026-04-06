@@ -137,7 +137,7 @@ def main() -> int:
 
         actions: dict[str, Any] = {}
         completed = (
-            str(board_payload.get("status") or "") == "completed"
+            str(board_payload.get("status") or "") in {"completed", "handed_off"}
             and str(_read_json_dict(_resolve_path(args.handoff_manifest)).get("status") or "") == "completed"
         )
         if completed:

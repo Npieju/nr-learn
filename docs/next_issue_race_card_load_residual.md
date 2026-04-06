@@ -1,5 +1,10 @@
 # Next Issue: Netkeiba Race-Card Load Residual
 
+Historical note:
+
+- この draft は `#29` として exact-safe residual cut の landing まで完了している。
+- netkeiba race-card load residual は completed runtime reference として扱い、この文書は historical issue source / artifact reference として使う。
+
 ## Summary
 
 `#28` で exact-safe source-range skip を landing し、current mainline の supplemental residual はかなり縮んだ。

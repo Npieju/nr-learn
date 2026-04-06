@@ -149,3 +149,89 @@ meaning:
 
 - external result arrival 後の rerun は revision 固有 artifact で隔離できる
 - bootstrap rerun ごとの上書き衝突を避けられる
+
+## Operator Runbook
+
+external result arrival 後の再開は、この文書の wrapper を唯一の operator entrypoint として扱う。
+
+current blocker を読むときの一次参照は次である。
+
+- board:
+  - [local_nankan_data_status_board.json](/workspaces/nr-learn/artifacts/reports/local_nankan_data_status_board.json)
+- read order:
+  1. top-level `status`
+  2. top-level `current_phase`
+  3. top-level `recommended_action`
+  4. `readiness_surfaces.readiness_probe`
+  5. `readiness_surfaces.pre_race_handoff`
+  6. `readiness_surfaces.bootstrap_handoff`
+  7. `readiness_surfaces.readiness_watcher`
+
+operator rule:
+
+- board が `status=partial`, `current_phase=await_result_arrival` の間は rerun しない
+- board が `bootstrap_handoff.status=benchmark_ready` または `completed` に進んだときだけ child execution / formal read に移る
+- board だけで足りないときに限り、この文書の個別 manifest 順へ降りる
+
+default command:
+
+```bash
+cd /workspaces/nr-learn
+PYTHONPATH=/workspaces/nr-learn/src /workspaces/nr-learn/.venv/bin/python \
+  scripts/run_local_nankan_result_ready_bootstrap_handoff.py \
+  --wait-for-results \
+  --poll-interval-seconds 300 \
+  --run-bootstrap
+```
+
+phase read:
+
+1. `status=not_ready`
+  - result-ready race 未到着
+  - action: rerun せず blocked 維持
+2. `status=benchmark_ready`
+  - strict `pre_race_only` freeze 完了
+  - action: manifest の `bootstrap_command_plan` と `runtime_configs` を確認して child 実行へ進める
+3. `status=completed`
+  - `#101 -> #103` handoff が end-to-end で完了
+  - action: revision outputs を formal read して issue judgment に進む
+
+review order:
+
+1. [local_nankan_pre_race_ready_summary.json](/workspaces/nr-learn/artifacts/reports/local_nankan_pre_race_ready_summary.json)
+2. [local_nankan_pre_race_benchmark_handoff_manifest.json](/workspaces/nr-learn/artifacts/reports/local_nankan_pre_race_benchmark_handoff_manifest.json)
+3. [local_nankan_result_ready_bootstrap_handoff_manifest.json](/workspaces/nr-learn/artifacts/reports/local_nankan_result_ready_bootstrap_handoff_manifest.json)
+4. generated runtime configs under [artifacts/runtime_configs](/workspaces/nr-learn/artifacts/runtime_configs)
+
+decision rule:
+
+- `status=not_ready` は infra failure ではなく external blocker として扱う
+- `status=failed` は `current_phase` を見て `#101` handoff failure か `#103` child command failure かを切り分ける
+- `status=completed` のときだけ architecture parity first read に進める
+
+## Queue Update Template
+
+`#101` と `#103` が進んだ後に [github_issue_queue_current.md](/workspaces/nr-learn/docs/github_issue_queue_current.md) へ戻す summary は、次の block を起点にする。
+
+```text
+NAR completion update:
+
+1. `#101` strict `pre_race_only` benchmark rebuild は <completed|still blocked|failed> である
+2. result-ready read:
+  - races=<races>
+  - rows=<rows>
+  - ready_for_benchmark_rerun=<true|false>
+3. `#103` value-blend architecture bootstrap は <completed|benchmark_ready|blocked|failed> である
+4. if completed:
+  - revision=<revision>
+  - weighted_roi=<weighted_roi>
+  - feasible_folds=<feasible_folds>/<total_folds>
+  - decision=<promote|hold|reject>
+5. next NAR stage is <Stage 2 feature-family parity|keep blocked on Stage 0/1>
+```
+
+queue write rule:
+
+- `#101` が未完了なら current blocker は引き続き Stage 0 と書く
+- `#101` 完了かつ `#103` 未完了なら current blocker は Stage 1 architecture parity と書く
+- `#103` まで完了したら、`docs/next_issue_nar_class_rest_surface_replay.md` を Stage 2 future option から current next candidate へ繰り上げるかを明示する

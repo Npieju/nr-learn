@@ -1,5 +1,10 @@
 # Next Issue: Read-Tail Dominant Phase Revisit
 
+Historical note:
+
+- この draft は `#27` として revisit decision まで完了している。
+- read-tail dominant phase revisit は completed runtime reference として扱い、この文書は historical issue source / artifact reference として使う。
+
 ## Summary
 
 `#26` で current mainline の `tail_training_table` phase budget を repeated read した結果、append path は `~0.69s` で安定しており、次の dominant phase は明確に `_read_csv_tail` だった。

@@ -162,11 +162,13 @@ def _derive_status(
     if handoff_status == "completed" and benchmark_status in {"not_ready", "snapshot_failed", "train_failed", "evaluate_failed", "failed", "interrupted"}:
         return "partial", benchmark_phase or "benchmark_gate_blocked", benchmark_action
     if handoff_status == "completed":
-        return "completed", handoff_phase or "live_predict_completed", handoff_action
+        return "handed_off", handoff_phase or "live_predict_completed", handoff_action
+    if handoff_status == "timeout":
+        return "partial", handoff_phase or "await_history_ready_timeout", handoff_action
     if handoff_status in {"handoff_failed", "failed"}:
         return "failed", handoff_phase or "live_predict_failed", handoff_action
     if handoff_status == "waiting":
-        return "running", handoff_phase or "await_history_ready", handoff_action
+        return "waiting", handoff_phase or "await_history_ready", handoff_action
     if bool(readiness.get("benchmark_rerun_ready")):
         return "ready", "history_ready_for_live_handoff", "run_netkeiba_2026_live_handoff"
     if str(progress.get("current_stage") or ""):

@@ -12,6 +12,7 @@ import traceback
 
 
 ROOT = Path(__file__).resolve().parents[1]
+NO_MODEL_ARTIFACT_SUFFIX = "__NO_MODEL_ARTIFACT_SUFFIX__"
 SRC = ROOT / "src"
 if str(SRC) not in sys.path:
     sys.path.append(str(SRC))
@@ -825,6 +826,7 @@ def main() -> int:
     parser.add_argument("--train-max-train-rows", type=int, default=None)
     parser.add_argument("--train-max-valid-rows", type=int, default=None)
     parser.add_argument("--evaluate-model-artifact-suffix", default=None)
+    parser.add_argument("--evaluate-no-model-artifact-suffix", action="store_true")
     parser.add_argument("--evaluate-max-rows", type=int, default=120000)
     parser.add_argument("--evaluate-pre-feature-max-rows", type=int, default=None)
     parser.add_argument("--evaluate-start-date", default=None)
@@ -892,12 +894,17 @@ def main() -> int:
         lock_path = _build_lock_path(manifest_output, revision_slug=revision_slug)
 
         progress = ProgressBar(total=4, prefix="[revision-gate]", logger=log_progress, min_interval_sec=0.0)
+        effective_evaluate_model_artifact_suffix = args.evaluate_model_artifact_suffix
+        if args.evaluate_no_model_artifact_suffix:
+            effective_evaluate_model_artifact_suffix = NO_MODEL_ARTIFACT_SUFFIX
+
         progress.start(
             message=(
                 f"starting revision={revision_slug} profile={resolved_profile or 'custom'} config={config_path} "
                 f"data_config={data_config_path} feature_config={feature_config_path} "
                 f"train_max_train_rows={args.train_max_train_rows or 'config'} train_max_valid_rows={args.train_max_valid_rows or 'config'} "
-                f"skip_train={args.skip_train} evaluate_model_artifact_suffix={args.evaluate_model_artifact_suffix or 'none'}"
+                f"skip_train={args.skip_train} "
+                f"evaluate_model_artifact_suffix={effective_evaluate_model_artifact_suffix or 'none'}"
             )
         )
 
@@ -932,8 +939,8 @@ def main() -> int:
             feature_config_path=feature_config_path,
         )
         evaluate_command.extend(["--artifact-suffix", train_artifact_suffix])
-        if args.evaluate_model_artifact_suffix:
-            evaluate_command.extend(["--model-artifact-suffix", str(args.evaluate_model_artifact_suffix)])
+        if effective_evaluate_model_artifact_suffix is not None:
+            evaluate_command.extend(["--model-artifact-suffix", str(effective_evaluate_model_artifact_suffix)])
         if args.evaluate_pre_feature_max_rows is not None:
             evaluate_command.extend(["--pre-feature-max-rows", str(args.evaluate_pre_feature_max_rows)])
         if args.evaluate_start_date:
@@ -956,8 +963,8 @@ def main() -> int:
             feature_config_path=feature_config_path,
         )
         wf_command.extend(["--artifact-suffix", train_artifact_suffix])
-        if args.evaluate_model_artifact_suffix:
-            wf_command.extend(["--model-artifact-suffix", str(args.evaluate_model_artifact_suffix)])
+        if effective_evaluate_model_artifact_suffix is not None:
+            wf_command.extend(["--model-artifact-suffix", str(effective_evaluate_model_artifact_suffix)])
         if args.evaluate_pre_feature_max_rows is not None:
             wf_command.extend(["--pre-feature-max-rows", str(args.evaluate_pre_feature_max_rows)])
         if args.evaluate_start_date:

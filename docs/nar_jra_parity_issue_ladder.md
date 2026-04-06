@@ -110,3 +110,21 @@ rule:
 
 1. `#101` result-ready rerun
 2. `#103`
+
+## Queue Sync Template
+
+`#101` / `#103` 実行後に ladder と current queue を同期するときは、次の read を使う。
+
+```text
+Queue sync read:
+- Stage 0 benchmark parity: <open|completed>
+- Stage 1 architecture parity: <blocked|open|completed>
+- current blocker: <external result arrival|architecture bootstrap execution|none>
+- next candidate: <issue number or draft path>
+```
+
+promotion rule:
+
+- Stage 0 が未完了なら Stage 1 は blocked のまま維持する
+- Stage 1 が completed したときだけ Stage 2 selective replay family を current next candidate に上げる
+- Stage 2 へ上げる first candidate は現時点では [next_issue_nar_class_rest_surface_replay.md](/workspaces/nr-learn/docs/next_issue_nar_class_rest_surface_replay.md) を起点にする

@@ -1,5 +1,10 @@
 # Next Issue: Surface Plus Class-Layoff Interaction Candidate
 
+Historical note:
+
+- この draft は `#44` として formal candidate execution まで完了している。
+- surface-plus-class-layoff interaction candidate は completed feature reference として扱い、この文書は historical issue source / artifact reference として使う。
+
 ## Summary
 
 `#43` の `r20260330_surface_interaction_only_v1` は、`#41` より support を改善したが、formal result は `hold` だった。

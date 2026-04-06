@@ -48,10 +48,14 @@
 - broad strategy change は human review 前提
 - JRA baseline 更新は human judgment を要求する
 - 不足する規則は会話ではなく docs / tests / instructions に追加する
+- Git の更新を長く滞らせない。同じ変更単位の code / config / script / docs は意味のある小さめの batch でまとめ、issue の進捗に対応する commit / push を早めに行う。
 - 数秒で終わらない source に progress がない変更は未完成扱いにする
 - progress は possible な限り分母付きで出し、生存確認だけの heartbeat を progress 完了扱いにしない
 - 重い task に 60 秒超の no-output 区間が残る変更は未完成扱いにする
 - 重い task は bounded interrupt rule を持ち、長時間 silent のまま無制限に走らせない
+- Pylance の code snippet execution で重い Python script を回さない。重い Python 実行は workspace Python environment を確認した上で terminal から行う。
+- 重い Python 実行では外部ログファイルを必須にする。`--log-file` を優先し、未対応 script は `artifacts/logs/...` へ redirect または `tee` し、ログ path を進捗と最終報告に明記する。
+- Python 実行が environment 起因で失敗したときは、安易に別経路へ逃げず、interpreter / package / 実行 prefix を確認して environment を修復してから再実行する。
 
 ## Important Entry Points
 

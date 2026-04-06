@@ -1,5 +1,10 @@
 # Next Issue: Tighter Policy September Fallback Compare
 
+Historical note:
+
+- この draft は `#89` として seasonal fallback ordering decision まで完了している。
+- `current_sep_guard_candidate` を second seasonal fallback に据え置く判断は確定済みであり、この文書は historical decision reference として使う。
+
 ## Summary
 
 `current_tighter_policy_search_candidate_2025_latest` は formal support が強いが、現状の seasonal ordering では third defensive option に留まっている。

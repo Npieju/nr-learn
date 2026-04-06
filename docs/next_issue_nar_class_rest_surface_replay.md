@@ -1,5 +1,11 @@
 # Next Issue: NAR Class-Rest-Surface Replay
 
+Current queue note:
+
+- この draft は未完了の future option だが、current active NAR issue ではない。
+- issue ladder 上では Stage 2 feature-family parity に属し、着手順は `#101` strict `pre_race_only` benchmark rebuild 完了後、`#103` value-blend architecture bootstrap の後段である。
+- したがって現時点では未起票 draft として保持し、current queue には昇格しない。
+
 ## Summary
 
 `#57` で local Nankan baseline の denominator-first formal read は確定した。

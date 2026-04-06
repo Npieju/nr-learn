@@ -1,5 +1,10 @@
 # Next Issue: Owner Signal Ablation Audit
 
+Historical note:
+
+- この hypothesis は actual execution と final hold decision まで読了済みである。
+- current queue の secondary draft ではなく、historical decision reference として使う。
+
 ## Summary
 
 JRA current baseline には `owner_last_50_win_rate` が既に入っている。したがって owner family の次仮説は add-on ではなく、owner を外したときに formal / actual-date でどれだけ劣化するかを測る ablation である。

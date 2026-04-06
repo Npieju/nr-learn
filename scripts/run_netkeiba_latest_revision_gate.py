@@ -148,6 +148,10 @@ def main() -> int:
     parser.add_argument("--evaluate-pre-feature-max-rows", type=int, default=300000)
     parser.add_argument("--evaluate-wf-mode", choices=["off", "fast", "full"], default="full")
     parser.add_argument("--evaluate-wf-scheme", choices=["single", "nested"], default="nested")
+    parser.add_argument("--skip-train", action="store_true")
+    parser.add_argument("--train-artifact-suffix", default=None)
+    parser.add_argument("--evaluate-model-artifact-suffix", default=None)
+    parser.add_argument("--evaluate-no-model-artifact-suffix", action="store_true")
     parser.add_argument("--promotion-min-feasible-folds", type=int, default=1)
     parser.add_argument("--snapshot-output", default="artifacts/reports/netkeiba_coverage_snapshot_2025_latest.json")
     parser.add_argument("--manifest-output", default=None)
@@ -177,6 +181,12 @@ def main() -> int:
             else None,
             "wf_mode": args.evaluate_wf_mode,
             "wf_scheme": args.evaluate_wf_scheme,
+            "model_artifact_suffix": args.evaluate_model_artifact_suffix,
+            "no_model_artifact_suffix": bool(args.evaluate_no_model_artifact_suffix),
+        },
+        "training": {
+            "skip_train": bool(args.skip_train),
+            "train_artifact_suffix": args.train_artifact_suffix,
         },
         "snapshot_output": artifact_display_path(snapshot_path, workspace_root=ROOT),
         "target_manifests": {
@@ -235,6 +245,14 @@ def main() -> int:
             revision_command.extend(
                 ["--evaluate-pre-feature-max-rows", str(args.evaluate_pre_feature_max_rows)]
             )
+        if args.skip_train:
+            revision_command.append("--skip-train")
+        if args.train_artifact_suffix:
+            revision_command.extend(["--train-artifact-suffix", str(args.train_artifact_suffix)])
+        if args.evaluate_model_artifact_suffix:
+            revision_command.extend(["--evaluate-model-artifact-suffix", str(args.evaluate_model_artifact_suffix)])
+        if args.evaluate_no_model_artifact_suffix:
+            revision_command.append("--evaluate-no-model-artifact-suffix")
         if args.dry_run:
             revision_command.append("--dry-run")
 

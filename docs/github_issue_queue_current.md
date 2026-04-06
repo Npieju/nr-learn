@@ -17,49 +17,42 @@
 
 ## 3. Current Issue Set
 
-### 3.0 Current Queue As Of 2026-04-03
+### 3.0 Current Queue As Of 2026-04-05
 
-NAR separate-universe line は、baseline narrow と `jockey_trainer_combo_replay_v1_pathfix` まで formal `pass / promote` を通した。  
-その後の integrity audit と corrective で、次が確認できた。
+2026-04-05 時点の current queue は、JRA latest の source-of-truth docs と latest formal rerun の再現導線を揃えた状態を前提に、次のように固定する。
 
-- high AUC / high EV ROI の大部分は `odds / popularity` 依存
-- no-market ablation でも policy 自体は成立
-- baseline pathfix line は evaluation `3/3 no_bet + bets=0` でも formal 側で uplift していた
-- `#72` で `3/3 no_bet + bets=0` line の formal promote は short-circuit 済み
-- `#73` で formal benchmark は held-out test metrics に揃えた
-- no-market rerun では old formal `ROI=0.8104` が held-out formal `ROI=0.7234` へ低下した
-- `#74` で local Nankan promotion gate に held-out formal `weighted_roi >= 1.0` の minimal guard を入れた
-- `#67` owner replay は no-op ではなかったが evaluation `3/3 no_bet + bets=0` で reject と確定した
-- `#49` jockey-trainer-combo family は first child と role split まで終え、analysis-first promoted candidate で一段落した
-- `#75` tighter policy frontier は existing artifact compare で再確定し、strictest defensible anchor は引き続き `abs90` で据え置きと結論した
-- したがって current NAR corrective stack は `#72` no-bet short-circuit, `#73` held-out alignment, `#74` threshold realignment まで完了した
+- `current_recommended_serving_2025_latest` は引き続き operational baseline である。
+- `current_best_eval_2025_latest` は `r20260405_2025latest_refresh_reuse_runtimecfg_wfprofilefix` により formal refresh が `pass / promote` まで再現できる evaluation mainline reference である。
+- current active priority は、新しい broad 実行を足すことではなく、docs / queue の drift を抑えつつ future option を JRA baseline 本線と切り分けることである。
+- したがって JRA / NAR の新しい重い execution は、まず 1 issue = 1 measurable hypothesis の GitHub issue を明示してから再開する。
+- `next_issue_*.md` 群の多くは reference draft library として保持しており、この節または `## 4. Execution Order` に明示したものだけを current queue として扱う。
+
+Current reading:
+
+1. JRA 本線は「未着手の active experiment」が空である。再開時は 1 本だけ issue を切る。
+2. `recent_history_track_distance_selective` は `#96`, role split は `#97` まで進み、next candidate ではなく historical completed reference である。
+3. `owner_signal_ablation_audit` は actual execution と hold decision まで確定しており、secondary draft ではなく historical decision reference である。
+4. `jockey-trainer combo style-distance` は `#108` の formal child と `#115` の role split まで完了しており、historical completed reference である。
+5. NAR separate-universe line は future option として保持するが、JRA baseline の current queue には混ぜない。
+6. 既存の NAR corrective / replay / parity 系 draft は archive/reference として残し、必要時のみ個別 issue で再開する。
 
 Primary completed issues:
 
-- `#69`
-- <https://github.com/Npieju/nr-learn/issues/69>
-- `#70`
-- <https://github.com/Npieju/nr-learn/issues/70>
-- `#71`
-- <https://github.com/Npieju/nr-learn/issues/71>
-- `#72`
-- <https://github.com/Npieju/nr-learn/issues/72>
-- `#73`
-- <https://github.com/Npieju/nr-learn/issues/73>
-- `#74`
-- <https://github.com/Npieju/nr-learn/issues/74>
-- `#67`
-- <https://github.com/Npieju/nr-learn/issues/67>
-- `#49`
-- <https://github.com/Npieju/nr-learn/issues/49>
-- `#75`
-- <https://github.com/Npieju/nr-learn/issues/75>
+- latest 2025 serving baseline formalization は完了
+- latest eval mainline formal refresh は完了
+- latest wrapper reuse-compare pass-through、runtime-config restore、WF `--profile` compatibility は完了
+- public / internal source-of-truth docs の同期は完了
+
+Archive note:
+
+- 以降の `3.1+` は historical draft / template library を含む。active queue として読むのは `3.0` と `## 4. Execution Order` を優先する。
 
 Primary next execution order:
 
-1. JRA 本線は new hypothesis issue を切って再開する
-2. `tighter policy search` family は `abs90` anchor を維持し、near-par challenger は reference 扱いに留める
-3. NAR side は held-out formal benchmark を正本に維持し、新 hypothesis は必要時に別 issue で切る
+1. source-of-truth docs と queue summary が open / closed issue 状態と矛盾しないよう保守する
+2. JRA 本線を再開する場合に限り、draft library から次の 1 measurable hypothesis issue を選ぶ
+3. 新しい JRA hypothesis は 1 本ずつ進め、並列で open にしない
+4. NAR side は future option として別 issue でのみ再開し、current JRA queue と混在させない
 
 Latest promoted-candidate ordering:
 
@@ -106,85 +99,43 @@ Latest fallback compare:
 
 Current open-work expectation:
 
-1. JRA 本線は `pace / closing-fit` family の selective replay を切る
-2. `gate/frame/course` extension は broad default でも September fallback primary でも September overlay でもなく、compare reference に留める
-3. `current_sep_guard_candidate` は September seasonal fallback のまま据え置く
+1. JRA 本線の current active issue は `#117` である
+2. 最有力の next JRA hypothesis source は `docs/next_issue_tighter_policy_seasonal_regime_narrowing.md` である
+3. hypothesis は `tighter policy search` family の season-aware narrowing を narrow に読む policy issue である
+4. `gate/frame/course`, `pace/closing-fit`, `kelly runtime`, `class-rest-surface conditional`, `recent-history track-distance`, `deque_trim promotion decision` はこの節では next queue ではなく completed / historical reference として扱う
+5. `current_sep_guard_candidate` は September seasonal fallback のまま据え置く
+6. NAR side の open issue は `#101`, `#103` のみであり、current JRA queue とは混在させない
+7. `docs/next_issue_nar_class_rest_surface_replay.md` は Stage 2 feature-family parity の future option であり、`#103` の後段に置く
 
-Latest formal completion:
+Historical note:
 
-1. `#83` pace-closing-fit selective candidate は formal `pass / promote` まで完了した
-2. first child `r20260403_pace_closing_fit_selective_v1` は
-   - `auc=0.8411224406691354`
-   - `top1_roi=0.7982417834980464`
-   - `ev_top1_roi=0.6212479889680533`
-   - `wf_nested_test_roi_weighted=0.8857142857142858`
-   - `wf_nested_test_bets_total=357`
-   - held-out formal `weighted_roi=1.0307760253096685`
-   - `formal_benchmark_bets_total=938`
-   - `bets / races / bet_rate = 938 / 6244 = 15.02%`
-3. baseline refresh 比では `auc`, `ev_top1_roi`, nested WF weighted ROI は小幅に上、`top1_roi` と nested WF bet count は下
-4. したがって next execution source は actual-date role split である
+1. `#83` / `#84` / `#85` の pace-closing-fit line は formal / role split / fallback compare まで完了した
+2. `#92` の kelly runtime family は anchor challenger としては reject まで完了した
+3. `#94` / `#95` の class-rest-surface conditional line は formal / role split まで完了した
+4. `#96` / `#97` の recent-history track-distance line は formal / role split まで完了した
+5. `#116` の deque trim promotion decision は `analysis-only retention` で close した
+6. したがって、これらの draft は再利用可能な historical issue source ではあるが、2026-04-05 時点の current next issue draft ではない
 
 Primary next issue draft:
 
-- `docs/next_issue_kelly_runtime_family.md`
+- `docs/next_issue_tighter_policy_seasonal_regime_narrowing.md`
+- GitHub issue:
+   - `#117`
+   - <https://github.com/Npieju/nr-learn/issues/117>
+- JRA 本線の再開はこの 1 hypothesis を起点にする
+- NAR residual unissued draft library は `docs/next_issue_nar_class_rest_surface_replay.md` のみである
+- ただし NAR residual draft は current next issue ではなく、`#101` と `#103` の後段候補である
 
 Latest next feature queue:
 
-1. next JRA feature hypothesis は `class / rest / surface` family の conditional selective child とする
+1. JRA 本線の次 issue は `tighter policy search` family の season-aware narrowing とする
 2. issue source:
-   - `docs/next_issue_class_rest_surface_conditional_selective_candidate.md`
+   - `docs/next_issue_tighter_policy_seasonal_regime_narrowing.md`
 3. rationale:
-   - current baseline では family 本体は中核に残っている
-   - ただし conditional interaction 群
-     - `horse_surface_switch_short_turnaround`
-     - `horse_surface_switch_long_layoff`
-     - `horse_class_up_short_turnaround`
-     - `horse_class_down_short_turnaround`
-     - `horse_class_up_long_layoff`
-     - `horse_class_down_long_layoff`
-     は builder / force-include には存在するのに actual used set には残っていない
-4. したがって broad family rerun ではなく、上記 interaction 群の selective child を first read とする
-5. `#94` の selective child は formal `pass / promote` まで完了した
-6. focal 6 列は feature-gap / actual used set の両方で成立し、no-op ではなかった
-7. revision `r20260404_class_rest_surface_conditional_selective_v1` は
-   - `auc=0.8426169492248933`
-   - `top1_roi=0.8082087836284203`
-   - `ev_top1_roi=0.8213612324672338`
-   - `wf_nested_test_roi_weighted=0.7632385120350111`
-   - `wf_nested_test_bets_total=457`
-   - held-out formal `weighted_roi=1.2311149102465346`
-   - `formal_benchmark_bets_total=9806`
-   - `formal_benchmark_feasible_fold_count=3`
-8. next execution source は actual-date role split
-9. issue source:
-   - `docs/next_issue_class_rest_surface_conditional_actual_date_role_split.md`
-10. broad September read は先に確定済み
-    - baseline `32 bets / -27.3 / pure bankroll 0.2958869306148325`
-    - candidate `5 bets / -3.6 / pure bankroll 0.8808888460219477`
-11. したがって current judgment は `September difficult-regime positive`, role finalization は December / latest control read 待ち
-12. `#95` actual-date role split は確定
-    - broad September:
-      - baseline `32 bets / -27.3 / pure bankroll 0.2958869306148325`
-      - candidate `5 bets / -3.6 / pure bankroll 0.8808888460219477`
-    - December control:
-      - baseline `45 bets / +21.8 / pure bankroll 1.6711564921099862`
-      - candidate `30 bets / -9.3 / pure bankroll 0.7513642270122226`
-13. したがって `r20260404_class_rest_surface_conditional_selective_v1` は formal `pass / promote` だが、operational role は `analysis-first promoted candidate` に固定し、serving default には上げない
-
-Latest next feature queue:
-
-1. next JRA feature hypothesis は `recent form / history` family の track-distance selective child とする
-2. issue source:
-   - `docs/next_issue_recent_history_track_distance_selective_candidate.md`
-3. rationale:
-   - `recent form / history` family は Tier B で、baseline core として残っている
-   - builder には
-     - `horse_track_distance_last_3_avg_rank`
-     - `horse_track_distance_last_5_win_rate`
-     が既にある
-   - `fundamental_enriched` では force include されていたが、current high-coverage rich baseline では未採用
-4. したがって broad history rerun ではなく、上記 pair の narrow selective child を first read とする
+   - feature family の broad widening より execution risk が低い
+   - existing formal support が strongest policy family にある
+   - September downside と December control を 1 issue 1 hypothesis で読み分けられる
+4. 再開時はこの 1 measurable hypothesis だけを GitHub issue に起こす
 
 Latest combo track-distance selective read:
 
@@ -223,43 +174,39 @@ Latest combo track-distance role split:
 
 Current active issue:
 
-- `#108`
-- <https://github.com/Npieju/nr-learn/issues/108>
+- JRA 本線の active issue は `#117`
+- <https://github.com/Npieju/nr-learn/issues/117>
+- latest completed role split は `#115`
+- <https://github.com/Npieju/nr-learn/issues/115>
 
 Current active read:
 
-1. `#108` `jockey / trainer / combo` family の `style + track-distance` selective child を開始した
-2. config:
-   - `configs/features_catboost_rich_high_coverage_diag_jockey_trainer_combo_regime_extension.yaml`
-3. feature gap summary:
-   - `artifacts/reports/feature_gap_summary_jockey_trainer_combo_style_distance_selective_v1.json`
-4. feature-gap read:
-   - `priority_missing_raw_columns=[]`
-   - `missing_force_include_features=[]`
-   - `low_coverage_force_include_features=[]`
-5. focal 8 features は全て `selected=True`, `present=True`, `status=ok`
-6. coverage:
-   - style pair `0.92133 - 0.92175`
-   - track-distance quartet `0.92386`
-7. current judgment:
-   - selective child は buildable
-   - no-op risk は低い
-8. next execution source:
-   - stack build
-9. first acceptance point:
-   - win component `auc=0.8345232157261651`
-   - `selected features=109`
-   - focal 8 features は actual used set に全て入った
-10. second acceptance point:
-   - ROI component `top1_roi=0.7817685589519648`
-   - `selected features=109`
-   - focal 8 features は ROI actual used set に全て入った
+1. `#117` seasonal regime narrowing on tighter-policy anchor を開始した
+2. first pass threshold sweep では `r20260329_tighter_policy_ratio003_abs90` が依然として strictest defensible `5/5` anchor と再確認された
+3. new frontier read:
+   - `0.03 / 100 -> 4/5 feasible folds`
+   - `0.03 / 90 -> 5/5 feasible folds`
+   - `0.03 / 80 -> 5/5 feasible folds`
+4. dominant blocking reason は引き続き `min_bets` である
+5. したがって current next move は broad frontier reopening ではなく、September / December compare を使った season-aware role read である
 
 Blocked parallel track:
 
 1. `#101` timestamped strict `pre_race_only` benchmark handoff は外部結果待ち
 2. `result_ready_races=0`
 3. NAR side の next move は result arrival 待ち
+
+Queue sync template after NAR progress:
+
+1. `#101` strict `pre_race_only` benchmark rebuild は <completed|blocked|failed>
+2. result-ready support は `<rows> rows / <races> races`
+3. `#103` value-blend architecture bootstrap は <completed|benchmark_ready|blocked|failed>
+4. if `#103` completed:
+   - revision `<revision>`
+   - held-out formal `weighted_roi=<weighted_roi>`
+   - `feasible_folds=<feasible_folds>/<total_folds>`
+   - decision `<promote|hold|reject>`
+5. next NAR stage は `<Stage 2 selective replay|keep blocked>`
 
 Background read:
 
@@ -402,6 +349,15 @@ Background read:
    - `artifacts/reports/local_nankan_readiness_watcher_manifest.json`
    を使う
 56. active issue は `#101` に戻す
+57. current NAR blocker を 1 file で読む canonical board は
+   - `artifacts/reports/local_nankan_data_status_board.json`
+   を使う
+58. board の `readiness_surfaces` では
+   - probe
+   - pre-race handoff
+   - bootstrap handoff
+   - watcher
+   をまとめて追えるため、`#101/#103` の current phase はまず board を読む
 
 Latest actual-date role split:
 
@@ -830,16 +786,15 @@ Primary references:
 
 今の順番は次で固定する。
 
-1. `[ops] Revision gate duplicate-run prevention and artifact collision guard`
-2. `[experiment] Tighter policy search frontier refinement`
-3. `[ops] Progress instrumentation real-run validation and message quality pass`
+1. source-of-truth docs と queue summary が current reading と矛盾しないかを保守する
+2. JRA 本線は active issue が空のまま維持されているので、再開時だけ draft library から次の 1 measurable hypothesis issue を選ぶ
+3. 並列で新しい hypothesis issue を足さない
+4. NAR separate-universe は current JRA queue の外に置き、必要時だけ別 issue で再開する
 
 ## 5. Note
 
-この環境では `gh` CLI が入っておらず、現在見えている GitHub 連携にも issue 作成 endpoint はない。そのため、当面はこの文書を GitHub issue の下書き正本として扱い、issue 作成は GitHub UI 側で行う前提にする。
+`gh` は利用可能であり、issue を先に立ててから実行する運用を前提にする。
 
-2026-03-29 update:
-
-- `gh` は利用可能になった
-- 直近 queue は GitHub issue `#1`, `#2`, `#3` として起票済み
-- 以後は原則として案件ごとに issue を先に立て、完了時に decision summary を追記して close する
+- この文書は current queue の要約と draft library の境界を示す正本である。
+- 実行開始前には `3.0` と `## 4. Execution Order` を見て、active issue が本当に current queue かを確認する。
+- `3.1+` にある historical draft は再利用してよいが、そのまま active queue とは見なさない。

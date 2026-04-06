@@ -1,5 +1,10 @@
 # Next Issue: Materialized Supplemental Tables
 
+Historical note:
+
+- この draft は `#16` として materialized supplemental path の整備まで完了している。
+- materialized supplementals は completed runtime reference として扱い、この文書は historical issue source / implementation reference として使う。
+
 ## GitHub Issue
 
 - `#16`

@@ -199,7 +199,10 @@ def main() -> int:
                 time.sleep(poll_interval_seconds)
 
         completed_passes = len(pass_records)
-        latest_status = str(latest_summary.get("status") or ("failed" if completed_passes < max_passes else "completed"))
+        all_passes_completed = completed_passes == max_passes and all(
+            record.get("status") == "completed" for record in pass_records
+        )
+        latest_status = str(latest_summary.get("status") or ("completed" if all_passes_completed else "failed"))
         latest_phase = str(latest_summary.get("current_phase") or "capture_loop")
         latest_action = str(latest_summary.get("recommended_action") or "inspect_capture_loop_manifest")
 
@@ -216,7 +219,7 @@ def main() -> int:
         }
         write_json(wrapper_manifest_path, wrapper_manifest)
         progress.complete(message=f"loop manifest ready output={wrapper_manifest_path}")
-        return 0 if all(record.get("status") == "completed" for record in pass_records) else 1
+        return 0 if all_passes_completed else 1
     except KeyboardInterrupt:
         print("[local-nankan-pre-race-loop] interrupted by user")
         return 130
