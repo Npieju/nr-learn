@@ -83,6 +83,11 @@ wrapper は次を固定する。
 2. `not_ready` のときは bounded stop で終える
 3. `#103` 用 bootstrap command plan を manifest に残す
 4. `--run-bootstrap` を付けた場合だけ、win / ROI / stack / revision gate を順に実行する
+5. heavy child command の stdout / stderr は `artifacts/logs/` 配下の step 別 log file に残す
+6. future-only wait-cycle supervisor 経由では cycle-scoped log prefix を使い、arrival 後の handoff/bootstrap log が cycle history と 1:1 で対応する
+7. future-only readiness cycle 経由では `pre_race_benchmark_handoff` / `pre_race_ready_summary` / `pre_race_ready_primary_materialize` / `pre_race_ready_benchmark_gate` も cycle-scoped report path に分離する
+8. future-only wait-cycle supervisor 経由では bootstrap revision も cycle-scoped にし、runtime config と downstream model/report output の上書きを避ける
+9. future-only wait-cycle supervisor 経由では filtered pre-race card/result/primary CSV も cycle-scoped にし、中間 data artifact の上書きを避ける
 
 validation:
 
@@ -104,6 +109,7 @@ confirmed read:
 - `recommended_action=wait_for_result_ready_pre_race_races`
 - `bootstrap_command_plan` length=`4`
 - first step=`train_win_component`
+- `handoff_command_result.log_file` と `bootstrap_command_plan[*].log_file` が `artifacts/logs/` を指す
 
 meaning:
 
@@ -162,15 +168,18 @@ current blocker を読むときの一次参照は次である。
   1. top-level `status`
   2. top-level `current_phase`
   3. top-level `recommended_action`
-  4. `readiness_surfaces.readiness_probe`
-  5. `readiness_surfaces.pre_race_handoff`
-  6. `readiness_surfaces.bootstrap_handoff`
-  7. `readiness_surfaces.readiness_watcher`
+  4. `readiness_surfaces.capture_loop`
+  5. `readiness_surfaces.readiness_probe`
+  6. `readiness_surfaces.pre_race_handoff`
+  7. `readiness_surfaces.bootstrap_handoff`
+  8. `readiness_surfaces.readiness_watcher`
+  9. `readiness_surfaces.followup_entrypoint`
 
 operator rule:
 
 - board が `status=partial`, `current_phase=await_result_arrival` の間は rerun しない
 - board が `bootstrap_handoff.status=benchmark_ready` または `completed` に進んだときだけ child execution / formal read に移る
+- refresh 完了直後の readiness-only 再確認は `readiness_surfaces.followup_entrypoint` の dry-run/run preview を正本入口として使う
 - board だけで足りないときに限り、この文書の個別 manifest 順へ降りる
 
 default command:
@@ -234,4 +243,4 @@ queue write rule:
 
 - `#101` が未完了なら current blocker は引き続き Stage 0 と書く
 - `#101` 完了かつ `#103` 未完了なら current blocker は Stage 1 architecture parity と書く
-- `#103` まで完了したら、`docs/next_issue_nar_class_rest_surface_replay.md` を Stage 2 future option から current next candidate へ繰り上げるかを明示する
+- `#103` まで完了したら、`docs/issue_library/next_issue_nar_class_rest_surface_replay.md` を Stage 2 future option から current next candidate へ繰り上げるかを明示する

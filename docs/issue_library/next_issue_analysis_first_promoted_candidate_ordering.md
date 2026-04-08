@@ -135,8 +135,8 @@ Current promoted-but-non-default set:
 - `artifacts/reports/promotion_gate_r20260403_gate_frame_course_regime_extension_v1.json`
 - `artifacts/reports/promotion_gate_r20260403_pace_closing_fit_selective_v1.json`
 - `artifacts/reports/promotion_gate_r20260404_jockey_trainer_combo_closing_time_selective_v1.json`
-- `docs/next_issue_post_surface_plus_class_layoff_promotion.md`
-- `docs/next_issue_surface_plus_class_layoff_bet_rate_robustness.md`
-- `docs/next_issue_gate_frame_course_actual_date_role_split.md`
-- `docs/next_issue_pace_closing_fit_actual_date_role_split.md`
-- `docs/next_issue_jockey_trainer_combo_closing_time_role_split.md`
+- `docs/issue_library/next_issue_post_surface_plus_class_layoff_promotion.md`
+- `docs/issue_library/next_issue_surface_plus_class_layoff_bet_rate_robustness.md`
+- `docs/issue_library/next_issue_gate_frame_course_actual_date_role_split.md`
+- `docs/issue_library/next_issue_pace_closing_fit_actual_date_role_split.md`
+- `docs/issue_library/next_issue_jockey_trainer_combo_closing_time_role_split.md`

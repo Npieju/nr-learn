@@ -166,7 +166,7 @@ meaning:
 - `#100` は close 条件を満たした
 - 次段は strict `pre_race_only` subset を使った benchmark rebuild である
 - execution source:
-  - [next_issue_nar_pre_race_only_benchmark_rebuild.md](/workspaces/nr-learn/docs/next_issue_nar_pre_race_only_benchmark_rebuild.md)
+  - [next_issue_nar_pre_race_only_benchmark_rebuild.md](/workspaces/nr-learn/docs/issue_library/next_issue_nar_pre_race_only_benchmark_rebuild.md)
 
 ## Residual Risk
 

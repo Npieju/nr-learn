@@ -2,6 +2,11 @@
 
 ## Summary
 
+parent completion gate:
+
+- `#123 [nar] JRA-equivalent trust completion gate`
+- `#101` の role は `Stage 0 benchmark trust` を解く blocker issue であり、これ自体は NAR solved を意味しない
+
 `#100` で local Nankan collector に provenance persistence を入れ、small-scope live recrawl で strict `pre_race` row の実在を確認した。
 
 - live recrawl:
@@ -37,14 +42,17 @@ blocked 中の canonical read は次である。
   - `status`
   - `current_phase`
   - `recommended_action`
+  - `readiness_surfaces.capture_loop`
   - `readiness_surfaces.readiness_probe`
   - `readiness_surfaces.pre_race_handoff`
   - `readiness_surfaces.bootstrap_handoff`
   - `readiness_surfaces.readiness_watcher`
+  - `readiness_surfaces.followup_entrypoint`
 
 rule:
 
 - board が `status=partial`, `current_phase=await_result_arrival` の間は `#101` は external result arrival 待ちのままと読む
+- refresh 完了直後の bounded re-check は `readiness_surfaces.followup_entrypoint` から follow-up oneshot preview へ降りる
 - detail が必要なときだけ、この文書の個別 manifest / smoke artifact に降りる
 
 ## In Scope
@@ -207,6 +215,7 @@ meaning:
 
 - `#101` は依然として external result arrival のみで blocked している
 - `#103` も同じ readiness 条件の後段 blocker として維持する
+- `#101` が完了しても、それは `#123` に対する Stage 0 exit であり、NAR completion そのものではない
 
 ## Stop Condition
 

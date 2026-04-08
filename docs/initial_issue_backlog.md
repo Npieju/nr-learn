@@ -63,7 +63,7 @@ feature family の初版 ranking は [feature_family_ranking.md](feature_family_
 
 policy family の初版 shortlist は [policy_family_shortlist.md](policy_family_shortlist.md) を参照する。
 
-次の最有力 issue 下書きは [next_issue_tighter_policy_frontier.md](next_issue_tighter_policy_frontier.md) を参照する。
+次の最有力 issue 下書きは [next_issue_tighter_policy_frontier.md](issue_library/next_issue_tighter_policy_frontier.md) を参照する。
 
 formal 化前の確認には [revision_gate_candidate_checklist.md](revision_gate_candidate_checklist.md) を使う。
 

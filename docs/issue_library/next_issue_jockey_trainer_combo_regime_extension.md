@@ -49,7 +49,7 @@ tracked config:
 
 detail:
 
-- `docs/next_issue_jockey_trainer_combo_style_distance_candidate.md`
+- `docs/issue_library/next_issue_jockey_trainer_combo_style_distance_candidate.md`
 
 ## Final Read
 

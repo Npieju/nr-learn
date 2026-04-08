@@ -214,4 +214,4 @@ current judgment:
 
 next execution source:
 
-- `docs/next_issue_jockey_trainer_combo_style_distance_actual_date_role_split.md`
+- `docs/issue_library/next_issue_jockey_trainer_combo_style_distance_actual_date_role_split.md`

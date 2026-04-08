@@ -2,6 +2,11 @@
 
 ## Summary
 
+parent completion gate:
+
+- `#123 [nar] JRA-equivalent trust completion gate`
+- `#103` の role は `Stage 1 architecture parity` を解く blocker issue であり、これ自体は NAR solved を意味しない
+
 NAR を JRA と同水準の model architecture で比較できるようにするには、strict `pre_race_only` benchmark が成立した後に `value_blend` family を持ち込む必要がある。
 
 current NAR は dataset readiness corrective が先行しており、LightGBM baseline line までは formalized されているが、JRA 本線の
@@ -203,15 +208,18 @@ blocked 中の canonical read は次である。
   - `status`
   - `current_phase`
   - `recommended_action`
+  - `readiness_surfaces.capture_loop`
   - `readiness_surfaces.readiness_probe`
   - `readiness_surfaces.pre_race_handoff`
   - `readiness_surfaces.bootstrap_handoff`
   - `readiness_surfaces.readiness_watcher`
+  - `readiness_surfaces.followup_entrypoint`
 
 rule:
 
 - blocked 中は、まず board を見る
 - board が `status=partial`, `current_phase=await_result_arrival` なら current blocker は external result arrival のままと読む
+- refresh 完了直後の readiness-only 再確認は `readiness_surfaces.followup_entrypoint` の preview から follow-up oneshot に降りる
 - 詳細が必要なときだけ個別 manifest に降りる
 
 default surface:
@@ -276,6 +284,7 @@ meaning:
 
 - `#103` は now blocked issue だが、resume path 自体は fixed されている
 - unblock 後は `#101` handoff 完了確認と同時に、同じ entrypoint から architecture bootstrap を再現できる
+- `#103` 完了は `#123` に対する Stage 1 exit であり、Stage 2/3 parity と operator trust が残る限り NAR completion ではない
 
 ## Formal Read Contract
 

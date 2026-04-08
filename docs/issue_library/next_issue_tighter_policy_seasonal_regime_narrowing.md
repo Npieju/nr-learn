@@ -192,7 +192,7 @@ Stop Condition
 
 - `docs/policy_family_shortlist.md`
 - `docs/tighter_policy_frontier_execution.md`
-- `docs/next_issue_tighter_policy_frontier.md`
+- `docs/issue_library/next_issue_tighter_policy_frontier.md`
 - `artifacts/reports/promotion_gate_r20260325_current_recommended_serving_2025_latest_benchmark_refresh.json`
 - `artifacts/reports/promotion_gate_r20260329_tighter_policy_ratio003_abs90.json`
 

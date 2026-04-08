@@ -207,4 +207,4 @@ if ML model development stage checklist is standardized and referenced from the 
 
 その次の issue 候補 `Policy family shortlist for high-ROI / controlled-drawdown experiments` は、[policy_family_shortlist.md](policy_family_shortlist.md) を下書き兼 outcome として使う。
 
-その直後の実行候補は [next_issue_tighter_policy_frontier.md](next_issue_tighter_policy_frontier.md) を使う。
+その直後の実行候補は [next_issue_tighter_policy_frontier.md](issue_library/next_issue_tighter_policy_frontier.md) を使う。
