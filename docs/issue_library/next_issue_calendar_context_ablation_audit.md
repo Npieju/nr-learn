@@ -92,3 +92,44 @@ interpretation:
 - ablation config 自体は clean に buildable
 - calendar context 3 列を除いた narrow baseline candidate として first gate は通った
 - no-op や low-coverage blocker は見えていないため、次段は true component retrain に進めてよい
+
+## Acceptance Points
+
+### Win Component
+
+- artifact:
+  - `artifacts/reports/train_metrics_catboost_win_high_coverage_diag_r20260408_calendar_context_ablation_v1.json`
+  - `artifacts/models/catboost_win_high_coverage_diag_model.manifest_r20260408_calendar_context_ablation_v1.json`
+- metrics:
+  - `auc=0.8396626458946592`
+  - `best_iteration=518`
+  - `feature_count=106`
+  - `categorical_feature_count=37`
+
+read:
+
+- win component は clean に完走した
+- manifest には `race_year`, `race_month`, `race_dayofweek` が残っていない
+- calendar context ablation は win side で no-op ではない
+
+### ROI Component
+
+- artifact:
+  - `artifacts/reports/train_metrics_lightgbm_roi_high_coverage_diag_r20260408_calendar_context_ablation_v1.json`
+  - `artifacts/models/lightgbm_roi_high_coverage_diag_model.manifest_r20260408_calendar_context_ablation_v1.json`
+- metrics:
+  - `top1_roi=0.9133429811866856`
+  - `best_iteration=113`
+  - `feature_count=106`
+  - `categorical_feature_count=37`
+
+read:
+
+- ROI component も clean に完走した
+- ROI manifest にも `race_year`, `race_month`, `race_dayofweek` は残っていない
+- calendar context ablation は win / ROI の両 component で no-op ではない
+
+## Current Next Move
+
+- next step は stack build と formal compare である
+- `value_blend` family compare は base stack config を使い、calendar context ablation revision の component artifact を評価に渡す

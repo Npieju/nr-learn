@@ -146,7 +146,10 @@ Latest next feature queue:
 4. current next hypothesis は `calendar context ablation audit` とする
 5. focal features は `race_year`, `race_month`, `race_dayofweek` の 3 列で、current baseline から narrow に外して keep / prune judgment を取る
 6. first read では `priority_missing_raw_columns=[]`, `missing_force_include_features=[]`, `low_coverage_force_include_features=[]` を確認した
-7. current read では ablation config は clean に buildable であり、next move は true component retrain である
+7. win component `r20260408_calendar_context_ablation_v1` は `auc=0.8396626458946592`, `best_iteration=518`, `feature_count=106` で完走した
+8. ROI component `r20260408_calendar_context_ablation_v1` は `top1_roi=0.9133429811866856`, `best_iteration=113`, `feature_count=106` で完走した
+9. win / ROI の両 manifest から `race_year`, `race_month`, `race_dayofweek` は消えており、calendar context ablation は no-op ではない
+10. current next move は stack build と formal compare である
 
 Latest combo track-distance selective read:
 
