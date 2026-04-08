@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 from pathlib import Path
+import re
 import shlex
 import subprocess
 import sys
@@ -15,7 +17,7 @@ SRC = ROOT / "src"
 if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
-from racing_ml.common.artifacts import read_json, write_json
+from racing_ml.common.artifacts import read_json, utc_now_iso, write_json
 from racing_ml.common.progress import Heartbeat, ProgressBar
 from racing_ml.data.local_nankan_bootstrap import (
     build_value_blend_bootstrap_command_plan,
@@ -39,11 +41,58 @@ def _read_json_dict(path: Path) -> dict[str, Any]:
     return payload if isinstance(payload, dict) else {}
 
 
-def _run_command(*, label: str, command: list[str]) -> int:
+def _sanitize_label(value: str) -> str:
+    return re.sub(r"[^A-Za-z0-9_.-]+", "_", value).strip("_") or "step"
+
+
+def _build_log_path(*, log_dir: Path, log_prefix: str, revision: str, label: str) -> Path:
+    safe_parts: list[str] = []
+    for value in (log_prefix, revision, label):
+        safe_value = _sanitize_label(value)
+        if safe_value and safe_value not in safe_parts:
+            safe_parts.append(safe_value)
+    stem = "_".join(safe_parts) or "step"
+    suffix = ".log"
+    max_name_length = 240
+    max_stem_length = max_name_length - len(suffix)
+    if len(stem) > max_stem_length:
+        digest = hashlib.sha1(stem.encode("utf-8")).hexdigest()[:12]
+        keep_length = max_stem_length - len(digest) - 1
+        stem = f"{stem[:keep_length].rstrip('_')}_{digest}"
+    return log_dir / f"{stem}{suffix}"
+
+
+def _display_path(path: Path) -> str:
+    try:
+        return str(path.relative_to(ROOT))
+    except ValueError:
+        return str(path)
+
+
+def _run_command(*, label: str, command: list[str], log_path: Path | None = None) -> dict[str, Any]:
+    started_at = utc_now_iso()
     print(f"[nar-bootstrap-handoff] running {label}: {shlex.join(command)}", flush=True)
-    with Heartbeat("[nar-bootstrap-handoff]", f"{label} child command", logger=log_progress):
-        result = subprocess.run(command, cwd=ROOT, check=False)
-    return int(result.returncode)
+    if log_path is not None:
+        log_path.parent.mkdir(parents=True, exist_ok=True)
+        with log_path.open("w", encoding="utf-8") as handle:
+            handle.write(f"started_at: {started_at}\n")
+            handle.write(f"label: {label}\n")
+            handle.write(f"command: {shlex.join(command)}\n\n")
+            handle.flush()
+            with Heartbeat("[nar-bootstrap-handoff]", f"{label} child command", logger=log_progress):
+                result = subprocess.run(command, cwd=ROOT, check=False, stdout=handle, stderr=subprocess.STDOUT)
+    else:
+        with Heartbeat("[nar-bootstrap-handoff]", f"{label} child command", logger=log_progress):
+            result = subprocess.run(command, cwd=ROOT, check=False)
+    return {
+        "label": label,
+        "command": list(command),
+        "exit_code": int(result.returncode),
+        "status": "completed" if result.returncode == 0 else "failed",
+        "started_at": started_at,
+        "finished_at": utc_now_iso(),
+        "log_file": _display_path(log_path) if log_path is not None else None,
+    }
 
 
 def main() -> int:
@@ -64,6 +113,7 @@ def main() -> int:
     parser.add_argument("--benchmark-manifest-output", default="artifacts/reports/benchmark_gate_local_nankan_pre_race_ready.json")
     parser.add_argument("--handoff-manifest-output", default="artifacts/reports/local_nankan_pre_race_benchmark_handoff_manifest.json")
     parser.add_argument("--wrapper-manifest-output", default="artifacts/reports/local_nankan_result_ready_bootstrap_handoff_manifest.json")
+    parser.add_argument("--source-timing-summary-input", default="artifacts/reports/local_nankan_source_timing_audit_issue121.json")
     parser.add_argument("--wait-for-results", action="store_true")
     parser.add_argument("--max-wait-seconds", type=int, default=0)
     parser.add_argument("--poll-interval-seconds", type=int, default=60)
@@ -74,6 +124,8 @@ def main() -> int:
     parser.add_argument("--bootstrap-roi-config", default="configs/model_lightgbm_roi_high_coverage_diag_local_nankan_value_blend_bootstrap.yaml")
     parser.add_argument("--bootstrap-stack-config", default="configs/model_catboost_value_stack_lgbm_roi_high_coverage_tune_roi012_local_nankan_value_blend_bootstrap.yaml")
     parser.add_argument("--bootstrap-revision", default="r20260404_local_nankan_value_blend_bootstrap_pre_race_ready_v1")
+    parser.add_argument("--log-dir", default="artifacts/logs")
+    parser.add_argument("--log-prefix", default="local_nankan_result_ready_bootstrap_handoff")
     args = parser.parse_args()
 
     progress = ProgressBar(total=3, prefix="[nar-bootstrap-handoff]", logger=log_progress, min_interval_sec=0.0)
@@ -91,6 +143,13 @@ def main() -> int:
             roi_config=args.bootstrap_roi_config,
             stack_config=args.bootstrap_stack_config,
             output_dir=args.runtime_config_dir,
+        )
+        log_dir = _resolve_path(args.log_dir)
+        handoff_log_path = _build_log_path(
+            log_dir=log_dir,
+            log_prefix=args.log_prefix,
+            revision=args.bootstrap_revision,
+            label="pre_race_benchmark_handoff",
         )
 
         handoff_command = [
@@ -122,6 +181,8 @@ def main() -> int:
             args.benchmark_manifest_output,
             "--wrapper-manifest-output",
             args.handoff_manifest_output,
+            "--source-timing-summary-input",
+            args.source_timing_summary_input,
             "--wf-mode",
             "off",
         ]
@@ -136,11 +197,12 @@ def main() -> int:
                 ]
             )
 
-        handoff_exit = _run_command(label="pre_race_benchmark_handoff", command=handoff_command)
+        handoff_result = _run_command(label="pre_race_benchmark_handoff", command=handoff_command, log_path=handoff_log_path)
         handoff_manifest = _read_json_dict(_resolve_path(args.handoff_manifest_output))
+        handoff_exit = int(handoff_result["exit_code"])
         progress.update(current=1, message=f"handoff exit_code={handoff_exit} status={handoff_manifest.get('status')}")
 
-        command_plan = build_value_blend_bootstrap_command_plan(
+        base_command_plan = build_value_blend_bootstrap_command_plan(
             workspace_root=ROOT,
             python_executable=python_executable,
             data_config=args.data_config,
@@ -150,14 +212,30 @@ def main() -> int:
             stack_config=runtime_configs["stack_config"],
             revision=args.bootstrap_revision,
         )
+        command_plan = [
+            {
+                **step,
+                "log_file": _display_path(
+                    _build_log_path(
+                        log_dir=log_dir,
+                        log_prefix=args.log_prefix,
+                        revision=args.bootstrap_revision,
+                        label=str(step["label"]),
+                    )
+                ),
+            }
+            for step in base_command_plan
+        ]
 
         if handoff_exit == 2 or str(handoff_manifest.get("status")) == "not_ready":
             manifest = {
                 "status": "not_ready",
-                "current_phase": "await_result_arrival",
-                "recommended_action": "wait_for_result_ready_pre_race_races",
+                "current_phase": str(handoff_manifest.get("current_phase") or "await_result_arrival"),
+                "recommended_action": str(handoff_manifest.get("recommended_action") or "wait_for_result_ready_pre_race_races"),
+                "handoff_command_result": handoff_result,
                 "handoff_manifest": handoff_manifest,
                 "runtime_configs": runtime_configs,
+                "log_dir": _display_path(log_dir),
                 "bootstrap_command_plan": command_plan,
             }
             write_json(wrapper_manifest_path, manifest)
@@ -169,8 +247,10 @@ def main() -> int:
                 "status": "failed",
                 "current_phase": "benchmark_handoff",
                 "recommended_action": "inspect_handoff_manifest",
+                "handoff_command_result": handoff_result,
                 "handoff_manifest": handoff_manifest,
                 "runtime_configs": runtime_configs,
+                "log_dir": _display_path(log_dir),
                 "bootstrap_command_plan": command_plan,
             }
             write_json(wrapper_manifest_path, manifest)
@@ -183,8 +263,10 @@ def main() -> int:
                 "status": "benchmark_ready",
                 "current_phase": "bootstrap_pending",
                 "recommended_action": "run_bootstrap_command_plan",
+                "handoff_command_result": handoff_result,
                 "handoff_manifest": handoff_manifest,
                 "runtime_configs": runtime_configs,
+                "log_dir": _display_path(log_dir),
                 "bootstrap_command_plan": command_plan,
             }
             write_json(wrapper_manifest_path, manifest)
@@ -193,21 +275,22 @@ def main() -> int:
 
         bootstrap_runs: list[dict[str, Any]] = []
         for step in command_plan:
-            exit_code = _run_command(label=str(step["label"]), command=list(step["command"]))
-            bootstrap_runs.append(
-                {
-                    "label": str(step["label"]),
-                    "command": list(step["command"]),
-                    "exit_code": int(exit_code),
-                }
+            step_result = _run_command(
+                label=str(step["label"]),
+                command=list(step["command"]),
+                log_path=_resolve_path(str(step["log_file"])),
             )
+            bootstrap_runs.append(step_result)
+            exit_code = int(step_result["exit_code"])
             if exit_code != 0:
                 manifest = {
                     "status": "failed",
                     "current_phase": str(step["label"]),
                     "recommended_action": "inspect_bootstrap_child_command",
+                    "handoff_command_result": handoff_result,
                     "handoff_manifest": handoff_manifest,
                     "runtime_configs": runtime_configs,
+                    "log_dir": _display_path(log_dir),
                     "bootstrap_runs": bootstrap_runs,
                 }
                 write_json(wrapper_manifest_path, manifest)
@@ -217,8 +300,10 @@ def main() -> int:
             "status": "completed",
             "current_phase": "bootstrap_completed",
             "recommended_action": "review_bootstrap_revision_outputs",
+            "handoff_command_result": handoff_result,
             "handoff_manifest": handoff_manifest,
             "runtime_configs": runtime_configs,
+            "log_dir": _display_path(log_dir),
             "bootstrap_runs": bootstrap_runs,
         }
         write_json(wrapper_manifest_path, manifest)

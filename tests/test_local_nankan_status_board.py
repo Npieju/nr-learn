@@ -35,6 +35,7 @@ class LocalNankanStatusBoardTest(unittest.TestCase):
             coverage_path = tmp_path / "coverage.json"
             backfill_path = tmp_path / "backfill.json"
             archive_path = tmp_path / "archive.json"
+            capture_path = tmp_path / "capture_loop.json"
             probe_path = tmp_path / "probe.json"
             pre_race_handoff_path = tmp_path / "pre_race_handoff.json"
             bootstrap_handoff_path = tmp_path / "bootstrap_handoff.json"
@@ -54,6 +55,7 @@ class LocalNankanStatusBoardTest(unittest.TestCase):
             )
             backfill_path.write_text(json.dumps({"status": "completed", "remaining_window_count": 0}), encoding="utf-8")
             archive_path.write_text(json.dumps({"status": "completed", "archive_reports": []}), encoding="utf-8")
+            capture_path.write_text(json.dumps({}), encoding="utf-8")
             probe_path.write_text(json.dumps({"status": "ready", "result_ready_races": 3, "pending_result_races": 0}), encoding="utf-8")
             pre_race_handoff_path.write_text(json.dumps({"status": "completed", "current_phase": "benchmark_handoff_completed"}), encoding="utf-8")
             bootstrap_handoff_path.write_text(json.dumps({}), encoding="utf-8")
@@ -72,6 +74,8 @@ class LocalNankanStatusBoardTest(unittest.TestCase):
                     str(backfill_path),
                     "--archive-run",
                     str(archive_path),
+                    "--capture-loop-manifest",
+                    str(capture_path),
                     "--readiness-probe-summary",
                     str(probe_path),
                     "--pre-race-handoff-manifest",
@@ -98,6 +102,7 @@ class LocalNankanStatusBoardTest(unittest.TestCase):
             coverage_path = tmp_path / "coverage.json"
             backfill_path = tmp_path / "backfill.json"
             archive_path = tmp_path / "archive.json"
+            capture_path = tmp_path / "capture_loop.json"
             probe_path = tmp_path / "probe.json"
             pre_race_handoff_path = tmp_path / "pre_race_handoff.json"
             bootstrap_handoff_path = tmp_path / "bootstrap_handoff.json"
@@ -117,6 +122,7 @@ class LocalNankanStatusBoardTest(unittest.TestCase):
             )
             backfill_path.write_text(json.dumps({"status": "completed", "remaining_window_count": 0}), encoding="utf-8")
             archive_path.write_text(json.dumps({"status": "completed", "archive_reports": []}), encoding="utf-8")
+            capture_path.write_text(json.dumps({}), encoding="utf-8")
             probe_path.write_text(json.dumps({"status": "not_ready", "result_ready_races": 0, "pending_result_races": 24}), encoding="utf-8")
             pre_race_handoff_path.write_text(json.dumps({"status": "not_ready", "current_phase": "await_result_arrival"}), encoding="utf-8")
             bootstrap_handoff_path.write_text(json.dumps({"status": "not_ready", "current_phase": "await_result_arrival"}), encoding="utf-8")
@@ -135,6 +141,8 @@ class LocalNankanStatusBoardTest(unittest.TestCase):
                     str(backfill_path),
                     "--archive-run",
                     str(archive_path),
+                    "--capture-loop-manifest",
+                    str(capture_path),
                     "--readiness-probe-summary",
                     str(probe_path),
                     "--pre-race-handoff-manifest",
@@ -156,6 +164,10 @@ class LocalNankanStatusBoardTest(unittest.TestCase):
             self.assertEqual(payload["readiness_surfaces"]["pre_race_handoff"]["status"], "not_ready")
             self.assertEqual(payload["readiness_surfaces"]["bootstrap_handoff"]["status"], "not_ready")
             self.assertEqual(payload["readiness_surfaces"]["readiness_watcher"]["attempts"], 2)
+            self.assertEqual(payload["readiness_surfaces"]["followup_entrypoint"]["script"], "scripts/run_local_nankan_future_only_followup_oneshot.py")
+            self.assertEqual(payload["readiness_surfaces"]["followup_entrypoint"]["upstream_manifest"], str(capture_path))
+            self.assertFalse(payload["readiness_surfaces"]["followup_entrypoint"]["upstream_contract_ready"])
+            self.assertIn("--dry-run", payload["readiness_surfaces"]["followup_entrypoint"]["dry_run_command_preview"])
             self.assertEqual(payload["status"], "partial")
             self.assertEqual(payload["current_phase"], "await_result_arrival")
             self.assertIn("probe_status=not_ready", payload["highlights"])
@@ -167,6 +179,7 @@ class LocalNankanStatusBoardTest(unittest.TestCase):
             coverage_path = tmp_path / "coverage.json"
             backfill_path = tmp_path / "backfill.json"
             archive_path = tmp_path / "archive.json"
+            capture_path = tmp_path / "capture_loop.json"
             probe_path = tmp_path / "probe.json"
             pre_race_handoff_path = tmp_path / "pre_race_handoff.json"
             bootstrap_handoff_path = tmp_path / "bootstrap_handoff.json"
@@ -186,6 +199,7 @@ class LocalNankanStatusBoardTest(unittest.TestCase):
             )
             backfill_path.write_text(json.dumps({"status": "completed", "remaining_window_count": 0}), encoding="utf-8")
             archive_path.write_text(json.dumps({"status": "completed", "archive_reports": []}), encoding="utf-8")
+            capture_path.write_text(json.dumps({}), encoding="utf-8")
             probe_path.write_text(
                 json.dumps(
                     {
@@ -231,6 +245,8 @@ class LocalNankanStatusBoardTest(unittest.TestCase):
                     str(backfill_path),
                     "--archive-run",
                     str(archive_path),
+                    "--capture-loop-manifest",
+                    str(capture_path),
                     "--readiness-probe-summary",
                     str(probe_path),
                     "--pre-race-handoff-manifest",
@@ -254,12 +270,37 @@ class LocalNankanStatusBoardTest(unittest.TestCase):
             self.assertEqual(payload["readiness_surfaces"]["readiness_probe"]["pending_result_races"], 24)
             self.assertEqual(payload["readiness_surfaces"]["readiness_probe"]["race_card_rows"], 562)
 
+    def test_status_board_surfaces_followup_entrypoint_for_self_describing_capture_loop(self) -> None:
+        readiness_surfaces = status_board_script._build_readiness_surfaces(
+            capture_loop_manifest_path="artifacts/reports/local_nankan_pre_race_capture_loop_issue122_cycle.json",
+            capture_loop_manifest={
+                "status": "capturing",
+                "current_phase": "capturing_pre_race_pool",
+                "recommended_action": "wait",
+                "execution_role": "pre_race_capture_refresh_loop",
+                "data_update_mode": "capture_refresh_only",
+                "trigger_contract": "direct_capture_refresh",
+            },
+            readiness_probe_summary={},
+            pre_race_handoff_manifest={},
+            bootstrap_handoff_manifest={},
+            readiness_watcher_manifest={},
+        )
+
+        followup_entrypoint = readiness_surfaces["followup_entrypoint"]
+        self.assertTrue(followup_entrypoint["upstream_contract_ready"])
+        self.assertEqual(followup_entrypoint["read_order"][3], "upstream_refresh.upstream_fresh")
+        self.assertEqual(followup_entrypoint["read_order"][4], "upstream_refresh.age_seconds")
+        self.assertIn("artifacts/reports/local_nankan_pre_race_capture_loop_issue122_cycle.json", followup_entrypoint["dry_run_command_preview"])
+        self.assertIn("--run-bootstrap-on-ready", followup_entrypoint["run_command_preview"])
+
     def test_status_board_surfaces_benchmark_ready_from_bootstrap_handoff(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
             tmp_path = Path(tmp_dir)
             coverage_path = tmp_path / "coverage.json"
             backfill_path = tmp_path / "backfill.json"
             archive_path = tmp_path / "archive.json"
+            capture_path = tmp_path / "capture_loop.json"
             probe_path = tmp_path / "probe.json"
             pre_race_handoff_path = tmp_path / "pre_race_handoff.json"
             bootstrap_handoff_path = tmp_path / "bootstrap_handoff.json"
@@ -279,6 +320,7 @@ class LocalNankanStatusBoardTest(unittest.TestCase):
             )
             backfill_path.write_text(json.dumps({"status": "completed", "remaining_window_count": 0}), encoding="utf-8")
             archive_path.write_text(json.dumps({"status": "completed", "archive_reports": []}), encoding="utf-8")
+            capture_path.write_text(json.dumps({}), encoding="utf-8")
             probe_path.write_text(json.dumps({"status": "ready", "result_ready_races": 3, "pending_result_races": 0}), encoding="utf-8")
             pre_race_handoff_path.write_text(json.dumps({"status": "completed", "current_phase": "benchmark_handoff_completed"}), encoding="utf-8")
             bootstrap_handoff_path.write_text(
@@ -306,6 +348,8 @@ class LocalNankanStatusBoardTest(unittest.TestCase):
                     str(backfill_path),
                     "--archive-run",
                     str(archive_path),
+                    "--capture-loop-manifest",
+                    str(capture_path),
                     "--readiness-probe-summary",
                     str(probe_path),
                     "--pre-race-handoff-manifest",
@@ -333,6 +377,7 @@ class LocalNankanStatusBoardTest(unittest.TestCase):
             coverage_path = tmp_path / "coverage.json"
             backfill_path = tmp_path / "backfill.json"
             archive_path = tmp_path / "archive.json"
+            capture_path = tmp_path / "capture_loop.json"
             probe_path = tmp_path / "probe.json"
             pre_race_handoff_path = tmp_path / "pre_race_handoff.json"
             bootstrap_handoff_path = tmp_path / "bootstrap_handoff.json"
@@ -352,6 +397,7 @@ class LocalNankanStatusBoardTest(unittest.TestCase):
             )
             backfill_path.write_text(json.dumps({"status": "completed", "remaining_window_count": 0}), encoding="utf-8")
             archive_path.write_text(json.dumps({"status": "completed", "archive_reports": []}), encoding="utf-8")
+            capture_path.write_text(json.dumps({}), encoding="utf-8")
             probe_path.write_text(json.dumps({"status": "ready", "result_ready_races": 3, "pending_result_races": 0}), encoding="utf-8")
             pre_race_handoff_path.write_text(json.dumps({"status": "completed", "current_phase": "benchmark_handoff_completed"}), encoding="utf-8")
             bootstrap_handoff_path.write_text(
@@ -379,6 +425,8 @@ class LocalNankanStatusBoardTest(unittest.TestCase):
                     str(backfill_path),
                     "--archive-run",
                     str(archive_path),
+                    "--capture-loop-manifest",
+                    str(capture_path),
                     "--readiness-probe-summary",
                     str(probe_path),
                     "--pre-race-handoff-manifest",

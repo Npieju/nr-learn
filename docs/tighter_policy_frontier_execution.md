@@ -216,7 +216,7 @@ Candidate C 結果:
 
 ## 10. Companion Docs
 
-- `docs/next_issue_tighter_policy_frontier.md`
+- `docs/issue_library/next_issue_tighter_policy_frontier.md`
 - `docs/policy_family_shortlist.md`
 - `docs/revision_gate_candidate_checklist.md`
 - `docs/policy_challenger_decision_checklist.md`

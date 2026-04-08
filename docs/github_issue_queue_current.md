@@ -104,8 +104,10 @@ Current open-work expectation:
 3. latest completed JRA feature read は `#118` であり、`course_baseline_race_pace_front3f` / `course_baseline_race_pace_back3f` は low coverage reject と確定した
 4. `gate/frame/course`, `pace/closing-fit`, `kelly runtime`, `class-rest-surface conditional`, `recent-history track-distance`, `deque_trim promotion decision`, `tighter policy seasonal narrowing` はこの節では next queue ではなく completed / historical reference として扱う
 5. `current_sep_guard_candidate` は September seasonal fallback のまま据え置く
-6. NAR side の open issue は `#101`, `#103` のみであり、current JRA queue とは混在させない
-7. `docs/next_issue_nar_class_rest_surface_replay.md` は Stage 2 feature-family parity の future option であり、`#103` の後段に置く
+6. NAR side の open issue は `#101`, `#103`, `#119`, `#120`, `#121`, `#122`, `#123` であり、current JRA queue とは混在させない
+7. `#123` は `NAR solved = JRA-equivalent trust model constructed` を固定する top-level completion gate の重大 issue である
+8. `#122` は historical diagnostic-only downgrade 後の future-only readiness track を扱う current next NAR issue である
+9. `docs/issue_library/next_issue_nar_class_rest_surface_replay.md` は Stage 2 feature-family parity の future option であり、`#103` の後段に置く
 
 Historical note:
 
@@ -119,10 +121,14 @@ Historical note:
 Primary next issue draft:
 
 - current JRA primary next issue draft は未固定である
-- `docs/next_issue_tighter_policy_seasonal_regime_narrowing.md` は `#117` 完了後の historical issue source として保持する
-- `docs/next_issue_gate_frame_course_pace_decomposition_selective_candidate.md` は `#118` close 後の historical issue source として保持する
-- NAR residual unissued draft library は `docs/next_issue_nar_class_rest_surface_replay.md` のみである
-- ただし NAR residual draft は current next issue ではなく、`#101` と `#103` の後段候補である
+- `docs/issue_library/next_issue_tighter_policy_seasonal_regime_narrowing.md` は `#117` 完了後の historical issue source として保持する
+- `docs/issue_library/next_issue_gate_frame_course_pace_decomposition_selective_candidate.md` は `#118` close 後の historical issue source として保持する
+- NAR residual unissued draft library は `docs/issue_library/next_issue_nar_class_rest_surface_replay.md` のみである
+- `docs/issue_library/next_issue_local_nankan_market_provenance_fail_closed.md` は `#120` の source issue draft である
+- `docs/issue_library/next_issue_local_nankan_source_timing_corrective.md` は `#121` の source issue draft である
+- `docs/issue_library/next_issue_local_nankan_future_only_pre_race_readiness.md` は `#122` の source issue draft である
+- `docs/issue_library/next_issue_nar_jra_equivalent_trust_completion.md` は `#123` の source issue draft である
+- ただし NAR residual draft は current next issue ではなく、`#101`, `#103`, `#119`, `#120`, `#121` と別の後段候補である
 
 Latest next feature queue:
 
@@ -151,7 +157,7 @@ Latest combo track-distance selective read:
    - formal promoted candidate
    - operational role は未確定
 6. next execution source:
-   - `docs/next_issue_jockey_trainer_combo_track_distance_role_split.md`
+   - `docs/issue_library/next_issue_jockey_trainer_combo_track_distance_role_split.md`
 
 Latest combo track-distance role split:
 
@@ -184,9 +190,25 @@ Current active read:
 
 Blocked parallel track:
 
-1. `#101` timestamped strict `pre_race_only` benchmark handoff は外部結果待ち
-2. `result_ready_races=0`
-3. NAR side の next move は result arrival 待ち
+1. `#120` local Nankan market provenance fail-closed gate で stale primary / missing provenance columns は解消済みである
+2. repaired strict provenance audit では `pre_race=0`, `unknown=257`, `post_race=728850` を確認した
+3. `#121` source timing audit では、historical result-ready `62503 races` に対して `pre_race=0`, `unknown=0`, `post_race=728859` を確認した
+4. current cache 上の pre-race rows は `2026-04-06 .. 2026-04-07` の future-only `24 races / 562 rows` に限られる
+5. したがって current stop condition は「historical benchmark を diagnostic only に降格し、future-only pre-race readiness track へ縮退する」である
+6. `#101` timestamped strict `pre_race_only` benchmark handoff は外部結果待ちではなく source timing blocker 付きの future-only readiness track として扱い、historical benchmark 再開には使わない
+7. future-only readiness の current operator read は `status=not_ready`, `current_phase=future_only_readiness_track`, `recommended_action=capture_future_pre_race_rows_and_wait_for_results` である
+8. `#122` tuning probe (`artifacts/reports/local_nankan_future_only_tuning_probe_issue122.json`) では `h1_p1`, `h7_p1`, `h7_p2` の全 scenario で `pre_race_only_rows=426`, `pre_race_only_races=24`, `pending_result_races=24`, `benchmark_rerun_ready=false` と同一だった
+9. したがって現時点では `horizon_days` や `max_passes` を増やしても future-only support growth は確認できず、default operator knob は据え置きとする
+10. bounded supervisor `scripts/run_local_nankan_future_only_wait_then_cycle.py` により、future-only operator path は cycle history 付きの readiness 再評価を繰り返せる。これは data 更新 job ではなく、更新済み data / artifact を再読する operator surface である
+11. smoke (`artifacts/reports/local_nankan_future_only_wait_then_cycle_issue122_smoke.json`) でも `pre_race_only_rows=426`, `result_ready_races=0`, `pending_result_races=24`, `benchmark_rerun_ready=false` で未到着継続を確認した
+12. capture refresh 正本 `local_nankan_pre_race_capture_loop_issue122_cycle.json` は self-describing contract (`execution_role=pre_race_capture_refresh_loop`, `data_update_mode=capture_refresh_only`, `trigger_contract=direct_capture_refresh`) を持ち、follow-up oneshot はこの contract-valid な refresh artifact にだけ従属する
+13. ただし `#122` は NAR solved を意味しない。current role は `Stage 0 benchmark trust readiness blocker resolution` である
+14. NAR の top-level completion condition は `JRA相当の信頼度で運用判断できるモデル line を構築すること` であり、重大 issue `#123` を正本とする
+15. next measurable hypothesis は `#122` のまま `result-ready future-only support arrival を待ち、arrival 後に strict rerun 条件へ遷移できるか` である
+16. `#119` は current NAR corpus が `local Nankan`、すなわち South-Kanto-only track に限られることを guardrail として固定する
+17. historical diagnostics `#69` / `#70` により、current local Nankan high ROI は market dependence と promotion-phase optimism を含む
+18. したがって NAR side の current line は `full NAR ROI evidence` ではなく readiness / audit track として扱う
+19. `#103` value-blend bootstrap は `#120/#121` strict trust corrective と `#101` result-ready benchmark の後段 block に維持する
 
 Queue sync template after NAR progress:
 
@@ -259,13 +281,13 @@ Background read:
 20. したがって `#101` の残作業は result arrival 後の first benchmark rerun に narrowed された
 21. 並行 next issue は `pre_race` capture window expansion である
 22. execution source:
-    - [next_issue_nar_pre_race_capture_window_expansion.md](/workspaces/nr-learn/docs/next_issue_nar_pre_race_capture_window_expansion.md)
+    - [next_issue_nar_pre_race_capture_window_expansion.md](/workspaces/nr-learn/docs/issue_library/next_issue_nar_pre_race_capture_window_expansion.md)
 23. NAR を JRA と同水準の model-development surface へ上げる中期 ladder は
     - [nar_jra_parity_issue_ladder.md](/workspaces/nr-learn/docs/nar_jra_parity_issue_ladder.md)
 24. post-readiness の first architecture issue は `#103`
     - <https://github.com/Npieju/nr-learn/issues/103>
 25. execution source:
-    - [next_issue_nar_value_blend_architecture_bootstrap.md](/workspaces/nr-learn/docs/next_issue_nar_value_blend_architecture_bootstrap.md)
+    - [next_issue_nar_value_blend_architecture_bootstrap.md](/workspaces/nr-learn/docs/issue_library/next_issue_nar_value_blend_architecture_bootstrap.md)
 26. `#102` first read:
     - race-list discovery を `2026-04-30` まで広げても `24 races` のまま
     - strict `pre_race` pool は `281 rows / 24 races`
@@ -336,7 +358,7 @@ Background read:
    を正本に使う
 53. active issue は `#101` に戻す
 54. `#106` watcher handoff は close 条件を満たした
-55. bounded watcher の正本は
+55. bounded readiness watcher の正本は
    - `scripts/run_local_nankan_readiness_watcher.py`
    - `artifacts/reports/local_nankan_readiness_watcher_manifest.json`
    を使う
@@ -345,11 +367,14 @@ Background read:
    - `artifacts/reports/local_nankan_data_status_board.json`
    を使う
 58. board の `readiness_surfaces` では
-   - probe
+   - capture loop
+   - readiness probe
    - pre-race handoff
    - bootstrap handoff
-   - watcher
+   - readiness watcher
+   - follow-up entrypoint
    をまとめて追えるため、`#101/#103` の current phase はまず board を読む
+   `readiness_surfaces.followup_entrypoint` からは `run_local_nankan_future_only_followup_oneshot.py` の dry-run/run preview へそのまま降りられる
 
 Latest actual-date role split:
 
@@ -522,19 +547,19 @@ Primary issue draft:
 
 - `docs/nar_model_transfer_strategy.md`
 - `docs/nar_bet_denominator_standard.md`
-- `docs/next_issue_local_nankan_baseline_formalization.md`
-- `docs/next_issue_nar_post_formal_read.md`
-- `docs/next_issue_nar_wf_runtime_followup.md`
-- `docs/next_issue_nar_class_rest_surface_replay.md`
-- `docs/next_issue_nar_class_rest_surface_availability_audit.md`
-- `docs/next_issue_nar_selection_fix_for_buildable_replay.md`
-- `docs/next_issue_nar_jockey_trainer_combo_replay.md`
-- `docs/next_issue_nar_wf_summary_path_alignment.md`
-- `docs/next_issue_nar_gate_frame_course_replay.md`
+- `docs/issue_library/next_issue_local_nankan_baseline_formalization.md`
+- `docs/issue_library/next_issue_nar_post_formal_read.md`
+- `docs/issue_library/next_issue_nar_wf_runtime_followup.md`
+- `docs/issue_library/next_issue_nar_class_rest_surface_replay.md`
+- `docs/issue_library/next_issue_nar_class_rest_surface_availability_audit.md`
+- `docs/issue_library/next_issue_nar_selection_fix_for_buildable_replay.md`
+- `docs/issue_library/next_issue_nar_jockey_trainer_combo_replay.md`
+- `docs/issue_library/next_issue_nar_wf_summary_path_alignment.md`
+- `docs/issue_library/next_issue_nar_gate_frame_course_replay.md`
 - `configs/model_local_baseline_wf_runtime_narrow.yaml`
 - `configs/features_local_baseline_class_rest_surface_replay.yaml`
 - `#60` で long-running job の live progress を repo 内 log file に tee し、VS Code から確認できる operator path を作る
-- `docs/next_issue_jockey_trainer_combo_regime_extension.md`
+- `docs/issue_library/next_issue_jockey_trainer_combo_regime_extension.md`
 
 GitHub issue:
 
@@ -545,7 +570,7 @@ GitHub issue:
 
 Primary next execution order:
 
-1. NAR の next family は `docs/next_issue_nar_owner_signal_replay.md` で owner signal replay を narrow に試す
+1. NAR の next family は `docs/issue_library/next_issue_nar_owner_signal_replay.md` で owner signal replay を narrow に試す
 2. JRA の `#49` family は promoted-but-non-anchor read として一段止め、次の widening は NAR next family formal read の後に再判断する
 
 Side universe track:
@@ -629,7 +654,7 @@ Stop Condition
 
 Primary references:
 
-- `docs/next_issue_tighter_policy_frontier.md`
+- `docs/issue_library/next_issue_tighter_policy_frontier.md`
 - `docs/tighter_policy_frontier_execution.md`
 - `docs/tighter_policy_candidate_matrix.md`
 

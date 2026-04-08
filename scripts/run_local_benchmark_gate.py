@@ -12,6 +12,8 @@ if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
 from racing_ml.common.progress import Heartbeat, ProgressBar
+from racing_ml.common.artifacts import write_json
+from racing_ml.common.config import load_yaml
 
 DEFAULT_DATA_CONFIG = "configs/data_local_nankan.yaml"
 DEFAULT_MODEL_CONFIG = "configs/model_local_baseline.yaml"
@@ -27,6 +29,8 @@ DEFAULT_RACE_CARD_PATH = "data/external/local_nankan/racecard/local_racecard.csv
 DEFAULT_PEDIGREE_PATH = "data/external/local_nankan/pedigree/local_pedigree.csv"
 DEFAULT_PREFLIGHT_OUTPUT = "artifacts/reports/data_preflight_local_nankan.json"
 DEFAULT_PRIMARY_MATERIALIZE_MANIFEST = "artifacts/reports/local_nankan_primary_materialize_manifest.json"
+DEFAULT_PROVENANCE_SUMMARY_OUTPUT = "artifacts/reports/local_nankan_provenance_summary.json"
+DEFAULT_PROVENANCE_MANIFEST_OUTPUT = "artifacts/reports/local_nankan_provenance_audit.json"
 
 
 def log_progress(message: str) -> None:
@@ -48,6 +52,109 @@ def _load_generated_files(manifest_file: str) -> dict[str, str]:
     payload = json.loads(manifest_path.read_text())
     generated_files = payload.get("generated_files")
     return generated_files if isinstance(generated_files, dict) else {}
+
+
+def _resolve_primary_input_path(*, data_config_path: str, override_path: str | None) -> Path:
+    if override_path:
+        path = Path(override_path)
+        return path if path.is_absolute() else (ROOT / path)
+    config_payload = load_yaml(ROOT / data_config_path)
+    dataset_cfg = config_payload.get("dataset") if isinstance(config_payload.get("dataset"), dict) else config_payload
+    raw_dir = dataset_cfg.get("raw_dir", "data/local_nankan/raw") if isinstance(dataset_cfg, dict) else "data/local_nankan/raw"
+    raw_path = Path(str(raw_dir))
+    if not raw_path.is_absolute():
+        raw_path = ROOT / raw_path
+    return raw_path / "local_nankan_primary.csv"
+
+
+def _write_provenance_block_outputs(
+    *,
+    args: argparse.Namespace,
+    provenance_manifest_path: Path,
+    provenance_summary_path: Path,
+) -> None:
+    provenance_payload = json.loads(provenance_manifest_path.read_text(encoding="utf-8")) if provenance_manifest_path.exists() else {}
+    readiness = provenance_payload.get("readiness") if isinstance(provenance_payload.get("readiness"), dict) else {}
+    recommended_action = str(readiness.get("recommended_action") or provenance_payload.get("recommended_action") or "inspect_local_nankan_provenance_audit")
+    blocking_reasons = readiness.get("blocking_reasons") if isinstance(readiness.get("blocking_reasons"), list) else []
+    benchmark_manifest = {
+        "schema_version": args.schema_version,
+        "artifact_type": "benchmark_gate_manifest",
+        "started_at": None,
+        "finished_at": None,
+        "status": "not_ready",
+        "completed_step": "provenance_preflight",
+        "current_phase": "provenance_preflight",
+        "universe": args.universe,
+        "source_scope": args.source_scope,
+        "baseline_reference": args.baseline_reference,
+        "error_code": "market_provenance_not_ready",
+        "error_message": str(provenance_payload.get("error_message") or "local market provenance trust gate blocked benchmark"),
+        "recommended_action": recommended_action,
+        "configs": {
+            "data_config": args.data_config,
+            "model_config": args.model_config,
+            "feature_config": args.feature_config,
+            "tail_rows": int(args.tail_rows),
+            "max_rows": int(args.max_rows),
+            "pre_feature_max_rows": int(args.pre_feature_max_rows) if args.pre_feature_max_rows is not None else None,
+            "wf_mode": args.wf_mode,
+            "wf_scheme": args.wf_scheme,
+            "skip_train": bool(args.skip_train),
+            "skip_evaluate": bool(args.skip_evaluate),
+            "race_result_path": args.race_result_path,
+            "race_card_path": args.race_card_path,
+            "pedigree_path": args.pedigree_path,
+            "preflight_output": args.preflight_output,
+            "provenance_summary_output": args.provenance_summary_output,
+            "provenance_manifest_output": args.provenance_manifest_output,
+        },
+        "readiness": {
+            "benchmark_rerun_ready": False,
+            "recommended_action": recommended_action,
+            "reasons": blocking_reasons or ["strict local market provenance trust gate blocked benchmark rerun"],
+        },
+        "provenance_audit": provenance_payload,
+        "artifacts": {
+            "manifest": args.manifest_output,
+            "preflight_manifest": args.preflight_output,
+            "provenance_summary": args.provenance_summary_output,
+            "provenance_manifest": args.provenance_manifest_output,
+        },
+        "highlights": [
+            "local benchmark gate stopped before snapshot because strict market provenance trust requirements were not satisfied",
+            f"next operator action: {recommended_action}",
+        ],
+    }
+    preflight_payload = {
+        "started_at": None,
+        "finished_at": None,
+        "status": "not_ready",
+        "completed_step": "provenance_preflight",
+        "artifact_type": "dataset_source_preflight",
+        "config": args.data_config,
+        "universe": args.universe,
+        "source_scope": args.source_scope,
+        "baseline_reference": args.baseline_reference,
+        "error_code": "market_provenance_not_ready",
+        "error_message": str(provenance_payload.get("error_message") or "local market provenance trust gate blocked benchmark"),
+        "recommended_action": recommended_action,
+        "artifacts": {
+            "preflight_manifest": args.preflight_output,
+            "provenance_summary": args.provenance_summary_output,
+            "provenance_manifest": args.provenance_manifest_output,
+        },
+        "readiness": {
+            "benchmark_rerun_ready": False,
+            "recommended_action": recommended_action,
+            "reasons": blocking_reasons or ["strict local market provenance trust gate blocked benchmark rerun"],
+        },
+        "source_report": {
+            "local_market_provenance_summary": json.loads(provenance_summary_path.read_text(encoding="utf-8")) if provenance_summary_path.exists() else None,
+        },
+    }
+    write_json(ROOT / args.manifest_output, benchmark_manifest)
+    write_json(ROOT / args.preflight_output, preflight_payload)
 
 
 def main() -> int:
@@ -73,6 +180,13 @@ def main() -> int:
     parser.add_argument("--materialize-primary-before-gate", action="store_true")
     parser.add_argument("--materialize-output-file", default=None)
     parser.add_argument("--materialize-manifest-file", default=DEFAULT_PRIMARY_MATERIALIZE_MANIFEST)
+    parser.add_argument("--skip-provenance-audit", action="store_true")
+    parser.add_argument("--provenance-input-file", default=None)
+    parser.add_argument("--provenance-summary-output", default=DEFAULT_PROVENANCE_SUMMARY_OUTPUT)
+    parser.add_argument("--provenance-manifest-output", default=DEFAULT_PROVENANCE_MANIFEST_OUTPUT)
+    parser.add_argument("--provenance-max-unknown-ratio", type=float, default=0.0)
+    parser.add_argument("--provenance-max-post-race-ratio", type=float, default=0.0)
+    parser.add_argument("--provenance-min-pre-race-rows", type=int, default=1)
     parser.add_argument("--skip-train", action="store_true")
     parser.add_argument("--skip-evaluate", action="store_true")
     args = parser.parse_args()
@@ -121,6 +235,50 @@ def main() -> int:
         pedigree_path = str(generated_files.get("local_nankan_pedigree") or pedigree_path)
     else:
         progress.update(message="primary materialize skipped")
+
+    provenance_input_path = _resolve_primary_input_path(
+        data_config_path=args.data_config,
+        override_path=args.provenance_input_file or args.materialize_output_file,
+    )
+    provenance_manifest_path = ROOT / args.provenance_manifest_output
+    provenance_summary_path = ROOT / args.provenance_summary_output
+    if args.skip_provenance_audit:
+        progress.update(message="provenance audit skipped by configuration")
+    elif not provenance_input_path.exists():
+        progress.update(message=f"provenance input missing; defer to source preflight path input={provenance_input_path}")
+    else:
+        provenance_command = [
+            sys.executable,
+            str(ROOT / "scripts/run_local_nankan_provenance_audit.py"),
+            "--input-file",
+            str(provenance_input_path),
+            "--summary-output",
+            args.provenance_summary_output,
+            "--manifest-output",
+            args.provenance_manifest_output,
+            "--fail-on-missing-columns",
+            "--max-unknown-ratio",
+            str(args.provenance_max_unknown_ratio),
+            "--max-post-race-ratio",
+            str(args.provenance_max_post_race_ratio),
+            "--min-pre-race-rows",
+            str(args.provenance_min_pre_race_rows),
+        ]
+        provenance_result = _run_command(label="provenance_audit", command=provenance_command)
+        progress.update(message=f"provenance audit finished exit_code={int(provenance_result.returncode)}")
+        if int(provenance_result.returncode) == 2:
+            _write_provenance_block_outputs(
+                args=args,
+                provenance_manifest_path=provenance_manifest_path,
+                provenance_summary_path=provenance_summary_path,
+            )
+            print(
+                "[local-benchmark-gate] strict market provenance trust gate blocked benchmark rerun; see provenance manifest for details",
+                flush=True,
+            )
+            return 2
+        if int(provenance_result.returncode) != 0:
+            return int(provenance_result.returncode)
 
     command = [
         sys.executable,

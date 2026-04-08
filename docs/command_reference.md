@@ -946,7 +946,110 @@ local_nankan の current blocker を 1 本の board で読む入口:
   - `local_nankan_pre_race_benchmark_handoff_manifest.json`
   - `local_nankan_result_ready_bootstrap_handoff_manifest.json`
   - `local_nankan_readiness_watcher_manifest.json`
+- `readiness_surfaces.followup_entrypoint` には `run_local_nankan_future_only_followup_oneshot.py` の正本入口を残す。ここで capture loop manifest path、accepted upstream contract、`dry_run_command_preview`、`run_command_preview` を board から直接読める。
 - current NAR 運用では `#101/#103` の readiness はまずこの board を一次参照にし、必要なときだけ個別 manifest に降りる。
+
+local_nankan future-only readiness を 1 cycle 更新する operator-default command:
+
+```bash
+/workspaces/nr-learn/.venv/bin/python scripts/run_local_nankan_future_only_readiness_cycle.py
+```
+
+補足:
+
+- `#122` の current default operator path。
+- これは NAR solved を意味せず、`#123` 配下の Stage 0 readiness blocker resolution として読む。
+- 出力 wrapper manifest には `execution_role=readiness_cycle_wrapper`, `data_update_mode=capture_refresh_with_readiness`, `execution_mode=single_cycle`, `trigger_contract=direct_refresh_plus_readiness` を持たせ、capture loop を含む `refresh + readiness read` 入口だと artifact 単体でも判別できる。
+- future-only pool の refresh も同時に進めたい通常運用では、まずこの command を使う。内部で capture loop も走るため、`refresh + readiness read` の入口として扱う。
+- `result arrival / 到着` は、future-only strict `pre_race_only` races に対応する official result rows が実データへ反映され、artifact 上で `result_ready_races>0` になることを指す。
+
+local_nankan future-only readiness を bounded supervisor で監視する command:
+
+```bash
+/workspaces/nr-learn/.venv/bin/python scripts/run_local_nankan_future_only_wait_then_cycle.py \
+  --max-cycles 3 \
+  --wait-seconds 3600 \
+  --run-id live_20260407T120000Z \
+  --log-file artifacts/logs/local_nankan_future_only_wait_then_cycle_issue122_live_20260407T120000Z.log \
+  --run-bootstrap-on-ready \
+```
+
+idle wait を持たせず 1 cycle だけ実行したいとき:
+
+```bash
+/workspaces/nr-learn/.venv/bin/python scripts/run_local_nankan_future_only_wait_then_cycle.py \
+  --oneshot \
+  --run-id $(date -u +%Y%m%dT%H%M%SZ) \
+  --log-file artifacts/logs/local_nankan_future_only_wait_then_cycle_issue122_oneshot.log
+```
+
+補足:
+
+- cycle ごとに readiness wrapper を実行し、history manifest を残す。
+- 同じ live prefix で monitor を再起動する場合は `--run-id` を変えて、restart ごとの cycle history 上書きを防ぐ。
+- `run_local_nankan_future_only_wait_then_cycle.py` 自体は data ingest を行わず、既に更新された local data / artifact を読んで readiness を再評価する supervisor である。
+- したがってこれは `refresh + readiness read` の入口ではなく、更新済み data に対する `readiness-only follow-up` の入口として使う。
+- 出力 manifest には `execution_role=readiness_supervisor`, `data_update_mode=readiness_recheck_only`, `execution_mode=bounded_wait_cycle|oneshot`, `trigger_contract=external_refresh_completed_only` を持たせ、artifact 単体でも「refresh 完了後だけ意味がある readiness-only follow-up」だと判別できるようにしている。
+- `--oneshot` を付けると `max_cycles=1` かつ `wait-seconds=0` として扱い、idle wait を持たずに 1 cycle 実行して終了する。意味があるのは、data 更新が別経路で既に走っており、その完了後に readiness だけを bounded に再評価したい場合に限る。
+- 単なる定時 cron だけでこの script を回しても、元データが更新されていなければ同じ blocker を繰り返し読むだけなので、運用上の第一選択にはしない。
+- `--run-id` を付けると、stable manifest に加えて `..._<run-id>.json` の run-scoped manifest も自動で残る。
+- `--log-file` を付けると shell redirect なしで parent live log を残せる。restart ごとの上書きを防ぐため `..._<run-id>.log` を使う。
+- `--wait-heartbeat-seconds` で cycle 間待機の manifest heartbeat 間隔を調整できる。既定は 60 秒。
+- cycle 内の readiness probe summary も watcher/status-board と同じ stem で cycle-scoped に出力される。
+- cycle 内の capture coverage snapshots も `..._pre_race_capture_snapshots/` 配下へ cycle-scoped に出力される。
+- status board が参照する pre-race handoff manifest も cycle-scoped path に固定される。
+- child 実行中は top-level manifest に `cycle_state` が入り、`current_cycle`、`stage`、`elapsed_seconds`、`updated_at` で進行中 cycle を追える。
+- `cycle_state.surface_summaries` には active cycle 中の `capture/watcher/bootstrap/status_board/wrapper` の軽量 status 要約が入り、子 manifest を開かなくても現在の停滞点を読める。
+- `active_readiness_summary` は active cycle 中だけ出る fixed-position shortcut で、`current_surface`、`pending_result_races`、`bootstrap_status` などを top-level から直接読める。
+- `monitor_state` は top-level の単一フラグで、`running_cycle` / `waiting_next_cycle` / `completed` を返す。
+- `monitor_phase` は scheduler 自身の現在 phase を返し、active 中は `readiness_cycle` などの実行 stage、wait 中は `waiting_next_cycle`、終了後は `completed` を返す。
+- `current_timing` も top-level にあり、active 中は current cycle の開始時刻と経過秒、wait 中は待機開始時刻と残り秒、終了後は run 全体の完了時刻と経過秒を固定位置から読める。
+- `current_decision` も top-level にあり、current cycle、`recommended_action`、`benchmark_rerun_ready`、`bootstrap_status`、`pending_result_races`、`stop_reason` を固定位置から読める。
+- `current_counts` も top-level にあり、`pre_race_only_rows`、`pre_race_only_races`、`result_ready_races`、`pending_result_races` を固定位置から読める。
+- `current_flags` も top-level にあり、`has_pending_result_races`、`blocked_on_result_arrival`、`benchmark_rerun_ready`、`bootstrap_ready`、`cycle_in_flight`、`wait_in_flight` などの boolean 判定を固定位置から読める。
+- `current_blockers` も top-level にあり、`primary_code`、`codes`、`details[]` で未準備理由を固定位置から読める。`details[]` には `surface`、`status`、`phase` と、必要なら `pending_result_races` のような件数が入る。
+- active 初期のように `status_board` / `bootstrap_handoff` がまだ観測されていない段階では、`current_blockers` はそれらを未準備 blocker として先回りで確定しない。`observed_surfaces` を見れば、どこまで child surface が観測済みか分かる。
+- `current_outcome` も top-level にあり、`state`、`summary_code`、`blocking_surface`、`recommended_action` を固定位置から読める。dashboard 側は `current_decision` と `current_blockers` を束ね直さず、この 1 つを見れば当座の operator 判断を描画できる。
+- `current_refs` も top-level にあり、`focus_manifest` と `blocking_manifest` を固定位置から読める。consumer は `status_board -> status_board_manifest` のような surface-to-artifact 変換を自前で持たなくてよい。
+- `current_operator_card` も top-level にあり、`headline`、`state`、`recommended_action`、`focus_surface`、`blocking_surface`、`focus_manifest`、`blocking_manifest` をそのまま card 描画に使える。
+- `current_surface_views` も top-level にあり、surface ごとの `status`、`current_phase`、`manifest`、`summary` を 1 オブジェクトで返す。consumer は `current_statuses` / `current_phases` / `current_artifacts` / `current_surface_summaries` を zip しなくてよい。
+- `current_runtime` も top-level にあり、`monitor_state`、`mode`、`current_cycle`、`next_cycle`、`completion_percent`、`seconds_remaining` を 1 オブジェクトで返す。scheduler banner は `current_timing` / `current_progress` / `wait_state` を再合成しなくてよい。
+- `current_snapshot` も top-level にあり、`current_*` shortcut 群を 1 つの subtree に束ねて返す。互換のため root の `current_*` も残すが、新しい consumer は `current_snapshot.current_outcome` のように 1 箇所を読めばよい。
+- `current_snapshot_meta` も top-level にあり、`schema_version`、`preferred_entrypoints`、`root_aliases_present` を返す。downstream はまず `current_snapshot` を使い、runtime/card/surface views/outcome/refs を優先参照先として扱える。
+- `current_statuses` も top-level にあり、`readiness_cycle`、`capture_loop`、`readiness_watcher`、`bootstrap_handoff`、`status_board` の status を固定位置から読める。
+- `current_phases` も top-level にあり、monitor 全体と各 surface の `current_phase` を固定位置から読める。
+- `current_progress` も top-level にあり、`completed_cycles`、`remaining_cycles`、`in_flight_cycle`、`completion_percent` を固定位置から読める。
+- `current_focus` も top-level にあり、現時点で注目すべき surface の `current_surface`、`current_phase`、`status`、`recommended_action` を固定位置から読める。
+- `current_cycle_index`、`next_cycle_index`、`current_artifacts` も top-level にあるので、consumer は state ごとの差分を気にせず current cycle と drill-down 先を固定位置から読める。
+- `current_readiness_summary` も top-level にあり、active 中は `active_readiness_summary`、wait/completed では `readiness_summary` 相当の blocker metrics と artifact path を固定位置から読める。
+- `current_surface_summaries` も top-level にあり、active 中は `cycle_state.surface_summaries`、wait/completed では直近 cycle の child manifest から再構成した軽量 surface status を同じ参照先で読める。
+- `cycle_state.artifacts` と `cycles[].*_manifest` で `capture/watcher/bootstrap/status_board/wrapper` の drill-down 先を top-level manifest から直接辿れる。
+- `latest_cycle` は直近 cycle の要約を top-level に複製するので、`cycles` 配列全体を読まずに blocker を把握できる。
+- `readiness_summary` は直近 cycle の blocker 数値と主要 artifact path だけを top-level に抜き出した shortcut で、operator 向けの一次参照に使える。
+- cycle 間の待機中は top-level manifest に `wait_state` が入り、`seconds_remaining` と `next_cycle` で生存確認できる。
+- current smoke artifact は `artifacts/reports/local_nankan_future_only_wait_then_cycle_issue122_smoke.json`。
+- `--run-bootstrap-on-ready` を付けると、`benchmark_ready` 到達 cycle で `run_local_nankan_result_ready_bootstrap_handoff.py --run-bootstrap` を follow-up し、`bootstrap_resume` 系 manifest に `#101 -> #103` 再開結果を残す。
+
+external refresh completion を条件に readiness-only oneshot を起動する operator helper:
+
+```bash
+/workspaces/nr-learn/.venv/bin/python scripts/run_local_nankan_future_only_followup_oneshot.py \
+  --upstream-manifest artifacts/reports/local_nankan_pre_race_capture_loop_issue122_cycle.json \
+  --max-upstream-age-seconds 7200 \
+  --run-bootstrap-on-ready
+```
+
+補足:
+
+- `run_local_nankan_future_only_wait_then_cycle.py --oneshot` を直接 scheduler から叩く代わりに使う thin wrapper。
+- accepted upstream manifest contract は `execution_role=pre_race_capture_refresh_loop`, `data_update_mode=capture_refresh_only`, `trigger_contract=direct_capture_refresh` である。
+- upstream manifest が missing または stale のときは child を起動せず、wrapper manifest を `status=not_ready`, `current_phase=await_external_refresh_completion|await_fresh_external_refresh_completion` で閉じる。
+- upstream manifest の contract が不正なときも child を起動せず、`current_phase=invalid_upstream_refresh_contract` で閉じる。
+- fresh と判定されたときだけ child の `--oneshot` を同期実行し、その child command / log path / wait-cycle manifest を wrapper manifest から辿れる。
+- `--dry-run` を付けると freshness / contract 判定だけ行い、child は起動せず `status=dry_run`, `current_phase=followup_plan_ready` で計画だけを残す。
+- wrapper の top-level `observed_at` は freshness 判定に使った基準時刻そのものであり、`upstream_refresh.age_seconds` はその同じ時刻との差分として読む。
+- wrapper 自身の contract は `execution_role=readiness_followup_gate`, `trigger_contract=external_refresh_completed_only` であり、`refresh 完了確認 -> readiness-only follow-up` の境界を 1 つの artifact に固定する。
+- wrapper manifest は `read_order`, `highlights`, `upstream_fresh`, `child_launch_allowed` も返すので、operator は freshness 判定と child 実行可否を top-level から直接読める。
 
 local_nankan primary raw materialize の初期 smoke:
 

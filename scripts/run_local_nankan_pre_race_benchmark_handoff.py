@@ -61,6 +61,24 @@ def _build_not_ready_manifest(
     }
 
 
+def _extract_historical_source_blocker(source_timing_summary: dict[str, Any]) -> dict[str, Any] | None:
+    recoverability = source_timing_summary.get("historical_pre_race_recoverability")
+    if not isinstance(recoverability, dict):
+        return None
+    result_ready_pre_race_rows = int(recoverability.get("result_ready_pre_race_rows") or 0)
+    status = str(recoverability.get("status") or "")
+    if result_ready_pre_race_rows > 0:
+        return None
+    if status != "no_pre_race_capture_in_current_cache":
+        return None
+    return {
+        "status": "not_ready",
+        "current_phase": "historical_source_timing_blocked",
+        "recommended_action": str(source_timing_summary.get("recommended_action") or "inspect_source_timing_audit"),
+        "source_timing_summary": source_timing_summary,
+    }
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--data-config", default="configs/data_local_nankan.yaml")
@@ -76,6 +94,7 @@ def main() -> int:
     parser.add_argument("--primary-manifest-file", default="artifacts/reports/local_nankan_primary_pre_race_ready_materialize_manifest.json")
     parser.add_argument("--benchmark-manifest-output", default="artifacts/reports/benchmark_gate_local_nankan_pre_race_ready.json")
     parser.add_argument("--wrapper-manifest-output", default="artifacts/reports/local_nankan_pre_race_benchmark_handoff_manifest.json")
+    parser.add_argument("--source-timing-summary-input", default="artifacts/reports/local_nankan_source_timing_audit_issue121.json")
     parser.add_argument("--tail-rows", type=int, default=5000)
     parser.add_argument("--max-rows", type=int, default=200000)
     parser.add_argument("--pre-feature-max-rows", type=int, default=None)
@@ -93,6 +112,16 @@ def main() -> int:
 
     try:
         progress.start(message="starting pre-race benchmark handoff")
+
+        source_timing_summary_path = _resolve_path(args.source_timing_summary_input)
+        if source_timing_summary_path.exists():
+            source_timing_summary = _read_json_dict(source_timing_summary_path)
+            source_blocker = _extract_historical_source_blocker(source_timing_summary)
+            if source_blocker is not None:
+                source_blocker["source_timing_summary_input"] = str(source_timing_summary_path)
+                write_json(wrapper_manifest_path, source_blocker)
+                progress.complete(message=f"historical source timing blocked output={wrapper_manifest_path}")
+                return 2
 
         pre_race_command = [
             sys.executable,

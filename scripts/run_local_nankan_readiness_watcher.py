@@ -51,6 +51,7 @@ def main() -> int:
     parser.add_argument("--probe-summary-output", default="artifacts/reports/local_nankan_pre_race_readiness_probe_summary.json")
     parser.add_argument("--handoff-manifest-output", default="artifacts/reports/local_nankan_result_ready_bootstrap_handoff_manifest.json")
     parser.add_argument("--watcher-manifest-output", default="artifacts/reports/local_nankan_readiness_watcher_manifest.json")
+    parser.add_argument("--source-timing-summary-input", default="artifacts/reports/local_nankan_source_timing_audit_issue121.json")
     parser.add_argument("--wait-for-ready", action="store_true")
     parser.add_argument("--max-wait-seconds", type=int, default=0)
     parser.add_argument("--poll-interval-seconds", type=int, default=60)
@@ -63,8 +64,20 @@ def main() -> int:
 
     try:
         python_executable = resolve_python_executable(workspace_root=ROOT, fallback=args.python_executable or sys.executable)
-        probe_command = [python_executable, str(_resolve_path(args.probe_script))]
-        handoff_command = [python_executable, str(_resolve_path(args.handoff_script))]
+        probe_command = [
+            python_executable,
+            str(_resolve_path(args.probe_script)),
+            "--summary-output",
+            args.probe_summary_output,
+            "--source-timing-summary-input",
+            str(_resolve_path(args.source_timing_summary_input)),
+        ]
+        handoff_command = [
+            python_executable,
+            str(_resolve_path(args.handoff_script)),
+            "--source-timing-summary-input",
+            str(_resolve_path(args.source_timing_summary_input)),
+        ]
         if args.run_bootstrap:
             handoff_command.append("--run-bootstrap")
 
@@ -92,6 +105,7 @@ def main() -> int:
                     attempts=attempts,
                     waited_seconds=int(max(0, time.monotonic() - wait_started)),
                     timed_out=False,
+                    probe_summary_output=args.probe_summary_output,
                     probe_summary=probe_summary,
                     handoff_manifest=handoff_manifest,
                 )
@@ -104,11 +118,15 @@ def main() -> int:
             if timed_out:
                 manifest = build_readiness_watcher_manifest(
                     status="not_ready",
-                    current_phase="await_result_arrival",
-                    recommended_action="wait_for_result_ready_pre_race_races",
+                    current_phase=str(probe_summary.get("current_phase") or "await_result_arrival"),
+                    recommended_action=str(
+                        probe_summary.get("recommended_action")
+                        or "wait_for_result_ready_pre_race_races"
+                    ),
                     attempts=attempts,
                     waited_seconds=waited_seconds,
                     timed_out=True,
+                    probe_summary_output=args.probe_summary_output,
                     probe_summary=probe_summary,
                 )
                 write_json(watcher_manifest_path, manifest)

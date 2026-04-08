@@ -15,7 +15,7 @@ SRC = ROOT / "src"
 if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
-from racing_ml.common.artifacts import read_json, write_json
+from racing_ml.common.artifacts import read_json, utc_now_iso, write_json
 from racing_ml.common.progress import Heartbeat, ProgressBar
 
 
@@ -66,6 +66,8 @@ def main() -> int:
     parser.add_argument("--no-overwrite", dest="overwrite", action="store_false")
     parser.set_defaults(overwrite=True)
     args = parser.parse_args()
+
+    run_started_at = utc_now_iso()
 
     try:
         max_passes = max(1, int(args.max_passes))
@@ -207,9 +209,15 @@ def main() -> int:
         latest_action = str(latest_summary.get("recommended_action") or "inspect_capture_loop_manifest")
 
         wrapper_manifest = {
+            "started_at": run_started_at,
+            "finished_at": utc_now_iso(),
             "status": latest_status,
             "current_phase": latest_phase,
             "recommended_action": latest_action,
+            "execution_role": "pre_race_capture_refresh_loop",
+            "data_update_mode": "capture_refresh_only",
+            "execution_mode": "bounded_pass_loop",
+            "trigger_contract": "direct_capture_refresh",
             "max_passes": max_passes,
             "completed_passes": completed_passes,
             "poll_interval_seconds": poll_interval_seconds,

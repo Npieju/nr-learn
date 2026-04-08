@@ -17,6 +17,7 @@ def build_readiness_watcher_manifest(
     attempts: int,
     waited_seconds: int,
     timed_out: bool,
+    probe_summary_output: str | None,
     probe_summary: dict[str, Any] | None,
     handoff_manifest: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
@@ -27,6 +28,7 @@ def build_readiness_watcher_manifest(
         "attempts": int(attempts),
         "waited_seconds": int(waited_seconds),
         "timed_out": bool(timed_out),
+        "probe_summary_output": probe_summary_output,
         "probe_summary": probe_summary if isinstance(probe_summary, dict) else {},
     }
     if isinstance(handoff_manifest, dict):

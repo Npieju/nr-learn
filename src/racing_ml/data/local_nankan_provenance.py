@@ -293,3 +293,227 @@ def build_pre_race_capture_coverage_summary(
             "removed_dates": sorted(set(previous_dates) - set(current_dates)),
         },
     }
+
+
+def _normalize_string_series(frame: pd.DataFrame, column: str, *, default: str = RELATION_UNKNOWN) -> pd.Series:
+    if column not in frame.columns:
+        return pd.Series([default] * len(frame), index=frame.index, dtype="object")
+    return frame[column].fillna(default).astype(str)
+
+
+def _build_source_timing_breakdown(
+    frame: pd.DataFrame,
+    *,
+    group_column: str,
+    result_ready_race_ids: set[str],
+) -> pd.DataFrame:
+    breakdown_columns = [
+        group_column,
+        "row_count",
+        "race_count",
+        "result_ready_rows",
+        "result_ready_races",
+        "pre_race_rows",
+        "unknown_rows",
+        "post_race_rows",
+        "result_ready_pre_race_rows",
+        "result_ready_unknown_rows",
+        "result_ready_post_race_rows",
+    ]
+    if len(frame) == 0:
+        return pd.DataFrame(columns=breakdown_columns)
+
+    working = frame.copy()
+    working[group_column] = _normalize_string_series(working, group_column)
+    working["race_id"] = _normalize_string_series(working, "race_id", default="")
+    working["market_timing_bucket"] = _normalize_string_series(working, MARKET_TIMING_BUCKET_COLUMN)
+    working["is_result_ready"] = working["race_id"].isin(result_ready_race_ids)
+
+    records: list[dict[str, Any]] = []
+    for group_value, group_frame in working.groupby(group_column, dropna=False):
+        row_count = int(len(group_frame))
+        race_count = int(group_frame["race_id"].loc[group_frame["race_id"] != ""].nunique())
+        result_ready_frame = group_frame.loc[group_frame["is_result_ready"]]
+        bucket_counts = group_frame["market_timing_bucket"].value_counts().to_dict()
+        result_ready_bucket_counts = result_ready_frame["market_timing_bucket"].value_counts().to_dict()
+        records.append(
+            {
+                group_column: str(group_value),
+                "row_count": row_count,
+                "race_count": race_count,
+                "result_ready_rows": int(len(result_ready_frame)),
+                "result_ready_races": int(result_ready_frame["race_id"].loc[result_ready_frame["race_id"] != ""].nunique()),
+                "pre_race_rows": int(bucket_counts.get(RELATION_PRE_RACE, 0)),
+                "unknown_rows": int(bucket_counts.get(RELATION_UNKNOWN, 0)),
+                "post_race_rows": int(bucket_counts.get(RELATION_POST_RACE, 0)),
+                "result_ready_pre_race_rows": int(result_ready_bucket_counts.get(RELATION_PRE_RACE, 0)),
+                "result_ready_unknown_rows": int(result_ready_bucket_counts.get(RELATION_UNKNOWN, 0)),
+                "result_ready_post_race_rows": int(result_ready_bucket_counts.get(RELATION_POST_RACE, 0)),
+            }
+        )
+
+    return pd.DataFrame.from_records(records, columns=breakdown_columns).sort_values(group_column).reset_index(drop=True)
+
+
+def build_source_timing_audit_summary(
+    frame: pd.DataFrame,
+    *,
+    result_frame: pd.DataFrame | None = None,
+) -> tuple[dict[str, Any], pd.DataFrame, pd.DataFrame]:
+    annotated = annotate_market_timing_bucket(frame)
+    working = annotated.copy()
+    working["race_id"] = _normalize_string_series(working, "race_id", default="")
+    working["date"] = _normalize_string_series(working, "date")
+    working["card_fetch_mode"] = _normalize_string_series(working, "card_fetch_mode")
+    working["odds_fetch_mode"] = _normalize_string_series(working, "odds_fetch_mode")
+    working["fetch_mode_pair"] = working["card_fetch_mode"] + "|" + working["odds_fetch_mode"]
+    working["year"] = working["date"].str.slice(0, 4)
+
+    result_ready_race_ids: set[str] = set()
+    if result_frame is not None and "race_id" in result_frame.columns:
+        result_ready_race_ids = {str(value) for value in result_frame["race_id"].dropna().tolist()}
+    working["is_result_ready"] = working["race_id"].isin(result_ready_race_ids)
+
+    result_ready_frame = working.loc[working["is_result_ready"]].copy()
+    overall_summary = build_provenance_summary(working)
+    result_ready_summary = build_provenance_summary(result_ready_frame)
+
+    by_date = _build_source_timing_breakdown(working, group_column="date", result_ready_race_ids=result_ready_race_ids)
+    by_year = _build_source_timing_breakdown(working, group_column="year", result_ready_race_ids=result_ready_race_ids)
+
+    fetch_mode_records: list[dict[str, Any]] = []
+    for fetch_mode_pair, pair_frame in working.groupby("fetch_mode_pair", dropna=False):
+        result_ready_pair = pair_frame.loc[pair_frame["is_result_ready"]]
+        bucket_counts = pair_frame[MARKET_TIMING_BUCKET_COLUMN].value_counts().to_dict()
+        result_ready_bucket_counts = result_ready_pair[MARKET_TIMING_BUCKET_COLUMN].value_counts().to_dict()
+        card_mode, odds_mode = str(fetch_mode_pair).split("|", 1)
+        fetch_mode_records.append(
+            {
+                "card_fetch_mode": card_mode,
+                "odds_fetch_mode": odds_mode,
+                "row_count": int(len(pair_frame)),
+                "race_count": int(pair_frame["race_id"].loc[pair_frame["race_id"] != ""].nunique()),
+                "result_ready_rows": int(len(result_ready_pair)),
+                "result_ready_races": int(result_ready_pair["race_id"].loc[result_ready_pair["race_id"] != ""].nunique()),
+                "pre_race_rows": int(bucket_counts.get(RELATION_PRE_RACE, 0)),
+                "unknown_rows": int(bucket_counts.get(RELATION_UNKNOWN, 0)),
+                "post_race_rows": int(bucket_counts.get(RELATION_POST_RACE, 0)),
+                "result_ready_pre_race_rows": int(result_ready_bucket_counts.get(RELATION_PRE_RACE, 0)),
+                "result_ready_unknown_rows": int(result_ready_bucket_counts.get(RELATION_UNKNOWN, 0)),
+                "result_ready_post_race_rows": int(result_ready_bucket_counts.get(RELATION_POST_RACE, 0)),
+            }
+        )
+
+    fetch_mode_summary = sorted(fetch_mode_records, key=lambda record: (record["card_fetch_mode"], record["odds_fetch_mode"]))
+    pre_race_dates = sorted({str(value) for value in working.loc[working[MARKET_TIMING_BUCKET_COLUMN] == RELATION_PRE_RACE, "date"].tolist() if str(value)})
+    result_ready_pre_race_dates = sorted(
+        {
+            str(value)
+            for value in result_ready_frame.loc[result_ready_frame[MARKET_TIMING_BUCKET_COLUMN] == RELATION_PRE_RACE, "date"].tolist()
+            if str(value)
+        }
+    )
+    result_ready_unknown_dates = sorted(
+        {
+            str(value)
+            for value in result_ready_frame.loc[result_ready_frame[MARKET_TIMING_BUCKET_COLUMN] == RELATION_UNKNOWN, "date"].tolist()
+            if str(value)
+        }
+    )
+
+    result_ready_pre_race_rows = int(result_ready_summary.get("pre_race_only_rows") or 0)
+    future_only_pre_race_rows = int(overall_summary.get("pre_race_only_rows") or 0) - result_ready_pre_race_rows
+    if result_ready_pre_race_rows > 0:
+        historical_status = "historical_pre_race_subset_available"
+        recommended_action = "materialize_result_ready_pre_race_subset"
+    elif future_only_pre_race_rows > 0:
+        historical_status = "future_only_pre_race_capture_available"
+        recommended_action = "downgrade_historical_benchmark_to_diagnostic_only"
+    else:
+        historical_status = "no_pre_race_capture_in_current_cache"
+        recommended_action = "rebuild_local_backfill_with_true_pre_race_capture_source"
+
+    summary = {
+        "status": "completed",
+        "current_phase": historical_status,
+        "recommended_action": recommended_action,
+        "overall_summary": overall_summary,
+        "result_ready_summary": result_ready_summary,
+        "result_ready_race_count": int(len(result_ready_race_ids)),
+        "pre_race_dates": pre_race_dates,
+        "result_ready_pre_race_dates": result_ready_pre_race_dates,
+        "result_ready_unknown_dates": result_ready_unknown_dates,
+        "fetch_mode_summary": fetch_mode_summary,
+        "historical_pre_race_recoverability": {
+            "status": historical_status,
+            "result_ready_pre_race_rows": result_ready_pre_race_rows,
+            "future_only_pre_race_rows": int(max(future_only_pre_race_rows, 0)),
+            "result_ready_post_race_rows": int(result_ready_summary.get("post_race_rows") or 0),
+            "result_ready_unknown_rows": int(result_ready_summary.get("unknown_rows") or 0),
+        },
+    }
+    return summary, by_date, by_year
+
+
+def build_historical_source_timing_context(source_timing_summary: dict[str, Any] | None) -> dict[str, Any] | None:
+    if not isinstance(source_timing_summary, dict):
+        return None
+    recoverability = source_timing_summary.get("historical_pre_race_recoverability")
+    if not isinstance(recoverability, dict):
+        return None
+
+    status = str(recoverability.get("status") or source_timing_summary.get("current_phase") or "")
+    result_ready_pre_race_rows = int(recoverability.get("result_ready_pre_race_rows") or 0)
+    future_only_pre_race_rows = int(recoverability.get("future_only_pre_race_rows") or 0)
+
+    if result_ready_pre_race_rows > 0:
+        return {
+            "status": "historical_pre_race_subset_available",
+            "current_phase": "historical_pre_race_subset_available",
+            "recommended_action": "run_pre_race_benchmark_handoff",
+            "result_ready_pre_race_rows": result_ready_pre_race_rows,
+            "future_only_pre_race_rows": future_only_pre_race_rows,
+        }
+
+    if status == "future_only_pre_race_capture_available":
+        return {
+            "status": status,
+            "current_phase": "future_only_readiness_track",
+            "recommended_action": "capture_future_pre_race_rows_and_wait_for_results",
+            "result_ready_pre_race_rows": result_ready_pre_race_rows,
+            "future_only_pre_race_rows": future_only_pre_race_rows,
+        }
+
+    if status == "no_pre_race_capture_in_current_cache":
+        return {
+            "status": status,
+            "current_phase": "historical_source_timing_blocked",
+            "recommended_action": str(source_timing_summary.get("recommended_action") or "rebuild_local_backfill_with_true_pre_race_capture_source"),
+            "result_ready_pre_race_rows": result_ready_pre_race_rows,
+            "future_only_pre_race_rows": future_only_pre_race_rows,
+        }
+
+    return {
+        "status": status or "unknown",
+        "current_phase": str(source_timing_summary.get("current_phase") or "historical_source_timing_review"),
+        "recommended_action": str(source_timing_summary.get("recommended_action") or "inspect_source_timing_audit"),
+        "result_ready_pre_race_rows": result_ready_pre_race_rows,
+        "future_only_pre_race_rows": future_only_pre_race_rows,
+    }
+
+
+def apply_source_timing_context_to_readiness_summary(
+    readiness_summary: dict[str, Any],
+    *,
+    source_timing_summary: dict[str, Any] | None,
+) -> dict[str, Any]:
+    output = dict(readiness_summary)
+    context = build_historical_source_timing_context(source_timing_summary)
+    if context is None:
+        return output
+    output["historical_source_timing"] = context
+    if str(output.get("status") or "") == "ready":
+        return output
+    output["current_phase"] = context["current_phase"]
+    output["recommended_action"] = context["recommended_action"]
+    return output
