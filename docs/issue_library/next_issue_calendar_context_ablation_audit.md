@@ -129,7 +129,74 @@ read:
 - ROI manifest にも `race_year`, `race_month`, `race_dayofweek` は残っていない
 - calendar context ablation は win / ROI の両 component で no-op ではない
 
-## Current Next Move
+### Stack Build
 
-- next step は stack build と formal compare である
-- `value_blend` family compare は base stack config を使い、calendar context ablation revision の component artifact を評価に渡す
+- artifact:
+  - `artifacts/reports/train_metrics_catboost_value_stack_lgbm_roi_high_coverage_tune_roi012_liquidity_regime_hybrid_r20260408_calendar_context_ablation_v1.json`
+  - `artifacts/models/catboost_value_stack_lgbm_roi_high_coverage_tune_roi012_liquidity_regime_hybrid_model.manifest_r20260408_calendar_context_ablation_v1.json`
+- metrics:
+  - `component_count=2`
+  - `feature_count=106`
+  - `categorical_feature_count=37`
+
+read:
+
+- `value_blend` stack も clean に build できた
+- revision suffix 付き component artifact を base stack config から解決できることを確認した
+
+### Formal Compare
+
+- artifact:
+  - `artifacts/reports/evaluation_summary_catboost_value_stack_lgbm_roi_high_coverage_tune_roi012_liquidity_regime_hybrid_model_r20260408_calendar_context_ablation_v1.json`
+  - `artifacts/reports/wf_feasibility_diag_catboost_value_stack_lgbm_roi_high_coverage_tune_roi012_liquidity_regime_hybrid_wf_full_nested.json`
+  - `artifacts/reports/promotion_gate_r20260408_calendar_context_ablation_v1.json`
+  - `artifacts/reports/revision_gate_r20260408_calendar_context_ablation_v1.json`
+- evaluation:
+  - `auc=0.8376476592261183`
+  - `top1_roi=0.8033572810168554`
+  - `ev_top1_roi=0.6874274661508704`
+  - `wf_nested_test_roi_weighted=1.1519579860235565`
+  - `wf_nested_test_bets_total=976`
+  - `stability_assessment=representative`
+- WF feasibility:
+  - `fold_count=5`
+  - `feasible_fold_count=4`
+  - `dominant_failure_reason=min_bets`
+- promotion:
+  - `status=pass`
+  - `decision=promote`
+  - `weighted_roi=1.0185100913844163`
+  - `bets_total=1069`
+  - `feasible_fold_count=4`
+
+read:
+
+- calendar context 3 列を外しても formal gate は維持された
+- evaluation / WF / promotion いずれも candidate を reject する根拠は見えない
+- この時点で current baseline core に対する pruning candidate として actual-date reread に進める
+
+### Actual-Date Role Split
+
+- artifact:
+  - `artifacts/reports/serving_smoke_compare_sep25_calendar_context_base_vs_sep25_calendar_context_cand.json`
+  - `artifacts/reports/serving_stateful_bankroll_sweep_sep25_calendar_context_base_vs_sep25_calendar_context_cand.json`
+  - `artifacts/reports/serving_smoke_compare_dec25_calendar_context_base_vs_dec25_calendar_context_cand.json`
+  - `artifacts/reports/serving_stateful_bankroll_sweep_dec25_calendar_context_base_vs_dec25_calendar_context_cand.json`
+- broad September 2025:
+  - baseline `33 bets / -20.0 / pure bankroll 0.3931722898269604`
+  - candidate `33 bets / -20.0 / pure bankroll 0.3931722898269604`
+- December control 2025:
+  - baseline `17 bets / -5.199999999999999 / pure bankroll 0.7886889523160848`
+  - candidate `17 bets / -5.199999999999999 / pure bankroll 0.7886889523160848`
+
+read:
+
+- September difficult window でも December control window でも `bets / total net / pure bankroll` は完全同値だった
+- serving policy 形状も変わらず、calendar context 3 列は current serving behavior に operational delta を作っていない
+
+## Decision Summary
+
+- `r20260408_calendar_context_ablation_v1` は formal `pass / promote` まで完了した
+- actual-date role split でも September difficult window と December control window の両方で baseline と完全同値だった
+- したがって `race_year`, `race_month`, `race_dayofweek` は current JRA high-coverage serving family の必須土台とは言えず、pruning candidate judgment は完了した
+- baseline config への実反映は human review 前提だが、この issue の hypothesis は artifact ベースで支持された

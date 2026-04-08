@@ -101,13 +101,14 @@ Current open-work expectation:
 
 1. JRA 本線の current active issue は空である
 2. latest completed JRA policy issue は `#117` であり、`abs90` anchor 維持・`minprob005` / `odds25` reject まで確定した
-3. latest completed JRA feature read は `#118` であり、`course_baseline_race_pace_front3f` / `course_baseline_race_pace_back3f` は low coverage reject と確定した
-4. `gate/frame/course`, `pace/closing-fit`, `kelly runtime`, `class-rest-surface conditional`, `recent-history track-distance`, `deque_trim promotion decision`, `tighter policy seasonal narrowing` はこの節では next queue ではなく completed / historical reference として扱う
-5. `current_sep_guard_candidate` は September seasonal fallback のまま据え置く
-6. NAR side の open issue は `#101`, `#103`, `#119`, `#120`, `#121`, `#122`, `#123` であり、current JRA queue とは混在させない
-7. `#123` は `NAR solved = JRA-equivalent trust model constructed` を固定する top-level completion gate の重大 issue である
-8. `#122` は historical diagnostic-only downgrade 後の future-only readiness track を扱う current next NAR issue である
-9. `docs/issue_library/next_issue_nar_class_rest_surface_replay.md` は Stage 2 feature-family parity の future option であり、`#103` の後段に置く
+3. latest issue-numbered JRA feature read は `#118` であり、`course_baseline_race_pace_front3f` / `course_baseline_race_pace_back3f` は low coverage reject と確定した
+4. latest completed JRA feature decision source は `calendar context ablation audit` であり、formal `pass / promote` と actual-date equivalence により pruning candidate judgment まで完了した
+5. `gate/frame/course`, `pace/closing-fit`, `kelly runtime`, `class-rest-surface conditional`, `recent-history track-distance`, `deque_trim promotion decision`, `tighter policy seasonal narrowing` はこの節では next queue ではなく completed / historical reference として扱う
+6. `current_sep_guard_candidate` は September seasonal fallback のまま据え置く
+7. NAR side の open issue は `#101`, `#103`, `#119`, `#120`, `#121`, `#122`, `#123` であり、current JRA queue とは混在させない
+8. `#123` は `NAR solved = JRA-equivalent trust model constructed` を固定する top-level completion gate の重大 issue である
+9. `#122` は historical diagnostic-only downgrade 後の future-only readiness track を扱う current next NAR issue である
+10. `docs/issue_library/next_issue_nar_class_rest_surface_replay.md` は Stage 2 feature-family parity の future option であり、`#103` の後段に置く
 
 Historical note:
 
@@ -120,15 +121,13 @@ Historical note:
 
 Primary next issue draft:
 
-- current JRA primary next issue draft は `calendar context ablation audit` に固定する
-- source issue draft:
-   - `docs/issue_library/next_issue_calendar_context_ablation_audit.md`
-- tracked config:
-   - `configs/features_catboost_rich_high_coverage_diag_calendar_context_ablation.yaml`
-- rationale:
-   - current high-coverage baseline と recent promoted / compare-reference manifests に `race_year`, `race_month`, `race_dayofweek` が継続して残っている
-   - `base race context` family は Tier B だが、calendar context 単体の keep / prune judgment はまだ無い
-   - next hypothesis は add-on ではなく narrow ablation に切るのが自然である
+- current JRA primary next issue draft は空である
+- `docs/issue_library/next_issue_calendar_context_ablation_audit.md` は latest completed feature decision source として保持する
+- completed judgment:
+   - `race_year`, `race_month`, `race_dayofweek` を外した `r20260408_calendar_context_ablation_v1` は formal `pass / promote` を通過した
+   - broad September 2025 と December control 2025 の actual-date compare でも baseline と `bets / total net / pure bankroll` が完全同値だった
+   - したがって calendar context 3 列は current JRA high-coverage serving family の pruning candidate と判断できる
+- next JRA hypothesis は、これを historical completed reference として別の 1 measurable hypothesis を再選定してから起こす
 - `docs/issue_library/next_issue_tighter_policy_seasonal_regime_narrowing.md` は `#117` 完了後の historical issue source として保持する
 - `docs/issue_library/next_issue_gate_frame_course_pace_decomposition_selective_candidate.md` は `#118` close 後の historical issue source として保持する
 - NAR residual unissued draft library は `docs/issue_library/next_issue_nar_class_rest_surface_replay.md` のみである
@@ -143,13 +142,14 @@ Latest next feature queue:
 1. `#118` first read により current JRA next issue は再選定待ちへ戻った
 2. `tighter policy search` family の season-aware narrowing 自体は close し、strict anchor `abs90` 維持で判断が終わった
 3. `course_baseline_race_pace_front3f` / `course_baseline_race_pace_back3f` pair は `non_null_ratio=0.08897` で low coverage reject と確定したため、再開時は別 family を含めて 1 measurable hypothesis を切り直す
-4. current next hypothesis は `calendar context ablation audit` とする
-5. focal features は `race_year`, `race_month`, `race_dayofweek` の 3 列で、current baseline から narrow に外して keep / prune judgment を取る
+4. `calendar context ablation audit` は completed historical feature decision reference になった
+5. focal features は `race_year`, `race_month`, `race_dayofweek` の 3 列で、current baseline から narrow に外した
 6. first read では `priority_missing_raw_columns=[]`, `missing_force_include_features=[]`, `low_coverage_force_include_features=[]` を確認した
 7. win component `r20260408_calendar_context_ablation_v1` は `auc=0.8396626458946592`, `best_iteration=518`, `feature_count=106` で完走した
 8. ROI component `r20260408_calendar_context_ablation_v1` は `top1_roi=0.9133429811866856`, `best_iteration=113`, `feature_count=106` で完走した
-9. win / ROI の両 manifest から `race_year`, `race_month`, `race_dayofweek` は消えており、calendar context ablation は no-op ではない
-10. current next move は stack build と formal compare である
+9. stack / formal compare では `auc=0.8376476592261183`, `weighted_roi=1.0185100913844163`, `feasible_fold_count=4`, `status=pass`, `decision=promote` を確認した
+10. actual-date compare でも broad September 2025 は `33 bets / -20.0 / pure bankroll 0.3931722898269604`、December control 2025 は `17 bets / -5.199999999999999 / pure bankroll 0.7886889523160848` で baseline と完全同値だった
+11. したがって calendar context 3 列は current JRA serving family の pruning candidate と判断し、current next move は別の 1 measurable hypothesis の再選定に戻す
 
 Latest combo track-distance selective read:
 
