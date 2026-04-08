@@ -120,7 +120,15 @@ Historical note:
 
 Primary next issue draft:
 
-- current JRA primary next issue draft は未固定である
+- current JRA primary next issue draft は `calendar context ablation audit` に固定する
+- source issue draft:
+   - `docs/issue_library/next_issue_calendar_context_ablation_audit.md`
+- tracked config:
+   - `configs/features_catboost_rich_high_coverage_diag_calendar_context_ablation.yaml`
+- rationale:
+   - current high-coverage baseline と recent promoted / compare-reference manifests に `race_year`, `race_month`, `race_dayofweek` が継続して残っている
+   - `base race context` family は Tier B だが、calendar context 単体の keep / prune judgment はまだ無い
+   - next hypothesis は add-on ではなく narrow ablation に切るのが自然である
 - `docs/issue_library/next_issue_tighter_policy_seasonal_regime_narrowing.md` は `#117` 完了後の historical issue source として保持する
 - `docs/issue_library/next_issue_gate_frame_course_pace_decomposition_selective_candidate.md` は `#118` close 後の historical issue source として保持する
 - NAR residual unissued draft library は `docs/issue_library/next_issue_nar_class_rest_surface_replay.md` のみである
@@ -135,6 +143,8 @@ Latest next feature queue:
 1. `#118` first read により current JRA next issue は再選定待ちへ戻った
 2. `tighter policy search` family の season-aware narrowing 自体は close し、strict anchor `abs90` 維持で判断が終わった
 3. `course_baseline_race_pace_front3f` / `course_baseline_race_pace_back3f` pair は `non_null_ratio=0.08897` で low coverage reject と確定したため、再開時は別 family を含めて 1 measurable hypothesis を切り直す
+4. current next hypothesis は `calendar context ablation audit` とする
+5. focal features は `race_year`, `race_month`, `race_dayofweek` の 3 列で、current baseline から narrow に外して keep / prune judgment を取る
 
 Latest combo track-distance selective read:
 
