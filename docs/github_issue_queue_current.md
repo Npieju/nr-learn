@@ -145,6 +145,8 @@ Latest next feature queue:
 3. `course_baseline_race_pace_front3f` / `course_baseline_race_pace_back3f` pair は `non_null_ratio=0.08897` で low coverage reject と確定したため、再開時は別 family を含めて 1 measurable hypothesis を切り直す
 4. current next hypothesis は `calendar context ablation audit` とする
 5. focal features は `race_year`, `race_month`, `race_dayofweek` の 3 列で、current baseline から narrow に外して keep / prune judgment を取る
+6. first read では `priority_missing_raw_columns=[]`, `missing_force_include_features=[]`, `low_coverage_force_include_features=[]` を確認した
+7. current read では ablation config は clean に buildable であり、next move は true component retrain である
 
 Latest combo track-distance selective read:
 

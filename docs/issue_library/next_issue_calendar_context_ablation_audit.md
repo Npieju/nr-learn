@@ -70,3 +70,25 @@ tracked config:
 - actual selected set から calendar context 3 列が外れない
 - component retrain が no-op に近い
 - formal support が baseline 比で明確に崩れ、analysis value も薄い
+
+## First Read
+
+first read は `configs/data_2025_latest.yaml` の tail `100,000` rows を使って取得した。
+
+- feature-gap:
+	- `artifacts/reports/feature_gap_summary_calendar_context_ablation_v1.json`
+	- `artifacts/reports/feature_gap_feature_coverage_calendar_context_ablation_v1.csv`
+	- `artifacts/reports/feature_gap_raw_column_coverage_calendar_context_ablation_v1.csv`
+- summary:
+	- `priority_missing_raw_columns=[]`
+	- `missing_force_include_features=[]`
+	- `low_coverage_force_include_features=[]`
+	- `selected_feature_count=106`
+	- `categorical_feature_count=37`
+	- `force_include_total=31`
+
+interpretation:
+
+- ablation config 自体は clean に buildable
+- calendar context 3 列を除いた narrow baseline candidate として first gate は通った
+- no-op や low-coverage blocker は見えていないため、次段は true component retrain に進めてよい
