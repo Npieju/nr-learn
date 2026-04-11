@@ -1,0 +1,49 @@
+# JRA Operator And Policy Index
+
+JRA 本線の operator ordering / seasonal fallback / feature-family side read / policy historical reference をまとめた index である。
+
+## Operator / Seasonal Routing
+
+- [next_issue_analysis_first_promoted_candidate_ordering.md](next_issue_analysis_first_promoted_candidate_ordering.md)
+- [next_issue_difficult_regime_operator_routing_surface_vs_pace.md](next_issue_difficult_regime_operator_routing_surface_vs_pace.md)
+- [next_issue_surface_plus_class_layoff_interactions.md](next_issue_surface_plus_class_layoff_interactions.md)
+- [next_issue_surface_plus_class_layoff_role_split.md](next_issue_surface_plus_class_layoff_role_split.md)
+- [next_issue_surface_plus_class_layoff_bet_rate_robustness.md](next_issue_surface_plus_class_layoff_bet_rate_robustness.md)
+- [next_issue_post_surface_plus_class_layoff_promotion.md](next_issue_post_surface_plus_class_layoff_promotion.md)
+- [next_issue_pace_closing_fit_selective_candidate.md](next_issue_pace_closing_fit_selective_candidate.md)
+- [next_issue_pace_closing_fit_actual_date_role_split.md](next_issue_pace_closing_fit_actual_date_role_split.md)
+- [next_issue_pace_closing_fit_september_fallback_compare.md](next_issue_pace_closing_fit_september_fallback_compare.md)
+- [next_issue_sep_guard_secondary_family.md](next_issue_sep_guard_secondary_family.md)
+
+## Feature Family Side Reads
+
+- [next_issue_gate_frame_course_regime_extension.md](next_issue_gate_frame_course_regime_extension.md)
+- [next_issue_gate_frame_course_actual_date_role_split.md](next_issue_gate_frame_course_actual_date_role_split.md)
+- [next_issue_gate_frame_course_september_fallback_compare.md](next_issue_gate_frame_course_september_fallback_compare.md)
+- [next_issue_gate_frame_course_september_overlay_audit.md](next_issue_gate_frame_course_september_overlay_audit.md)
+- [next_issue_gate_frame_course_pace_decomposition_selective_candidate.md](next_issue_gate_frame_course_pace_decomposition_selective_candidate.md)
+- [next_issue_recent_history_track_distance_selective_candidate.md](next_issue_recent_history_track_distance_selective_candidate.md)
+- [next_issue_recent_history_track_distance_actual_date_role_split.md](next_issue_recent_history_track_distance_actual_date_role_split.md)
+- [next_issue_class_rest_surface_conditional_selective_candidate.md](next_issue_class_rest_surface_conditional_selective_candidate.md)
+- [next_issue_class_rest_surface_conditional_actual_date_role_split.md](next_issue_class_rest_surface_conditional_actual_date_role_split.md)
+- [next_issue_jockey_trainer_combo_style_distance_candidate.md](next_issue_jockey_trainer_combo_style_distance_candidate.md)
+- [next_issue_jockey_trainer_combo_style_distance_actual_date_role_split.md](next_issue_jockey_trainer_combo_style_distance_actual_date_role_split.md)
+- [next_issue_jockey_trainer_combo_closing_time_selective_candidate.md](next_issue_jockey_trainer_combo_closing_time_selective_candidate.md)
+- [next_issue_jockey_trainer_combo_closing_time_role_split.md](next_issue_jockey_trainer_combo_closing_time_role_split.md)
+- [next_issue_jockey_trainer_combo_track_distance_selective_candidate.md](next_issue_jockey_trainer_combo_track_distance_selective_candidate.md)
+- [next_issue_jockey_trainer_combo_track_distance_role_split.md](next_issue_jockey_trainer_combo_track_distance_role_split.md)
+
+## Policy / Runtime Historical References
+
+- [next_issue_tighter_policy_frontier.md](next_issue_tighter_policy_frontier.md)
+- [next_issue_tighter_policy_reentry_after_runtime.md](next_issue_tighter_policy_reentry_after_runtime.md)
+- [next_issue_tighter_policy_seasonal_regime_narrowing.md](next_issue_tighter_policy_seasonal_regime_narrowing.md)
+- [next_issue_tighter_policy_september_fallback_compare.md](next_issue_tighter_policy_september_fallback_compare.md)
+- [next_issue_kelly_runtime_family.md](next_issue_kelly_runtime_family.md)
+- [next_issue_shared_portfolio_bottleneck_regime_split.md](next_issue_shared_portfolio_bottleneck_regime_split.md)
+
+## Reading Order
+
+1. operator ordering の結論だけなら [next_issue_analysis_first_promoted_candidate_ordering.md](next_issue_analysis_first_promoted_candidate_ordering.md)
+2. difficult regime の routing を確認するなら [next_issue_difficult_regime_operator_routing_surface_vs_pace.md](next_issue_difficult_regime_operator_routing_surface_vs_pace.md)
+3. fallback / policy の historical trail は必要な family だけ開く
