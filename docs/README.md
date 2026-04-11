@@ -85,8 +85,11 @@
 ## Snapshot And Tag Rules
 
 - current source-of-truth は原則として version や date を file 名に入れない。
-- 凍結して残す review package / decision memo / handoff note だけ、`<topic>_<YYYYMMDD>.md` または `<topic>_<tag>.md` の形で snapshot 化する。
-- docs の commit batch が review package、運用 boundary、または current source-of-truth の大きい再編を確定させる場合だけ、その batch に対応する git tag を切る。
+- 凍結して残す review package / decision memo / handoff note だけ、`<topic>_<version>.md` または `<topic>_<tag>.md` の形で snapshot 化する。
+- docs の commit batch が review package、運用 boundary、または current source-of-truth の大きい再編を確定させる場合だけ、その batch に対応する semver 形式の git tag を切る。
+- docs tag の基本形は `docs-v<major>.<minor>.<patch>` とする。
+- 既存の大きい docs 再編は `docs-v0.1.0`、tag workflow 導入は `docs-v0.2.0` のように、意味のある batch 単位で minor を上げる。
+- minor の後に小さい docs 修正を積むときだけ `docs-v0.2.1` のように patch を上げる。
 - 軽微な wording fix や typo 修正には毎回 tag を切らない。
 - snapshot file 名と git tag は 1 対 1 に揃っている必要はないが、どの更新単位を凍結したかが相互に追える状態を保つ。
 

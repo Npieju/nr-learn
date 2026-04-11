@@ -121,25 +121,26 @@ git push origin <branch>
 docs の snapshot batch や review package を凍結するときだけ annotated tag を切る。
 
 ```bash
-git tag -a docs-source-of-truth-20260411 -m "docs source-of-truth restructuring snapshot"
+git tag -a docs-v0.2.1 -m "docs source-of-truth patch"
 ```
 
 既存 commit に後から tag を付けるときの例:
 
 ```bash
-git tag -a docs-source-of-truth-20260411 c7f8ae5 -m "docs source-of-truth restructuring snapshot"
+git tag -a docs-v0.1.0 c7f8ae5 -m "docs source-of-truth restructuring snapshot"
 ```
 
 確認は次を使う。
 
 ```bash
 git tag --list
-git show docs-source-of-truth-20260411 --stat
+git show docs-v0.2.1 --stat
 ```
 
 補足:
 
-- tag は review package、運用 boundary、または current source-of-truth の再編 batch にだけ使う。
+- tag は `docs-v<major>.<minor>.<patch>` を基本形にし、review package、運用 boundary、または current source-of-truth の再編 batch にだけ使う。
+- current source-of-truth の大きい再編は minor を上げ、小さい追補だけなら patch を上げる。
 - typo や wording fix のたびには切らない。
 
 ## 3. まず使うコマンド
