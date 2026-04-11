@@ -18,7 +18,9 @@ docs は検索で掘らないと読めない状態を許容しない。
 - draft / reference library は raw listing ではなく index から辿れる
 - 同じ判断や status を複数 docs へ平行更新しないと整合しない構造を増やさない
 - 新しい doc を追加する前に、既存正本へ統合できない理由を確認する
-- snapshot / review memo は version または date を file 名に入れ、作成時点の記録だと分かるようにする
+- snapshot / review memo は version、tag、または date を file 名や参照名に入れ、どの更新単位の記録か分かるようにする
+- current source-of-truth の下に細かい派生 doc を増やす場合は、原則として read-only な versioned snapshot/reference にする
+- 細かい仕様差分を追うための child doc を current doc の下へ増やし、親子で平行更新が必要になる構造を作らない
 - commit しない一時 doc や作業メモは tracked な `docs/` に置かず、gitignore 管理の scratch/local path に隔離する
 
 default rule:
@@ -26,20 +28,24 @@ default rule:
 - まず既存 doc へ統合する
 - 統合できない場合は新規 doc 本体より先に index / source-of-truth を定義する
 - summary doc を増やすときは、何を current source-of-truth にして何を versioned snapshot / 参照専用にするかを同時に固定する
-- versioned snapshot は作成時点の情報を保持するためのものとし、current info を追って平行更新しない
+- versioned snapshot は、ある commit batch / tag / date 時点の記録を保持するためのものとし、current info を追って平行更新しない
+- child doc を切るなら current detail の延長ではなく、version/tag/date 付きの read-only snapshot として切り出す
+- current doc は短い入口と判断境界だけを残し、細部の経緯や時点依存の仕様は snapshot 側へ逃がす
+- 差分は「この doc は古い」と追記して回るのではなく、tag/version の違いで読む
 
 review rule:
 
 - grep 前提の docs 導線は reject 候補にする
 - parallel update が前提の doc 追加は reject 候補にする
-- version/date が無く、current doc と snapshot doc の境界が曖昧な新規文書は reject 候補にする
+- version/tag/date が無く、current doc と snapshot doc の境界が曖昧な新規文書は reject 候補にする
+- current doc の配下に mutable な子 docs を増やし、親子で同時更新が必要になる設計は reject 候補にする
 - commit 予定のない一時 doc を tracked docs に追加する変更は reject 候補にする
 - docs 整備だけが長く滞留し、本線変更の commit を止める状態を作らない
 - heavy run が無い時間帯に non-blocking docs をまとめて前景化し、結果依存の current doc 更新まで同時に膨らませる進め方は reject 候補にする
 
 timing rule:
 
-- running 中に進めてよい docs は、issue 整理、historical note 付け、index 整備、review package の下書きなど、結果未確定でも無駄になりにくいものに限る
+- running 中に進めてよい docs は、issue 整理、snapshot/tag 境界の整理、index 整備、review package の下書きなど、結果未確定でも無駄になりにくいものに限る
 - running 完了後に触る current source-of-truth は、artifact 数値、decision summary、current priority の最小更新に限る
 - heavy run 完了後に docs を大きく書き始めるのではなく、下書きは waiting time に進め、確定反映だけを最後に行う
 

@@ -1,10 +1,5 @@
 # Next Issue: September Guard Secondary Family Ordering
 
-Historical note:
-
-- この draft は `#77` として ordering decision まで完了している。
-- `current_sep_guard_candidate` を second seasonal fallback に据え置く判断は確定済みであり、この文書は historical decision reference として使う。
-
 ## 1. Purpose
 
 この文書は、`current_long_horizon_serving_2025_latest` を first seasonal alias と確定した後、`current_sep_guard_candidate` family を second-layer seasonal family としてどう扱うかを固定するための次 issue 下書きである。

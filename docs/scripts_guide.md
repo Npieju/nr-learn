@@ -348,6 +348,10 @@ capture refresh 側の正本 manifest は `run_local_nankan_pre_race_capture_loo
 
 wait-cycle manifest には `execution_role=readiness_supervisor`, `data_update_mode=readiness_recheck_only`, `execution_mode=bounded_wait_cycle|oneshot`, `trigger_contract=external_refresh_completed_only` を持たせ、artifact 単体でも「data 更新 job ではなく、refresh 完了後だけ意味がある readiness 再評価 surface」であることを判別できるようにしている。
 
+workspace 配下の `artifacts/reports/...` manifest を使う bounded supervisor run では、cycle / wait / completed の current state が canonical `artifacts/reports/local_nankan_data_status_board.json` にも overlay される。したがって live operator の first read は board 側の `readiness_surfaces.readiness_supervisor` と `operator_runtime` から始めてよく、必要なときだけ wait-cycle manifest や cycle-scoped child manifest に降りればよい。
+
+一方で tmp path や外部 path の manifest を使う ad hoc / test run は canonical board を自動更新しない。こうした run で board 出力も欲しい場合だけ `--operator-board-output` を明示する。
+
 `--oneshot` は idle wait を持たずに 1 cycle だけ readiness を再評価するための補助モードである。外部 scheduler と組み合わせる意味があるのは、data ingest 完了や artifact refresh が別経路で担保されていて、その直後に bounded な再評価を差し込みたい場合だけである。
 
 この境界を operator entrypoint として固定したい場合は `run_local_nankan_future_only_followup_oneshot.py` を使う。これは upstream refresh manifest の fresh/stale を先に確認し、fresh な場合だけ `run_local_nankan_future_only_wait_then_cycle.py --oneshot` を同期実行する。したがって外部 scheduler / hook 側は「refresh 完了後にこの wrapper を 1 回呼ぶ」だけでよく、stale artifact への誤発火は wrapper manifest の `status=not_ready` で止められる。wrapper manifest は `read_order`, `highlights`, `upstream_fresh`, `child_launch_allowed` も返すため、child を起動したかどうかを top-level だけで追える。

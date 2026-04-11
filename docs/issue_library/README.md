@@ -1,44 +1,29 @@
 # Issue Library Index
 
-この directory は `next_issue_*.md` の local source/reference library である。
+この directory は current source-of-truth ではない。GitHub issue thread、current queue、versioned snapshot を補助する local reference library である。
 
-ここを raw listing のまま読ませないために、まずこの index から入る。
+current priority を追うときは、まず [../github_issue_queue_current.md](../github_issue_queue_current.md) を読む。この index は queue や thread から参照が必要になったときだけ使う。
 
-## Reading Rules
+## First Rules
 
-- `Historical note:` が先頭にある file は、current active draft ではなく historical decision/reference として扱う。
-- `Historical note:` が無い file も、自動的に active とはみなさない。まず `Current Active Local Entry Points` を見る。
-- GitHub issue thread に source-of-truth が移った後は、重複する local draft を削除候補として扱う。
+- raw listing を入口にしない。
+- `next_issue_*.md` を current queue として直接読まない。
+- GitHub issue thread に source-of-truth が移った local draft は削除候補とする。
+- file 自体に「古い情報」と書き足して回るのではなく、version/tag/date 付き snapshot として扱う。
 
-## Sub-Indexes
+## Entry Points
 
-- [jra_pruning_index.md](jra_pruning_index.md)
-  - active JRA pruning source, human review package, family-level audits, staged boundary references
-- [jra_operator_policy_index.md](jra_operator_policy_index.md)
-  - operator ordering, seasonal fallback, policy/runtime historical references
-- [nar_issue_index.md](nar_issue_index.md)
-  - current NAR source drafts and NAR historical references
-- [ops_runtime_index.md](ops_runtime_index.md)
-  - data / loader / runtime / residual historical references
+- JRA pruning reference: [jra_pruning_index.md](jra_pruning_index.md)
+- JRA operator/policy reference: [jra_operator_policy_index.md](jra_operator_policy_index.md)
+- NAR reference: [nar_issue_index.md](nar_issue_index.md)
+- ops/runtime reference: [ops_runtime_index.md](ops_runtime_index.md)
 
-## Current Active Local Entry Points
-
-- JRA active entrypoint: [jra_pruning_index.md](jra_pruning_index.md)
-- NAR active sources: [nar_issue_index.md](nar_issue_index.md)
-
-## Current Human Review Package
+## Current Review Package
 
 - [../jra_pruning_staged_decision_summary_20260411.md](../jra_pruning_staged_decision_summary_20260411.md)
 - [../jra_pruning_package_review_20260410.md](../jra_pruning_package_review_20260410.md)
-- [jra_pruning_index.md](jra_pruning_index.md)
-
-## Usage
-
-- current priority を追うときは [../github_issue_queue_current.md](../github_issue_queue_current.md) から入る。
-- JRA pruning は [jra_pruning_index.md](jra_pruning_index.md)、JRA operator/policy は [jra_operator_policy_index.md](jra_operator_policy_index.md)、NAR は [nar_issue_index.md](nar_issue_index.md)、ops/runtime は [ops_runtime_index.md](ops_runtime_index.md) から入る。
-- raw な directory listing を直接舐めるのは最後だけにする。
 
 ## Maintenance Rule
 
-- この index は category entrypoint が変わったときだけ更新する。
-- 個別 issue doc の細部更新のたびに、ここへ平行反映しない。
+- この index は entrypoint が変わったときだけ更新する。
+- 個別 doc の本文更新をここへ平行反映しない。

@@ -1,10 +1,5 @@
 # Next Issue: NAR Pre-Race Readiness Probe
 
-Historical note:
-
-- この draft は `#105` として close 条件を満たしている。
-- read-only readiness probe は completed monitoring reference として扱い、この文書は historical issue source / operator reference として使う。
-
 ## Summary
 
 `#101` handoff は result-ready race が来れば benchmark へ進めるが、current refresh は materialization と filtered outputs を伴う。external result arrival を監視するだけなら、raw を書き換えずに readiness を判定する probe が必要である。

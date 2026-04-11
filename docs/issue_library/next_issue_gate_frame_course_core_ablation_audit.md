@@ -1,10 +1,5 @@
 # Next Issue: Gate Frame Course Core Ablation Audit
 
-Historical note:
-
-- この draft は artifact-based judgment まで完了している。
-- current active queue の source draft ではなく、historical decision reference として扱う。
-
 ## Summary
 
 `gate / frame / course bucket` family は current JRA high-coverage baseline に残り続けている。

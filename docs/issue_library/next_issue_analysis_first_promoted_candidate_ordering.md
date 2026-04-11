@@ -1,10 +1,5 @@
 # Next Issue: Analysis-First Promoted Candidate Ordering
 
-Historical note:
-
-- この draft は `#93` として operator ordering 固定まで完了している。
-- current queue の next issue source ではなく、historical decision reference として使う。
-
 ## Summary
 
 JRA では formal `pass / promote` に到達したが、actual-date role split で serving default には上げなかった line が複数並んでいる。

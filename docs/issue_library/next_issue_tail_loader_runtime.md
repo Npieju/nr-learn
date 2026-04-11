@@ -1,10 +1,5 @@
 # Next Issue: Tail Loader Runtime Reduction
 
-Historical note:
-
-- この draft は `#18` として runtime reduction まで完了している。
-- tail loader runtime reduction は completed runtime reference として扱い、この文書は historical issue source / implementation reference として使う。
-
 ## Summary
 
 `#17` により feature builder 側の low-risk fixed-cost 削減は一段進み、reduced smoke の floor は `0m27s` まで下がった。2026-03-29 の profile では、次の本命 bottleneck は再び loader 側に戻っている。

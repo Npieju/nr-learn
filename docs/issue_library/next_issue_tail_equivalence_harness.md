@@ -1,10 +1,5 @@
 # Next Issue: Tail Loader Equivalence Harness
 
-Historical note:
-
-- この draft は `#19` として harness 整備まで完了している。
-- tail loader equivalence harness は current gate standard の前提として完成済みであり、この文書は historical issue source / tooling reference として使う。
-
 ## Summary
 
 `#18` で loader runtime は small safe cuts により reduced smoke `0m25s` 付近まで改善した。一方で、本命 hotspot は引き続き `src/racing_ml/data/dataset_loader.py:_read_csv_tail` であり、より大きい改善余地は aggressive な tail compaction / selection path にある。

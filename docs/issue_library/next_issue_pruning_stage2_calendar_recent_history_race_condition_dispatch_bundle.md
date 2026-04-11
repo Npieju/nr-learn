@@ -1,10 +1,5 @@
 # Next Issue: Pruning Stage 2 Calendar Recent-History Race-Condition Bundle Audit
 
-Historical note:
-
-- この draft は artifact-based judgment まで完了している。
-- current active queue の source draft ではなく、historical decision reference として扱う。
-
 ## Summary
 
 stage-1 `calendar context + recent-history core` bundle は `r20260410_pruning_stage1_calendar_recent_history_v1` で formal `pass / promote` と actual-date Sep/Dec equivalence まで完了した。

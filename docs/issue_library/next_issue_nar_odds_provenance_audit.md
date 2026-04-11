@@ -1,10 +1,5 @@
 # Next Issue: NAR Odds Provenance Audit
 
-Historical note:
-
-- この draft は `#99` として provenance audit まで完了し、その後の corrective execution は `#100` で timestamped odds rebuild として close している。
-- NAR odds provenance audit は completed diagnostic reference として扱い、この文書は historical issue source / provenance reference として使う。
-
 ## Summary
 
 local Nankan line の integrity audit で、high AUC / high ROI の大部分は `odds / popularity` 依存と確認できた。

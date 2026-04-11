@@ -1,10 +1,5 @@
 # Next Issue: Track Weather Surface Context Ablation Audit
 
-Historical note:
-
-- この draft は artifact-based judgment まで完了している。
-- current active queue の source draft ではなく、historical decision reference として扱う。
-
 ## Summary
 
 `base race context` family では `race_year`, `race_month`, `race_dayofweek` の calendar context 3 列を pruning candidate と判断できたが、track / weather / ground / surface-layout 側はまだ formal に監査していない。

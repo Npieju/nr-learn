@@ -1,10 +1,5 @@
 # Next Issue: Kelly-Centered Runtime Family
 
-Historical note:
-
-- この draft は `#92` として formal decision まで完了している。
-- Kelly-centered runtime family は anchor challenger として reject 済みであり、この文書は historical issue source / artifact reference として使う。
-
 ## 1. Title
 
 `[experiment] Kelly-centered runtime family baseline defensive fallback formalization`

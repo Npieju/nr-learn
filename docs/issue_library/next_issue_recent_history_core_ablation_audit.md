@@ -1,10 +1,5 @@
 # Next Issue: Recent History Core Ablation Audit
 
-Historical note:
-
-- この draft は artifact-based judgment まで完了している。
-- current active queue の source draft ではなく、historical decision reference として扱う。
-
 ## Summary
 
 `recent form / history` family は current JRA high-coverage baseline の土台として残っている。

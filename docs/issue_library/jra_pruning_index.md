@@ -1,21 +1,25 @@
 # JRA Pruning Index
 
-JRA pruning / simplification 系の local source と historical reference をまとめた index である。
+JRA pruning / simplification 系の local reference と historical snapshot をまとめた index である。current source-of-truth は GitHub issue `#124` であり、この file は二次参照に留める。
 
 ## Quick Read
 
 - current JRA source-of-truth は GitHub issue `#124` `[jra] pruning stage-7 rollout guardrails`
 - current review status は `awaiting reviewer decision`
-- local compact snapshot は [next_issue_pruning_stage7_rollout_guardrails.md](next_issue_pruning_stage7_rollout_guardrails.md)
 - current defendable stopping point は `stage-7`
 - human review package は version/date 付き docs を正本にする
 - family-level completed audits と staged boundary references は historical snapshot/reference として読む
 
-## Current Source Thread And Snapshot
+## First Read
 
-- [next_issue_pruning_stage7_rollout_guardrails.md](next_issue_pruning_stage7_rollout_guardrails.md)
-  - local compact snapshot
-  - role: GitHub issue `#124` の local reference / artifact entrypoint
+- GitHub issue `#124`
+- [../jra_pruning_staged_decision_summary_20260411.md](../jra_pruning_staged_decision_summary_20260411.md)
+- [../jra_pruning_stage7_implementation_review_checklist.md](../jra_pruning_stage7_implementation_review_checklist.md)
+
+local transfer snapshot が必要なときだけ [next_issue_pruning_stage7_rollout_guardrails.md](next_issue_pruning_stage7_rollout_guardrails.md) を開く。
+
+## Current Source Thread
+
 - GitHub issue `#124`
   - status: open / mechanically review-ready / awaiting reviewer decision
   - expected bounded decision: `approve implementation-candidate review package` or `keep docs-only`
@@ -24,7 +28,6 @@ JRA pruning / simplification 系の local source と historical reference をま
 
 - [../jra_pruning_staged_decision_summary_20260411.md](../jra_pruning_staged_decision_summary_20260411.md)
 - [../jra_pruning_package_review_20260410.md](../jra_pruning_package_review_20260410.md)
-- [next_issue_pruning_stage7_rollout_guardrails.md](next_issue_pruning_stage7_rollout_guardrails.md)
 - [../jra_pruning_stage7_implementation_review_checklist.md](../jra_pruning_stage7_implementation_review_checklist.md)
 - [../jra_pruning_stage7_rollback_checklist.md](../jra_pruning_stage7_rollback_checklist.md)
 
@@ -55,10 +58,10 @@ JRA pruning / simplification 系の local source と historical reference をま
 
 ## Reading Order
 
-1. current issue を追うなら GitHub issue `#124` を優先し、local residue が必要なときだけ [next_issue_pruning_stage7_rollout_guardrails.md](next_issue_pruning_stage7_rollout_guardrails.md) を開く
+1. current issue を追うなら GitHub issue `#124`
 2. human review 全体像を確認するなら [../jra_pruning_staged_decision_summary_20260411.md](../jra_pruning_staged_decision_summary_20260411.md)
-3. pruning の根拠を遡るなら family-level audits
-4. boundary を確認するなら staged boundary references
+3. local transfer snapshot が必要なときだけ [next_issue_pruning_stage7_rollout_guardrails.md](next_issue_pruning_stage7_rollout_guardrails.md)
+4. pruning の根拠を遡るなら family-level audits と staged boundary references
 
 ## Maintenance Rule
 

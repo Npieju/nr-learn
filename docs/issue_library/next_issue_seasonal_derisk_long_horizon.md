@@ -1,10 +1,5 @@
 # Next Issue: Seasonal De-Risk Long-Horizon Formalization
 
-Historical note:
-
-- この draft は `#14` として seasonal alias decision まで完了している。
-- `current_long_horizon_serving_2025_latest` を first seasonal de-risk alias に据え置く判断は確定済みであり、この文書は historical decision reference として使う。
-
 ## 1. Purpose
 
 この文書は、Kelly runtime family 完了後の次の本線 issue をそのまま起票できる粒度で固定するための下書きである。

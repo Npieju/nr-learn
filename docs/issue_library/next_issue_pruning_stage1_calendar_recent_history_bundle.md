@@ -1,10 +1,5 @@
 # Next Issue: Pruning Stage 1 Calendar Recent-History Bundle Audit
 
-Historical note:
-
-- この draft は artifact-based judgment まで完了している。
-- current active queue の source draft ではなく、historical decision reference として扱う。
-
 ## Summary
 
 `calendar context` 3 列と `recent-history core` 2 列は、それぞれ individual ablation では pruning candidate judgment まで完了した。

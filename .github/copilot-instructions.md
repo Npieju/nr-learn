@@ -9,6 +9,7 @@
 - issue は prompt そのものとして扱う。曖昧なら、まず issue を具体化する。
 - 1 task で 1 measurable hypothesis に絞る。
 - `JRA` を benchmark 正本として扱う。`NAR` は readiness track として扱い、主 KPI 判定に混ぜない。
+- broad に docs を舐めず、まず `docs/README.md` を入口にして current source-of-truth だけを開く。versioned snapshot や大きい queue/history は必要になった時だけ読む。
 - broad な strategy change や baseline 更新は human review 前提で進める。
 - 変更前に、目的、非目的、成功条件、検証方法を明確にする。
 - explore -> plan -> code -> verify の順を守る。
@@ -20,8 +21,11 @@
 - Git の更新を長く滞らせない。同じ変更単位の code / config / script / docs は意味のある小さめの batch にまとめ、issue の進捗と乖離しないタイミングで commit / push する。
 - commit しない一時 doc や作業メモを tracked な `docs/` 配下へ置かない。必要な一時メモは gitignore 管理の scratch/local path に隔離し、current source-of-truth や version/date 付き snapshot と混在させない。
 - docs を増やすこと自体は許容するが、grep 前提にしない。まず入口 index か既存正本への統合で解決し、同じ内容を毎回平行更新しないと維持できない docs は原則増やさない。
-- current info は current source-of-truth にだけ書き、補助的なまとめやレビュー資料は version/date を付けた snapshot として切り出す。snapshot は「いつの情報か」が分かる名前にし、後から最新情報へ平行更新しない。
-- docs 整備が必要でも本線より長く脇道化させない。構造化は小さく区切り、既存 docs の削減、導線整理、または version/date 付き snapshot 化を伴わない新規 doc 追加は避ける。
+- docs 整理では、入口 docs と current queue を短く保つことを優先し、completed history を current source-of-truth に抱え込まない。
+- current info は current source-of-truth にだけ書き、補助的なまとめやレビュー資料は version/tag/date を付けた snapshot として切り出す。snapshot はどの更新単位の情報かが分かる名前にし、後から最新情報へ平行更新しない。
+- current source-of-truth の下に細かい child doc を増やす場合も、原則として read-only な version/tag/date 付き snapshot/reference に倒し、親子で平行更新が必要な mutable docs を増やさない。
+- docs 整備が必要でも本線より長く脇道化させない。構造化は小さく区切り、既存 docs の削減、導線整理、または version/tag/date 付き snapshot 化を伴わない新規 doc 追加は避ける。
+- snapshot 側へ「古い情報」と追記して回るのではなく、commit batch ごとの tag/version で差分が読める状態を優先する。
 - 重い train / evaluate / revision gate / serving compare の running 中は、その待ち時間で non-blocking な docs 整理や issue 更新を進めてよい。ただし artifact 数値や decision summary に依存する current source-of-truth 更新は、結果確定後に最小差分で行う。
 - Pylance の code snippet execution は軽い probe / 集計 / 単発確認に限る。train / evaluate / revision gate / serving compare / backfill / multi-date replay などの重い Python script を Pylance で回さない。
 - 重い Python script を実行するときは、先に workspace の Python environment を整えたうえで terminal 実行に切り替え、必ず外部ログファイルを残す。script 自身に `--log-file` があればそれを使い、無ければ shell redirect や `tee` で `artifacts/logs/...` に保存し、その path をユーザーへ明示する。

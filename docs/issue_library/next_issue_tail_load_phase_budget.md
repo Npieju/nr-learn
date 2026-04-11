@@ -1,10 +1,5 @@
 # Next Issue: Tail Training-Table Phase Budget Attribution
 
-Historical note:
-
-- この draft は `#22` として phase-budget attribution まで完了している。
-- tail training-table phase budget attribution は completed runtime reference として扱い、この文書は historical issue source / profiling reference として使う。
-
 ## Summary
 
 `#25` では `_append_external_tables` を集中的に掘り、次の 1 本だけを accepted cut として landing できた。

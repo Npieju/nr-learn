@@ -1,10 +1,5 @@
 # Next Issue: Primary Source Shaping After Tail Micro-Cut Exhaustion
 
-Historical note:
-
-- この draft は `#36` として source-shaping decision まで完了している。
-- primary source shaping は completed runtime reference として扱い、この文書は historical issue source / artifact reference として使う。
-
 ## Summary
 
 `#35` では `_read_csv_tail(...)` の exact-safe candidate を既存 harness で切り分けたが、current mainline に対して landing できる新規 cut は見つからなかった。

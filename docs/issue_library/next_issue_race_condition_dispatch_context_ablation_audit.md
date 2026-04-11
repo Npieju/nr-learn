@@ -1,10 +1,5 @@
 # Next Issue: Race Condition Dispatch Context Ablation Audit
 
-Historical note:
-
-- この draft は artifact-based judgment まで完了している。
-- current active queue の source draft ではなく、historical decision reference として扱う。
-
 ## Summary
 
 `base race context` family では calendar context 3 列と track / weather / surface-layout context 8 列を pruning candidate と判断できたが、race-condition / dispatch categorical subgroup はまだ formal に監査していない。

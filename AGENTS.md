@@ -9,15 +9,12 @@
 ## Read This First
 
 1. `README.md`
-2. `docs/strategy_v2.md`
-3. `docs/autonomous_dev_standard.md`
-4. `docs/ai_coding_best_practices.md`
+2. `docs/README.md`
+3. `docs/strategy_v2.md`
+4. `docs/autonomous_dev_standard.md`
 5. `docs/ml_model_development_standard.md`
-6. `docs/development_operational_cautions.md`
-7. `docs/initial_issue_backlog.md`
-8. `docs/tail_loader_equivalence_gate_standard.md`
 
-既存の `docs/` は reference / legacy として残すが、新しい標準は上の文書を優先する。
+まずは上の 5 本だけを読む。追加の docs は `docs/README.md` から必要な正本だけを辿り、versioned snapshot や大きい queue/history を毎回広く読まない。
 
 ## Repo Priorities
 
@@ -51,8 +48,11 @@
 - Git の更新を長く滞らせない。同じ変更単位の code / config / script / docs は意味のある小さめの batch でまとめ、issue の進捗に対応する commit / push を早めに行う。
 - commit しない一時 doc や作業メモを tracked な `docs/` 配下へ置かない。必要な一時メモは gitignore 管理の scratch/local path に隔離し、current source-of-truth や version/date 付き snapshot と混在させない。
 - docs を増やすこと自体は許容するが、index から辿れる単一導線を優先し、同じ変更を複数 docs に平行反映しないと維持できない構造は原則追加しない。
-- docs は「current source-of-truth」か「version/date 付き snapshot/reference」に役割を分ける。snapshot/reference は作成時点の記録として凍結し、最新化のたびに平行更新しない。
-- docs 整備は本線作業と切り離して長く滞留させない。新しい index / summary を増やす前に、既存 docs へ統合するか、version/date を付けた snapshot として独立させる。
+- broad に docs を読む前に `docs/README.md` を入口にし、current source-of-truth だけを開く。
+- docs は「current source-of-truth」か「version/tag/date 付き snapshot/reference」に役割を分ける。snapshot/reference は特定の更新単位の記録として凍結し、最新化のたびに平行更新しない。
+- current source-of-truth の下に細かい child doc を増やす場合は、原則として read-only な version/tag/date 付き snapshot/reference にし、親子で平行更新が必要な mutable 構造を作らない。
+- docs 整備は本線作業と切り離して長く滞留させない。新しい index / summary を増やす前に、既存 docs へ統合するか、version/tag/date を付けた snapshot として独立させる。
+- snapshot に「古い情報」と追記して回るのではなく、commit batch ごとの tag/version で差分が分かる状態を優先する。
 - 重い train / evaluate / gate / compare が running 中なら、その待ち時間では non-blocking な docs 整備、issue 整理、review package の下書きを優先する。artifact 数値や結論に依存する current source-of-truth 更新は、結果確定後に必要最小限だけ行う。
 - 数秒で終わらない source に progress がない変更は未完成扱いにする
 - progress は possible な限り分母付きで出し、生存確認だけの heartbeat を progress 完了扱いにしない
@@ -64,14 +64,14 @@
 
 ## Important Entry Points
 
+- docs index: `docs/README.md`
+- current queue: `docs/github_issue_queue_current.md`
 - training: `scripts/run_train.py`
 - evaluation: `scripts/run_evaluate.py`
 - revision gate: `scripts/run_revision_gate.py`
 - benchmark references: `docs/benchmarks.md`, `docs/public_benchmark_snapshot.md`
 - dev process: `docs/autonomous_dev_standard.md`
-- AI coding standard: `docs/ai_coding_best_practices.md`
 - ML development standard: `docs/ml_model_development_standard.md`
-- tail loader gate standard: `docs/tail_loader_equivalence_gate_standard.md`
 
 ## Issue Quality Bar
 

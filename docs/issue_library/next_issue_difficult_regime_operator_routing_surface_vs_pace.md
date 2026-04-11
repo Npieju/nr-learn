@@ -1,10 +1,5 @@
 # Next Issue: Difficult-Regime Operator Routing Surface-vs-Pace
 
-Historical note:
-
-- この draft は existing artifact reread により routing judgment まで完了している。
-- current conclusion は explicit narrow routing rule を追加せず、existing flat ordering を維持することなので、この文書は historical decision reference として使う。
-
 ## Summary
 
 `#93` の analysis-first promoted candidate ordering により、non-default promoted line の current operator read は次で固定された。

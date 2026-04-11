@@ -1,10 +1,5 @@
 # Next Issue: Pruning Stage 6 Calendar Recent-History Gate-Frame-Course Track-Weather Class-Rest-Surface JT-ID Combo Bundle Audit
 
-Historical note:
-
-- この draft は artifact-based judgment まで完了している。
-- current active queue の source draft ではなく、historical decision reference として扱う。
-
 ## Summary
 
 current staged pruning read はここまでで 6 つに分岐した。

@@ -4,7 +4,7 @@
 
 この文書は、`nr-learn` の新しい運用基準である。
 
-既存の `docs/` は当面 reference / legacy として残すが、今後の意思決定と自動開発の起点はこの文書群を優先する。
+`docs/` 全体を広く読む前に、まず [README.md](README.md) を入口にして current source-of-truth だけを辿る。versioned snapshot や大きい補助資料は必要になった時だけ開く。
 
 ## 2. North Star
 

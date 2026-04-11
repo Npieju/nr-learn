@@ -1,10 +1,5 @@
 # Next Issue: Primary Tail Cache Refresh Automation
 
-Historical note:
-
-- この draft は `#37` として refresh automation / ownership decision まで完了している。
-- primary tail cache refresh automation は completed runtime reference として扱い、この文書は historical issue source / operational reference として使う。
-
 ## Summary
 
 `#36` で primary tail cache path は same-summary equivalent かつ freshness-guarded opt-in candidate として成立した。残る論点は cache correctness ではなく、refresh を誰がいつ回すかである。

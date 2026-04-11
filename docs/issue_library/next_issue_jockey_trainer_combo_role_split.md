@@ -1,10 +1,5 @@
 # Next Issue: Jockey Trainer Combo Role Split
 
-Historical note:
-
-- この draft は後続の `#108` formal child と `#115` actual-date role split に吸収され、family-level role decision は完了している。
-- current queue の next issue source ではなく、historical bridge draft / decision reference として使う。
-
 ## Summary
 
 `jockey / trainer / combo` family の first child `r20260330_jockey_trainer_combo_style_distance_v1` は formal gate まで `pass / promote` に到達した。

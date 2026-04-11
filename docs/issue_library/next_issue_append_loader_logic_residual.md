@@ -1,10 +1,5 @@
 # Next Issue: Append Loader Logic Residual
 
-Historical note:
-
-- この draft は `#33` として exact-safe logic cut の landing まで完了している。
-- append loader logic residual は completed runtime reference として扱い、この文書は historical issue source / artifact reference として使う。
-
 ## Summary
 
 `#32` で append source candidate を 2 本見たが、どちらも current mainline に勝てなかった。

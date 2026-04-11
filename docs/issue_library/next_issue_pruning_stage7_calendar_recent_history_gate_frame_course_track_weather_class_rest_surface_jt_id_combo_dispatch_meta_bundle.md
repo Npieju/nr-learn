@@ -1,10 +1,5 @@
 # Next Issue: Pruning Stage 7 Calendar Recent-History Gate/Frame/Course Track/Weather Class/Rest/Surface JT-ID Combo Dispatch-Meta Bundle Audit
 
-Historical note:
-
-- この draft は artifact-based judgment まで完了している。
-- current active queue の source draft ではなく、historical decision reference として扱う。
-
 ## Summary
 
 stage-6 `calendar + recent-history + gate/frame/course core + track/weather/surface context + class/rest/surface core + jockey/trainer ID core + jockey/trainer/combo core` bundle は `r20260411_pruning_stage6_calendar_recent_history_gate_frame_course_track_weather_class_rest_surface_jt_id_combo_v1` で formal `pass / promote` と actual-date Sep/Dec equivalence まで完了した。

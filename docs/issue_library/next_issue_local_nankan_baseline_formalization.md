@@ -1,12 +1,5 @@
 # Next Issue: Local Nankan Baseline Formalization
 
-Historical note:
-
-- この draft は `#54` として baseline formalization まで完了している。
-- local Nankan baseline formalization は completed NAR baseline reference として扱い、この文書は historical issue source / artifact reference として使う。
-- 本文中の `status board=ready_for_benchmark` は `#54` 当時の historical read であり、current `#101/#103` blocker 判定には使わない。
-- current blocker は `artifacts/reports/local_nankan_data_status_board.json` の `readiness_surfaces` を正本として読む。
-
 ## Summary
 
 local Nankan data collection は completed で、`#54` 当時の status board も `ready_for_benchmark` になっている。

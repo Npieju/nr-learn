@@ -1,10 +1,5 @@
 # Next Issue: Class Rest Surface Core Ablation Audit
 
-Historical note:
-
-- この draft は artifact-based judgment まで完了している。
-- current active queue の source draft ではなく、historical decision reference として扱う。
-
 ## Summary
 
 `class / rest / surface` family は current JRA high-coverage baseline の最上位 core family として残っている。

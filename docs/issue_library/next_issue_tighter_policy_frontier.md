@@ -1,10 +1,5 @@
 # Next Issue: Tighter Policy Frontier Refinement
 
-Historical note:
-
-- この draft は `#75` として frontier decision まで完了している。
-- strictest defensible anchor は `abs90` に固定済みであり、この文書は historical issue source / artifact reference として使う。
-
 ## 1. Purpose
 
 この文書は、次に着手する最有力 issue

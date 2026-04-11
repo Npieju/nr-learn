@@ -1,10 +1,5 @@
 # Next Issue: Recent History Track-Distance Selective Candidate
 
-Historical note:
-
-- この hypothesis は `#96` として実行済みで、後続の role split は `#97` で完了している。
-- current queue の next issue source ではなく、historical issue source / artifact reference として使う。
-
 ## Summary
 
 `recent form / history` family は current JRA baseline の土台だが、現行 high-coverage line では `horse_last_3_avg_rank` と `horse_last_5_win_rate` に寄っており、course-conditioned な recent history はまだ selective child として切り分けていない。

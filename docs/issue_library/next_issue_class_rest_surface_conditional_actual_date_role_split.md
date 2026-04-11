@@ -1,10 +1,5 @@
 # Next Issue: Class-Rest-Surface Conditional Actual-Date Role Split
 
-Historical note:
-
-- この draftは `#95` 相当の actual-date role split decision まで完了している。
-- conditional selective line の operational role は確定済みであり、この文書は historical issue source / role-split reference として使う。
-
 ## Summary
 
 `#94` の selective child `r20260404_class_rest_surface_conditional_selective_v1` は formal `pass / promote` まで通った。

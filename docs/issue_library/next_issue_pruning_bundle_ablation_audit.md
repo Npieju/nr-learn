@@ -1,10 +1,5 @@
 # Next Issue: Pruning Bundle Ablation Audit
 
-Historical note:
-
-- この draft は artifact-based judgment まで完了している。
-- current active queue の source draft ではなく、historical decision reference として扱う。
-
 ## Summary
 
 `calendar context`, `gate/frame/course core`, `recent history core`, `jockey/trainer/combo core`, `class/rest/surface core`, `track/weather/surface context`, `race-condition/dispatch context`, `jockey/trainer ID core` は個別 audit ではすべて formal `pass / promote` と actual-date equivalence を通過し、pruning candidate judgment まで到達した。

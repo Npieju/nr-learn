@@ -1,10 +1,5 @@
 # Next Issue: Jockey Trainer ID Core Ablation Audit
 
-Historical note:
-
-- この draft は artifact-based judgment まで完了している。
-- current active queue の source draft ではなく、historical decision reference として扱う。
-
 ## Summary
 
 current JRA high-coverage baseline では、base race context の主要 categorical subgroup は calendar、track/weather/surface-layout、race-condition/dispatch と順に pruning candidate judgment まで閉じた。

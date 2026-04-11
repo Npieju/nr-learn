@@ -1,10 +1,5 @@
 # Next Issue: Pre-Slim Netkeiba Race-Result Append Source Candidate
 
-Historical note:
-
-- この draft は `#32` として pre-slim append source evaluation まで完了している。
-- pre-slim netkeiba race-result append source candidate は completed runtime reference として扱い、この文書は historical issue source / artifact reference として使う。
-
 ## Summary
 
 `#31` で `netkeiba_race_result_keys` の materialized source は default 昇格に到達した。これにより current load residual の主対象は append path の `netkeiba_race_result` 側へ移る。

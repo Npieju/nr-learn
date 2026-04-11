@@ -1,10 +1,5 @@
 # Next Issue: Pruning Stage 4 Calendar Recent-History Gate-Frame-Course Track-Weather Class-Rest-Surface Bundle Audit
 
-Historical note:
-
-- この draft は artifact-based judgment まで完了している。
-- current active queue の source draft ではなく、historical decision reference として扱う。
-
 ## Summary
 
 current staged pruning read はここまでで 4 つに分岐した。

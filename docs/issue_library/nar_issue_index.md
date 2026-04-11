@@ -1,16 +1,24 @@
 # NAR Issue Index
 
-NAR separate-universe line の local source draft と historical reference をまとめた index である。
+NAR separate-universe line の local reference index である。current source-of-truth は [../github_issue_queue_current.md](../github_issue_queue_current.md) と GitHub issue thread に置き、この file は二次参照に留める。
 
-## Current NAR Source Drafts
+## First Read
 
-- [next_issue_local_nankan_market_provenance_fail_closed.md](next_issue_local_nankan_market_provenance_fail_closed.md)
-- [next_issue_local_nankan_source_timing_corrective.md](next_issue_local_nankan_source_timing_corrective.md)
-- [next_issue_local_nankan_future_only_pre_race_readiness.md](next_issue_local_nankan_future_only_pre_race_readiness.md)
-- [next_issue_nar_jra_equivalent_trust_completion.md](next_issue_nar_jra_equivalent_trust_completion.md)
-- [next_issue_nar_class_rest_surface_replay.md](next_issue_nar_class_rest_surface_replay.md)
+- [../github_issue_queue_current.md](../github_issue_queue_current.md)
+- [../nar_jra_parity_issue_ladder.md](../nar_jra_parity_issue_ladder.md)
+- [../command_reference.md](../command_reference.md)
 
-## Other NAR References
+local draft/reference が必要なときだけ下の category を使う。
+
+## Open-Issue Local References
+
+- `#122`: [next_issue_local_nankan_future_only_pre_race_readiness.md](next_issue_local_nankan_future_only_pre_race_readiness.md)
+- `#123`: [next_issue_nar_jra_equivalent_trust_completion.md](next_issue_nar_jra_equivalent_trust_completion.md)
+- future option after `#103`: [next_issue_nar_class_rest_surface_replay.md](next_issue_nar_class_rest_surface_replay.md)
+
+closed corrective や過去の readiness/source timing 系は historical reference としてだけ扱う。
+
+## Historical References
 
 - [next_issue_local_nankan_baseline_formalization.md](next_issue_local_nankan_baseline_formalization.md)
 - [next_issue_nar_baseline_pathfixed_rerun_for_policy_audit.md](next_issue_nar_baseline_pathfixed_rerun_for_policy_audit.md)
@@ -39,5 +47,7 @@ NAR separate-universe line の local source draft と historical reference を�
 
 ## Reading Order
 
-1. current NAR queue を追うなら current source drafts
-2. parity / replay の background を確認するなら other NAR references
+1. current NAR queue は [../github_issue_queue_current.md](../github_issue_queue_current.md)
+2. stage 定義は [../nar_jra_parity_issue_ladder.md](../nar_jra_parity_issue_ladder.md)
+3. local residue が必要なときだけ open-issue local references
+4. completed history は historical references

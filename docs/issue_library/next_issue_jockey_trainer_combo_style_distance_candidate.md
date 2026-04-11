@@ -1,10 +1,5 @@
 # Next Issue: Jockey Trainer Combo Style-Distance Candidate
 
-Historical note:
-
-- この hypothesis は `#108` として formal `pass / promote` まで完了している。
-- current active issue は `#115` の actual-date role split であり、この文書は historical issue source / artifact reference として使う。
-
 ## Summary
 
 `jockey / trainer / combo` family は Tier A 次順位で、current strong family に一貫して残っている。

@@ -1,6 +1,15 @@
 # JRA Operator And Policy Index
 
-JRA 本線の operator ordering / seasonal fallback / feature-family side read / policy historical reference をまとめた index である。
+JRA operator / policy 系の historical reference index である。current source-of-truth は current queue と benchmark/operator 正本 docs に置き、この file は背景参照に留める。
+
+## First Read
+
+- [../github_issue_queue_current.md](../github_issue_queue_current.md)
+- [../project_overview.md](../project_overview.md)
+- [../benchmarks.md](../benchmarks.md)
+- [../serving_validation_guide.md](../serving_validation_guide.md)
+
+local historical trail が必要なときだけ下の category に降りる。
 
 ## Operator / Seasonal Routing
 
@@ -44,6 +53,7 @@ JRA 本線の operator ordering / seasonal fallback / feature-family side read /
 
 ## Reading Order
 
-1. operator ordering の結論だけなら [next_issue_analysis_first_promoted_candidate_ordering.md](next_issue_analysis_first_promoted_candidate_ordering.md)
-2. difficult regime の routing を確認するなら [next_issue_difficult_regime_operator_routing_surface_vs_pace.md](next_issue_difficult_regime_operator_routing_surface_vs_pace.md)
-3. fallback / policy の historical trail は必要な family だけ開く
+1. current judgment は current queue と benchmark/operator 正本 docs
+2. local historical ordering の根拠が必要なときだけ [next_issue_analysis_first_promoted_candidate_ordering.md](next_issue_analysis_first_promoted_candidate_ordering.md)
+3. difficult regime routing の historical trail は [next_issue_difficult_regime_operator_routing_surface_vs_pace.md](next_issue_difficult_regime_operator_routing_surface_vs_pace.md)
+4. family 別の過去比較は必要な file だけ開く
