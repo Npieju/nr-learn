@@ -114,7 +114,7 @@ Current open-work expectation:
 4. latest completed JRA feature decision source は `class_rest_surface_core_ablation_audit` であり、formal `pass / promote` と actual-date equivalence により pruning candidate judgment まで完了した
 5. `gate/frame/course`, `pace/closing-fit`, `kelly runtime`, `class-rest-surface conditional`, `recent-history track-distance`, `deque_trim promotion decision`, `tighter policy seasonal narrowing` はこの節では next queue ではなく completed / historical reference として扱う
 6. `current_sep_guard_candidate` は September seasonal fallback のまま据え置く
-7. NAR side の open issue は `#101`, `#103`, `#119`, `#120`, `#121`, `#122`, `#123` であり、current JRA queue とは混在させない
+7. NAR side の open issue は `#101`, `#103`, `#119`, `#122`, `#123` であり、current JRA queue とは混在させない
 8. `#123` は `NAR solved = JRA-equivalent trust model constructed` を固定する top-level completion gate の重大 issue である
 9. `#122` は historical diagnostic-only downgrade 後の future-only readiness track を扱う current next NAR issue である
 10. `docs/issue_library/next_issue_nar_class_rest_surface_replay.md` は Stage 2 feature-family parity の future option であり、`#103` の後段に置く
@@ -193,7 +193,7 @@ Primary next issue draft:
 - `docs/issue_library/next_issue_local_nankan_source_timing_corrective.md` は `#121` の source issue draft である
 - `docs/issue_library/next_issue_local_nankan_future_only_pre_race_readiness.md` は `#122` の source issue draft である
 - `docs/issue_library/next_issue_nar_jra_equivalent_trust_completion.md` は `#123` の source issue draft である
-- ただし NAR residual draft は current next issue ではなく、`#101`, `#103`, `#119`, `#120`, `#121` と別の後段候補である
+- ただし NAR residual draft は current next issue ではなく、open issue と closed corrective references を分けて読む
 
 Latest next feature queue:
 
