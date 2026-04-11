@@ -1,5 +1,10 @@
 # Next Issue: Post-Promotion Serving Validation For Surface Plus Class-Layoff Candidate
 
+Historical note:
+
+- この draft は `#45` の serving compare と role interpretation まで完了している。
+- promoted surface-plus-class-layoff line の current read は確定済みであり、この文書は historical issue source / serving-role reference として使う。
+
 ## Summary
 
 `#44` の `r20260330_surface_plus_class_layoff_interactions_v1` は formal に `pass / promote` まで到達した。

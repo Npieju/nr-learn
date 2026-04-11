@@ -1,5 +1,10 @@
 # Next Issue: Class-Rest-Surface Conditional Selective Candidate
 
+Historical note:
+
+- この draft は `#94` として selective child の formal candidate read まで完了している。
+- conditional interaction child は no-op ではないことが確認済みであり、この文書は historical issue source / feature reference として使う。
+
 ## Summary
 
 `class / rest / surface` family 自体は、JRA current baseline の中核に残っている。ただし current high-coverage baseline の actual used set を見ると、conditional interaction 群は builder に存在し `force_include` にも入っているのに、selected set には残っていない。

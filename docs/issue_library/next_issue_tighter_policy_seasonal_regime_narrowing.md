@@ -1,5 +1,10 @@
 # Next Issue: Tighter Policy Seasonal Regime Narrowing
 
+Historical note:
+
+- この draft は `#117` として season-aware narrowing の reject decision まで完了している。
+- strict anchor `r20260329_tighter_policy_ratio003_abs90` 維持の結論は確定済みであり、この文書は historical issue source / decision reference として使う。
+
 ## Summary
 
 JRA の current policy 本線では、`current_tighter_policy_search_candidate_2025_latest` family が依然として最も formal support が強い。

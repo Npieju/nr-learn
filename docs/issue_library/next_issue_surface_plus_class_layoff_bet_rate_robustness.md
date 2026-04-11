@@ -1,5 +1,10 @@
 # Next Issue: Bet-Rate Robustness Audit For Surface Plus Class-Layoff Candidate
 
+Historical note:
+
+- この draft は `#46` として bet-rate / concentration audit の decision まで完了している。
+- low-exposure caution を含む operational read は確定済みであり、この文書は historical issue source / denominator reference として使う。
+
 ## Summary
 
 `r20260330_surface_plus_class_layoff_interactions_v1` は formal benchmark では `pass / promote` に到達したが、actual-date の serving compare では exposure を大きく削る shape が目立つ。
