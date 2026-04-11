@@ -7,7 +7,7 @@
 ## Reading Rules
 
 - `Historical note:` が先頭にある file は、current active draft ではなく historical decision/reference として扱う。
-- `Historical note:` が無い file も、自動的に active とはみなさない。まず `Current Active Local Source Drafts` を見る。
+- `Historical note:` が無い file も、自動的に active とはみなさない。まず `Current Active Local Entry Points` を見る。
 - GitHub issue thread に source-of-truth が移った後は、重複する local draft を削除候補として扱う。
 
 ## Sub-Indexes
@@ -21,9 +21,9 @@
 - [ops_runtime_index.md](ops_runtime_index.md)
   - data / loader / runtime / residual historical references
 
-## Current Active Local Source Drafts
+## Current Active Local Entry Points
 
-- JRA active source: [jra_pruning_index.md](jra_pruning_index.md)
+- JRA active entrypoint: [jra_pruning_index.md](jra_pruning_index.md)
 - NAR active sources: [nar_issue_index.md](nar_issue_index.md)
 
 ## Current Human Review Package

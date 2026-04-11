@@ -47,11 +47,11 @@ progress 不足の棚卸しは [progress_coverage_audit.md](progress_coverage_au
 
 2026-04-05 時点では、active queue は [github_issue_queue_current.md](github_issue_queue_current.md) の `3.0` と `Execution Order` を正本にする。draft/reference library は [issue_library/](issue_library/) に分離してあり、そのまま current priority と読まず、issue 化する 1 hypothesis だけを queue から選ぶ。
 
-2026-04-11 時点の JRA pruning human review package は次の 4 本を正本にする。
+2026-04-11 時点の JRA pruning human review package は、GitHub issue `#124` を thread 正本とし、local docs は次の 4 本を入口にする。
 
 1. [jra_pruning_staged_decision_summary_20260411.md](jra_pruning_staged_decision_summary_20260411.md)
 2. [jra_pruning_package_review_20260410.md](jra_pruning_package_review_20260410.md)
-3. [issue_library/next_issue_pruning_stage7_rollout_guardrails.md](issue_library/next_issue_pruning_stage7_rollout_guardrails.md)
+3. [issue_library/jra_pruning_index.md](issue_library/jra_pruning_index.md)
 4. [jra_pruning_stage7_implementation_review_checklist.md](jra_pruning_stage7_implementation_review_checklist.md)
 
 rollback まで見る場合だけ [jra_pruning_stage7_rollback_checklist.md](jra_pruning_stage7_rollback_checklist.md) を追加で開く。

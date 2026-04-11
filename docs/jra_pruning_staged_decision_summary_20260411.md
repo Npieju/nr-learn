@@ -46,7 +46,9 @@
 
 review-ready support docs:
 
-- rollout guardrail issue:
+- rollout guardrail source-of-truth:
+  - GitHub issue `#124` `[jra] pruning stage-7 rollout guardrails`
+- rollout guardrail local snapshot:
   - `docs/issue_library/next_issue_pruning_stage7_rollout_guardrails.md`
 - implementation review checklist:
   - `docs/jra_pruning_stage7_implementation_review_checklist.md`
