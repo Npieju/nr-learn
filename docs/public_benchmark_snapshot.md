@@ -1,5 +1,12 @@
 # 対外向けベンチマーク概要
 
+## Quick Read
+
+- role: public explanation 用の current benchmark snapshot
+- snapshot date: `2026-04-05`
+- use this when: current baseline と直近 formal candidate の数値だけを短く示したいとき
+- source-of-truth boundary: benchmark 数字と operational role の読み方そのものは [public_benchmark_operational_reading_guide.md](public_benchmark_operational_reading_guide.md) を優先する
+
 ## 1. この文書の役割
 
 この文書は、`nr-learn` の現状を対外向けに説明するときに使う benchmark snapshot である。

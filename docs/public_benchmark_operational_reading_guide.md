@@ -1,5 +1,12 @@
 # Public Benchmark-To-Operation Reading Guide
 
+## Quick Read
+
+- role: public benchmark numbers の読み方を固定する current guide
+- use this when: `formal pass` と `operational default` の違いを短く説明したいとき
+- source-of-truth: benchmark 数字と operational role の関係はこの文書を優先する
+- not for: internal pruning review, family-level ablation judgment, operator-only fallback ordering
+
 ## Purpose
 
 この文書は、対外向けに `nr-learn` の数字を説明するときの読み方を固定する。
