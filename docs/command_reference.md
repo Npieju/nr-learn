@@ -946,6 +946,7 @@ local_nankan の current blocker を 1 本の board で読む入口:
   - `local_nankan_pre_race_benchmark_handoff_manifest.json`
   - `local_nankan_result_ready_bootstrap_handoff_manifest.json`
   - `local_nankan_readiness_watcher_manifest.json`
+- bounded supervisor を workspace 配下の report manifest で走らせている間は、同じ board に `readiness_surfaces.readiness_supervisor` と `operator_runtime` も重ねて書かれる。したがって live wait / running-cycle の operator read は、separate な wait manifest を開く前にこの canonical board から始めてよい。
 - `readiness_surfaces.followup_entrypoint` には `run_local_nankan_future_only_followup_oneshot.py` の正本入口を残す。ここで capture loop manifest path、accepted upstream contract、`dry_run_command_preview`、`run_command_preview` を board から直接読める。
 - current NAR 運用では `#101/#103` の readiness はまずこの board を一次参照にし、必要なときだけ個別 manifest に降りる。
 
@@ -994,6 +995,8 @@ idle wait を持たせず 1 cycle だけ実行したいとき:
 - 単なる定時 cron だけでこの script を回しても、元データが更新されていなければ同じ blocker を繰り返し読むだけなので、運用上の第一選択にはしない。
 - `--run-id` を付けると、stable manifest に加えて `..._<run-id>.json` の run-scoped manifest も自動で残る。
 - `--log-file` を付けると shell redirect なしで parent live log を残せる。restart ごとの上書きを防ぐため `..._<run-id>.log` を使う。
+- workspace 配下の `artifacts/reports/...` manifest を使う run では、cycle/wait/completed の current state が canonical `artifacts/reports/local_nankan_data_status_board.json` にも overlay される。これにより board 側から `readiness_surfaces.readiness_supervisor.monitor_state` と `operator_runtime.current_runtime` を直接読める。
+- 一方で tmp path や外部 path の manifest を使う ad hoc / test run は canonical board を自動更新しない。そうした run で board 出力が必要なときだけ `--operator-board-output` を明示する。
 - `--wait-heartbeat-seconds` で cycle 間待機の manifest heartbeat 間隔を調整できる。既定は 60 秒。
 - cycle 内の readiness probe summary も watcher/status-board と同じ stem で cycle-scoped に出力される。
 - cycle 内の capture coverage snapshots も `..._pre_race_capture_snapshots/` 配下へ cycle-scoped に出力される。
