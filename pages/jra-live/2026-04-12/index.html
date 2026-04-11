@@ -234,6 +234,23 @@
       cursor: pointer;
       transition: 140ms ease;
       font-size: 12px;
+      position: relative;
+    }
+    .tab.has-selection {
+      border-color: rgba(27, 127, 93, 0.26);
+      color: #165640;
+      background: rgba(27, 127, 93, 0.08);
+    }
+    .tab.has-selection::after {
+      content: "";
+      position: absolute;
+      left: 10px;
+      right: 10px;
+      bottom: 3px;
+      height: 2px;
+      border-radius: 999px;
+      background: currentColor;
+      opacity: 0.85;
     }
     .tab.active {
       border-color: rgba(33, 57, 91, 0.4);
@@ -961,7 +978,8 @@
         `<button class="tab ${state.viewMode === "overview" ? "active" : ""}" data-view-mode="overview">Overview</button>`,
         ...state.data.venues.map((venue) => {
           const activeClass = state.viewMode === "venue" && venue.venueCode === state.selectedVenueCode ? "active" : "";
-          return `<button class="tab ${activeClass}" data-venue-code="${venue.venueCode || ""}">${venue.venue || "Unknown"}</button>`;
+          const selectedClass = (venue.selectedRows || 0) > 0 ? "has-selection" : "";
+          return `<button class="tab ${activeClass} ${selectedClass}" data-venue-code="${venue.venueCode || ""}">${venue.venue || "Unknown"}</button>`;
         }),
       ];
       const html = buttons.join("");
@@ -976,7 +994,8 @@
       }
       const html = venueRaces().map((race) => {
         const activeClass = race.raceId === state.selectedRaceId ? "active" : "";
-        return `<button class="tab ${activeClass}" data-race-id="${race.raceId}">${race.raceNo || "-"}R</button>`;
+        const selectedClass = (race.selectedRows || 0) > 0 ? "has-selection" : "";
+        return `<button class="tab ${activeClass} ${selectedClass}" data-race-id="${race.raceId}">${race.raceNo || "-"}R</button>`;
       }).join("");
       document.getElementById("race-tabs-row").hidden = false;
       document.getElementById("race-tabs").innerHTML = html;
