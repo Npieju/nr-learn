@@ -31,18 +31,23 @@
 2. [roadmap.md](roadmap.md)
 3. [ml_model_development_standard.md](ml_model_development_standard.md)
 4. [benchmarks.md](benchmarks.md)
+5. [ml_stage_checklist.md](ml_stage_checklist.md)
 
 ### 評価・昇格判断
 
 1. [benchmarks.md](benchmarks.md)
 2. [evaluation_guide.md](evaluation_guide.md)
 3. [public_benchmark_snapshot.md](public_benchmark_snapshot.md)
+4. NAR denominator 読みが必要なら [nar_bet_denominator_standard.md](nar_bet_denominator_standard.md)
 
 ### 日常実行・障害対応
 
 1. [command_reference.md](command_reference.md)
 2. [scripts_guide.md](scripts_guide.md)
 3. [artifact_guide.md](artifact_guide.md)
+4. cache alias 運用は [primary_tail_cache_operational_policy.md](primary_tail_cache_operational_policy.md)
+5. GPU / Docker / Notebook の実務メモは [environment_notes.md](environment_notes.md)
+6. progress 棚卸し結果は [progress_coverage_audit.md](progress_coverage_audit.md)
 
 ### NAR readiness
 
