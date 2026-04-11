@@ -907,6 +907,8 @@ class LocalNankanBootstrapTest(unittest.TestCase):
             self.assertTrue(wait_payloads)
             self.assertEqual(wait_payloads[0]["monitor_state"], "waiting_next_cycle")
             self.assertEqual(wait_payloads[0]["monitor_phase"], "waiting_next_cycle")
+            self.assertIsNone(wait_payloads[0]["finished_at"])
+            self.assertIn("updated_at", wait_payloads[0])
             self.assertEqual(wait_payloads[0]["current_decision"]["monitor_state"], "waiting_next_cycle")
             self.assertEqual(wait_payloads[0]["current_decision"]["stop_reason"], "running")
             self.assertEqual(wait_payloads[0]["current_decision"]["pending_result_races"], 24)
@@ -1379,6 +1381,8 @@ class LocalNankanBootstrapTest(unittest.TestCase):
             cycle_payloads = [payload for payload in captured_payloads if isinstance(payload.get("cycle_state"), dict) and payload["cycle_state"].get("active")]
             self.assertTrue(cycle_payloads)
             self.assertEqual(cycle_payloads[0]["current_focus"]["current_surface"], "readiness_cycle")
+            self.assertIsNone(cycle_payloads[0]["finished_at"])
+            self.assertIn("updated_at", cycle_payloads[0])
             self.assertEqual(cycle_payloads[0]["current_blockers"]["primary_code"], None)
             self.assertEqual(cycle_payloads[0]["current_blockers"]["blocking_count"], 0)
             self.assertFalse(cycle_payloads[0]["current_blockers"]["observed_surfaces"]["status_board"])

@@ -885,9 +885,12 @@ def _build_wait_manifest_payload(
 
     execution_mode = "oneshot" if oneshot else "bounded_wait_cycle"
 
+    top_level_finished_at = payload_finished_at if monitor_state == "completed" else None
+
     payload = {
         "started_at": run_started_at,
-        "finished_at": payload_finished_at,
+        "updated_at": payload_finished_at,
+        "finished_at": top_level_finished_at,
         "status": final_status,
         "current_phase": final_phase,
         "recommended_action": final_action,
