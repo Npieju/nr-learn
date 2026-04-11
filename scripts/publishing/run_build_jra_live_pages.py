@@ -603,7 +603,7 @@ def render_live_page(*, page_title: str) -> str:
     .chip-row,
     .tabs {
       display: flex;
-      gap: 6px;
+      gap: 4px;
       flex-wrap: wrap;
     }
     .tabs {
@@ -611,18 +611,30 @@ def render_live_page(*, page_title: str) -> str:
       flex-wrap: nowrap;
       padding-bottom: 1px;
     }
+    #race-tabs {
+      gap: 2px;
+    }
     .tab {
       border: 1px solid var(--line);
       background: rgba(251, 253, 255, 0.82);
       color: var(--ink);
-      border-radius: 999px;
-      padding: 5px 8px;
+      border-radius: 9px;
+      padding: 4px 7px;
       font: inherit;
       white-space: nowrap;
       cursor: pointer;
       transition: 140ms ease;
-      font-size: 11px;
+      font-size: 10px;
+      line-height: 1.1;
       position: relative;
+    }
+    #race-tabs .tab {
+      min-width: 32px;
+      padding: 4px 6px;
+      text-align: center;
+    }
+    #race-tabs .tab.tab-overview {
+      min-width: 54px;
     }
     .tab.has-selection {
       border-color: rgba(77, 111, 130, 0.26);
@@ -651,7 +663,7 @@ def render_live_page(*, page_title: str) -> str:
       align-items: center;
       gap: 6px;
       padding: 6px 10px;
-      border-radius: 999px;
+      border-radius: 10px;
       font-size: 11px;
       border: 1px solid var(--line);
       background: rgba(250, 253, 255, 0.8);
@@ -904,7 +916,17 @@ def render_live_page(*, page_title: str) -> str:
       .chip,
       .info-summary,
       .tabs-toggle {
-        font-size: 10px;
+        font-size: 9px;
+      }
+      #race-tabs {
+        gap: 1px;
+      }
+      #race-tabs .tab {
+        min-width: 29px;
+        padding: 3px 4px;
+      }
+      #race-tabs .tab.tab-overview {
+        min-width: 46px;
       }
       .race-title {
         font-size: 17px;
@@ -933,11 +955,11 @@ def render_live_page(*, page_title: str) -> str:
       </div>
       <div class="tab-stack" id="tabs-stack">
         <div class="tab-panel-row">
-          <p class="tab-panel-label">Mode / Venue</p>
+          <p class="tab-panel-label">Venue</p>
           <div class="tabs" id="venue-tabs"></div>
         </div>
-        <div class="tab-panel-row" id="race-tabs-row" hidden>
-          <p class="tab-panel-label">Race</p>
+        <div class="tab-panel-row" id="race-tabs-row">
+          <p class="tab-panel-label">Overview / Race</p>
           <div class="tabs" id="race-tabs"></div>
         </div>
       </div>
@@ -946,8 +968,8 @@ def render_live_page(*, page_title: str) -> str:
     <section class="section overview-section" id="overview-section">
       <div class="section-head">
         <div>
-          <h2 class="section-title">Overview</h2>
-          <p class="section-note">全レースの命中寄り上位、妙味上位、policy 採否、主 blocker を 1 表で見ます。行クリックで該当レースへ移動します。</p>
+          <h2 class="section-title" id="overview-title">Overview</h2>
+          <p class="section-note">開催別の命中寄り上位、妙味上位、policy 採否、主 blocker を 1 表で見ます。行クリックで該当レースへ移動します。</p>
         </div>
       </div>
       <div class="overview-table-wrap" id="overview-wrap">
@@ -1299,7 +1321,7 @@ def render_live_page(*, page_title: str) -> str:
     }
 
     function currentRace() {
-      const pool = state.viewMode === "overview" ? state.data.races : venueRaces();
+      const pool = venueRaces();
       return pool.find((race) => race.raceId === state.selectedRaceId) || pool[0] || state.data.races[0];
     }
 
@@ -1312,19 +1334,12 @@ def render_live_page(*, page_title: str) -> str:
     }
 
     function syncSelection() {
-      if (state.viewMode === "overview") {
-        if (!state.selectedRaceId) {
-          state.selectedRaceId = state.data.races[0]?.raceId || null;
-        }
-        return;
-      }
       const activeVenue = currentVenue();
       if (!activeVenue) {
         state.selectedVenueCode = state.data.venues[0]?.venueCode || null;
-        return;
       }
       const races = venueRaces();
-      if (!races.some((race) => race.raceId === state.selectedRaceId)) {
+      if (!state.selectedRaceId || !races.some((race) => race.raceId === state.selectedRaceId)) {
         state.selectedRaceId = races[0]?.raceId || state.data.races[0]?.raceId || null;
       }
     }
@@ -1362,20 +1377,18 @@ def render_live_page(*, page_title: str) -> str:
       ].filter(Boolean);
       document.getElementById("page-meta").textContent = metaBits.join(" / ");
       document.getElementById("page-note").textContent = diag.likely_blocker_reason
-        ? `主 blocker は ${diag.likely_blocker_reason}。overview で全体を確認してから、開催場とレースへ降りてください。`
-        : "overview で全体を確認してから、開催場とレースへ降りてください。";
+        ? `主 blocker は ${diag.likely_blocker_reason}。開催別 overview からレースへ降りて市場オッズ・推論値・policy 判定を確認できます。`
+        : "開催別 overview からレースへ降りて市場オッズ・推論値・policy 判定を確認できます。";
       document.getElementById("footer-meta").textContent = `source=${meta.predictionFile} | summary=${meta.summaryFile} | built=${meta.generatedAt}`;
     }
 
     function renderOverview() {
-      const rows = [...state.data.dayOverview].sort((left, right) => {
-        if ((left.venueCode || "") !== (right.venueCode || "")) {
-          return String(left.venueCode || "").localeCompare(String(right.venueCode || ""), "ja");
-        }
-        return (left.raceNo || 0) - (right.raceNo || 0);
-      });
+      const activeVenue = currentVenue();
+      const rows = state.data.dayOverview
+        .filter((row) => row.venueCode === state.selectedVenueCode)
+        .sort((left, right) => (left.raceNo || 0) - (right.raceNo || 0));
+      document.getElementById("overview-title").textContent = `${activeVenue?.venue || "-"} Overview`;
       const html = [`<table><thead><tr>
-        <th>開催</th>
         <th>R</th>
         <th>命中寄り</th>
         <th>妙味寄り</th>
@@ -1386,7 +1399,6 @@ def render_live_page(*, page_title: str) -> str:
         const activeClass = row.raceId === state.selectedRaceId ? "active-overview" : "";
         html.push(`
           <tr class="${activeClass}" data-race-id="${row.raceId}">
-            <td>${row.venue || "-"}</td>
             <td><button class="tab-link" data-race-id="${row.raceId}">${formatValue("raceNo", row.raceNo)}R</button></td>
             <td>${row.topScoreHorse || "-"} <span class="mono">${formatValue("score", row.topScore)}</span></td>
             <td>${row.topRawEvHorse || "-"} <span class="mono">${formatValue("expected_value", row.topRawEv)}</span></td>
@@ -1400,14 +1412,11 @@ def render_live_page(*, page_title: str) -> str:
     }
 
     function renderVenueTabs() {
-      const buttons = [
-        `<button class="tab ${state.viewMode === "overview" ? "active" : ""}" data-view-mode="overview">Overview</button>`,
-        ...state.data.venues.map((venue) => {
-          const activeClass = state.viewMode === "venue" && venue.venueCode === state.selectedVenueCode ? "active" : "";
-          const selectedClass = (venue.selectedRows || 0) > 0 ? "has-selection" : "";
-          return `<button class="tab ${activeClass} ${selectedClass}" data-venue-code="${venue.venueCode || ""}">${venue.venue || "Unknown"}</button>`;
-        }),
-      ];
+      const buttons = state.data.venues.map((venue) => {
+        const activeClass = venue.venueCode === state.selectedVenueCode ? "active" : "";
+        const selectedClass = (venue.selectedRows || 0) > 0 ? "has-selection" : "";
+        return `<button class="tab ${activeClass} ${selectedClass}" data-venue-code="${venue.venueCode || ""}">${venue.venue || "Unknown"}</button>`;
+      });
       const html = buttons.join("");
       document.getElementById("venue-tabs").innerHTML = html;
     }
@@ -1429,16 +1438,14 @@ def render_live_page(*, page_title: str) -> str:
     }
 
     function renderTabs() {
-      if (state.viewMode === "overview") {
-        document.getElementById("race-tabs-row").hidden = true;
-        document.getElementById("race-tabs").innerHTML = "";
-        return;
-      }
-      const html = venueRaces().map((race) => {
-        const activeClass = race.raceId === state.selectedRaceId ? "active" : "";
-        const selectedClass = (race.selectedRows || 0) > 0 ? "has-selection" : "";
-        return `<button class="tab ${activeClass} ${selectedClass}" data-race-id="${race.raceId}">${race.raceNo || "-"}R</button>`;
-      }).join("");
+      const html = [
+        `<button class="tab tab-overview ${state.viewMode === "overview" ? "active" : ""}" data-view-mode="overview">Overview</button>`,
+        ...venueRaces().map((race) => {
+          const activeClass = race.raceId === state.selectedRaceId ? "active" : "";
+          const selectedClass = (race.selectedRows || 0) > 0 ? "has-selection" : "";
+          return `<button class="tab ${activeClass} ${selectedClass}" data-race-id="${race.raceId}">${race.raceNo || "-"}R</button>`;
+        }),
+      ].join("");
       document.getElementById("race-tabs-row").hidden = false;
       document.getElementById("race-tabs").innerHTML = html;
     }
@@ -1546,7 +1553,7 @@ def render_live_page(*, page_title: str) -> str:
         }
         const venueCode = target.getAttribute("data-venue-code");
         if (venueCode !== null) {
-          state.viewMode = "venue";
+          state.viewMode = "overview";
           state.selectedVenueCode = venueCode || null;
           syncSelection();
           renderRace();
