@@ -132,6 +132,10 @@ Primary next issue draft:
 
 - current JRA primary next issue thread:
   - `#124` `[jra] pruning stage-7 rollout guardrails`
+- current status:
+   - open
+   - mechanically review-ready
+   - awaiting reviewer decision between `approve implementation-candidate review package` and `keep docs-only`
 - next step:
    - stage-8 quartet hold judgment と difficult-regime operator routing reread は historical reference とする
    - JRA 本線の fresh next move は、新しい heavy execution ではなく `stage-7` stopping point を review-ready implementation candidate として package する issue を優先する
@@ -259,7 +263,8 @@ Latest combo track-distance role split:
 
 Current active issue:
 
-- JRA 本線の active issue は `docs/issue_library/next_issue_pruning_stage8_calendar_recent_history_gate_frame_course_track_weather_class_rest_surface_jt_id_combo_dispatch_meta_condition_quartet_bundle.md` まで完了したため、再び空である
+- JRA execution issue は `docs/issue_library/next_issue_pruning_stage8_calendar_recent_history_gate_frame_course_track_weather_class_rest_surface_jt_id_combo_dispatch_meta_condition_quartet_bundle.md` まで完了したため、再び空である
+- ただし human review issue `#124` は open であり、current state は reviewer decision 待ちである
 
 Latest staged pruning read:
 
@@ -271,6 +276,7 @@ Latest staged pruning read:
 6. human review の短い starting memo は `docs/jra_pruning_staged_decision_summary_20260411.md` とする
 7. human review 前の fresh JRA issue source は GitHub issue `#124` とし、local `docs/issue_library/next_issue_pruning_stage7_rollout_guardrails.md` は compact transfer snapshot として扱う
 8. human review の execution checklist は `docs/jra_pruning_stage7_implementation_review_checklist.md`、rollback runbook は `docs/jra_pruning_stage7_rollback_checklist.md` を正本にする
+9. reviewer に求める bounded decision は `approve implementation-candidate review package` または `keep docs-only` の二択に固定する
 - latest completed JRA issue は `#117`
 - <https://github.com/Npieju/nr-learn/issues/117>
 - latest completed role split は `#115`

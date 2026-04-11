@@ -5,6 +5,7 @@ JRA pruning / simplification 系の local source と historical reference をま
 ## Quick Read
 
 - current JRA source-of-truth は GitHub issue `#124` `[jra] pruning stage-7 rollout guardrails`
+- current review status は `awaiting reviewer decision`
 - local compact snapshot は [next_issue_pruning_stage7_rollout_guardrails.md](next_issue_pruning_stage7_rollout_guardrails.md)
 - current defendable stopping point は `stage-7`
 - human review package は version/date 付き docs を正本にする
@@ -15,6 +16,9 @@ JRA pruning / simplification 系の local source と historical reference をま
 - [next_issue_pruning_stage7_rollout_guardrails.md](next_issue_pruning_stage7_rollout_guardrails.md)
   - local compact snapshot
   - role: GitHub issue `#124` の local reference / artifact entrypoint
+- GitHub issue `#124`
+  - status: open / mechanically review-ready / awaiting reviewer decision
+  - expected bounded decision: `approve implementation-candidate review package` or `keep docs-only`
 
 ## Current Human Review Package
 
