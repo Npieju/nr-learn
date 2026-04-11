@@ -40,6 +40,13 @@
 3. [public_benchmark_snapshot.md](public_benchmark_snapshot.md)
 4. NAR denominator 読みが必要なら [nar_bet_denominator_standard.md](nar_bet_denominator_standard.md)
 
+### JRA human review
+
+1. [github_issue_queue_current.md](github_issue_queue_current.md)
+2. [jra_pruning_staged_decision_summary_20260411.md](jra_pruning_staged_decision_summary_20260411.md)
+3. [jra_pruning_stage7_implementation_review_checklist.md](jra_pruning_stage7_implementation_review_checklist.md)
+4. rollback runbook は [jra_pruning_stage7_rollback_checklist.md](jra_pruning_stage7_rollback_checklist.md)
+
 ### 日常実行・障害対応
 
 1. [command_reference.md](command_reference.md)

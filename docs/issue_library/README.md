@@ -22,6 +22,8 @@ current priority を追うときは、まず [../github_issue_queue_current.md](
 
 - [../jra_pruning_staged_decision_summary_20260411.md](../jra_pruning_staged_decision_summary_20260411.md)
 - [../jra_pruning_package_review_20260410.md](../jra_pruning_package_review_20260410.md)
+- [../jra_pruning_stage7_implementation_review_checklist.md](../jra_pruning_stage7_implementation_review_checklist.md)
+- [../jra_pruning_stage7_rollback_checklist.md](../jra_pruning_stage7_rollback_checklist.md)
 
 ## Maintenance Rule
 
