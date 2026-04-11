@@ -352,22 +352,22 @@ def render_live_page(*, page_title: str) -> str:
   <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+JP:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
   <style>
     :root {
-      --bg: #f2f0ec;
-      --bg-strong: #e9e6df;
-      --surface: rgba(252, 251, 248, 0.94);
-      --surface-strong: #fcfbf8;
-      --ink: #22303a;
-      --muted: #70808b;
-      --line: rgba(34, 48, 58, 0.11);
-      --accent: #7f8d96;
-      --accent-soft: rgba(127, 141, 150, 0.10);
-      --navy: #52636f;
-      --navy-soft: rgba(82, 99, 111, 0.08);
-      --gold: #b8aa82;
-      --selected: #55786a;
-      --selected-soft: rgba(85, 120, 106, 0.11);
-      --danger-soft: rgba(127, 141, 150, 0.10);
-      --shadow: 0 12px 32px rgba(34, 48, 58, 0.06);
+      --bg: #e7edf3;
+      --bg-strong: #dbe4ec;
+      --surface: rgba(247, 250, 252, 0.94);
+      --surface-strong: #f8fbfd;
+      --ink: #1e2b36;
+      --muted: #667786;
+      --line: rgba(30, 43, 54, 0.11);
+      --accent: #6f8799;
+      --accent-soft: rgba(111, 135, 153, 0.10);
+      --navy: #466276;
+      --navy-soft: rgba(70, 98, 118, 0.09);
+      --gold: #8d9cab;
+      --selected: #4d6f82;
+      --selected-soft: rgba(77, 111, 130, 0.11);
+      --danger-soft: rgba(111, 135, 153, 0.10);
+      --shadow: 0 10px 28px rgba(30, 43, 54, 0.06);
       --radius: 20px;
     }
     * { box-sizing: border-box; }
@@ -376,23 +376,23 @@ def render_live_page(*, page_title: str) -> str:
       color: var(--ink);
       font-family: "IBM Plex Sans JP", sans-serif;
       background:
-        radial-gradient(circle at top left, rgba(184, 170, 130, 0.10), transparent 30%),
-        radial-gradient(circle at top right, rgba(82, 99, 111, 0.07), transparent 32%),
-        linear-gradient(180deg, #f5f3ee 0%, #efede7 48%, #e8e5dd 100%);
+        radial-gradient(circle at top left, rgba(111, 135, 153, 0.10), transparent 28%),
+        radial-gradient(circle at top right, rgba(70, 98, 118, 0.08), transparent 32%),
+        linear-gradient(180deg, #edf3f8 0%, #e7eef4 52%, #dde6ee 100%);
     }
     a { color: inherit; }
     .shell {
-      width: min(1480px, calc(100vw - 24px));
-      margin: 14px auto 28px;
+      width: min(1480px, calc(100vw - 14px));
+      margin: 8px auto 20px;
     }
     .hero {
       display: grid;
-      gap: 6px;
-      padding: 12px 14px;
+      gap: 5px;
+      padding: 10px 12px;
       border: 1px solid var(--line);
-      border-radius: 22px;
-      background: linear-gradient(135deg, rgba(252, 251, 248, 0.95), rgba(244, 242, 237, 0.92));
-      box-shadow: 0 10px 24px rgba(34, 48, 58, 0.05);
+      border-radius: 18px;
+      background: linear-gradient(135deg, rgba(249, 252, 254, 0.96), rgba(238, 245, 250, 0.92));
+      box-shadow: 0 8px 20px rgba(30, 43, 54, 0.05);
     }
     .eyebrow {
       margin: 0 0 4px;
@@ -418,19 +418,19 @@ def render_live_page(*, page_title: str) -> str:
       font-size: 12px;
     }
     .section {
-      margin-top: 10px;
-      padding: 10px;
-      border-radius: 18px;
+      margin-top: 8px;
+      padding: 8px;
+      border-radius: 16px;
       border: 1px solid var(--line);
       background: var(--surface);
-      box-shadow: 0 14px 36px rgba(23, 32, 51, 0.05);
+      box-shadow: 0 12px 28px rgba(30, 43, 54, 0.05);
     }
     .sticky-panel {
       position: sticky;
       top: 8px;
       z-index: 9;
       backdrop-filter: blur(14px);
-      background: rgba(252, 251, 248, 0.94);
+      background: rgba(247, 250, 252, 0.94);
     }
     .sticky-panel.collapsed {
       padding: 8px;
@@ -441,17 +441,17 @@ def render_live_page(*, page_title: str) -> str:
     .sticky-panel-head {
       display: flex;
       justify-content: flex-end;
-      margin-bottom: 6px;
+      margin-bottom: 4px;
     }
     .sticky-panel.collapsed .sticky-panel-head {
       margin-bottom: 0;
     }
     .tabs-toggle {
       border: 1px solid var(--line);
-      background: rgba(255, 255, 255, 0.82);
+      background: rgba(251, 253, 255, 0.84);
       color: var(--navy);
       border-radius: 999px;
-      padding: 4px 9px;
+      padding: 3px 8px;
       font: inherit;
       font-size: 12px;
       line-height: 1.2;
@@ -462,7 +462,7 @@ def render_live_page(*, page_title: str) -> str:
     }
     .tab-stack {
       display: grid;
-      gap: 4px;
+      gap: 3px;
     }
     .tab-panel-row {
       display: grid;
@@ -485,8 +485,8 @@ def render_live_page(*, page_title: str) -> str:
       display: flex;
       align-items: flex-start;
       justify-content: space-between;
-      gap: 10px;
-      margin-bottom: 8px;
+      gap: 8px;
+      margin-bottom: 6px;
     }
     .section-title {
       margin: 0;
@@ -501,35 +501,35 @@ def render_live_page(*, page_title: str) -> str:
     .overview-table-wrap,
     .table-wrap {
       overflow: auto;
-      border-radius: 18px;
+      border-radius: 14px;
       border: 1px solid var(--line);
       background: var(--surface-strong);
     }
     table {
       width: 100%;
       border-collapse: collapse;
-      min-width: 720px;
+      min-width: 660px;
     }
     table.compact-table {
       table-layout: fixed;
-      min-width: 100%;
+      min-width: 620px;
     }
     table.raw-table {
       table-layout: fixed;
-      min-width: 1080px;
+      min-width: 980px;
     }
     th,
     td {
-      padding: 9px 10px;
+      padding: 7px 7px;
       text-align: left;
       border-bottom: 1px solid rgba(23, 32, 51, 0.08);
       vertical-align: top;
-      font-size: 13px;
+      font-size: 12px;
     }
     th {
       position: sticky;
       top: 0;
-      background: #f9f5ee;
+      background: #eef4f8;
       color: var(--navy);
       font-weight: 700;
       z-index: 2;
@@ -541,21 +541,21 @@ def render_live_page(*, page_title: str) -> str:
       color: inherit;
     }
     th.mark-col, td.mark-col {
-      width: 58px;
-      max-width: 58px;
+      width: 44px;
+      max-width: 44px;
     }
     th.name-col, td.name-col {
-      width: 156px;
-      max-width: 156px;
+      width: 132px;
+      max-width: 132px;
     }
     th.num-col, td.num-col,
     th.tiny-col, td.tiny-col {
-      width: 82px;
-      max-width: 82px;
+      width: 68px;
+      max-width: 68px;
     }
     th.note-col, td.note-col {
-      width: 190px;
-      max-width: 190px;
+      width: 150px;
+      max-width: 150px;
     }
     .cell-text {
       display: block;
@@ -585,7 +585,7 @@ def render_live_page(*, page_title: str) -> str:
     .chip-row,
     .tabs {
       display: flex;
-      gap: 10px;
+      gap: 6px;
       flex-wrap: wrap;
     }
     .tabs {
@@ -595,21 +595,21 @@ def render_live_page(*, page_title: str) -> str:
     }
     .tab {
       border: 1px solid var(--line);
-      background: rgba(255, 255, 255, 0.78);
+      background: rgba(251, 253, 255, 0.82);
       color: var(--ink);
       border-radius: 999px;
-      padding: 6px 10px;
+      padding: 5px 8px;
       font: inherit;
       white-space: nowrap;
       cursor: pointer;
       transition: 140ms ease;
-      font-size: 12px;
+      font-size: 11px;
       position: relative;
     }
     .tab.has-selection {
-      border-color: rgba(27, 127, 93, 0.26);
-      color: #165640;
-      background: rgba(27, 127, 93, 0.08);
+      border-color: rgba(77, 111, 130, 0.26);
+      color: #375668;
+      background: rgba(77, 111, 130, 0.09);
     }
     .tab.has-selection::after {
       content: "";
@@ -631,12 +631,12 @@ def render_live_page(*, page_title: str) -> str:
     .chip {
       display: inline-flex;
       align-items: center;
-      gap: 8px;
-      padding: 8px 12px;
+      gap: 6px;
+      padding: 6px 10px;
       border-radius: 999px;
-      font-size: 12px;
+      font-size: 11px;
       border: 1px solid var(--line);
-      background: rgba(255, 255, 255, 0.74);
+      background: rgba(250, 253, 255, 0.8);
       color: var(--muted);
     }
     .chip.strong {
@@ -657,21 +657,21 @@ def render_live_page(*, page_title: str) -> str:
     .race-layout {
       display: grid;
       grid-template-columns: 1fr;
-      gap: 12px;
+      gap: 8px;
     }
     .race-header {
       display: grid;
-      gap: 6px;
-      padding: 10px 12px;
+      gap: 5px;
+      padding: 8px 10px;
       border-radius: 14px;
       border: 1px solid var(--line);
-      background: linear-gradient(135deg, rgba(255, 255, 255, 0.88), rgba(244, 242, 237, 0.92));
+      background: linear-gradient(135deg, rgba(251, 253, 255, 0.9), rgba(238, 245, 250, 0.92));
     }
     .race-commentary {
       margin: 0;
-      padding: 8px 10px;
+      padding: 7px 8px;
       border-radius: 10px;
-      background: rgba(33, 57, 91, 0.06);
+      background: rgba(70, 98, 118, 0.06);
       color: var(--ink);
       line-height: 1.55;
       font-size: 12px;
@@ -703,11 +703,11 @@ def render_live_page(*, page_title: str) -> str:
       display: inline-flex;
       align-items: center;
       justify-content: center;
-      min-width: 56px;
-      padding: 7px 11px;
+      min-width: 52px;
+      padding: 6px 9px;
       border-radius: 999px;
       border: 1px solid var(--line);
-      background: rgba(255, 255, 255, 0.84);
+      background: rgba(251, 253, 255, 0.86);
       color: var(--navy);
       font-size: 12px;
       font-weight: 700;
@@ -720,23 +720,23 @@ def render_live_page(*, page_title: str) -> str:
     .info-panel {
       border: 1px solid var(--line);
       border-radius: 16px;
-      background: rgba(255, 255, 255, 0.72);
-      padding: 10px 12px 12px;
+      background: rgba(248, 251, 253, 0.78);
+      padding: 8px 10px 10px;
     }
     .info-panel[open] {
-      background: rgba(255, 255, 255, 0.86);
+      background: rgba(250, 253, 255, 0.9);
     }
     .guide-grid {
       display: grid;
-      gap: 8px;
-      margin-top: 10px;
-      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 6px;
+      margin-top: 8px;
+      grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
     }
     .guide-card {
-      padding: 10px 11px;
-      border-radius: 14px;
+      padding: 8px 9px;
+      border-radius: 12px;
       border: 1px solid var(--line);
-      background: rgba(249, 245, 238, 0.9);
+      background: rgba(241, 247, 251, 0.92);
     }
     .guide-card-head {
       display: flex;
@@ -763,39 +763,39 @@ def render_live_page(*, page_title: str) -> str:
       display: inline-flex;
       align-items: center;
       justify-content: center;
-      min-width: 32px;
-      height: 28px;
+      min-width: 28px;
+      height: 24px;
       border-radius: 999px;
       font-weight: 700;
       border: 1px solid var(--line);
-      background: rgba(255,255,255,0.78);
+      background: rgba(251, 253, 255, 0.84);
     }
     .mark-badge.mark-top {
-      background: rgba(197, 158, 70, 0.18);
-      color: #7a5a11;
+      background: rgba(141, 156, 171, 0.18);
+      color: #4e6272;
     }
     .mark-badge.mark-mid {
-      background: rgba(33, 57, 91, 0.10);
+      background: rgba(70, 98, 118, 0.10);
       color: var(--navy);
     }
     .mark-badge.mark-low {
-      background: rgba(183, 71, 42, 0.12);
+      background: rgba(111, 135, 153, 0.12);
       color: var(--accent);
     }
     .controls {
       display: flex;
-      gap: 10px;
+      gap: 8px;
       align-items: center;
       flex-wrap: wrap;
-      margin: 0 0 6px;
+      margin: 0 0 4px;
     }
     .search {
-      min-width: 260px;
+      min-width: 200px;
       flex: 1;
       border: 1px solid var(--line);
       border-radius: 12px;
-      padding: 9px 11px;
-      background: rgba(255, 255, 255, 0.86);
+      padding: 8px 10px;
+      background: rgba(250, 253, 255, 0.88);
       color: var(--ink);
       font: inherit;
     }
@@ -819,11 +819,11 @@ def render_live_page(*, page_title: str) -> str:
     .details-panel {
       border: 1px solid var(--line);
       border-radius: 16px;
-      background: rgba(255, 255, 255, 0.62);
-      padding: 10px 12px 12px;
+      background: rgba(246, 250, 253, 0.72);
+      padding: 8px 10px 10px;
     }
     .details-panel[open] {
-      background: rgba(255, 255, 255, 0.76);
+      background: rgba(249, 252, 255, 0.84);
     }
     .details-summary {
       cursor: pointer;
@@ -848,20 +848,54 @@ def render_live_page(*, page_title: str) -> str:
     }
     @media (max-width: 720px) {
       .shell {
-        width: min(100vw - 18px, 1480px);
-        margin-top: 8px;
+        width: min(100vw - 8px, 1480px);
+        margin-top: 4px;
       }
       .hero,
       .section {
-        padding: 10px;
-        border-radius: 14px;
+        padding: 7px;
+        border-radius: 12px;
       }
       th,
       td {
-        padding: 8px 9px;
+        padding: 6px 6px;
+      }
+      table {
+        min-width: 620px;
+      }
+      table.compact-table {
+        min-width: 560px;
+      }
+      table.raw-table {
+        min-width: 900px;
+      }
+      th.name-col, td.name-col {
+        width: 112px;
+        max-width: 112px;
+      }
+      th.num-col, td.num-col,
+      th.tiny-col, td.tiny-col {
+        width: 60px;
+        max-width: 60px;
+      }
+      th.note-col, td.note-col {
+        width: 132px;
+        max-width: 132px;
+      }
+      .tab,
+      .chip,
+      .info-summary,
+      .tabs-toggle {
+        font-size: 10px;
       }
       .race-title {
-        font-size: 18px;
+        font-size: 17px;
+      }
+      .search {
+        min-width: 150px;
+      }
+      .guide-grid {
+        grid-template-columns: repeat(auto-fit, minmax(132px, 1fr));
       }
     }
   </style>
