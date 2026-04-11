@@ -419,7 +419,7 @@ def render_live_page(*, page_title: str) -> str:
     }
     .section {
       margin-top: 20px;
-      padding: 18px;
+      padding: 14px;
       border-radius: 24px;
       border: 1px solid var(--line);
       background: var(--surface);
@@ -462,13 +462,13 @@ def render_live_page(*, page_title: str) -> str:
     }
     .section-title {
       margin: 0;
-      font-size: 20px;
+      font-size: 18px;
     }
     .section-note {
-      margin: 8px 0 0;
+      margin: 4px 0 0;
       color: var(--muted);
-      font-size: 13px;
-      line-height: 1.7;
+      font-size: 12px;
+      line-height: 1.55;
     }
     .overview-table-wrap,
     .table-wrap {
@@ -570,11 +570,12 @@ def render_live_page(*, page_title: str) -> str:
       background: rgba(255, 255, 255, 0.7);
       color: var(--ink);
       border-radius: 999px;
-      padding: 10px 14px;
+      padding: 8px 12px;
       font: inherit;
       white-space: nowrap;
       cursor: pointer;
       transition: 140ms ease;
+      font-size: 13px;
     }
     .tab.active {
       border-color: rgba(33, 57, 91, 0.4);
@@ -611,7 +612,7 @@ def render_live_page(*, page_title: str) -> str:
     .race-layout {
       display: grid;
       grid-template-columns: 1fr;
-      gap: 16px;
+      gap: 12px;
     }
     .race-header {
       display: grid;
@@ -643,34 +644,52 @@ def render_live_page(*, page_title: str) -> str:
     }
     .race-kickers {
       display: flex;
-      gap: 10px 14px;
+      gap: 6px 12px;
       flex-wrap: wrap;
       margin: 0;
       color: var(--ink);
-      font-size: 12px;
+      font-size: 11px;
       line-height: 1.6;
     }
     .race-kickers span {
       color: var(--muted);
     }
-    .guide-panel {
-      padding: 12px 14px 14px;
-      border-radius: 18px;
+    .info-summary {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 56px;
+      padding: 7px 11px;
+      border-radius: 999px;
       border: 1px solid var(--line);
-      background: rgba(255, 255, 255, 0.72);
+      background: rgba(255, 255, 255, 0.84);
+      color: var(--navy);
+      font-size: 12px;
+      font-weight: 700;
+      cursor: pointer;
+      list-style: none;
     }
-    .guide-panel h3 {
-      margin: 0;
-      font-size: 18px;
+    .info-summary::-webkit-details-marker {
+      display: none;
+    }
+    .info-panel {
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      background: rgba(255, 255, 255, 0.72);
+      padding: 10px 12px 12px;
+    }
+    .info-panel[open] {
+      background: rgba(255, 255, 255, 0.86);
     }
     .guide-grid {
       display: grid;
-      gap: 10px;
-      margin-top: 14px;
+      gap: 8px;
+      margin-top: 10px;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
     }
     .guide-card {
-      padding: 12px 14px;
-      border-radius: 16px;
+      padding: 10px 11px;
+      border-radius: 14px;
       border: 1px solid var(--line);
       background: rgba(249, 245, 238, 0.9);
     }
@@ -720,10 +739,10 @@ def render_live_page(*, page_title: str) -> str:
     }
     .controls {
       display: flex;
-      gap: 12px;
+      gap: 10px;
       align-items: center;
       flex-wrap: wrap;
-      margin: 2px 0 14px;
+      margin: 0 0 10px;
     }
     .search {
       min-width: 260px;
@@ -754,9 +773,9 @@ def render_live_page(*, page_title: str) -> str:
     }
     .details-panel {
       border: 1px solid var(--line);
-      border-radius: 18px;
+      border-radius: 16px;
       background: rgba(255, 255, 255, 0.62);
-      padding: 12px 14px 14px;
+      padding: 10px 12px 12px;
     }
     .details-panel[open] {
       background: rgba(255, 255, 255, 0.76);
@@ -859,15 +878,13 @@ def render_live_page(*, page_title: str) -> str:
             <h3 class="section-title">Focused Metrics</h3>
             <p class="section-note">市場オッズ、推論値、policy 指標を中心に並べた主表です。header を押すと列ソートできます。</p>
           </div>
+          <details class="info-panel">
+            <summary class="info-summary">info</summary>
+            <div class="guide-grid" id="column-guide"></div>
+          </details>
         </div>
         <div class="table-wrap" id="focused-table-wrap"></div>
       </div>
-
-      <aside class="guide-panel">
-        <h3>Column Guide</h3>
-        <p class="section-note">短縮列名の意味をここだけに集約しています。必要時だけ見返せる密度にしています。</p>
-        <div class="guide-grid" id="column-guide"></div>
-      </aside>
 
       <div>
         <details class="details-panel">
@@ -1278,8 +1295,7 @@ def render_live_page(*, page_title: str) -> str:
       }
       const html = venueRaces().map((race) => {
         const activeClass = race.raceId === state.selectedRaceId ? "active" : "";
-        const lead = race.topMarkedHorse ? ` ${race.topMarkedLabel}${shortText(race.topMarkedHorse, 5)}` : "";
-        return `<button class="tab ${activeClass}" data-race-id="${race.raceId}">${race.raceNo || "-"}R${lead}</button>`;
+        return `<button class="tab ${activeClass}" data-race-id="${race.raceId}">${race.raceNo || "-"}R</button>`;
       }).join("");
       document.getElementById("race-tabs-row").hidden = false;
       document.getElementById("race-tabs").innerHTML = html;
