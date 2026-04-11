@@ -805,6 +805,7 @@ class LocalNankanBootstrapTest(unittest.TestCase):
             tmp_path = Path(tmp_dir)
             manifest_output = tmp_path / "wait_then_cycle.json"
             log_output = tmp_path / "wait_then_cycle.log"
+            operator_board_output = tmp_path / "operator_board.json"
             captured_payloads: list[dict[str, object]] = []
             original_write_wait_manifest = wait_then_cycle_script._write_wait_manifest
 
@@ -890,6 +891,8 @@ class LocalNankanBootstrapTest(unittest.TestCase):
                     "unit_wait_then_cycle",
                     "--run-id",
                     "run02",
+                    "--operator-board-output",
+                    str(operator_board_output),
                     "--max-cycles",
                     "2",
                     "--wait-seconds",
@@ -997,6 +1000,83 @@ class LocalNankanBootstrapTest(unittest.TestCase):
             self.assertFalse(final_manifest["current_flags"]["cycle_in_flight"])
             self.assertFalse(final_manifest["current_flags"]["wait_in_flight"])
             self.assertEqual(final_manifest["current_blockers"]["primary_code"], "result_arrival_pending")
+            operator_board = json.loads(operator_board_output.read_text(encoding="utf-8"))
+            self.assertEqual(operator_board["readiness_surfaces"]["readiness_supervisor"]["monitor_state"], "completed")
+            self.assertEqual(operator_board["readiness_surfaces"]["readiness_supervisor"]["completed_cycles"], 2)
+            self.assertEqual(operator_board["operator_runtime"]["monitor_state"], "completed")
+            self.assertTrue(operator_board["artifacts"]["readiness_supervisor_manifest"].endswith("wait_then_cycle_run02.json"))
+            self.assertIn("supervisor_monitor_state=completed", operator_board["highlights"])
+
+    def test_build_operator_board_payload_surfaces_live_supervisor_state(self) -> None:
+        board_payload = {
+            "status": "partial",
+            "current_phase": "future_only_readiness_track",
+            "recommended_action": "capture_future_pre_race_rows_and_wait_for_results",
+            "artifacts": {
+                "status_board": "artifacts/reports/cycle_001_status_board.json",
+            },
+            "readiness_surfaces": {
+                "readiness_probe": {
+                    "status": "not_ready",
+                    "pending_result_races": 24,
+                },
+            },
+            "highlights": ["probe_status=not_ready"],
+        }
+        wait_payload = {
+            "status": "partial",
+            "monitor_state": "waiting_next_cycle",
+            "monitor_phase": "waiting_next_cycle",
+            "stopped_reason": "running",
+            "completed_cycles": 2,
+            "max_cycles": 3,
+            "current_cycle_index": 2,
+            "next_cycle_index": 3,
+            "wait_state": {
+                "seconds_remaining": 1200,
+            },
+            "cycle_state": None,
+            "current_runtime": {
+                "monitor_state": "waiting_next_cycle",
+                "seconds_remaining": 1200,
+            },
+            "current_timing": {
+                "mode": "waiting_next_cycle",
+                "updated_at": "2026-04-11T07:47:41Z",
+            },
+            "current_progress": {
+                "completed_cycles": 2,
+                "completion_percent": 66,
+            },
+            "current_outcome": {
+                "state": "blocked",
+                "summary_code": "result_arrival_pending",
+            },
+            "current_operator_card": {
+                "headline": "result arrival pending",
+            },
+            "current_refs": {
+                "focus_manifest": "artifacts/reports/cycle_002_status_board.json",
+            },
+            "started_at": "2026-04-11T06:04:34Z",
+            "updated_at": "2026-04-11T07:47:41Z",
+            "finished_at": None,
+        }
+
+        operator_board = wait_then_cycle_script._build_operator_board_payload(
+            board_payload=board_payload,
+            wait_payload=wait_payload,
+            status_board_manifest="artifacts/reports/cycle_002_status_board.json",
+            stable_manifest_path=Path("artifacts/reports/wait_then_cycle.json"),
+            run_manifest_path=Path("artifacts/reports/wait_then_cycle_live.json"),
+        )
+
+        self.assertEqual(operator_board["readiness_surfaces"]["readiness_supervisor"]["monitor_state"], "waiting_next_cycle")
+        self.assertEqual(operator_board["readiness_surfaces"]["readiness_supervisor"]["current_runtime"]["seconds_remaining"], 1200)
+        self.assertEqual(operator_board["operator_runtime"]["monitor_phase"], "waiting_next_cycle")
+        self.assertEqual(operator_board["artifacts"]["live_status_board_source"], "artifacts/reports/cycle_002_status_board.json")
+        self.assertEqual(operator_board["artifacts"]["readiness_supervisor_manifest"], "artifacts/reports/wait_then_cycle_live.json")
+        self.assertIn("supervisor_monitor_state=waiting_next_cycle", operator_board["highlights"])
 
     def test_wait_then_cycle_oneshot_skips_idle_wait(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:

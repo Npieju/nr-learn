@@ -69,6 +69,13 @@ def _read_json_dict(path: Path | None) -> dict[str, Any]:
     return payload if isinstance(payload, dict) else {}
 
 
+def _dict_payload(value: object) -> dict[str, Any]:
+    return value if isinstance(value, dict) else {}
+
+
+DEFAULT_OPERATOR_BOARD_OUTPUT = "artifacts/reports/local_nankan_data_status_board.json"
+
+
 def _display_path(path: Path | None) -> str | None:
     if path is None:
         return None
@@ -834,6 +841,101 @@ def _write_wait_manifest(*, stable_manifest_path: Path, run_manifest_path: Path 
         write_json(run_manifest_path, payload)
 
 
+def _build_operator_board_payload(
+    *,
+    board_payload: dict[str, Any],
+    wait_payload: dict[str, Any],
+    status_board_manifest: str,
+    stable_manifest_path: Path,
+    run_manifest_path: Path | None,
+) -> dict[str, Any]:
+    merged_payload = dict(board_payload)
+    readiness_surfaces = dict(_dict_payload(board_payload.get("readiness_surfaces")))
+    artifacts = dict(_dict_payload(board_payload.get("artifacts")))
+    current_runtime = _dict_payload(wait_payload.get("current_runtime"))
+    current_timing = _dict_payload(wait_payload.get("current_timing"))
+    current_progress = _dict_payload(wait_payload.get("current_progress"))
+    current_outcome = _dict_payload(wait_payload.get("current_outcome"))
+    current_operator_card = _dict_payload(wait_payload.get("current_operator_card"))
+    current_refs = _dict_payload(wait_payload.get("current_refs"))
+
+    supervisor_manifest = _display_path(run_manifest_path or stable_manifest_path)
+    supervisor_surface = {
+        "status": wait_payload.get("status"),
+        "monitor_state": wait_payload.get("monitor_state"),
+        "monitor_phase": wait_payload.get("monitor_phase"),
+        "stopped_reason": wait_payload.get("stopped_reason"),
+        "completed_cycles": wait_payload.get("completed_cycles"),
+        "max_cycles": wait_payload.get("max_cycles"),
+        "current_cycle_index": wait_payload.get("current_cycle_index"),
+        "next_cycle_index": wait_payload.get("next_cycle_index"),
+        "wait_state": wait_payload.get("wait_state"),
+        "cycle_state": wait_payload.get("cycle_state"),
+        "current_runtime": current_runtime,
+        "current_timing": current_timing,
+        "current_progress": current_progress,
+        "current_outcome": current_outcome,
+        "current_operator_card": current_operator_card,
+        "current_refs": current_refs,
+        "manifest": supervisor_manifest,
+        "status_board_manifest": status_board_manifest,
+        "started_at": wait_payload.get("started_at"),
+        "updated_at": wait_payload.get("updated_at") or wait_payload.get("finished_at"),
+        "finished_at": wait_payload.get("finished_at"),
+    }
+    readiness_surfaces["readiness_supervisor"] = supervisor_surface
+
+    artifacts["readiness_supervisor_manifest"] = supervisor_manifest
+    artifacts["live_status_board_source"] = status_board_manifest
+
+    highlights = [item for item in board_payload.get("highlights", []) if isinstance(item, str)]
+    highlights.extend(
+        [
+            f"supervisor_monitor_state={supervisor_surface['monitor_state']}",
+            f"supervisor_completed_cycles={supervisor_surface['completed_cycles']}",
+            f"supervisor_seconds_remaining={current_runtime.get('seconds_remaining')}",
+        ]
+    )
+
+    merged_payload["readiness_surfaces"] = readiness_surfaces
+    merged_payload["artifacts"] = artifacts
+    merged_payload["operator_runtime"] = {
+        "surface": "readiness_supervisor",
+        "monitor_state": supervisor_surface.get("monitor_state"),
+        "monitor_phase": supervisor_surface.get("monitor_phase"),
+        "current_runtime": current_runtime,
+        "current_timing": current_timing,
+        "current_progress": current_progress,
+        "current_outcome": current_outcome,
+        "current_operator_card": current_operator_card,
+    }
+    merged_payload["highlights"] = highlights
+    return merged_payload
+
+
+def _write_operator_board(
+    *,
+    operator_board_path: Path | None,
+    latest_status_board_manifest: str | None,
+    stable_manifest_path: Path,
+    run_manifest_path: Path | None,
+    wait_payload: dict[str, Any],
+) -> None:
+    if operator_board_path is None or latest_status_board_manifest is None:
+        return
+    board_payload = _read_json_dict(_resolve_path(latest_status_board_manifest))
+    if not board_payload:
+        return
+    operator_board_payload = _build_operator_board_payload(
+        board_payload=board_payload,
+        wait_payload=wait_payload,
+        status_board_manifest=latest_status_board_manifest,
+        stable_manifest_path=stable_manifest_path,
+        run_manifest_path=run_manifest_path,
+    )
+    write_json(operator_board_path, operator_board_payload)
+
+
 def _build_wait_manifest_payload(
     *,
     run_started_at: str,
@@ -1251,6 +1353,7 @@ def main() -> int:
     parser.add_argument("--include-completed", action="store_true")
     parser.add_argument("--bootstrap-handoff-script", default="scripts/run_local_nankan_result_ready_bootstrap_handoff.py")
     parser.add_argument("--run-bootstrap-on-ready", action="store_true")
+    parser.add_argument("--operator-board-output", default=DEFAULT_OPERATOR_BOARD_OUTPUT)
     args = parser.parse_args()
 
     manifest_path = _resolve_path(args.manifest_output)
@@ -1259,6 +1362,9 @@ def main() -> int:
     run_manifest_path = _resolve_path(run_manifest_output) if run_manifest_output else None
     if run_manifest_path is not None:
         run_manifest_path.parent.mkdir(parents=True, exist_ok=True)
+    operator_board_path = _resolve_path(args.operator_board_output) if args.operator_board_output else None
+    if operator_board_path is not None:
+        operator_board_path.parent.mkdir(parents=True, exist_ok=True)
     progress = ProgressBar(total=max(1, int(args.max_cycles)), prefix="[local-nankan-future-wait-cycle]", logger=log_progress, min_interval_sec=0.0)
 
     run_started_at = utc_now_iso()
@@ -1479,6 +1585,13 @@ def main() -> int:
                 oneshot=args.oneshot,
             )
             _write_wait_manifest(stable_manifest_path=manifest_path, run_manifest_path=run_manifest_path, payload=payload)
+            _write_operator_board(
+                operator_board_path=operator_board_path,
+                latest_status_board_manifest=status_board_manifest,
+                stable_manifest_path=manifest_path,
+                run_manifest_path=run_manifest_path,
+                wait_payload=payload,
+            )
 
             if stop_now:
                 stopped_reason = stop_reason
@@ -1514,6 +1627,13 @@ def main() -> int:
                         },
                     )
                     _write_wait_manifest(stable_manifest_path=manifest_path, run_manifest_path=run_manifest_path, payload=wait_payload)
+                    _write_operator_board(
+                        operator_board_path=operator_board_path,
+                        latest_status_board_manifest=status_board_manifest,
+                        stable_manifest_path=manifest_path,
+                        run_manifest_path=run_manifest_path,
+                        wait_payload=wait_payload,
+                    )
 
                 _wait_with_heartbeat(
                     wait_seconds,
@@ -1538,6 +1658,14 @@ def main() -> int:
             oneshot=args.oneshot,
         )
         _write_wait_manifest(stable_manifest_path=manifest_path, run_manifest_path=run_manifest_path, payload=payload)
+        latest_status_board_manifest = cycle_records[-1].get("status_board_manifest") if cycle_records else None
+        _write_operator_board(
+            operator_board_path=operator_board_path,
+            latest_status_board_manifest=str(latest_status_board_manifest) if latest_status_board_manifest else None,
+            stable_manifest_path=manifest_path,
+            run_manifest_path=run_manifest_path,
+            wait_payload=payload,
+        )
         progress.complete(message=f"wait-then-cycle manifest output={manifest_path}")
         return 0
     except KeyboardInterrupt:
