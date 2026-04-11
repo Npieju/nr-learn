@@ -87,11 +87,16 @@
       position: sticky;
       top: 8px;
       z-index: 9;
+      overflow: visible;
       backdrop-filter: blur(14px);
       background: rgba(247, 250, 252, 0.94);
     }
     .sticky-panel.collapsed {
-      padding: 8px;
+      padding: 0;
+      min-height: 0;
+      border-color: transparent;
+      background: transparent;
+      box-shadow: none;
     }
     .sticky-panel.collapsed .tab-stack {
       display: none;
@@ -102,7 +107,14 @@
       margin-bottom: 4px;
     }
     .sticky-panel.collapsed .sticky-panel-head {
+      display: inline-flex;
+      width: auto;
       margin-bottom: 0;
+      position: absolute;
+      top: 2px;
+      left: -10px;
+      justify-content: flex-start;
+      z-index: 2;
     }
     .tabs-toggle {
       border: 1px solid var(--line);
@@ -114,9 +126,15 @@
       font-size: 12px;
       line-height: 1.2;
       cursor: pointer;
+      box-shadow: 0 6px 16px rgba(30, 43, 54, 0.10);
     }
     .tabs-toggle:hover {
       background: rgba(255, 255, 255, 0.96);
+    }
+    .sticky-panel.collapsed .tabs-toggle {
+      min-width: 28px;
+      padding: 6px 8px;
+      border-radius: 0 999px 999px 0;
     }
     .tab-stack {
       display: grid;
@@ -571,7 +589,7 @@
       <div class="sticky-panel-head">
         <button class="tabs-toggle" id="tabs-toggle" type="button" aria-expanded="true" aria-label="タブを折りたたむ">◀</button>
       </div>
-      <div class="tab-stack">
+      <div class="tab-stack" id="tabs-stack">
         <div class="tab-panel-row">
           <p class="tab-panel-label">Mode / Venue</p>
           <div class="tabs" id="venue-tabs"></div>
