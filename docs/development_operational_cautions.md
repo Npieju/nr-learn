@@ -35,6 +35,13 @@ review rule:
 - version/date が無く、current doc と snapshot doc の境界が曖昧な新規文書は reject 候補にする
 - commit 予定のない一時 doc を tracked docs に追加する変更は reject 候補にする
 - docs 整備だけが長く滞留し、本線変更の commit を止める状態を作らない
+- heavy run が無い時間帯に non-blocking docs をまとめて前景化し、結果依存の current doc 更新まで同時に膨らませる進め方は reject 候補にする
+
+timing rule:
+
+- running 中に進めてよい docs は、issue 整理、historical note 付け、index 整備、review package の下書きなど、結果未確定でも無駄になりにくいものに限る
+- running 完了後に触る current source-of-truth は、artifact 数値、decision summary、current priority の最小更新に限る
+- heavy run 完了後に docs を大きく書き始めるのではなく、下書きは waiting time に進め、確定反映だけを最後に行う
 
 ### 2.1 Progress Is Required For Long-Running Sources
 

@@ -53,6 +53,7 @@
 - docs を増やすこと自体は許容するが、index から辿れる単一導線を優先し、同じ変更を複数 docs に平行反映しないと維持できない構造は原則追加しない。
 - docs は「current source-of-truth」か「version/date 付き snapshot/reference」に役割を分ける。snapshot/reference は作成時点の記録として凍結し、最新化のたびに平行更新しない。
 - docs 整備は本線作業と切り離して長く滞留させない。新しい index / summary を増やす前に、既存 docs へ統合するか、version/date を付けた snapshot として独立させる。
+- 重い train / evaluate / gate / compare が running 中なら、その待ち時間では non-blocking な docs 整備、issue 整理、review package の下書きを優先する。artifact 数値や結論に依存する current source-of-truth 更新は、結果確定後に必要最小限だけ行う。
 - 数秒で終わらない source に progress がない変更は未完成扱いにする
 - progress は possible な限り分母付きで出し、生存確認だけの heartbeat を progress 完了扱いにしない
 - 重い task に 60 秒超の no-output 区間が残る変更は未完成扱いにする

@@ -26,6 +26,7 @@
 - operator-facing CLI は、設定ミス・入力不足・output path の取り違えを fail-fast で検出し、想定内の失敗では traceback を出さない。
 - まとまった変更を終えたら `git status` と diff を確認し、意味のある単位で commit する。共有 remote が使える作業では push までを完了条件に含め、push できない場合は理由を明示して残す。
 - commit しない doc は tracked な `docs/` に置かない。短期の作業メモや scratch は gitignore 管理の local path に置き、作業 batch の終了時点で tracked docs へ残さない。
+- 重い job の running 中は、結果待ちの wall-clock を non-blocking な docs 整備、issue 更新、review package 下書きに使ってよい。ただし final metric、decision、artifact path に依存する current source-of-truth は、結果確定後に最小差分で更新する。
 
 ## 3. 2 段階の評価運用
 
