@@ -152,12 +152,15 @@ config-level exact diff は次で固定する。
 - baseline `force_include_columns` は 34 columns を要求する
 - stage-7 candidate `force_include_columns` は `owner_last_50_win_rate` だけを残す
 - baseline `force_categorical_columns` は 16 columns を要求する
-- stage-7 candidate `force_categorical_columns` は次の 4 columns だけを残す
+- stage-7 candidate config は `force_categorical_columns` に 6 columns を宣言するが、このうち `発走時刻`, `東西・外国・地方区分` は同時に `exclude_columns` に入っており effective selected surface には残らない
+- effective retained categorical anchors は次の 4 columns で固定される
   - `競争条件`
   - `リステッド・重賞競走`
   - `障害区分`
   - `sex`
-- したがって stage-7 candidate は current baseline から 45 columns を removal set として扱う
+- effective retained anchor は `owner_last_50_win_rate` を加えた 5 columns であり、stage-7 candidate は current baseline から 45 columns を removal set として扱う
+- mechanical re-check command:
+   - `python scripts/run_pruning_rollout_guardrails_check.py`
 
 grouped exact diff:
 
