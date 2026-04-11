@@ -25,11 +25,12 @@
 - `current_best_eval_2025_latest` は `r20260405_2025latest_refresh_reuse_runtimecfg_wfprofilefix` により formal refresh が `pass / promote` まで再現できる evaluation mainline reference である。
 - current active priority は、新しい broad 実行を足すことではなく、docs / queue の drift を抑えつつ future option を JRA baseline 本線と切り分けることである。
 - したがって JRA / NAR の新しい重い execution は、まず 1 issue = 1 measurable hypothesis の GitHub issue を明示してから再開する。
-- `next_issue_*.md` 群の多くは reference draft library として保持しており、この節または `## 4. Execution Order` に明示したものだけを current queue として扱う。
+- `next_issue_*.md` 群の多くは reference draft library として保持しており、この節または `## 4. Execution Order` に明示したものだけを current queue として扱う。library 全体を読むときは raw listing ではなく `docs/issue_library/README.md` の category index から辿る。
+- `next_issue_*.md` は GitHub issue そのものではない。GitHub thread に転記済みで source-of-truth が thread 側へ移ったものは、local draft を削除または historical summary へ畳む。
 
 Current reading:
 
-1. JRA 本線は `#118` first read を close し、current active experiment は再び空になった。
+1. JRA 本線は difficult-regime operator routing reread まで close し、current active experiment は再び空になった。
 2. `recent_history_track_distance_selective` は `#96`, role split は `#97` まで進み、next candidate ではなく historical completed reference である。
 3. `owner_signal_ablation_audit` は actual execution と hold decision まで確定しており、secondary draft ではなく historical decision reference である。
 4. `jockey-trainer combo style-distance` は `#108` の formal child と `#115` の role split まで完了しており、historical completed reference である。
@@ -74,6 +75,14 @@ Latest reread completions:
 
 - `surface_plus_class_layoff` widening reread は close
 - `sep_guard` ordering reread も existing artifact だけで close 可能
+- difficult-regime operator routing reread も existing artifact だけで close した
+
+Latest difficult-regime routing read:
+
+1. `surface_plus_class_layoff` と `pace_closing_fit` の September reread では、`pace_closing_fit` が broad September でより defensive だが、改善はより sparse な suppression でも説明できた
+2. late-September narrow evidence でも `pace_closing_fit` は `current_sep_guard_candidate` を pure bankroll で更新しておらず、stable narrow override とまでは言えなかった
+3. December control window では `surface_plus_class_layoff` だけが positive carry を残した
+4. したがって explicit routing boundary は追加せず、operator wording は `surface first, pace second` の flat ordering を維持する
 
 Latest reread completions:
 
@@ -99,10 +108,10 @@ Latest fallback compare:
 
 Current open-work expectation:
 
-1. JRA 本線の current active issue は空である
+1. JRA 本線の current active issue は空に戻った
 2. latest completed JRA policy issue は `#117` であり、`abs90` anchor 維持・`minprob005` / `odds25` reject まで確定した
 3. latest issue-numbered JRA feature read は `#118` であり、`course_baseline_race_pace_front3f` / `course_baseline_race_pace_back3f` は low coverage reject と確定した
-4. latest completed JRA feature decision source は `calendar context ablation audit` であり、formal `pass / promote` と actual-date equivalence により pruning candidate judgment まで完了した
+4. latest completed JRA feature decision source は `class_rest_surface_core_ablation_audit` であり、formal `pass / promote` と actual-date equivalence により pruning candidate judgment まで完了した
 5. `gate/frame/course`, `pace/closing-fit`, `kelly runtime`, `class-rest-surface conditional`, `recent-history track-distance`, `deque_trim promotion decision`, `tighter policy seasonal narrowing` はこの節では next queue ではなく completed / historical reference として扱う
 6. `current_sep_guard_candidate` は September seasonal fallback のまま据え置く
 7. NAR side の open issue は `#101`, `#103`, `#119`, `#120`, `#121`, `#122`, `#123` であり、current JRA queue とは混在させない
@@ -121,13 +130,58 @@ Historical note:
 
 Primary next issue draft:
 
-- current JRA primary next issue draft は空である
+- current JRA primary next issue draft:
+  - `docs/issue_library/next_issue_pruning_stage7_rollout_guardrails.md`
+- next step:
+   - stage-8 quartet hold judgment と difficult-regime operator routing reread は historical reference とする
+   - JRA 本線の fresh next move は、新しい heavy execution ではなく `stage-7` stopping point を review-ready implementation candidate として package する issue を優先する
+- hygiene note:
+   - `docs/issue_library/next_issue_pruning_stage7_rollout_guardrails.md` は現時点では local source draft であり、GitHub issue thread へはまだ反映していない
+   - GitHub issue を起票して objective / rollback / validation を thread 側へ移した後は、この draft を削除候補として再判定する
+- issue-library hygiene read:
+   - non-historical かつ未決着の `next_issue_*.md` を再点検した結果、残存 open draft は NAR 系のみである
+   - したがって次の JRA issue は stale draft の再利用ではなく、current artifact read に基づく fresh draft として起こす
 - `docs/issue_library/next_issue_calendar_context_ablation_audit.md` は latest completed feature decision source として保持する
 - completed judgment:
    - `race_year`, `race_month`, `race_dayofweek` を外した `r20260408_calendar_context_ablation_v1` は formal `pass / promote` を通過した
    - broad September 2025 と December control 2025 の actual-date compare でも baseline と `bets / total net / pure bankroll` が完全同値だった
    - したがって calendar context 3 列は current JRA high-coverage serving family の pruning candidate と判断できる
-- next JRA hypothesis は、これを historical completed reference として別の 1 measurable hypothesis を再選定してから起こす
+- `docs/issue_library/next_issue_gate_frame_course_core_ablation_audit.md` は latest completed feature decision source として保持する
+- completed judgment:
+   - `r20260408_gate_frame_course_core_ablation_v1` は formal `pass / promote` を通過した
+   - broad September 2025 と December control 2025 の actual-date compare でも baseline と `bets / total net / pure bankroll` が完全同値だった
+   - したがって `gate_ratio`, `frame_ratio`, `course_gate_bucket_last_100_win_rate`, `course_gate_bucket_last_100_avg_rank` は current JRA high-coverage serving family の pruning candidate と判断できる
+- `docs/issue_library/next_issue_recent_history_core_ablation_audit.md` は latest completed feature decision source として保持する
+- completed judgment:
+   - `r20260408_recent_history_core_ablation_v1` は formal `pass / promote` を通過した
+   - broad September 2025 と December control 2025 の actual-date compare でも baseline と `bets / total net / pure bankroll` が完全同値だった
+   - したがって `horse_last_3_avg_rank`, `horse_last_5_win_rate` は current JRA high-coverage serving family の pruning candidate と判断できる
+- `docs/issue_library/next_issue_jockey_trainer_combo_core_ablation_audit.md` は latest completed feature decision source として保持する
+- completed judgment:
+   - `r20260408_jockey_trainer_combo_core_ablation_v1` は formal `pass / promote` を通過した
+   - broad September 2025 と December control 2025 の actual-date compare でも baseline と `bets / total net / pure bankroll` が完全同値だった
+   - したがって `jockey_last_30_win_rate`, `trainer_last_30_win_rate`, `jockey_trainer_combo_last_50_win_rate`, `jockey_trainer_combo_last_50_avg_rank` は current JRA high-coverage serving family の pruning candidate と判断できる
+- `docs/issue_library/next_issue_class_rest_surface_core_ablation_audit.md` は latest completed feature decision source として保持する
+- completed judgment:
+   - `r20260410_class_rest_surface_core_ablation_v1` は formal `pass / promote` を通過した
+   - broad September 2025 と December control 2025 の actual-date compare でも baseline と `bets / total net / pure bankroll` が完全同値だった
+   - したがって class/rest/surface core 20 列は current JRA high-coverage serving family の pruning candidate と判断できる
+- `docs/issue_library/next_issue_track_weather_surface_context_ablation_audit.md` は latest completed feature decision source として保持する
+- completed judgment:
+   - `r20260410_track_weather_surface_context_ablation_v1` は formal `pass / promote` を通過した
+   - broad September 2025 と December control 2025 の actual-date compare でも baseline と `bets / total net / pure bankroll` が完全同値だった
+   - したがって `track`, `weather`, `ground_condition`, `馬場状態2`, `芝・ダート区分`, `芝・ダート区分2`, `右左回り・直線区分`, `内・外・襷区分` は current JRA high-coverage serving family の pruning candidate と判断できる
+- `docs/issue_library/next_issue_race_condition_dispatch_context_ablation_audit.md` は latest completed feature decision source として保持する
+- completed judgment:
+   - `r20260410_race_condition_dispatch_context_ablation_v1` は formal `pass / promote` を通過した
+   - broad September 2025 と December control 2025 の actual-date compare でも baseline と `bets / total net / pure bankroll` が完全同値だった
+   - したがって `競争条件`, `リステッド・重賞競走`, `障害区分`, `発走時刻`, `sex`, `東西・外国・地方区分` は current JRA high-coverage serving family の pruning candidate と判断できる
+- `docs/issue_library/next_issue_jockey_trainer_id_core_ablation_audit.md` は latest completed feature decision source として保持する
+- completed judgment:
+   - `r20260410_jockey_trainer_id_core_ablation_v1` は formal `pass / promote` を通過した
+   - broad September 2025 と December control 2025 の actual-date compare でも baseline と `bets / total net / pure bankroll` が完全同値だった
+   - したがって `jockey_id`, `trainer_id` は current JRA high-coverage serving family の pruning candidate と判断できる
+- latest completed feature decision source を historical completed reference とし、current next move は別の 1 measurable hypothesis の再選定に戻す
 - `docs/issue_library/next_issue_tighter_policy_seasonal_regime_narrowing.md` は `#117` 完了後の historical issue source として保持する
 - `docs/issue_library/next_issue_gate_frame_course_pace_decomposition_selective_candidate.md` は `#118` close 後の historical issue source として保持する
 - NAR residual unissued draft library は `docs/issue_library/next_issue_nar_class_rest_surface_replay.md` のみである
@@ -139,17 +193,34 @@ Primary next issue draft:
 
 Latest next feature queue:
 
-1. `#118` first read により current JRA next issue は再選定待ちへ戻った
-2. `tighter policy search` family の season-aware narrowing 自体は close し、strict anchor `abs90` 維持で判断が終わった
-3. `course_baseline_race_pace_front3f` / `course_baseline_race_pace_back3f` pair は `non_null_ratio=0.08897` で low coverage reject と確定したため、再開時は別 family を含めて 1 measurable hypothesis を切り直す
-4. `calendar context ablation audit` は completed historical feature decision reference になった
-5. focal features は `race_year`, `race_month`, `race_dayofweek` の 3 列で、current baseline から narrow に外した
-6. first read では `priority_missing_raw_columns=[]`, `missing_force_include_features=[]`, `low_coverage_force_include_features=[]` を確認した
-7. win component `r20260408_calendar_context_ablation_v1` は `auc=0.8396626458946592`, `best_iteration=518`, `feature_count=106` で完走した
-8. ROI component `r20260408_calendar_context_ablation_v1` は `top1_roi=0.9133429811866856`, `best_iteration=113`, `feature_count=106` で完走した
-9. stack / formal compare では `auc=0.8376476592261183`, `weighted_roi=1.0185100913844163`, `feasible_fold_count=4`, `status=pass`, `decision=promote` を確認した
-10. actual-date compare でも broad September 2025 は `33 bets / -20.0 / pure bankroll 0.3931722898269604`、December control 2025 は `17 bets / -5.199999999999999 / pure bankroll 0.7886889523160848` で baseline と完全同値だった
-11. したがって calendar context 3 列は current JRA serving family の pruning candidate と判断し、current next move は別の 1 measurable hypothesis の再選定に戻す
+1. current JRA active issue は空に戻った
+2. `pruning_bundle_ablation_audit` は individual pruning candidates を one-shot simplification candidate として束ねた audit である
+3. first read では `priority_missing_raw_columns=[]`, `missing_force_include_features=[]`, `low_coverage_force_include_features=[]`, `selected_feature_count=60` を確認した
+4. component / stack retrain は完走し、actual used set は owner signal を残した 60 features まで縮んだ
+5. formal evaluate では `auc=0.8422288519737056`, `top1_roi=0.8064556962025317`, `ev_top1_roi=0.7503567318757192`, `wf_nested_test_roi_weighted=0.9622002820874471`, `wf_nested_test_bets_total=709` を得た
+6. ただし WF feasibility は `feasible_fold_count=0/5`、dominant failure reason は `min_bets` で、promotion gate は `status=block`, `decision=hold` だった
+7. actual-date compare では broad September 2025 は `33 bets / -20.0 / pure bankroll 0.3931722898269604`、December control 2025 は `17 bets / -5.199999999999999 / pure bankroll 0.7886889523160848` で baseline と完全同値だった
+8. したがって individual pruning candidates の bundle promotion は行わず、current judgment は `analysis reference / hold` に固定する
+9. `class_rest_surface_core_ablation_audit` completed judgment、`#118` pace decomposition low-coverage reject、calendar context ablation completed judgment、gate/frame/course core ablation completed judgment、recent-history core ablation completed judgment、combo core ablation completed judgment、track/weather/surface context ablation completed judgment、race-condition/dispatch context ablation completed judgment、jockey/trainer ID core ablation completed judgment、pruning bundle ablation hold judgment は historical reference として保持する
+10. current next move は human review による pruning package judgment か、別の 1 measurable hypothesis の再選定に戻す
+11. human review に進む場合の starting memo は `docs/jra_pruning_package_review_20260410.md` とする
+12. human review が staged simplification review を許可した場合の first execution source は `docs/issue_library/next_issue_pruning_stage1_calendar_recent_history_bundle.md` とする
+13. stage-1 `calendar + recent-history` bundle `r20260410_pruning_stage1_calendar_recent_history_v1` は formal `pass / promote` と actual-date Sep/Dec equivalence まで完了しており、bundle hold 後の first staged reference として保持する
+14. current next staged execution source は `docs/issue_library/next_issue_pruning_stage2_calendar_recent_history_race_condition_dispatch_bundle.md` とする
+15. stage-2 first read `feature_gap_summary_pruning_stage2_calendar_recent_history_race_condition_dispatch_v1.json` は `priority_missing_raw_columns=[]`, `missing_force_include_features=[]`, `empty_force_include_features=[]`, `low_coverage_force_include_features=[]`, `selected_feature_count=98`, `categorical_feature_count=31` で clean だった
+16. stage-2 `calendar + recent-history + race-condition/dispatch context` bundle `r20260410_pruning_stage2_calendar_recent_history_race_condition_dispatch_v1` は true retrain / formal compare / actual-date compare まで完了した
+17. stage-2 は `auc=0.8422432477925081`, `top1_roi=0.8084810126582278`, `ev_top1_roi=0.7635097813578826` と top-line は維持したが、WF feasibility は `feasible_fold_count=0/5`、promotion gate は `status=block`, `decision=hold` だった
+18. actual-date compare では broad September 2025 と December control 2025 の両方で baseline と `bets / total net / pure bankroll` が完全同値だった
+19. alternative second-block `calendar + recent-history + gate/frame/course core` bundle `r20260410_pruning_stage2_calendar_recent_history_gate_frame_course_v1` も true retrain / formal compare / actual-date compare まで完了した
+20. alternative stage-2 は `auc=0.8420815082342571`, `top1_roi=0.8077445339470656`, `ev_top1_roi=0.7973993095512083`, `feasible_fold_count=3/5`, `status=pass`, `decision=promote` で通過し、broad September 2025 / December control 2025 の actual-date compare も baseline 完全同値だった
+21. したがって current staged simplification read は `stage-1 supported first block`, `stage-2 race-condition hold`, `stage-2 gate/frame/course supported` に更新される
+22. third-block `calendar + recent-history + gate/frame/course core + track/weather/surface context` bundle `r20260410_pruning_stage3_calendar_recent_history_gate_frame_course_track_weather_v1` も true retrain / formal compare / actual-date compare まで完了した
+23. stage-3 は `auc=0.8422893707697219`, `top1_roi=0.8068584579976985`, `ev_top1_roi=0.6806214039125431`, `feasible_fold_count=3/5`, `status=pass`, `decision=promote` で通過し、broad September 2025 / December control 2025 の actual-date compare も baseline 完全同値だった
+24. したがって current staged simplification read は `stage-1 supported first block`, `stage-2 race-condition hold`, `stage-2 gate/frame/course supported second block`, `stage-3 track/weather supported third block on the gate/frame/course branch` に更新される
+25. fourth-block `calendar + recent-history + gate/frame/course core + track/weather/surface context + class/rest/surface core` bundle `r20260410_pruning_stage4_calendar_recent_history_gate_frame_course_track_weather_class_rest_surface_v1` も true retrain / formal compare / actual-date compare まで完了した
+26. stage-4 は `auc=0.8414765876087938`, `top1_roi=0.7996432681242808`, `ev_top1_roi=0.6966858457997699`, `feasible_fold_count=2/5`, `status=pass`, `decision=promote` で通過し、broad September 2025 / December control 2025 の actual-date compare も baseline 完全同値だった
+27. したがって current staged simplification read は `stage-1 supported first block`, `stage-2 race-condition hold`, `stage-2 gate/frame/course supported second block`, `stage-3 track/weather supported third block`, `stage-4 class/rest/surface supported fourth block on the same branch` に更新される
+28. current next move は human review を優先するか、supported line `stage-4 class/rest/surface` を起点にした fifth-block hypothesis を慎重に再選定することである
 
 Latest combo track-distance selective read:
 
@@ -188,7 +259,18 @@ Latest combo track-distance role split:
 
 Current active issue:
 
-- JRA 本線の active issue は空である
+- JRA 本線の active issue は `docs/issue_library/next_issue_pruning_stage8_calendar_recent_history_gate_frame_course_track_weather_class_rest_surface_jt_id_combo_dispatch_meta_condition_quartet_bundle.md` まで完了したため、再び空である
+
+Latest staged pruning read:
+
+1. eighth-block `calendar + recent-history + gate/frame/course core + track/weather/surface context + class/rest/surface core + jockey/trainer ID core + jockey/trainer/combo core + dispatch metadata + condition quartet` bundle `r20260411_pruning_stage8_condq_v1` も true retrain / formal compare / actual-date compare まで完了した
+2. stage-8 は `auc=0.8422288519737056`, `top1_roi=0.8064556962025317`, `ev_top1_roi=0.7503567318757192` と top-line は維持したが、`wf_nested_test_roi_weighted=0.9622002820874471`, `feasible_fold_count=0/5`, `status=block`, `decision=hold` だった
+3. broad September 2025 / December control 2025 の actual-date compare は baseline 完全同値だった
+4. したがって current staged simplification read は `stage-1 supported`, `stage-2 race-condition hold`, `stage-2 gate/frame/course supported`, `stage-3 track/weather supported`, `stage-4 class/rest/surface supported`, `stage-5 jockey/trainer ID supported`, `stage-6 jockey/trainer/combo supported`, `stage-7 dispatch metadata supported`, `stage-8 condition quartet hold` に更新される
+5. current defendable boundary は stage-7 で止まり、current next move は human review を優先することである
+6. human review の短い starting memo は `docs/jra_pruning_staged_decision_summary_20260411.md` とする
+7. human review 前の fresh JRA issue source は `docs/issue_library/next_issue_pruning_stage7_rollout_guardrails.md` とし、exact diff / rollback / post-change validation を 1 issue に固定する
+8. human review の execution checklist は `docs/jra_pruning_stage7_implementation_review_checklist.md`、rollback runbook は `docs/jra_pruning_stage7_rollback_checklist.md` を正本にする
 - latest completed JRA issue は `#117`
 - <https://github.com/Npieju/nr-learn/issues/117>
 - latest completed role split は `#115`

@@ -63,6 +63,12 @@ JRA の current public message は次で足りる。
 - tighter policy は difficult regime 向けの defensive candidate
 - `surface_plus_class_layoff` は formal promoted line だが、low bet-rate のため operational default ではない
 
+ここで意図的に public message に含めないものも固定する。
+
+- `pace_closing_fit` のような narrower September specialist は internal operator reading として扱い、public benchmark message には混ぜない
+- recent-heavy true retrain family の内部順位づけも public benchmark message には混ぜず、必要な場合だけ internal benchmark docs で説明する
+- public では「default line と formal promoted line を分ける」「low bet-rate caution を付ける」までに留める
+
 ### NAR
 
 NAR は separate universe として扱う。JRA の default 置換とは切り離して読む。
@@ -108,6 +114,11 @@ NAR の current public message は次で固定する。
 - `weighted ROI` が高いのでそのまま live expectation だ
 - `AUC` が高いので運用でも強い
 - `bets` だけを出して `races` を出さない
+
+構成簡約や feature pruning の internal audit も、この節に含めて public benchmark message へ混ぜない。
+
+- individual pruning candidate judgment は internal review material として扱う
+- bundle simplification が `hold` の間は public benchmark update reason に使わない
 
 ## Source Artifacts
 
