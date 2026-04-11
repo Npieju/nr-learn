@@ -92,10 +92,24 @@
       background: rgba(247, 250, 252, 0.94);
     }
     .sticky-panel.collapsed {
-      padding: 6px 8px;
+      padding: 0;
+      min-height: 0;
+      border-color: transparent;
+      background: transparent;
+      box-shadow: none;
+    }
+    .sticky-panel.collapsed .venue-row {
+      display: block;
+      height: 0;
+      min-height: 0;
+      overflow: visible;
+      gap: 0;
     }
     .sticky-panel.collapsed #venue-tabs,
     .sticky-panel.collapsed #race-tabs-row {
+      display: none;
+    }
+    .sticky-panel.collapsed .venue-row .tab-panel-label {
       display: none;
     }
     .tab-panel-head-inline {
@@ -103,6 +117,13 @@
       align-items: center;
       justify-content: space-between;
       gap: 6px;
+    }
+    .sticky-panel.collapsed .tab-panel-head-inline {
+      display: inline-flex;
+      position: absolute;
+      top: 2px;
+      left: -10px;
+      z-index: 2;
     }
     .tabs-toggle {
       border: 1px solid var(--line);
@@ -597,7 +618,7 @@
 
     <section class="section sticky-panel" id="sticky-panel">
       <div class="tab-stack" id="tabs-stack">
-        <div class="tab-panel-row">
+        <div class="tab-panel-row venue-row">
           <div class="tab-panel-head-inline">
             <p class="tab-panel-label">Venue</p>
             <button class="tabs-toggle" id="tabs-toggle" type="button" aria-expanded="true" aria-label="タブを折りたたむ">◀</button>
