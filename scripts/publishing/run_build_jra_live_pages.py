@@ -1450,7 +1450,7 @@ def render_live_page(*, page_title: str) -> str:
       const html = [
         `<button class="tab tab-overview ${state.viewMode === "overview" ? "active" : ""}" data-view-mode="overview">Overview</button>`,
         ...venueRaces().map((race) => {
-          const activeClass = race.raceId === state.selectedRaceId ? "active" : "";
+          const activeClass = state.viewMode !== "overview" && race.raceId === state.selectedRaceId ? "active" : "";
           const selectedClass = (race.selectedRows || 0) > 0 ? "has-selection" : "";
           return `<button class="tab ${activeClass} ${selectedClass}" data-race-id="${race.raceId}">${race.raceNo || "-"}R</button>`;
         }),
