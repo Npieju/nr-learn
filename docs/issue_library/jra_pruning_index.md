@@ -4,16 +4,17 @@ JRA pruning / simplification 系の local source と historical reference をま
 
 ## Quick Read
 
-- current active local source は [next_issue_pruning_stage7_rollout_guardrails.md](next_issue_pruning_stage7_rollout_guardrails.md)
+- current JRA source-of-truth は GitHub issue `#124` `[jra] pruning stage-7 rollout guardrails`
+- local compact snapshot は [next_issue_pruning_stage7_rollout_guardrails.md](next_issue_pruning_stage7_rollout_guardrails.md)
 - current defendable stopping point は `stage-7`
 - human review package は version/date 付き docs を正本にする
 - family-level completed audits と staged boundary references は historical snapshot/reference として読む
 
-## Current Active Local Source Draft
+## Current Source Thread And Snapshot
 
 - [next_issue_pruning_stage7_rollout_guardrails.md](next_issue_pruning_stage7_rollout_guardrails.md)
-  - current JRA primary next issue draft
-  - role: stage-7 を review-ready implementation candidate として package する local source draft
+  - local compact snapshot
+  - role: GitHub issue `#124` の local reference / artifact entrypoint
 
 ## Current Human Review Package
 
@@ -50,7 +51,7 @@ JRA pruning / simplification 系の local source と historical reference をま
 
 ## Reading Order
 
-1. current issue を追うなら [next_issue_pruning_stage7_rollout_guardrails.md](next_issue_pruning_stage7_rollout_guardrails.md)
+1. current issue を追うなら GitHub issue `#124` を優先し、local residue が必要なときだけ [next_issue_pruning_stage7_rollout_guardrails.md](next_issue_pruning_stage7_rollout_guardrails.md) を開く
 2. human review 全体像を確認するなら [../jra_pruning_staged_decision_summary_20260411.md](../jra_pruning_staged_decision_summary_20260411.md)
 3. pruning の根拠を遡るなら family-level audits
 4. boundary を確認するなら staged boundary references

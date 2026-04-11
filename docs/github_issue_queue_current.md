@@ -269,7 +269,7 @@ Latest staged pruning read:
 4. したがって current staged simplification read は `stage-1 supported`, `stage-2 race-condition hold`, `stage-2 gate/frame/course supported`, `stage-3 track/weather supported`, `stage-4 class/rest/surface supported`, `stage-5 jockey/trainer ID supported`, `stage-6 jockey/trainer/combo supported`, `stage-7 dispatch metadata supported`, `stage-8 condition quartet hold` に更新される
 5. current defendable boundary は stage-7 で止まり、current next move は human review を優先することである
 6. human review の短い starting memo は `docs/jra_pruning_staged_decision_summary_20260411.md` とする
-7. human review 前の fresh JRA issue source は `docs/issue_library/next_issue_pruning_stage7_rollout_guardrails.md` とし、exact diff / rollback / post-change validation を 1 issue に固定する
+7. human review 前の fresh JRA issue source は GitHub issue `#124` とし、local `docs/issue_library/next_issue_pruning_stage7_rollout_guardrails.md` は compact transfer snapshot として扱う
 8. human review の execution checklist は `docs/jra_pruning_stage7_implementation_review_checklist.md`、rollback runbook は `docs/jra_pruning_stage7_rollback_checklist.md` を正本にする
 - latest completed JRA issue は `#117`
 - <https://github.com/Npieju/nr-learn/issues/117>
