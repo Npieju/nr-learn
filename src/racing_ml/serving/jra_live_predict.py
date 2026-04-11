@@ -488,77 +488,38 @@ def build_live_prediction_report(
 ) -> str:
     policy_diagnostics = summarize_policy_diagnostics(predictions)
     history_coverage = runner_history_coverage if isinstance(runner_history_coverage, dict) else {"available": False, "runners": []}
-    lines = [
-        f"# JRA live prediction report {race_date}",
-        "",
-        f"- records: {len(predictions)}",
-        f"- races: {predictions['race_id'].nunique()}",
-        f"- odds_available_rows: {odds_available_rows}",
+
+    enriched = predictions.copy()
+    numeric_columns = [
+        "score",
+        "expected_value",
+        "pred_rank",
+        "ev_rank",
+        "odds",
+        "popularity",
+        "policy_prob",
+        "policy_market_prob",
+        "policy_expected_value",
+        "policy_edge",
+        "policy_min_prob",
+        "policy_odds_min",
+        "policy_odds_max",
+        "policy_min_expected_value",
     ]
-    if policy_diagnostics.get("available"):
-        lines.append(f"- policy_selected_rows: {policy_diagnostics.get('policy_selected_rows', 0)}")
-        lines.append(f"- policy_selected_races: {policy_diagnostics.get('policy_selected_races', 0)}")
-        likely_blocker_reason = policy_diagnostics.get("likely_blocker_reason")
-        if likely_blocker_reason:
-            lines.append(f"- likely_blocker_reason: {likely_blocker_reason}")
-    lines.append("")
-
-    if policy_diagnostics.get("available"):
-        lines.append("## Policy Diagnostics")
-        lines.append("")
-        primary_reason_counts = policy_diagnostics.get("primary_reject_reason_counts", {})
-        if primary_reason_counts:
-            lines.append("### Overall Reject Reasons")
-            lines.append("")
-            for reason, count in primary_reason_counts.items():
-                race_count = policy_diagnostics.get("primary_reject_reason_race_counts", {}).get(reason)
-                suffix = f" races={race_count}" if race_count is not None else ""
-                lines.append(f"- {reason}: rows={count}{suffix}")
-            lines.append("")
-        stage_reason_counts = policy_diagnostics.get("stage_fallback_reason_counts", {})
-        if stage_reason_counts:
-            lines.append("### Stage Fallback Reasons")
-            lines.append("")
-            for reason, count in stage_reason_counts.items():
-                lines.append(f"- {reason}: rows={count}")
-            lines.append("")
-
-    if history_coverage.get("available"):
-        lines.append("## Runner History Coverage")
-        lines.append("")
-        profile_counts = history_coverage.get("profile_counts", {})
-        if profile_counts:
-            lines.append("- profiles: " + ", ".join(f"{key}={value}" for key, value in profile_counts.items()))
-        horse_columns = history_coverage.get("group_columns", {}).get("horse_history", [])
-        pedigree_columns = history_coverage.get("group_columns", {}).get("pedigree_history", [])
-        lines.append(f"- horse_history_features: {len(horse_columns)}")
-        lines.append(f"- pedigree_history_features: {len(pedigree_columns)}")
-        lines.append("")
+    for column in numeric_columns:
+        if column in enriched.columns:
+            enriched[column] = pd.to_numeric(enriched[column], errors="coerce")
+    enriched["rank_gap"] = enriched["pred_rank"] - enriched["ev_rank"]
 
     history_runner_frame = pd.DataFrame(history_coverage.get("runners", [])) if history_coverage.get("available") else pd.DataFrame()
     if not history_runner_frame.empty:
         history_runner_frame = _normalize_history_merge_keys(history_runner_frame)
 
-    for race_id, race_frame in predictions.groupby("race_id", sort=True):
-        race_frame = _normalize_history_merge_keys(race_frame)
-        race_frame["score"] = pd.to_numeric(race_frame.get("score"), errors="coerce")
-        race_frame["expected_value"] = pd.to_numeric(race_frame.get("expected_value"), errors="coerce")
-        race_frame["pred_rank"] = pd.to_numeric(race_frame.get("pred_rank"), errors="coerce")
-        race_frame["ev_rank"] = pd.to_numeric(race_frame.get("ev_rank"), errors="coerce")
-        race_frame["rank_gap"] = race_frame["pred_rank"] - race_frame["ev_rank"]
-        race_frame = race_frame.sort_values(["pred_rank", "score"], ascending=[True, False]).reset_index(drop=True)
-        headline = next(
-            (
-                str(value)
-                for value in race_frame.get("headline", pd.Series(dtype="string"))
-                if pd.notna(value) and str(value).strip()
-            ),
-            str(race_id),
-        )
+    def classify_race_quadrant(race_frame: pd.DataFrame) -> pd.DataFrame:
         score_median = race_frame["score"].median(skipna=True)
         ev_median = race_frame["expected_value"].median(skipna=True)
 
-        def classify_quadrant(row: pd.Series) -> str:
+        def _classify(row: pd.Series) -> str:
             score_value = row.get("score")
             ev_value = row.get("expected_value")
             if pd.isna(score_value) or pd.isna(ev_value):
@@ -573,46 +534,197 @@ def build_live_prediction_report(
                 return "low_acc_high_ev"
             return "low_acc_low_ev"
 
-        race_frame["tradeoff_quadrant"] = race_frame.apply(classify_quadrant, axis=1)
+        with_quadrant = race_frame.copy()
+        with_quadrant["tradeoff_quadrant"] = with_quadrant.apply(_classify, axis=1)
+        return with_quadrant
+
+    lines = [
+        f"# JRA live prediction report {race_date}",
+        "",
+        f"- records: {len(enriched)}",
+        f"- races: {enriched['race_id'].nunique()}",
+        f"- odds_available_rows: {odds_available_rows}",
+    ]
+    if policy_diagnostics.get("available"):
+        lines.append(f"- policy_selected_rows: {policy_diagnostics.get('policy_selected_rows', 0)}")
+        lines.append(f"- policy_selected_races: {policy_diagnostics.get('policy_selected_races', 0)}")
+        likely_blocker_reason = policy_diagnostics.get("likely_blocker_reason")
+        if likely_blocker_reason:
+            lines.append(f"- likely_blocker_reason: {likely_blocker_reason}")
+    lines.append("")
+
+    lines.append("## 数値の読み方")
+    lines.append("")
+    lines.append("- `score`: モデルが見ている勝率 proxy。高いほど能力評価は高い。")
+    lines.append("- `expected_value`: `score * current_odds`。モデル score をそのまま odds に掛けた生の期待値読み。")
+    lines.append("- `policy_prob`: runtime policy が実際の採否判定に使う blended probability。")
+    lines.append("- `policy_expected_value`: `policy_prob * odds`。policy の閾値判定に使う期待値。`1.0` 超でプラス期待値読み。")
+    lines.append("- `policy_edge`: `policy_expected_value - 1.0`。市場に対してどれだけ上振れを見ているか。")
+    lines.append("- `pred_rank` と `ev_rank` の乖離が大きい馬は、命中寄り評価と妙味寄り評価がズレている。")
+    lines.append("- `tradeoff_quadrant=high_acc_high_ev` は、命中寄りでも妙味寄りでも上位に残るバランス候補。")
+    lines.append("- `policy_selected=no` でも、理由が `odds_above_max` なのか `expected_value_below_min_expected_value` なのかで解釈が変わる。")
+    lines.append("")
+
+    if policy_diagnostics.get("available"):
+        lines.append("## Policy Diagnostics")
+        lines.append("")
+        primary_reason_counts = policy_diagnostics.get("primary_reject_reason_counts", {})
+        if primary_reason_counts:
+            lines.append("### Overall Reject Reasons")
+            lines.append("")
+            for reason, count in primary_reason_counts.items():
+                race_count = policy_diagnostics.get("primary_reject_reason_race_counts", {}).get(reason)
+                suffix = f" races={race_count}" if race_count is not None else ""
+                lines.append(f"- {reason}: rows={count}{suffix}")
+            lines.append("")
+
+    if history_coverage.get("available"):
+        lines.append("## Runner History Coverage")
+        lines.append("")
+        profile_counts = history_coverage.get("profile_counts", {})
+        if profile_counts:
+            lines.append("- profiles: " + ", ".join(f"{key}={value}" for key, value in profile_counts.items()))
+        horse_columns = history_coverage.get("group_columns", {}).get("horse_history", [])
+        pedigree_columns = history_coverage.get("group_columns", {}).get("pedigree_history", [])
+        lines.append(f"- horse_history_features: {len(horse_columns)}")
+        lines.append(f"- pedigree_history_features: {len(pedigree_columns)}")
+        lines.append("")
+
+    lines.append("## 日次サマリー")
+    lines.append("")
+    lines.append("| race | runners | selected | top_score馬 | top_score | top_raw_ev馬 | raw_ev | top_policy_ev馬 | policy_ev | blocker |")
+    lines.append("| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |")
+
+    race_frames: list[tuple[str, pd.DataFrame]] = []
+    for race_id, race_frame in enriched.groupby("race_id", sort=True):
+        race_frame = _normalize_history_merge_keys(race_frame)
+        race_frame = race_frame.sort_values(["pred_rank", "score"], ascending=[True, False]).reset_index(drop=True)
+        race_frame = classify_race_quadrant(race_frame)
+        race_frames.append((str(race_id), race_frame))
+        headline = next(
+            (
+                str(value)
+                for value in race_frame.get("headline", pd.Series(dtype="string"))
+                if pd.notna(value) and str(value).strip()
+            ),
+            str(race_id),
+        )
         top_score_row = race_frame.sort_values(["score", "expected_value"], ascending=False).iloc[0]
-        top_ev_row = race_frame.sort_values(["expected_value", "score"], ascending=False).iloc[0]
-        largest_gap_row = race_frame.assign(abs_rank_gap=race_frame["rank_gap"].abs()).sort_values(
-            ["abs_rank_gap", "expected_value"],
-            ascending=False,
-        ).iloc[0]
-        lines.append(f"## {headline}")
-        lines.append("")
-        lines.append("score は予想 win probability の proxy、expected_value は `score * current_odds`。")
-        lines.append("単純な EV/score 比はほぼ odds に一致するため、この report では `score順位` と `EV順位` の乖離で命中寄り / 妙味寄りを読む。")
-        lines.append("")
-        lines.append("### Summary")
-        lines.append("")
-        lines.append(f"- top score: {top_score_row.get('horse_name', '')} score={_format_metric(top_score_row.get('score'), 6)} odds={_format_metric(top_score_row.get('odds'), 1)} EV={_format_metric(top_score_row.get('expected_value'), 3)}")
-        lines.append(f"- top EV: {top_ev_row.get('horse_name', '')} score={_format_metric(top_ev_row.get('score'), 6)} odds={_format_metric(top_ev_row.get('odds'), 1)} EV={_format_metric(top_ev_row.get('expected_value'), 3)}")
-        lines.append(f"- largest rank divergence: {largest_gap_row.get('horse_name', '')} pred_rank={'' if pd.isna(largest_gap_row.get('pred_rank')) else int(largest_gap_row.get('pred_rank'))} ev_rank={'' if pd.isna(largest_gap_row.get('ev_rank')) else int(largest_gap_row.get('ev_rank'))} gap={_format_metric(largest_gap_row.get('rank_gap'), 0)} quadrant={largest_gap_row.get('tradeoff_quadrant', '')}")
-        lines.append(f"- quadrant counts: {', '.join(f'{key}={value}' for key, value in race_frame['tradeoff_quadrant'].value_counts().to_dict().items())}")
-        lines.append("")
+        top_raw_ev_row = race_frame.sort_values(["expected_value", "score"], ascending=False).iloc[0]
+        top_policy_ev_row = race_frame.sort_values(["policy_expected_value", "expected_value"], ascending=False).iloc[0]
         race_policy_summary = next(
             (item for item in policy_diagnostics.get("race_diagnostics", []) if item.get("race_id") == str(race_id)),
             None,
         )
+        blocker = ""
+        selected_rows = 0
         if race_policy_summary is not None:
-            lines.append("### Policy Diagnostics")
-            lines.append("")
-            lines.append(f"- selected_rows: {race_policy_summary.get('selected_rows', 0)}")
+            selected_rows = int(race_policy_summary.get("selected_rows", 0))
             top_reasons = race_policy_summary.get("top_primary_reject_reasons", [])
             if top_reasons:
-                lines.append(
-                    "- top reject reasons: "
-                    + ", ".join(f"{item['reason']}={item['rows']}" for item in top_reasons)
+                blocker = str(top_reasons[0].get("reason", ""))
+        lines.append(
+            "| {race} | {runners} | {selected} | {top_score_horse} | {top_score} | {top_raw_ev_horse} | {top_raw_ev} | {top_policy_ev_horse} | {top_policy_ev} | {blocker} |".format(
+                race=headline,
+                runners=len(race_frame),
+                selected=selected_rows,
+                top_score_horse=str(top_score_row.get("horse_name", "")),
+                top_score=_format_metric(top_score_row.get("score"), 6),
+                top_raw_ev_horse=str(top_raw_ev_row.get("horse_name", "")),
+                top_raw_ev=_format_metric(top_raw_ev_row.get("expected_value"), 3),
+                top_policy_ev_horse=str(top_policy_ev_row.get("horse_name", "")),
+                top_policy_ev=_format_metric(top_policy_ev_row.get("policy_expected_value"), 3),
+                blocker=blocker,
+            )
+        )
+    lines.append("")
+
+    for race_id, race_frame in race_frames:
+        headline = next(
+            (
+                str(value)
+                for value in race_frame.get("headline", pd.Series(dtype="string"))
+                if pd.notna(value) and str(value).strip()
+            ),
+            str(race_id),
+        )
+        top_score_row = race_frame.sort_values(["score", "expected_value"], ascending=False).iloc[0]
+        top_raw_ev_row = race_frame.sort_values(["expected_value", "score"], ascending=False).iloc[0]
+        top_policy_ev_row = race_frame.sort_values(["policy_expected_value", "expected_value"], ascending=False).iloc[0]
+        largest_gap_row = race_frame.assign(abs_rank_gap=race_frame["rank_gap"].abs()).sort_values(
+            ["abs_rank_gap", "expected_value"],
+            ascending=False,
+        ).iloc[0]
+        balanced_candidates = race_frame[race_frame["tradeoff_quadrant"] == "high_acc_high_ev"].sort_values(
+            ["score", "expected_value"],
+            ascending=False,
+        )
+        value_outliers = race_frame[race_frame["tradeoff_quadrant"] == "low_acc_high_ev"].sort_values(
+            ["expected_value", "score"],
+            ascending=False,
+        )
+        race_policy_summary = next(
+            (item for item in policy_diagnostics.get("race_diagnostics", []) if item.get("race_id") == str(race_id)),
+            None,
+        )
+
+        lines.append(f"## {headline}")
+        lines.append("")
+        lines.append("### レース要約")
+        lines.append("")
+        lines.append(
+            f"- 命中寄りの最上位は {top_score_row.get('horse_name', '')}。score={_format_metric(top_score_row.get('score'), 6)}、odds={_format_metric(top_score_row.get('odds'), 1)}、raw EV={_format_metric(top_score_row.get('expected_value'), 3)}。"
+        )
+        lines.append(
+            f"- 生の期待値読みの最上位は {top_raw_ev_row.get('horse_name', '')}。expected_value={_format_metric(top_raw_ev_row.get('expected_value'), 3)}、score={_format_metric(top_raw_ev_row.get('score'), 6)}、odds={_format_metric(top_raw_ev_row.get('odds'), 1)}。"
+        )
+        lines.append(
+            f"- policy 判定用 EV の最上位は {top_policy_ev_row.get('horse_name', '')}。policy_expected_value={_format_metric(top_policy_ev_row.get('policy_expected_value'), 3)}、policy_edge={_format_metric(top_policy_ev_row.get('policy_edge'), 3)}。"
+        )
+        lines.append(
+            f"- 命中寄り順位と妙味寄り順位のズレが最大なのは {largest_gap_row.get('horse_name', '')}。pred_rank={'' if pd.isna(largest_gap_row.get('pred_rank')) else int(largest_gap_row.get('pred_rank'))}、ev_rank={'' if pd.isna(largest_gap_row.get('ev_rank')) else int(largest_gap_row.get('ev_rank'))}、gap={_format_metric(largest_gap_row.get('rank_gap'), 0)}。"
+        )
+        if race_policy_summary is not None:
+            selected_rows = int(race_policy_summary.get("selected_rows", 0))
+            if selected_rows > 0:
+                lines.append(f"- 現行 policy で実際に選択されたのは {selected_rows} 頭。")
+            else:
+                top_reasons = race_policy_summary.get("top_primary_reject_reasons", [])
+                if top_reasons:
+                    reason_text = ", ".join(f"{item['reason']}={item['rows']}" for item in top_reasons)
+                    lines.append(f"- 現行 policy では選択 0 頭。主な blocker は {reason_text}。")
+        if not balanced_candidates.empty:
+            lines.append(
+                "- 命中寄りと妙味寄りの両方で上位に残る候補: "
+                + ", ".join(
+                    f"{row['horse_name']} (score={_format_metric(row['score'], 6)}, EV={_format_metric(row['expected_value'], 3)})"
+                    for _, row in balanced_candidates.head(3).iterrows()
                 )
-            stage_reasons = race_policy_summary.get("stage_fallback_reason_counts", {})
-            if stage_reasons:
-                lines.append(
-                    "- stage fallback reasons: "
-                    + ", ".join(f"{reason}={count}" for reason, count in stage_reasons.items())
+                + "。"
+            )
+        if not value_outliers.empty:
+            lines.append(
+                "- 大穴寄りの妙味候補: "
+                + ", ".join(
+                    f"{row['horse_name']} (odds={_format_metric(row['odds'], 1)}, policy_EV={_format_metric(row['policy_expected_value'], 3)})"
+                    for _, row in value_outliers.head(3).iterrows()
                 )
+                + "。"
+            )
+        lines.append("")
+
+        if race_policy_summary is not None:
+            lines.append("### Policy Parameters")
             lines.append("")
+            first_row = race_frame.iloc[0]
+            lines.append(f"- policy_name: {first_row.get('policy_name', '')}")
+            lines.append(f"- strategy: {first_row.get('policy_strategy_kind', '')}")
+            lines.append(f"- min_prob: {_format_metric(first_row.get('policy_min_prob'), 3)}")
+            lines.append(f"- odds_range: {_format_metric(first_row.get('policy_odds_min'), 1)} .. {_format_metric(first_row.get('policy_odds_max'), 1)}")
+            lines.append(f"- min_expected_value: {_format_metric(first_row.get('policy_min_expected_value'), 3)}")
+            lines.append(f"- blend_weight: {_format_metric(first_row.get('policy_blend_weight'), 3)}")
+            lines.append("")
+
         if not history_runner_frame.empty:
             history_race = history_runner_frame[history_runner_frame["race_id"] == str(race_id)].copy()
             if not history_race.empty:
@@ -621,17 +733,24 @@ def build_live_prediction_report(
                 if not merge_keys and "horse_name" in race_frame.columns and "horse_name" in history_race.columns:
                     merge_keys = ["race_id", "horse_name"]
                 if merge_keys:
-                    extra_history_columns = [
-                        column for column in lookup_columns if column not in merge_keys and column != "horse_name"
-                    ]
-                    race_history_view = race_frame.merge(history_race[merge_keys + extra_history_columns + [
-                        "horse_history_key_source",
-                        "horse_history_non_null",
-                        "horse_history_total",
-                        "pedigree_history_non_null",
-                        "pedigree_history_total",
-                        "history_profile",
-                    ]], on=merge_keys, how="left", sort=False)
+                    extra_history_columns = [column for column in lookup_columns if column not in merge_keys and column != "horse_name"]
+                    race_history_view = race_frame.merge(
+                        history_race[
+                            merge_keys
+                            + extra_history_columns
+                            + [
+                                "horse_history_key_source",
+                                "horse_history_non_null",
+                                "horse_history_total",
+                                "pedigree_history_non_null",
+                                "pedigree_history_total",
+                                "history_profile",
+                            ]
+                        ],
+                        on=merge_keys,
+                        how="left",
+                        sort=False,
+                    )
                     lines.append("### Runner History Coverage")
                     lines.append("")
                     lines.append("| pred_rank | horse_name | horse_history | pedigree_history | key_source | profile |")
@@ -654,67 +773,68 @@ def build_live_prediction_report(
                             )
                         )
                     lines.append("")
-        lines.append("### Accuracy-First")
+
+        lines.append("### Full Numbers")
         lines.append("")
-        lines.append("| pred_rank | horse_name | score | odds | popularity | expected_value | policy_selected | reject_reason |")
-        lines.append("| --- | --- | --- | --- | --- | --- | --- | --- |")
-        for _, row in race_frame.head(5).iterrows():
-            pred_rank = row.get("pred_rank")
-            score = row.get("score")
-            odds = row.get("odds")
-            popularity = row.get("popularity")
-            expected_value = row.get("expected_value")
-            policy_selected = row.get("policy_selected", False)
-            reject_reason = row.get("policy_reject_reason_primary")
+        lines.append("| pred_rank | ev_rank | horse_name | score | odds | popularity | raw_ev | policy_prob | market_prob | policy_ev | edge | quadrant | selected | reject_reason |")
+        lines.append("| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |")
+        for _, row in race_frame.sort_values(["pred_rank", "score"], ascending=[True, False]).iterrows():
             lines.append(
-                "| {pred_rank} | {horse_name} | {score} | {odds} | {popularity} | {expected_value} | {policy_selected} | {reject_reason} |".format(
-                    pred_rank="" if pd.isna(pred_rank) else int(pred_rank),
+                "| {pred_rank} | {ev_rank} | {horse_name} | {score} | {odds} | {popularity} | {raw_ev} | {policy_prob} | {market_prob} | {policy_ev} | {edge} | {quadrant} | {selected} | {reject_reason} |".format(
+                    pred_rank="" if pd.isna(row.get("pred_rank")) else int(row.get("pred_rank")),
+                    ev_rank="" if pd.isna(row.get("ev_rank")) else int(row.get("ev_rank")),
                     horse_name=str(row.get("horse_name", "")),
-                    score="" if pd.isna(score) else f"{float(score):.6f}",
-                    odds="" if pd.isna(odds) else odds,
-                    popularity="" if pd.isna(popularity) else popularity,
-                    expected_value="" if pd.isna(expected_value) else f"{float(expected_value):.3f}",
-                    policy_selected="yes" if bool(policy_selected) else "no",
-                    reject_reason="" if pd.isna(reject_reason) else str(reject_reason),
+                    score=_format_metric(row.get("score"), 6),
+                    odds=_format_metric(row.get("odds"), 1),
+                    popularity=_format_metric(row.get("popularity"), 0),
+                    raw_ev=_format_metric(row.get("expected_value"), 3),
+                    policy_prob=_format_metric(row.get("policy_prob"), 6),
+                    market_prob=_format_metric(row.get("policy_market_prob"), 6),
+                    policy_ev=_format_metric(row.get("policy_expected_value"), 3),
+                    edge=_format_metric(row.get("policy_edge"), 3),
+                    quadrant=str(row.get("tradeoff_quadrant", "")),
+                    selected="yes" if bool(row.get("policy_selected", False)) else "no",
+                    reject_reason="" if pd.isna(row.get("policy_reject_reason_primary")) else str(row.get("policy_reject_reason_primary")),
                 )
             )
         lines.append("")
+
+        lines.append("### Accuracy-First")
+        lines.append("")
+        lines.append("| pred_rank | horse_name | score | odds | popularity | raw_ev | policy_ev | selected | reject_reason |")
+        lines.append("| --- | --- | --- | --- | --- | --- | --- | --- | --- |")
+        for _, row in race_frame.head(5).iterrows():
+            lines.append(
+                "| {pred_rank} | {horse_name} | {score} | {odds} | {popularity} | {raw_ev} | {policy_ev} | {selected} | {reject_reason} |".format(
+                    pred_rank="" if pd.isna(row.get("pred_rank")) else int(row.get("pred_rank")),
+                    horse_name=str(row.get("horse_name", "")),
+                    score=_format_metric(row.get("score"), 6),
+                    odds=_format_metric(row.get("odds"), 1),
+                    popularity=_format_metric(row.get("popularity"), 0),
+                    raw_ev=_format_metric(row.get("expected_value"), 3),
+                    policy_ev=_format_metric(row.get("policy_expected_value"), 3),
+                    selected="yes" if bool(row.get("policy_selected", False)) else "no",
+                    reject_reason="" if pd.isna(row.get("policy_reject_reason_primary")) else str(row.get("policy_reject_reason_primary")),
+                )
+            )
+        lines.append("")
+
         lines.append("### Value-First")
         lines.append("")
-        lines.append("| ev_rank | horse_name | expected_value | score | odds | popularity | pred_rank | quadrant |")
-        lines.append("| --- | --- | --- | --- | --- | --- | --- | --- |")
+        lines.append("| ev_rank | horse_name | raw_ev | policy_ev | edge | score | odds | popularity | pred_rank | quadrant |")
+        lines.append("| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |")
         for _, row in race_frame.sort_values(["expected_value", "score"], ascending=False).head(5).iterrows():
             lines.append(
-                "| {ev_rank} | {horse_name} | {expected_value} | {score} | {odds} | {popularity} | {pred_rank} | {quadrant} |".format(
+                "| {ev_rank} | {horse_name} | {raw_ev} | {policy_ev} | {edge} | {score} | {odds} | {popularity} | {pred_rank} | {quadrant} |".format(
                     ev_rank="" if pd.isna(row.get("ev_rank")) else int(row.get("ev_rank")),
                     horse_name=str(row.get("horse_name", "")),
-                    expected_value=_format_metric(row.get("expected_value"), 3),
+                    raw_ev=_format_metric(row.get("expected_value"), 3),
+                    policy_ev=_format_metric(row.get("policy_expected_value"), 3),
+                    edge=_format_metric(row.get("policy_edge"), 3),
                     score=_format_metric(row.get("score"), 6),
                     odds=_format_metric(row.get("odds"), 1),
                     popularity=_format_metric(row.get("popularity"), 0),
                     pred_rank="" if pd.isna(row.get("pred_rank")) else int(row.get("pred_rank")),
-                    quadrant=str(row.get("tradeoff_quadrant", "")),
-                )
-            )
-        lines.append("")
-        lines.append("### Divergence")
-        lines.append("")
-        lines.append("| horse_name | pred_rank | ev_rank | rank_gap | score | expected_value | odds | quadrant |")
-        lines.append("| --- | --- | --- | --- | --- | --- | --- | --- |")
-        divergence_frame = race_frame.assign(abs_rank_gap=race_frame["rank_gap"].abs()).sort_values(
-            ["abs_rank_gap", "expected_value"],
-            ascending=False,
-        )
-        for _, row in divergence_frame.head(5).iterrows():
-            lines.append(
-                "| {horse_name} | {pred_rank} | {ev_rank} | {rank_gap} | {score} | {expected_value} | {odds} | {quadrant} |".format(
-                    horse_name=str(row.get("horse_name", "")),
-                    pred_rank="" if pd.isna(row.get("pred_rank")) else int(row.get("pred_rank")),
-                    ev_rank="" if pd.isna(row.get("ev_rank")) else int(row.get("ev_rank")),
-                    rank_gap=_format_metric(row.get("rank_gap"), 0),
-                    score=_format_metric(row.get("score"), 6),
-                    expected_value=_format_metric(row.get("expected_value"), 3),
-                    odds=_format_metric(row.get("odds"), 1),
                     quadrant=str(row.get("tradeoff_quadrant", "")),
                 )
             )

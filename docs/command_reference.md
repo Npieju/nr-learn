@@ -737,6 +737,13 @@ backfill:
   --headline-contains 大阪杯
 ```
 
+live prediction の CSV / summary から GitHub Pages 向け静的 viewer を作るとき:
+
+```bash
+/workspaces/nr-learn/.venv/bin/python scripts/run_build_jra_live_pages.py \
+  --predictions-file artifacts/predictions/predictions_20260412_jra_live.csv
+```
+
 現在地を 1 本の board で読みたいときの wrapper:
 
 ```bash
@@ -762,6 +769,7 @@ same-day 完了後に enriched benchmark rerun の入口を切りたいときの
 - `run_netkeiba_2026_live_handoff.py` は、snapshot consistency、race_result/race_card の completed 状態、および外部 CSV の `max_date >= race_date - history_lag_days` を ready 条件に使う。未達時は `waiting`、poll を打ち切ったときは `timeout` の manifest を `artifacts/reports/netkeiba_2026_live_handoff_manifest.json` に残す。
 - `run_netkeiba_2026_live_handoff.py` も polling ごとに status board を更新するので、board を一次参照にして current phase を追える。
 - `run_netkeiba_2026_live_handoff.py` は、同じ `race_date` の completed manifest と live prediction/report が既に存在する場合、既定では no-op で終了する。再生成したい場合だけ `--force` を付ける。
+- `run_build_jra_live_pages.py` は、`predictions_*_jra_live.csv` と sibling の `.summary.json` / `.live.json` を読み、`pages/jra-live/<race-date>/index.html` と `data.json` を生成する。root の `pages/index.html` も更新し、`.github/workflows/publish-pages.yml` と組み合わせると GitHub Pages へそのまま deploy できる。
 - `run_netkeiba_2026_status_board.py` は、`artifacts/reports/netkeiba_backfill_manifest_2026_ytd.json`、`artifacts/reports/netkeiba_coverage_snapshot_2026_ytd.json`、`artifacts/reports/netkeiba_2026_live_handoff_manifest.json`、`artifacts/reports/netkeiba_2026_benchmark_gate.json` を束ね、`status`、`current_phase`、`recommended_action`、`highlights` を 1 回で読めるようにする。top-level `status` は少なくとも `running` / `waiting` / `ready` / `handed_off` / `completed` / `failed` を区別し、進行中は crawl target manifest と実 lock file から `active_cycle`、各 target の `processed_ids`、`rows_written`、live `crawl_lock` を反映する。history frontier は外部 result/racecard CSV の max date を直接読み、`race_result_gap_days`、`race_card_gap_days`、`limiting_history_target` により target date までの残日数も確認できる。handoff 後は live summary/runtime manifest から `policy_selected_rows` と `num_races`、および benchmark rerun manifest の状態も表示する。post-race benchmark gate が存在する場合、top-level `current_phase` と `recommended_action` も benchmark 側を優先する。
 - `run_netkeiba_2026_backfill_rollover.py` は、target manifest を見て running target が 0 本になる cycle 境界を待ち、lock の `pid` に `SIGINT` を送って旧 backfill を止めたあと、新しい `run_netkeiba_2026_ytd_backfill.py` を別 log で起動する one-shot rollover watcher である。`--dry-run` で safe boundary 判定だけ先に確認できる。
 - `run_netkeiba_2026_same_day_ops.py` は、2026 same-day serving の orchestration 入口で、まず status board を refresh し、未完了なら backfill / handoff / rollover の各 background action を重複起動なしで arm する。completed 済みなら `artifacts/reports/netkeiba_2026_same_day_ops_manifest.json` に `already_completed` を書いて即終了する。
