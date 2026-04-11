@@ -1,6 +1,6 @@
 # Issue Library Index
 
-この directory は current source-of-truth ではない。GitHub issue thread、current queue、versioned snapshot を補助する local reference library である。
+この directory は current source-of-truth ではない。GitHub issue thread、current queue、tagged snapshot/reference を補助する local reference library である。
 
 current priority を追うときは、まず [../github_issue_queue_current.md](../github_issue_queue_current.md) を読む。この index は queue や thread から参照が必要になったときだけ使う。
 
@@ -9,7 +9,7 @@ current priority を追うときは、まず [../github_issue_queue_current.md](
 - raw listing を入口にしない。
 - `next_issue_*.md` を current queue として直接読まない。
 - GitHub issue thread に source-of-truth が移った local draft は削除候補とする。
-- file 自体に「古い情報」と書き足して回るのではなく、version/tag/date 付き snapshot として扱う。
+- file 自体に「古い情報」と書き足して回るのではなく、version/tag 付き snapshot として扱う。
 
 ## Entry Points
 

@@ -18,8 +18,8 @@ docs は検索で掘らないと読めない状態を許容しない。
 - draft / reference library は raw listing ではなく index から辿れる
 - 同じ判断や status を複数 docs へ平行更新しないと整合しない構造を増やさない
 - 新しい doc を追加する前に、既存正本へ統合できない理由を確認する
-- snapshot / review memo は version、tag、または date を file 名や参照名に入れ、どの更新単位の記録か分かるようにする
-- current source-of-truth の下に細かい派生 doc を増やす場合は、原則として read-only な versioned snapshot/reference にする
+- snapshot / review memo は version や tag で識別できる形にし、どの更新単位の記録か分かるようにする
+- current source-of-truth の下に細かい派生 doc を増やす場合は、原則として read-only な tagged snapshot/reference にする
 - 細かい仕様差分を追うための child doc を current doc の下へ増やし、親子で平行更新が必要になる構造を作らない
 - commit しない一時 doc や作業メモは tracked な `docs/` に置かず、gitignore 管理の scratch/local path に隔離する
 
@@ -27,19 +27,19 @@ default rule:
 
 - まず既存 doc へ統合する
 - 統合できない場合は新規 doc 本体より先に index / source-of-truth を定義する
-- summary doc を増やすときは、何を current source-of-truth にして何を versioned snapshot / 参照専用にするかを同時に固定する
-- versioned snapshot は、ある commit batch / tag / date 時点の記録を保持するためのものとし、current info を追って平行更新しない
-- child doc を切るなら current detail の延長ではなく、version/tag/date 付きの read-only snapshot として切り出す
+- summary doc を増やすときは、何を current source-of-truth にして何を tagged snapshot / 参照専用にするかを同時に固定する
+- tagged snapshot は、ある commit batch / tag 時点の記録を保持するためのものとし、current info を追って平行更新しない
+- child doc を切るなら current detail の延長ではなく、version/tag 付きの read-only snapshot として切り出す
 - current doc は短い入口と判断境界だけを残し、細部の経緯や時点依存の仕様は snapshot 側へ逃がす
 - 差分は「この doc は古い」と追記して回るのではなく、tag/version の違いで読む
-- snapshot 名は `<topic>_<version>.md` または `<topic>_<tag>.md` を基本形にし、current source-of-truth には date/version を埋め込まない
+- snapshot 名は `<topic>_<version>.md` または `<topic>_<tag>.md` を基本形にし、current source-of-truth には日付/version を埋め込まない
 - docs git tag は `docs-v<major>.<minor>.<patch>` を基本形とし、review package、運用 boundary、current source-of-truth 再編のように「後から参照し直す batch」にだけ切り、軽微修正には切らない
 
 review rule:
 
 - grep 前提の docs 導線は reject 候補にする
 - parallel update が前提の doc 追加は reject 候補にする
-- version/tag/date が無く、current doc と snapshot doc の境界が曖昧な新規文書は reject 候補にする
+- version/tag が無く、current doc と snapshot doc の境界が曖昧な新規文書は reject 候補にする
 - current doc の配下に mutable な子 docs を増やし、親子で同時更新が必要になる設計は reject 候補にする
 - commit 予定のない一時 doc を tracked docs に追加する変更は reject 候補にする
 - docs 整備だけが長く滞留し、本線変更の commit を止める状態を作らない

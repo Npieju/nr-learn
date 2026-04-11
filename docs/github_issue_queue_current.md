@@ -4,7 +4,7 @@
 
 この文書は current open issue と次の実行順だけを保持する。completed history や長い判断経緯はここへ積まない。
 
-詳細は GitHub issue thread、artifact、versioned snapshot を見る。この file は「今どれを正本として追うか」を短く固定するための入口である。
+詳細は GitHub issue thread、artifact、tagged snapshot/reference を見る。この file は「今どれを正本として追うか」を短く固定するための入口である。
 
 ## Current Priority
 

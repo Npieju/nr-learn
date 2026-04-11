@@ -4,7 +4,7 @@
 
 この `docs/` の役割は 1 つだけである。必要な current source-of-truth へ最短で到達させる。
 
-細かな経緯や時点依存の判断を毎回広く読む前提にはしない。current 情報は少数の正本に寄せ、差分や過去時点の記録は issue thread、artifact、versioned snapshot で追う。
+細かな経緯や時点依存の判断を毎回広く読む前提にはしない。current 情報は少数の正本に寄せ、差分や過去時点の記録は issue thread、artifact、tagged snapshot/reference で追う。
 
 ## First Read
 
@@ -67,13 +67,13 @@
 ## Keep Or Delete
 
 - current info は current source-of-truth にだけ書く。
-- review package や時点付き判断は version/tag/date 付き snapshot として残す。
-- 細かい仕様や補助説明のために file を増やす場合は、原則として read-only な version/tag/date 付き snapshot に倒す。
+- review package や時点付き判断は version/tag で識別できる snapshot として残す。
+- 細かい仕様や補助説明のために file を増やす場合は、原則として read-only な version/tag 付き snapshot に倒す。
 - current doc の下に mutable な child docs を増やし、親子で平行更新が必要な構造は作らない。
 - GitHub issue thread に source-of-truth が移った local draft は削除候補とする。
 - 新しい docs を増やす前に、既存の正本へ統合できない理由を確認する。
 
-- snapshot 側に「古い情報」と追記して回るのではなく、どの更新単位の記録かを version/tag/date で識別できるようにする。
+- snapshot 側に「古い情報」と追記して回るのではなく、どの更新単位の記録かを version/tag で識別できるようにする。
 
 ## Update Rules
 
@@ -84,7 +84,7 @@
 
 ## Snapshot And Tag Rules
 
-- current source-of-truth は原則として version や date を file 名に入れない。
+- current source-of-truth は原則として version や日付を file 名に入れない。
 - 凍結して残す review package / decision memo / handoff note だけ、`<topic>_<version>.md` または `<topic>_<tag>.md` の形で snapshot 化する。
 - docs の commit batch が review package、運用 boundary、または current source-of-truth の大きい再編を確定させる場合だけ、その batch に対応する semver 形式の git tag を切る。
 - docs tag の基本形は `docs-v<major>.<minor>.<patch>` とする。

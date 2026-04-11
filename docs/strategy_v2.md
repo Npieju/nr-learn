@@ -4,7 +4,7 @@
 
 この文書は、`nr-learn` の新しい運用基準である。
 
-`docs/` 全体を広く読む前に、まず [README.md](README.md) を入口にして current source-of-truth だけを辿る。versioned snapshot や大きい補助資料は必要になった時だけ開く。
+`docs/` 全体を広く読む前に、まず [README.md](README.md) を入口にして current source-of-truth だけを辿る。tagged snapshot/reference や大きい補助資料は必要になった時だけ開く。
 
 ## 2. North Star
 
