@@ -49,6 +49,10 @@
 - JRA baseline 更新は human judgment を要求する
 - 不足する規則は会話ではなく docs / tests / instructions に追加する
 - Git の更新を長く滞らせない。同じ変更単位の code / config / script / docs は意味のある小さめの batch でまとめ、issue の進捗に対応する commit / push を早めに行う。
+- commit しない一時 doc や作業メモを tracked な `docs/` 配下へ置かない。必要な一時メモは gitignore 管理の scratch/local path に隔離し、current source-of-truth や version/date 付き snapshot と混在させない。
+- docs を増やすこと自体は許容するが、index から辿れる単一導線を優先し、同じ変更を複数 docs に平行反映しないと維持できない構造は原則追加しない。
+- docs は「current source-of-truth」か「version/date 付き snapshot/reference」に役割を分ける。snapshot/reference は作成時点の記録として凍結し、最新化のたびに平行更新しない。
+- docs 整備は本線作業と切り離して長く滞留させない。新しい index / summary を増やす前に、既存 docs へ統合するか、version/date を付けた snapshot として独立させる。
 - 数秒で終わらない source に progress がない変更は未完成扱いにする
 - progress は possible な限り分母付きで出し、生存確認だけの heartbeat を progress 完了扱いにしない
 - 重い task に 60 秒超の no-output 区間が残る変更は未完成扱いにする

@@ -25,6 +25,7 @@
 - full train は quiet heavy-job lane を前提にし、別の full train / evaluate / revision gate や重い local collection が生きているときは fail-fast で止める。
 - operator-facing CLI は、設定ミス・入力不足・output path の取り違えを fail-fast で検出し、想定内の失敗では traceback を出さない。
 - まとまった変更を終えたら `git status` と diff を確認し、意味のある単位で commit する。共有 remote が使える作業では push までを完了条件に含め、push できない場合は理由を明示して残す。
+- commit しない doc は tracked な `docs/` に置かない。短期の作業メモや scratch は gitignore 管理の local path に置き、作業 batch の終了時点で tracked docs へ残さない。
 
 ## 3. 2 段階の評価運用
 

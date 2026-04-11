@@ -17,3 +17,7 @@ data/local_nankan_pre_race_ready/raw/*.csv
 artifacts/*
 !artifacts/.gitkeep
 .codex
+
+# Local scratch notes that should never be tracked as source-of-truth docs
+docs/_local/
+docs/_scratch/

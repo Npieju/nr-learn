@@ -8,6 +8,34 @@
 
 ## 2. Mandatory Cautions
 
+### 2.0 Docs Must Remain Navigable Without Grep
+
+docs は検索で掘らないと読めない状態を許容しない。
+
+必須要件:
+
+- current operator が最初に開く入口 doc を明示する
+- draft / reference library は raw listing ではなく index から辿れる
+- 同じ判断や status を複数 docs へ平行更新しないと整合しない構造を増やさない
+- 新しい doc を追加する前に、既存正本へ統合できない理由を確認する
+- snapshot / review memo は version または date を file 名に入れ、作成時点の記録だと分かるようにする
+- commit しない一時 doc や作業メモは tracked な `docs/` に置かず、gitignore 管理の scratch/local path に隔離する
+
+default rule:
+
+- まず既存 doc へ統合する
+- 統合できない場合は新規 doc 本体より先に index / source-of-truth を定義する
+- summary doc を増やすときは、何を current source-of-truth にして何を versioned snapshot / 参照専用にするかを同時に固定する
+- versioned snapshot は作成時点の情報を保持するためのものとし、current info を追って平行更新しない
+
+review rule:
+
+- grep 前提の docs 導線は reject 候補にする
+- parallel update が前提の doc 追加は reject 候補にする
+- version/date が無く、current doc と snapshot doc の境界が曖昧な新規文書は reject 候補にする
+- commit 予定のない一時 doc を tracked docs に追加する変更は reject 候補にする
+- docs 整備だけが長く滞留し、本線変更の commit を止める状態を作らない
+
 ### 2.1 Progress Is Required For Long-Running Sources
 
 数秒で終わらないことが見込まれるすべての source には、progress を入れる。
