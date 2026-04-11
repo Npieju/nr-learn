@@ -40,20 +40,20 @@
     }
     a { color: inherit; }
     .shell {
-      width: min(1480px, calc(100vw - 32px));
-      margin: 24px auto 40px;
+      width: min(1480px, calc(100vw - 24px));
+      margin: 14px auto 28px;
     }
     .hero {
       display: grid;
-      gap: 10px;
-      padding: 18px 20px;
+      gap: 6px;
+      padding: 12px 14px;
       border: 1px solid var(--line);
       border-radius: 22px;
       background: linear-gradient(135deg, rgba(255, 250, 242, 0.94), rgba(247, 239, 229, 0.92));
       box-shadow: 0 12px 30px rgba(23, 32, 51, 0.07);
     }
     .eyebrow {
-      margin: 0 0 10px;
+      margin: 0 0 4px;
       color: var(--accent);
       font-size: 12px;
       letter-spacing: 0.14em;
@@ -63,7 +63,7 @@
     h1 {
       margin: 0;
       line-height: 1.08;
-      font-size: clamp(28px, 3vw, 40px);
+      font-size: clamp(24px, 2.5vw, 34px);
     }
     .hero-meta,
     .hero-note {
@@ -73,30 +73,30 @@
       line-height: 1.7;
     }
     .hero-note {
-      font-size: 13px;
+      font-size: 12px;
     }
     .section {
-      margin-top: 20px;
-      padding: 14px;
-      border-radius: 24px;
+      margin-top: 10px;
+      padding: 10px;
+      border-radius: 18px;
       border: 1px solid var(--line);
       background: var(--surface);
       box-shadow: 0 14px 36px rgba(23, 32, 51, 0.05);
     }
     .sticky-panel {
       position: sticky;
-      top: 12px;
+      top: 8px;
       z-index: 9;
       backdrop-filter: blur(14px);
       background: rgba(255, 251, 244, 0.92);
     }
     .tab-stack {
       display: grid;
-      gap: 10px;
+      gap: 4px;
     }
     .tab-panel-row {
       display: grid;
-      gap: 6px;
+      gap: 2px;
     }
     .tab-panel-row[hidden],
     .overview-section[hidden],
@@ -106,7 +106,7 @@
     .tab-panel-label {
       margin: 0;
       color: var(--muted);
-      font-size: 11px;
+      font-size: 10px;
       font-weight: 700;
       letter-spacing: 0.08em;
       text-transform: uppercase;
@@ -115,18 +115,18 @@
       display: flex;
       align-items: flex-start;
       justify-content: space-between;
-      gap: 16px;
-      margin-bottom: 16px;
+      gap: 10px;
+      margin-bottom: 8px;
     }
     .section-title {
       margin: 0;
-      font-size: 18px;
+      font-size: 16px;
     }
     .section-note {
-      margin: 4px 0 0;
+      margin: 2px 0 0;
       color: var(--muted);
-      font-size: 12px;
-      line-height: 1.55;
+      font-size: 11px;
+      line-height: 1.45;
     }
     .overview-table-wrap,
     .table-wrap {
@@ -150,7 +150,7 @@
     }
     th,
     td {
-      padding: 12px 14px;
+      padding: 9px 10px;
       text-align: left;
       border-bottom: 1px solid rgba(23, 32, 51, 0.08);
       vertical-align: top;
@@ -221,25 +221,25 @@
     .tabs {
       overflow-x: auto;
       flex-wrap: nowrap;
-      padding-bottom: 4px;
+      padding-bottom: 1px;
     }
     .tab {
       border: 1px solid var(--line);
       background: rgba(255, 255, 255, 0.7);
       color: var(--ink);
       border-radius: 999px;
-      padding: 8px 12px;
+      padding: 6px 10px;
       font: inherit;
       white-space: nowrap;
       cursor: pointer;
       transition: 140ms ease;
-      font-size: 13px;
+      font-size: 12px;
     }
     .tab.active {
       border-color: rgba(33, 57, 91, 0.4);
       background: var(--navy);
       color: white;
-      box-shadow: 0 10px 22px rgba(33, 57, 91, 0.22);
+      box-shadow: 0 6px 16px rgba(33, 57, 91, 0.18);
     }
     .chip {
       display: inline-flex;
@@ -274,31 +274,31 @@
     }
     .race-header {
       display: grid;
-      gap: 10px;
-      padding: 14px 16px;
-      border-radius: 20px;
+      gap: 6px;
+      padding: 10px 12px;
+      border-radius: 14px;
       border: 1px solid var(--line);
       background: linear-gradient(135deg, rgba(255, 255, 255, 0.82), rgba(247, 239, 229, 0.9));
     }
     .race-commentary {
       margin: 0;
-      padding: 10px 12px;
-      border-radius: 12px;
+      padding: 8px 10px;
+      border-radius: 10px;
       background: rgba(33, 57, 91, 0.06);
       color: var(--ink);
-      line-height: 1.65;
-      font-size: 13px;
+      line-height: 1.55;
+      font-size: 12px;
     }
     .race-title {
       margin: 0;
-      font-size: clamp(21px, 2vw, 30px);
+      font-size: clamp(18px, 1.8vw, 24px);
       line-height: 1.2;
     }
     .race-meta {
-      margin: 6px 0 0;
+      margin: 2px 0 0;
       color: var(--muted);
-      font-size: 12px;
-      line-height: 1.6;
+      font-size: 11px;
+      line-height: 1.45;
     }
     .race-kickers {
       display: flex;
@@ -400,14 +400,14 @@
       gap: 10px;
       align-items: center;
       flex-wrap: wrap;
-      margin: 0 0 10px;
+      margin: 0 0 6px;
     }
     .search {
       min-width: 260px;
       flex: 1;
       border: 1px solid var(--line);
-      border-radius: 14px;
-      padding: 12px 14px;
+      border-radius: 12px;
+      padding: 9px 11px;
       background: rgba(255, 255, 255, 0.86);
       color: var(--ink);
       font: inherit;
@@ -462,19 +462,19 @@
     @media (max-width: 720px) {
       .shell {
         width: min(100vw - 18px, 1480px);
-        margin-top: 10px;
+        margin-top: 8px;
       }
       .hero,
       .section {
-        padding: 16px;
-        border-radius: 22px;
+        padding: 10px;
+        border-radius: 14px;
       }
       th,
       td {
-        padding: 10px 11px;
+        padding: 8px 9px;
       }
       .race-title {
-        font-size: 22px;
+        font-size: 18px;
       }
     }
   </style>
@@ -677,14 +677,6 @@
         });
     }
 
-    function shortText(value, maxLength = 8) {
-      const text = String(value ?? "");
-      if (text.length <= maxLength) {
-        return text;
-      }
-      return `${text.slice(0, maxLength)}…`;
-    }
-
     function buildRecommendationReason(row) {
       const mark = row.recommendation_mark || "";
       const policyEv = numericValue(row.policy_expected_value) ?? 0;
@@ -760,6 +752,42 @@
       });
       const marked = orderedMarkedRows(rows);
       const dismissed = rows.filter((row) => row.recommendation_mark === "消");
+      const topPolicyEv = numericValue(race.topPolicyEv) ?? 0;
+      const topScore = numericValue(race.topScore) ?? 0;
+      const positiveEdgeRows = rows.filter((row) => (numericValue(row.policy_edge) ?? 0) > 0).length;
+      const selectedRows = rows.filter((row) => row.policy_selected).length;
+      const topPair = marked.slice(0, 2);
+      const topPairGap = topPair.length >= 2
+        ? (numericValue(topPair[0].recommendation_score) ?? 0) - (numericValue(topPair[1].recommendation_score) ?? 0)
+        : null;
+      const longshotCount = rows.filter((row) => (numericValue(row.odds) ?? 0) >= 20).length;
+      const commentary = [];
+      if (selectedRows > 0) {
+        commentary.push(`見送りではなく ${selectedRows} 頭まで絞れているレース。`);
+      } else {
+        commentary.push("runtime policy は見送り寄り。");
+      }
+      if (topPair.length >= 1 && topPairGap !== null && topPairGap >= 0.12) {
+        commentary.push(`${topPair[0].horse_name} が一段抜けた形。`);
+      } else if (topPair.length >= 2 && topPairGap !== null && topPairGap <= 0.04) {
+        commentary.push("上位評価が拮抗していて軸はやや定めづらい。");
+      }
+      if (topPolicyEv >= 1.05) {
+        commentary.push("妙味は一応立っている。");
+      } else if (topPolicyEv < 0.9) {
+        commentary.push("全体的にしょっぱめで、強く買いたい水準ではない。");
+      }
+      if (positiveEdgeRows >= 3) {
+        commentary.push("プラス域の候補が複数いて、広めに見たいレース。");
+      } else if (positiveEdgeRows === 0) {
+        commentary.push("市場に対して強く上振れを見る馬がほぼいない。");
+      }
+      if (topScore >= 0.3) {
+        commentary.push("能力評価の先頭は比較的はっきりしている。");
+      }
+      if (longshotCount >= Math.ceil(rows.length / 3)) {
+        commentary.push("人気薄が多く、妙味はあるが散りやすい組み合わせ。");
+      }
       race.rowsData = rows;
       race.recommendationSummary = marked.length
         ? marked.map((row) => `${row.recommendation_mark}${row.horse_name}`).join(" / ")
@@ -767,12 +795,7 @@
       race.dismissSummary = dismissed.length
         ? dismissed.map((row) => `${row.recommendation_mark}${row.horse_name}`).join(" / ")
         : "消印なし";
-      race.raceCommentary = [
-        race.selectedRows > 0 ? `runtime policy では ${race.selectedRows} 頭を実選択。` : "runtime policy では見送り。",
-        marked.length ? `総合期待値ベースの印は ${race.recommendationSummary}。` : "強い印を打つほどの集中候補は薄め。",
-        race.topPolicyEvHorse ? `${race.topPolicyEvHorse} が policy EV の先頭。` : "",
-        race.blocker ? `全体 blocker は ${race.blocker}。` : "",
-      ].filter(Boolean).join(" ");
+      race.raceCommentary = commentary.join(" ");
       race.topMarkedHorse = marked[0]?.horse_name || null;
       race.topMarkedLabel = marked[0]?.recommendation_mark || null;
       return race;
