@@ -87,6 +87,14 @@
 - 実行導線が変わったら [command_reference.md](command_reference.md) を更新する。
 - public message が変わったら [public_benchmark_snapshot.md](public_benchmark_snapshot.md) と [public_benchmark_operational_reading_guide.md](public_benchmark_operational_reading_guide.md) を更新する。
 
+## Supplemental References
+
+- AI 自動開発の実務標準は [ai_coding_best_practices.md](ai_coding_best_practices.md)
+- module 構成の俯瞰は [system_architecture.md](system_architecture.md)
+- policy challenger 判定の補助チェックは [policy_challenger_decision_checklist.md](policy_challenger_decision_checklist.md)
+- kelly runtime family の候補整理は [kelly_runtime_candidate_matrix.md](kelly_runtime_candidate_matrix.md)
+- tail loader 最適化の受け入れ基準は [tail_loader_equivalence_gate_standard.md](tail_loader_equivalence_gate_standard.md)
+
 ## Snapshot And Tag Rules
 
 - current source-of-truth は原則として version や日付を file 名に入れない。
