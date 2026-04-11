@@ -41,6 +41,7 @@ policy family は次の観点で並べる。
 位置づけ:
 
 次の policy issue の第一候補。support 改善型の本線 family として扱う。
+frontier の実行手順は [tighter_policy_frontier_execution.md](tighter_policy_frontier_execution.md)、候補 matrix は [tighter_policy_candidate_matrix.md](tighter_policy_candidate_matrix.md) を参照する。
 
 #### 3.2 Kelly-Centered Runtime Family
 

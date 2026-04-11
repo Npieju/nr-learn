@@ -69,6 +69,8 @@ formal な evaluation 導線は、[evaluation_guide.md](evaluation_guide.md) を
 
 2026-04-05 時点の current position は次のとおりである。
 
+baseline artifact の固定参照先は [jra_baseline_artifact_inventory.md](jra_baseline_artifact_inventory.md) を使う。
+
 | 区分 | profile | formal status | 実務上の扱い |
 | --- | --- | --- | --- |
 | operational baseline | `current_recommended_serving_2025_latest` | `pass / promote` | 既定運用 profile |

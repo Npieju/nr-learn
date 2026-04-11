@@ -67,6 +67,8 @@ NAR の first wave は次の順で進める。
 4. JRA Tier A family を NAR 用に narrow replay する。
 5. 最後にだけ JRA vs NAR の compare artifacts を作る。
 
+local Nankan の初期導入順は [local_nankan_introduction_plan.md](local_nankan_introduction_plan.md)、crawler 契約は [local_nankan_crawler_design.md](local_nankan_crawler_design.md) を参照する。
+
 ## Success Criteria
 
 NAR line の最初の成功条件は、JRA と同じで「高い一発 ROI」ではない。

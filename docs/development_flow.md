@@ -158,6 +158,8 @@ config 側の output file 名に revision suffix が既に入っている compar
 - `artifacts/reports/promotion_gate_<revision>.json`
 - `artifacts/reports/revision_gate_<revision>.json`
 
+formal gate 前の事前確認には [revision_gate_candidate_checklist.md](revision_gate_candidate_checklist.md) を使う。
+
 ## 6. 採用判断で見るもの
 
 正式な採用判断では、短窓の単発 ROI ではなく次をまとめて確認する。

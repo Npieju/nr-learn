@@ -41,6 +41,8 @@ December tail のような control window は、この切替が broad replacemen
 
 seasonal de-risk の正本ルールは `docs/seasonal_derisk_decision_standard.md` に置く。この guide では、まずその read order を実行手順へ落とし込む。
 
+seasonal alias の fallback ordering は [seasonal_secondary_fallback_standard.md](seasonal_secondary_fallback_standard.md) を正本にする。
+
 latest 2025 の seasonal decision は、次の 4 段で固定する。
 
 1. September difficult window の dashboard summary を見る
