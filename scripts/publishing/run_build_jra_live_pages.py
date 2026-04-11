@@ -352,22 +352,22 @@ def render_live_page(*, page_title: str) -> str:
   <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+JP:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
   <style>
     :root {
-      --bg: #f4efe6;
-      --bg-strong: #eadfce;
-      --surface: rgba(255, 251, 244, 0.92);
-      --surface-strong: #fffdf9;
-      --ink: #172033;
-      --muted: #667085;
-      --line: rgba(23, 32, 51, 0.12);
-      --accent: #b7472a;
-      --accent-soft: rgba(183, 71, 42, 0.12);
-      --navy: #21395b;
-      --navy-soft: rgba(33, 57, 91, 0.10);
-      --gold: #c59e46;
-      --selected: #1b7f5d;
-      --selected-soft: rgba(27, 127, 93, 0.12);
-      --danger-soft: rgba(183, 71, 42, 0.12);
-      --shadow: 0 18px 50px rgba(23, 32, 51, 0.10);
+      --bg: #f2f0ec;
+      --bg-strong: #e9e6df;
+      --surface: rgba(252, 251, 248, 0.94);
+      --surface-strong: #fcfbf8;
+      --ink: #22303a;
+      --muted: #70808b;
+      --line: rgba(34, 48, 58, 0.11);
+      --accent: #7f8d96;
+      --accent-soft: rgba(127, 141, 150, 0.10);
+      --navy: #52636f;
+      --navy-soft: rgba(82, 99, 111, 0.08);
+      --gold: #b8aa82;
+      --selected: #55786a;
+      --selected-soft: rgba(85, 120, 106, 0.11);
+      --danger-soft: rgba(127, 141, 150, 0.10);
+      --shadow: 0 12px 32px rgba(34, 48, 58, 0.06);
       --radius: 20px;
     }
     * { box-sizing: border-box; }
@@ -376,9 +376,9 @@ def render_live_page(*, page_title: str) -> str:
       color: var(--ink);
       font-family: "IBM Plex Sans JP", sans-serif;
       background:
-        radial-gradient(circle at top left, rgba(197, 158, 70, 0.18), transparent 30%),
-        radial-gradient(circle at top right, rgba(33, 57, 91, 0.12), transparent 32%),
-        linear-gradient(180deg, #f7f2ea 0%, #f2ebdf 48%, #ece3d7 100%);
+        radial-gradient(circle at top left, rgba(184, 170, 130, 0.10), transparent 30%),
+        radial-gradient(circle at top right, rgba(82, 99, 111, 0.07), transparent 32%),
+        linear-gradient(180deg, #f5f3ee 0%, #efede7 48%, #e8e5dd 100%);
     }
     a { color: inherit; }
     .shell {
@@ -391,8 +391,8 @@ def render_live_page(*, page_title: str) -> str:
       padding: 12px 14px;
       border: 1px solid var(--line);
       border-radius: 22px;
-      background: linear-gradient(135deg, rgba(255, 250, 242, 0.94), rgba(247, 239, 229, 0.92));
-      box-shadow: 0 12px 30px rgba(23, 32, 51, 0.07);
+      background: linear-gradient(135deg, rgba(252, 251, 248, 0.95), rgba(244, 242, 237, 0.92));
+      box-shadow: 0 10px 24px rgba(34, 48, 58, 0.05);
     }
     .eyebrow {
       margin: 0 0 4px;
@@ -430,7 +430,35 @@ def render_live_page(*, page_title: str) -> str:
       top: 8px;
       z-index: 9;
       backdrop-filter: blur(14px);
-      background: rgba(255, 251, 244, 0.92);
+      background: rgba(252, 251, 248, 0.94);
+    }
+    .sticky-panel.collapsed {
+      padding: 8px;
+    }
+    .sticky-panel.collapsed .tab-stack {
+      display: none;
+    }
+    .sticky-panel-head {
+      display: flex;
+      justify-content: flex-end;
+      margin-bottom: 6px;
+    }
+    .sticky-panel.collapsed .sticky-panel-head {
+      margin-bottom: 0;
+    }
+    .tabs-toggle {
+      border: 1px solid var(--line);
+      background: rgba(255, 255, 255, 0.82);
+      color: var(--navy);
+      border-radius: 999px;
+      padding: 4px 9px;
+      font: inherit;
+      font-size: 12px;
+      line-height: 1.2;
+      cursor: pointer;
+    }
+    .tabs-toggle:hover {
+      background: rgba(255, 255, 255, 0.96);
     }
     .tab-stack {
       display: grid;
@@ -567,7 +595,7 @@ def render_live_page(*, page_title: str) -> str:
     }
     .tab {
       border: 1px solid var(--line);
-      background: rgba(255, 255, 255, 0.7);
+      background: rgba(255, 255, 255, 0.78);
       color: var(--ink);
       border-radius: 999px;
       padding: 6px 10px;
@@ -598,7 +626,7 @@ def render_live_page(*, page_title: str) -> str:
       border-color: rgba(33, 57, 91, 0.4);
       background: var(--navy);
       color: white;
-      box-shadow: 0 6px 16px rgba(33, 57, 91, 0.18);
+      box-shadow: 0 4px 12px rgba(82, 99, 111, 0.14);
     }
     .chip {
       display: inline-flex;
@@ -637,7 +665,7 @@ def render_live_page(*, page_title: str) -> str:
       padding: 10px 12px;
       border-radius: 14px;
       border: 1px solid var(--line);
-      background: linear-gradient(135deg, rgba(255, 255, 255, 0.82), rgba(247, 239, 229, 0.9));
+      background: linear-gradient(135deg, rgba(255, 255, 255, 0.88), rgba(244, 242, 237, 0.92));
     }
     .race-commentary {
       margin: 0;
@@ -847,7 +875,10 @@ def render_live_page(*, page_title: str) -> str:
       <p class="hero-note" id="page-note">overview で全体を見てから、開催場とレースへ降りて市場オッズ・推論値・policy 判定を確認できます。</p>
     </section>
 
-    <section class="section sticky-panel">
+    <section class="section sticky-panel" id="sticky-panel">
+      <div class="sticky-panel-head">
+        <button class="tabs-toggle" id="tabs-toggle" type="button" aria-expanded="true" aria-label="タブを折りたたむ">◀</button>
+      </div>
       <div class="tab-stack">
         <div class="tab-panel-row">
           <p class="tab-panel-label">Mode / Venue</p>
@@ -957,6 +988,7 @@ def render_live_page(*, page_title: str) -> str:
     const state = {
       data: null,
       viewMode: "overview",
+      tabsCollapsed: false,
       selectedVenueCode: null,
       selectedRaceId: null,
       filter: "",
@@ -1328,6 +1360,22 @@ def render_live_page(*, page_title: str) -> str:
       document.getElementById("venue-tabs").innerHTML = html;
     }
 
+    function renderTabsToggle() {
+      const button = document.getElementById("tabs-toggle");
+      const panel = document.getElementById("sticky-panel");
+      if (state.tabsCollapsed) {
+        panel.classList.add("collapsed");
+        button.textContent = "▶";
+        button.setAttribute("aria-expanded", "false");
+        button.setAttribute("aria-label", "タブを展開する");
+      } else {
+        panel.classList.remove("collapsed");
+        button.textContent = "◀";
+        button.setAttribute("aria-expanded", "true");
+        button.setAttribute("aria-label", "タブを折りたたむ");
+      }
+    }
+
     function renderTabs() {
       if (state.viewMode === "overview") {
         document.getElementById("race-tabs-row").hidden = true;
@@ -1405,6 +1453,7 @@ def render_live_page(*, page_title: str) -> str:
 
     function renderRace() {
       syncSelection();
+      renderTabsToggle();
       renderVenueTabs();
       renderTabs();
       renderOverview();
@@ -1436,6 +1485,11 @@ def render_live_page(*, page_title: str) -> str:
         if (viewMode === "overview") {
           state.viewMode = "overview";
           renderRace();
+          return;
+        }
+        if (target.id === "tabs-toggle") {
+          state.tabsCollapsed = !state.tabsCollapsed;
+          renderTabsToggle();
           return;
         }
         const venueCode = target.getAttribute("data-venue-code");
