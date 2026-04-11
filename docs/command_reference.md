@@ -116,6 +116,32 @@ git push origin <branch>
 
 権限や認証で push できない場合は、その場で止めずに理由を記録して共有する。
 
+### 2.5 tag
+
+docs の snapshot batch や review package を凍結するときだけ annotated tag を切る。
+
+```bash
+git tag -a docs-source-of-truth-20260411 -m "docs source-of-truth restructuring snapshot"
+```
+
+既存 commit に後から tag を付けるときの例:
+
+```bash
+git tag -a docs-source-of-truth-20260411 c7f8ae5 -m "docs source-of-truth restructuring snapshot"
+```
+
+確認は次を使う。
+
+```bash
+git tag --list
+git show docs-source-of-truth-20260411 --stat
+```
+
+補足:
+
+- tag は review package、運用 boundary、または current source-of-truth の再編 batch にだけ使う。
+- typo や wording fix のたびには切らない。
+
 ## 3. まず使うコマンド
 
 ### 3.0 latest 2025 actual-date compare の再開順

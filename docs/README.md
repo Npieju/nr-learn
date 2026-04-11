@@ -82,6 +82,14 @@
 - 実行導線が変わったら [command_reference.md](command_reference.md) を更新する。
 - public message が変わったら [public_benchmark_snapshot.md](public_benchmark_snapshot.md) と [public_benchmark_operational_reading_guide.md](public_benchmark_operational_reading_guide.md) を更新する。
 
+## Snapshot And Tag Rules
+
+- current source-of-truth は原則として version や date を file 名に入れない。
+- 凍結して残す review package / decision memo / handoff note だけ、`<topic>_<YYYYMMDD>.md` または `<topic>_<tag>.md` の形で snapshot 化する。
+- docs の commit batch が review package、運用 boundary、または current source-of-truth の大きい再編を確定させる場合だけ、その batch に対応する git tag を切る。
+- 軽微な wording fix や typo 修正には毎回 tag を切らない。
+- snapshot file 名と git tag は 1 対 1 に揃っている必要はないが、どの更新単位を凍結したかが相互に追える状態を保つ。
+
 ## Notes
 
 - 長い historical 説明を current docs に抱え込まない。

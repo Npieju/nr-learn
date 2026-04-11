@@ -32,6 +32,8 @@ default rule:
 - child doc を切るなら current detail の延長ではなく、version/tag/date 付きの read-only snapshot として切り出す
 - current doc は短い入口と判断境界だけを残し、細部の経緯や時点依存の仕様は snapshot 側へ逃がす
 - 差分は「この doc は古い」と追記して回るのではなく、tag/version の違いで読む
+- snapshot 名は `<topic>_<YYYYMMDD>.md` または `<topic>_<tag>.md` を基本形にし、current source-of-truth には date/version を埋め込まない
+- git tag は review package、運用 boundary、current source-of-truth 再編のように「後から参照し直す batch」にだけ切り、軽微修正には切らない
 
 review rule:
 
