@@ -3,7 +3,7 @@
 ## Quick Read
 
 - role: current JRA primary next issue draft
-- current status: GitHub issue thread へ転記する前の local source draft
+- current status: GitHub issue #124 へ転記済みの transfer snapshot
 - decision boundary: `stage-7` は review-ready implementation candidate、`stage-8` は hold boundary
 - use this doc when: exact diff / rollback / validation gate を短時間で確認したいとき
 
@@ -27,8 +27,9 @@
 
 ## Local Status
 
-- current role: GitHub issue thread へ転記する前の local source draft
-- once transferred: GitHub thread を source-of-truth にし、この local draft は削除候補として再評価する
+- current role: GitHub issue #124 transfer snapshot
+- source-of-truth: GitHub issue #124 `[jra] pruning stage-7 rollout guardrails`
+- local handling rule: thread 側の objective / rollback / validation が正本であり、この local draft は削除または historical summary への畳み込み候補として扱う
 
 ## Objective
 

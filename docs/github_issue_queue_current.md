@@ -130,14 +130,14 @@ Historical note:
 
 Primary next issue draft:
 
-- current JRA primary next issue draft:
-  - `docs/issue_library/next_issue_pruning_stage7_rollout_guardrails.md`
+- current JRA primary next issue thread:
+  - `#124` `[jra] pruning stage-7 rollout guardrails`
 - next step:
    - stage-8 quartet hold judgment と difficult-regime operator routing reread は historical reference とする
    - JRA 本線の fresh next move は、新しい heavy execution ではなく `stage-7` stopping point を review-ready implementation candidate として package する issue を優先する
 - hygiene note:
-   - `docs/issue_library/next_issue_pruning_stage7_rollout_guardrails.md` は現時点では local source draft であり、GitHub issue thread へはまだ反映していない
-   - GitHub issue を起票して objective / rollback / validation を thread 側へ移した後は、この draft を削除候補として再判定する
+   - `docs/issue_library/next_issue_pruning_stage7_rollout_guardrails.md` は GitHub issue `#124` へ転記済みの local transfer snapshot である
+   - objective / rollback / validation の source-of-truth は thread 側へ移したため、この draft は削除候補として再判定する
 - issue-library hygiene read:
    - non-historical かつ未決着の `next_issue_*.md` を再点検した結果、残存 open draft は NAR 系のみである
    - したがって次の JRA issue は stale draft の再利用ではなく、current artifact read に基づく fresh draft として起こす
