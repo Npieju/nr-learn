@@ -1,6 +1,6 @@
 # Ops And Runtime Index
 
-data / loader / runtime / residual cleanup 系の historical reference index である。current operator entrypoint ではなく、過去の residual trail を辿るときだけ使う。
+data / loader / runtime / residual cleanup 系の local reference index である。current operator entrypoint ではなく、過去の residual trail を辿るときだけ使う。
 
 ## First Read
 
@@ -10,7 +10,7 @@ data / loader / runtime / residual cleanup 系の historical reference index で
 
 それでも過去の residual issue source が必要なときだけ下の一覧に降りる。
 
-## Historical References
+## Residual References
 
 - [next_issue_append_external_residual.md](next_issue_append_external_residual.md)
 - [next_issue_append_loader_logic_residual.md](next_issue_append_loader_logic_residual.md)
@@ -43,4 +43,4 @@ data / loader / runtime / residual cleanup 系の historical reference index で
 1. current runtime/operator 判断は first read の正本 docs
 2. loader / append residual の過去経緯だけ見たいときは append / racecard / race-result 系
 3. tail loader 系の過去経緯だけ見たいときは tail / primary tail cache 系
-4. feature builder / progress gap は runtime historical reference として読む
+4. feature builder / progress gap は runtime residual reference として読む

@@ -16,9 +16,9 @@ local draft/reference が必要なときだけ下の category を使う。
 - `#123`: [next_issue_nar_jra_equivalent_trust_completion.md](next_issue_nar_jra_equivalent_trust_completion.md)
 - future option after `#103`: [next_issue_nar_class_rest_surface_replay.md](next_issue_nar_class_rest_surface_replay.md)
 
-closed corrective や過去の readiness/source timing 系は historical reference としてだけ扱う。
+closed corrective や過去の readiness/source timing 系は tagged reference としてだけ扱う。
 
-## Historical References
+## Tagged References
 
 - [next_issue_local_nankan_baseline_formalization.md](next_issue_local_nankan_baseline_formalization.md)
 - [next_issue_nar_baseline_pathfixed_rerun_for_policy_audit.md](next_issue_nar_baseline_pathfixed_rerun_for_policy_audit.md)
@@ -50,4 +50,4 @@ closed corrective や過去の readiness/source timing 系は historical referen
 1. current NAR queue は [../github_issue_queue_current.md](../github_issue_queue_current.md)
 2. stage 定義は [../nar_jra_parity_issue_ladder.md](../nar_jra_parity_issue_ladder.md)
 3. local residue が必要なときだけ open-issue local references
-4. completed history は historical references
+4. completed history は tagged references

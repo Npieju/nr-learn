@@ -1,6 +1,6 @@
 # JRA Operator And Policy Index
 
-JRA operator / policy 系の historical reference index である。current source-of-truth は current queue と benchmark/operator 正本 docs に置き、この file は背景参照に留める。
+JRA operator / policy 系の local reference index である。current source-of-truth は current queue と benchmark/operator 正本 docs に置き、この file は背景参照に留める。
 
 ## First Read
 
@@ -9,7 +9,7 @@ JRA operator / policy 系の historical reference index である。current sour
 - [../benchmarks.md](../benchmarks.md)
 - [../serving_validation_guide.md](../serving_validation_guide.md)
 
-local historical trail が必要なときだけ下の category に降りる。
+local snapshot trail が必要なときだけ下の category に降りる。
 
 ## Operator / Seasonal Routing
 
@@ -42,7 +42,7 @@ local historical trail が必要なときだけ下の category に降りる。
 - [next_issue_jockey_trainer_combo_track_distance_selective_candidate.md](next_issue_jockey_trainer_combo_track_distance_selective_candidate.md)
 - [next_issue_jockey_trainer_combo_track_distance_role_split.md](next_issue_jockey_trainer_combo_track_distance_role_split.md)
 
-## Policy / Runtime Historical References
+## Policy / Runtime References
 
 - [next_issue_tighter_policy_frontier.md](next_issue_tighter_policy_frontier.md)
 - [next_issue_tighter_policy_reentry_after_runtime.md](next_issue_tighter_policy_reentry_after_runtime.md)
@@ -55,5 +55,5 @@ local historical trail が必要なときだけ下の category に降りる。
 
 1. current judgment は current queue と benchmark/operator 正本 docs
 2. local historical ordering の根拠が必要なときだけ [next_issue_analysis_first_promoted_candidate_ordering.md](next_issue_analysis_first_promoted_candidate_ordering.md)
-3. difficult regime routing の historical trail は [next_issue_difficult_regime_operator_routing_surface_vs_pace.md](next_issue_difficult_regime_operator_routing_surface_vs_pace.md)
+3. difficult regime routing の snapshot trail は [next_issue_difficult_regime_operator_routing_surface_vs_pace.md](next_issue_difficult_regime_operator_routing_surface_vs_pace.md)
 4. family 別の過去比較は必要な file だけ開く
