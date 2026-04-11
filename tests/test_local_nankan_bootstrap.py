@@ -1078,6 +1078,21 @@ class LocalNankanBootstrapTest(unittest.TestCase):
         self.assertEqual(operator_board["artifacts"]["readiness_supervisor_manifest"], "artifacts/reports/wait_then_cycle_live.json")
         self.assertIn("supervisor_monitor_state=waiting_next_cycle", operator_board["highlights"])
 
+    def test_resolve_operator_board_path_skips_canonical_for_external_manifest(self) -> None:
+        resolved = wait_then_cycle_script._resolve_operator_board_path(
+            operator_board_output=None,
+            manifest_output="/tmp/unit_wait_then_cycle.json",
+        )
+
+        self.assertIsNone(resolved)
+
+        resolved_workspace = wait_then_cycle_script._resolve_operator_board_path(
+            operator_board_output=None,
+            manifest_output="artifacts/reports/local_nankan_future_only_wait_then_cycle_issue122.json",
+        )
+
+        self.assertEqual(resolved_workspace, Path("/workspaces/nr-learn/artifacts/reports/local_nankan_data_status_board.json"))
+
     def test_wait_then_cycle_oneshot_skips_idle_wait(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
             tmp_path = Path(tmp_dir)

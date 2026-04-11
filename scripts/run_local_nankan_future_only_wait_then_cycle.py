@@ -835,6 +835,19 @@ def _run_manifest_path(*, manifest_output: str, run_id: str | None) -> str | Non
     return str(manifest_path.with_name(f"{manifest_path.stem}_{run_id}{manifest_path.suffix}"))
 
 
+def _resolve_operator_board_path(*, operator_board_output: str | None, manifest_output: str) -> Path | None:
+    if operator_board_output:
+        return _resolve_path(operator_board_output)
+    manifest_path = _resolve_path(manifest_output)
+    try:
+        manifest_relative = manifest_path.relative_to(ROOT)
+    except ValueError:
+        return None
+    if manifest_relative.parent == Path("artifacts/reports"):
+        return _resolve_path(DEFAULT_OPERATOR_BOARD_OUTPUT)
+    return None
+
+
 def _write_wait_manifest(*, stable_manifest_path: Path, run_manifest_path: Path | None, payload: dict[str, Any]) -> None:
     write_json(stable_manifest_path, payload)
     if run_manifest_path is not None:
@@ -1353,7 +1366,7 @@ def main() -> int:
     parser.add_argument("--include-completed", action="store_true")
     parser.add_argument("--bootstrap-handoff-script", default="scripts/run_local_nankan_result_ready_bootstrap_handoff.py")
     parser.add_argument("--run-bootstrap-on-ready", action="store_true")
-    parser.add_argument("--operator-board-output", default=DEFAULT_OPERATOR_BOARD_OUTPUT)
+    parser.add_argument("--operator-board-output", default=None)
     args = parser.parse_args()
 
     manifest_path = _resolve_path(args.manifest_output)
@@ -1362,7 +1375,10 @@ def main() -> int:
     run_manifest_path = _resolve_path(run_manifest_output) if run_manifest_output else None
     if run_manifest_path is not None:
         run_manifest_path.parent.mkdir(parents=True, exist_ok=True)
-    operator_board_path = _resolve_path(args.operator_board_output) if args.operator_board_output else None
+    operator_board_path = _resolve_operator_board_path(
+        operator_board_output=args.operator_board_output,
+        manifest_output=args.manifest_output,
+    )
     if operator_board_path is not None:
         operator_board_path.parent.mkdir(parents=True, exist_ok=True)
     progress = ProgressBar(total=max(1, int(args.max_cycles)), prefix="[local-nankan-future-wait-cycle]", logger=log_progress, min_interval_sec=0.0)
