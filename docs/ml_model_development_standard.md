@@ -42,6 +42,8 @@
 7. formal evaluation
 8. promotion decision
 
+実行時にそのまま使う checklist は [ml_stage_checklist.md](ml_stage_checklist.md) を参照する。
+
 ## 5. Stage Details
 
 ### 5.1 Objective Definition

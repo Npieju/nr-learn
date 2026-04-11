@@ -21,6 +21,8 @@
 
 latest 2025 の判断を再開するときも、formal artifact から先に読むのではなく、まず `serving_validation_guide.md` の dashboard summary JSON 一覧で actual-date role を確認し、必要なときだけこの文書の evaluate / promotion gate artifact に降りる。
 
+NAR line の評価では、ROI や net だけでなく bet density の分母読みを必須にする。[nar_bet_denominator_standard.md](nar_bet_denominator_standard.md) を併読する。
+
 ## 3. `run_evaluate.py` の役割
 
 本命候補の判定は、`run_evaluate.py` による nested walk-forward を基準に行う。

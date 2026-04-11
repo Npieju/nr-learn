@@ -455,6 +455,7 @@ materialized supplemental path を opt-in で評価する smoke:
 - status command の exit code は `fresh=0`, `stale/missing/tail_mismatch/cache_invalid=2`, `not_configured=1` である。
 - `run_primary_tail_cache_refresh_if_needed.py` は `fresh` なら no-op、`stale/missing/...` なら materialize を実行して再判定する。
 - refresh runbook は `status -> refresh_if_needed -> 必要なら reduced smoke` の順で使う。
+- default mainline と alias/fallback の位置づけは [primary_tail_cache_operational_policy.md](primary_tail_cache_operational_policy.md) を正本にする。
 - `primary_tail_cache_file` / `primary_tail_cache_manifest_file` を data config に追加すると、`load_training_table_tail(...)` は requested `tail_rows` と一致する cache manifest がある場合に pickle cache を優先する。
 - [configs/data_2025_latest.yaml](/workspaces/nr-learn/configs/data_2025_latest.yaml) は primary tail cache を default mainline として含む。
 - tracked candidate config [configs/data_2025_latest_primary_tail_cache.yaml](/workspaces/nr-learn/configs/data_2025_latest_primary_tail_cache.yaml) は historical A/B と explicit alias 用に残している。
