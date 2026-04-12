@@ -942,15 +942,16 @@ def render_live_page(*, page_title: str) -> str:
       border-radius: 14px;
       border: 1px solid var(--line);
       background: var(--surface-strong);
+      max-width: 100%;
     }
     table {
       width: 100%;
       border-collapse: collapse;
-      min-width: 660px;
+      min-width: 560px;
     }
     table.compact-table {
       table-layout: fixed;
-      min-width: 620px;
+      min-width: 520px;
     }
     table.raw-table {
       table-layout: fixed;
@@ -983,30 +984,26 @@ def render_live_page(*, page_title: str) -> str:
       max-width: 44px;
     }
     th.name-col, td.name-col {
-      width: 132px;
-      max-width: 132px;
+      width: 104px;
+      max-width: 104px;
     }
     th.num-col, td.num-col,
     th.tiny-col, td.tiny-col {
-      width: 68px;
-      max-width: 68px;
+      width: 56px;
+      max-width: 56px;
     }
     th.note-col, td.note-col {
-      width: 150px;
-      max-width: 150px;
+      width: 116px;
+      max-width: 116px;
     }
     .cell-text {
       display: block;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
+      white-space: normal;
+      word-break: break-word;
+      line-height: 1.35;
     }
     .cell-text.wrap {
-      white-space: normal;
-      line-height: 1.5;
-      display: -webkit-box;
-      -webkit-line-clamp: 2;
-      -webkit-box-orient: vertical;
+      line-height: 1.35;
     }
     tbody tr:hover {
       background: rgba(33, 57, 91, 0.04);
@@ -1114,6 +1111,11 @@ def render_live_page(*, page_title: str) -> str:
       gap: 6px;
       flex-wrap: wrap;
       margin: 2px 0 10px;
+    }
+    .race-subtabs .tab {
+      font-size: 12px;
+      padding: 7px 11px;
+      border-radius: 12px;
     }
     .race-panel[hidden] {
       display: none !important;
@@ -1529,8 +1531,8 @@ def render_live_page(*, page_title: str) -> str:
   </div>
 
   <script>
-    const numericSix = new Set(["score", "policy_prob", "policy_market_prob", "policy_weight"]);
-    const numericThree = new Set(["policy_expected_value", "policy_edge", "expected_value", "policy_min_prob", "policy_min_edge", "policy_fractional_kelly", "policy_min_expected_value", "policy_blend_weight", "policy_max_fraction"]);
+    const numericSix = new Set([]);
+    const numericThree = new Set(["score", "policy_prob", "policy_market_prob", "policy_weight", "policy_expected_value", "policy_edge", "expected_value", "policy_min_prob", "policy_min_edge", "policy_fractional_kelly", "policy_min_expected_value", "policy_blend_weight", "policy_max_fraction"]);
     const numericOne = new Set(["odds", "policy_odds_min", "policy_odds_max"]);
     const numericZero = new Set(["popularity", "pred_rank", "ev_rank", "rank", "race_no", "distance", "policy_selection_rank", "policy_stage_index", "policy_top_k"]);
     const boolCols = new Set(["policy_selected"]);
@@ -1623,6 +1625,17 @@ def render_live_page(*, page_title: str) -> str:
         return Number.isInteger(value) ? String(value) : value.toFixed(3);
       }
       return String(value);
+    }
+
+    function formatFocusedValue(key, value) {
+      const number = numericValue(value);
+      if (number === null) {
+        return formatValue(key, value);
+      }
+      if (Math.abs(number) >= 1 || number === 0) {
+        return formatValue(key, value);
+      }
+      return String(Number(number.toPrecision(3)));
     }
 
     function escapeHtml(value) {
@@ -2413,15 +2426,17 @@ def render_live_page(*, page_title: str) -> str:
       return "";
     }
 
-    function cellHtml(column, row) {
+    function cellHtml(column, row, tableName) {
       const value = row[column.key];
-      const formatted = formatValue(column.key, value);
+      const formatted = tableName === "focused"
+        ? formatFocusedValue(column.key, value)
+        : formatValue(column.key, value);
       if (column.key === "recommendation_mark") {
         const safeMark = escapeHtml(formatted);
         return `<span class="mark-badge ${markClass(formatted)}" title="${escapeHtml(column.description)}">${safeMark || "-"}</span>`;
       }
       const wrapClass = column.className === "note-col" ? "cell-text wrap" : "cell-text";
-      return `<span class="${wrapClass}" title="${escapeHtml(formatted)}">${escapeHtml(formatted)}</span>`;
+      return `<span class="${wrapClass}">${escapeHtml(formatted)}</span>`;
     }
 
     function tableHtml(columns, rows, sortState, tableName) {
@@ -2438,7 +2453,7 @@ def render_live_page(*, page_title: str) -> str:
           row.policy_selected ? "row-selected" : "",
           typeof row.policy_edge === "number" && row.policy_edge > 0 ? "row-positive-edge" : "",
         ].filter(Boolean).join(" ");
-        return `<tr class="${classes}">${columns.map((column) => `<td class="${column.className || ""}">${cellHtml(column, row)}</td>`).join("")}</tr>`;
+        return `<tr class="${classes}">${columns.map((column) => `<td class="${column.className || ""}">${cellHtml(column, row, tableName)}</td>`).join("")}</tr>`;
       }).join("");
       const tableClass = tableName === "focused" ? "compact-table" : "raw-table";
       return `<table class="${tableClass}"><thead><tr>${header}</tr></thead><tbody>${body}</tbody></table>`;
@@ -2457,7 +2472,7 @@ def render_live_page(*, page_title: str) -> str:
       document.getElementById("raw-panel-wrap").hidden = !focusedActive;
       document.getElementById("race-subtabs").innerHTML = [
         { key: "focused", label: "Focused Metrics" },
-        { key: "harville", label: "Multi-Market EV" },
+        { key: "harville", label: "Harville EV" },
       ].map((item) => `<button class="tab ${state.racePanel === item.key ? "active" : ""}" type="button" data-race-panel="${item.key}">${escapeHtml(item.label)}</button>`).join("");
     }
 
