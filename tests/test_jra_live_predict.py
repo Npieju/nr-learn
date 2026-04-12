@@ -24,6 +24,7 @@ from racing_ml.serving.jra_live_predict import (
     summarize_live_prediction_tradeoff,
 )
 from racing_ml.serving.runtime_policy import summarize_policy_diagnostics
+from racing_ml.version import get_source_version
 
 
 class JraLivePredictTest(unittest.TestCase):
@@ -149,6 +150,7 @@ class JraLivePredictTest(unittest.TestCase):
                 )
 
         self.assertEqual(summary["target_date"], "2026-04-05")
+        self.assertEqual(summary["source_version"], get_source_version())
         self.assertEqual(summary["historical_data_load"]["pre_feature_max_rows"], None)
         self.assertEqual(summary["historical_data_load"]["data_load_strategy"], "tail_cache")
         self.assertEqual(summary["historical_data_load"]["loaded_rows"], 1)
@@ -161,6 +163,7 @@ class JraLivePredictTest(unittest.TestCase):
         self.assertIn("total_seconds", summary["timings"])
         self.assertEqual(len(written_json), 1)
         self.assertTrue(str(written_json[0][0]).endswith("predictions_20260405_jra_live.live.json"))
+        self.assertEqual(written_json[0][1]["source_version"], get_source_version())
         self.assertEqual(len(written_text), 1)
         self.assertIn("# test report", written_text[0][1])
 

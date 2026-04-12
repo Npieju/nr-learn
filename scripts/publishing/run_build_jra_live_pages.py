@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+from itertools import permutations
 import json
 from pathlib import Path
 import sys
@@ -9,6 +10,7 @@ import traceback
 from typing import Any
 
 import pandas as pd
+import requests
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -19,6 +21,7 @@ if str(SRC) not in sys.path:
 from racing_ml.common.artifacts import display_path as artifact_display_path
 from racing_ml.common.artifacts import write_json, write_text_file
 from racing_ml.common.progress import Heartbeat, ProgressBar
+from racing_ml.version import get_source_version
 
 
 JRA_VENUE_CODE_MAP = {
@@ -33,6 +36,20 @@ JRA_VENUE_CODE_MAP = {
   "09": "阪神",
   "10": "小倉",
 }
+HARVILLE_MARKET_OPTIONS = [
+    {"key": "quinella", "label": "馬連", "odds_key": "馬連", "combo_size": 2, "ordered": False, "payout_rate": 0.775},
+    {"key": "exacta", "label": "馬単", "odds_key": "馬単", "combo_size": 2, "ordered": True, "payout_rate": 0.75},
+    {"key": "wide", "label": "ワイド", "odds_key": "ワイド", "combo_size": 2, "ordered": False, "payout_rate": 0.775},
+    {"key": "trio", "label": "三連複", "odds_key": "三連複", "combo_size": 3, "ordered": False, "payout_rate": 0.75},
+    {"key": "trifecta", "label": "三連単", "odds_key": "三連単", "combo_size": 3, "ordered": True, "payout_rate": 0.75},
+]
+HARVILLE_MODEL_PROB_WEIGHT = 0.35
+HARVILLE_MARKET_PROB_WEIGHT = 0.65
+HARVILLE_SUMMARY_LIMIT = 16
+HARVILLE_SUMMARY_PER_MARKET_LIMIT = 4
+HARVILLE_DETAIL_LIMIT = 120
+HARVILLE_SENTINEL_ODDS_THRESHOLD = 999000.0
+ODDS_ANALYZE_API_URL = "https://nk-calculator-api.onrender.com/v1/analyze"
 
 
 def log_progress(message: str) -> None:
@@ -164,6 +181,389 @@ def _derive_venue_name(race_id: str) -> str | None:
     return JRA_VENUE_CODE_MAP.get(venue_code)
 
 
+def _parse_odds_value(value: Any) -> float | None:
+  if value is None:
+    return None
+  text = str(value).replace(",", "").strip()
+  if not text:
+    return None
+  if "-" in text:
+    parts = [float(part.strip()) for part in text.split("-") if part.strip()]
+    if not parts:
+      return None
+    return sum(parts) / len(parts)
+  try:
+    return float(text)
+  except ValueError:
+    return None
+
+
+def _normalize_horse_no(value: Any) -> str:
+  text = str(value or "").strip()
+  if not text:
+    return ""
+  if text.isdigit():
+    return str(int(text))
+  try:
+    numeric = float(text)
+  except ValueError:
+    return text
+  if numeric.is_integer():
+    return str(int(numeric))
+  return text
+
+
+def _horse_sort_key(horse_no: str) -> tuple[int, str]:
+  return (int(horse_no), "") if horse_no.isdigit() else (9999, horse_no)
+
+
+def _pair_key(left: str, right: str) -> tuple[str, str]:
+  return tuple(sorted([left, right], key=_horse_sort_key))
+
+
+def _trio_key(a: str, b: str, c: str) -> tuple[str, str, str]:
+  return tuple(sorted([a, b, c], key=_horse_sort_key))
+
+
+def _combo_numbers(value: Any) -> list[str]:
+  return [_normalize_horse_no(item) for item in str(value or "").split("-") if _normalize_horse_no(item)]
+
+
+def _build_race_url(race_id: str) -> str:
+  return f"https://race.netkeiba.com/race/shutuba.html?race_id={race_id}&rf=race_list"
+
+
+def _fetch_race_analyze_payload(race_id: str) -> dict[str, Any]:
+  last_error: Exception | None = None
+  for attempt in range(3):
+    try:
+      response = requests.post(
+        ODDS_ANALYZE_API_URL,
+        json={"race_url": _build_race_url(race_id), "excluded_horses": [], "force_refresh": False},
+        timeout=30,
+      )
+      response.raise_for_status()
+      payload = response.json()
+      if not isinstance(payload, dict):
+        raise ValueError(f"Invalid analyze payload for race_id={race_id}")
+      return payload
+    except (requests.RequestException, ValueError) as error:
+      last_error = error
+      if attempt >= 2:
+        break
+      time.sleep(2 * (attempt + 1))
+  assert last_error is not None
+  raise last_error
+
+
+def _build_race_master(race_frame: pd.DataFrame, analyze_payload: dict[str, Any]) -> list[dict[str, str]]:
+  entries = analyze_payload.get("entries") if isinstance(analyze_payload, dict) else None
+  master: list[dict[str, str]] = []
+  seen: set[str] = set()
+  if isinstance(entries, list):
+    for row in entries:
+      if not isinstance(row, dict):
+        continue
+      horse_no = _normalize_horse_no(row.get("馬番") or row.get("col_2") or row.get("col_1"))
+      horse_name = str(row.get("馬名") or row.get("col_4") or "").strip()
+      if not horse_no or horse_no in seen:
+        continue
+      seen.add(horse_no)
+      master.append({"horse_no": horse_no, "horse_name": horse_name})
+  if master:
+    return sorted(master, key=lambda item: _horse_sort_key(item["horse_no"]))
+
+  for _, row in race_frame.iterrows():
+    horse_no = _normalize_horse_no(row.get("gate_no"))
+    horse_name = str(row.get("horse_name") or "").strip()
+    if not horse_no or horse_no in seen:
+      continue
+    seen.add(horse_no)
+    master.append({"horse_no": horse_no, "horse_name": horse_name})
+  return sorted(master, key=lambda item: _horse_sort_key(item["horse_no"]))
+
+
+def _build_model_win_probability_map(race_frame: pd.DataFrame, master: list[dict[str, str]]) -> dict[str, float]:
+  working = race_frame.copy()
+  if "gate_no" in working.columns:
+    working["gate_no"] = working["gate_no"].map(_normalize_horse_no)
+  if "score" in working.columns:
+    working["score"] = pd.to_numeric(working["score"], errors="coerce")
+
+  rows_by_horse_no = {
+    _normalize_horse_no(row.get("gate_no")): row
+    for row in working.to_dict(orient="records")
+    if _normalize_horse_no(row.get("gate_no"))
+  }
+  rows_by_horse_name = {
+    str(row.get("horse_name") or "").strip(): row
+    for row in working.to_dict(orient="records")
+    if str(row.get("horse_name") or "").strip()
+  }
+
+  raw: dict[str, float] = {}
+  total = 0.0
+  for item in master:
+    row = rows_by_horse_no.get(item["horse_no"]) or rows_by_horse_name.get(item["horse_name"])
+    if not isinstance(row, dict):
+      continue
+    score = _safe_float(row.get("score"))
+    if score is None or score <= 0:
+      continue
+    raw[item["horse_no"]] = score
+    total += score
+  if not total > 0:
+    return {}
+  return {horse_no: value / total for horse_no, value in raw.items()}
+
+
+def _build_market_win_probability_map(
+  win_odds_map: dict[str, float],
+  horse_numbers: list[str],
+) -> dict[str, float]:
+  raw: dict[str, float] = {}
+  total = 0.0
+  for horse_no in horse_numbers:
+    odds = _safe_float(win_odds_map.get(horse_no))
+    if odds is None or odds <= 0:
+      continue
+    implied = 1.0 / odds
+    raw[horse_no] = implied
+    total += implied
+  if not total > 0:
+    return {}
+  return {horse_no: value / total for horse_no, value in raw.items()}
+
+
+def _blend_win_probability_maps(
+  model_probability_map: dict[str, float],
+  market_probability_map: dict[str, float],
+  horse_numbers: list[str],
+) -> dict[str, float]:
+  blended_raw: dict[str, float] = {}
+  total = 0.0
+  for horse_no in horse_numbers:
+    model_probability = _safe_float(model_probability_map.get(horse_no))
+    market_probability = _safe_float(market_probability_map.get(horse_no))
+    if model_probability is None and market_probability is None:
+      continue
+    if model_probability is None:
+      blended = float(market_probability)
+    elif market_probability is None:
+      blended = float(model_probability)
+    else:
+      blended = (
+        HARVILLE_MODEL_PROB_WEIGHT * float(model_probability) +
+        HARVILLE_MARKET_PROB_WEIGHT * float(market_probability)
+      )
+    if blended <= 0:
+      continue
+    blended_raw[horse_no] = blended
+    total += blended
+  if not total > 0:
+    return {}
+  return {horse_no: value / total for horse_no, value in blended_raw.items()}
+
+
+def _build_win_odds_map(odds_payload: dict[str, Any]) -> dict[str, float]:
+  rows = odds_payload.get("単勝") if isinstance(odds_payload, dict) else None
+  result: dict[str, float] = {}
+  if not isinstance(rows, list):
+    return result
+  for row in rows:
+    if not isinstance(row, dict):
+      continue
+    horse_no = _normalize_horse_no(row.get("馬番"))
+    odds_value = _parse_odds_value(row.get("オッズ"))
+    if not horse_no or odds_value is None or odds_value <= 0:
+      continue
+    result[horse_no] = odds_value
+  return result
+
+
+def _harville_ordered_probability(win_probability_map: dict[str, float], combo: list[str]) -> float | None:
+  seen: set[str] = set()
+  remaining = 1.0
+  probability = 1.0
+  for horse_no in combo:
+    if not horse_no or horse_no in seen:
+      return None
+    win_probability = win_probability_map.get(horse_no)
+    if win_probability is None or win_probability <= 0 or remaining <= 0 or win_probability >= remaining + 1e-12:
+      return None
+    probability *= win_probability / remaining
+    remaining -= win_probability
+    seen.add(horse_no)
+  return probability if probability > 0 else None
+
+
+def _harville_unordered_probability(win_probability_map: dict[str, float], combo: list[str]) -> float | None:
+  total = 0.0
+  for permutation in permutations(combo, len(combo)):
+    value = _harville_ordered_probability(win_probability_map, list(permutation))
+    if value is not None:
+      total += value
+  return total if total > 0 else None
+
+
+def _harville_wide_probability(win_probability_map: dict[str, float], pair: list[str], horses: list[str]) -> float | None:
+  if len(pair) != 2:
+    return None
+  total = 0.0
+  left, right = pair
+  for horse_no in horses:
+    if horse_no in {left, right}:
+      continue
+    value = _harville_unordered_probability(win_probability_map, [left, right, horse_no])
+    if value is not None:
+      total += value
+  return total if total > 0 else None
+
+
+def _build_harville_rows_for_market(
+  *,
+  config: dict[str, Any],
+  actual_rows: list[dict[str, Any]],
+  horse_name_map: dict[str, str],
+  horse_numbers: list[str],
+  win_odds_map: dict[str, float],
+  win_probability_map: dict[str, float],
+) -> list[dict[str, Any]]:
+  rows: list[dict[str, Any]] = []
+  seen: set[tuple[str, ...] | tuple[str, str] | tuple[str, str, str]] = set()
+  for row in actual_rows:
+    if not isinstance(row, dict):
+      continue
+    combo_raw = _combo_numbers(row.get("組み合わせ"))
+    if len(combo_raw) != int(config["combo_size"]):
+      continue
+    combo = combo_raw if bool(config["ordered"]) else sorted(combo_raw, key=_horse_sort_key)
+    if bool(config["ordered"]):
+      dedupe_key: tuple[str, ...] | tuple[str, str] | tuple[str, str, str] = tuple(combo)
+    elif int(config["combo_size"]) == 2:
+      dedupe_key = _pair_key(combo[0], combo[1])
+    else:
+      dedupe_key = _trio_key(combo[0], combo[1], combo[2])
+    if dedupe_key in seen:
+      continue
+    seen.add(dedupe_key)
+
+    actual_odds = _parse_odds_value(row.get("オッズ"))
+    if actual_odds is None or actual_odds <= 0 or actual_odds >= HARVILLE_SENTINEL_ODDS_THRESHOLD:
+      continue
+    if config["key"] == "wide":
+      harville_probability = _harville_wide_probability(win_probability_map, combo, horse_numbers)
+    elif bool(config["ordered"]):
+      harville_probability = _harville_ordered_probability(win_probability_map, combo)
+    else:
+      harville_probability = _harville_unordered_probability(win_probability_map, combo)
+    if harville_probability is None or harville_probability <= 0:
+      continue
+    harville_odds = float(config["payout_rate"]) / harville_probability
+    spread = (actual_odds / harville_odds) * 100 if harville_odds > 0 else None
+    payload: dict[str, Any] = {
+      "marketKey": config["key"],
+      "marketLabel": config["label"],
+      "market_odds": actual_odds,
+      "harville_odds": harville_odds,
+      "spread": spread,
+      "edge": spread - 100 if spread is not None else None,
+      "ev_ratio": actual_odds / harville_odds if harville_odds > 0 else None,
+    }
+    for index, horse_no in enumerate(combo):
+      suffix = ["a", "b", "c"][index]
+      payload[f"horse_no_{suffix}"] = horse_no
+      payload[f"horse_name_{suffix}"] = horse_name_map.get(horse_no, "")
+      payload[f"win_odds_{suffix}"] = win_odds_map.get(horse_no)
+    rows.append(payload)
+  return sorted(
+    rows,
+    key=lambda item: (
+      -9999 if _safe_float(item.get("edge")) is None else -float(item.get("edge")),
+      -9999 if _safe_float(item.get("market_odds")) is None else -float(item.get("market_odds")),
+    ),
+  )
+
+
+def _build_harville_payload_for_race(race_frame: pd.DataFrame, race_id: str) -> dict[str, Any]:
+  try:
+    analyze_payload = _fetch_race_analyze_payload(race_id)
+  except Exception as error:
+    return {
+      "available": False,
+      "message": f"odds api unavailable: {error}",
+      "meta": {},
+      "marketOptions": [],
+      "summaryRows": [],
+      "rowsByMarket": {},
+    }
+
+  master = _build_race_master(race_frame, analyze_payload)
+  if not master:
+    return {
+      "available": False,
+      "message": "odds api returned no entries",
+      "meta": {},
+      "marketOptions": [],
+      "summaryRows": [],
+      "rowsByMarket": {},
+    }
+
+  odds_payload = analyze_payload.get("odds") if isinstance(analyze_payload, dict) else {}
+  if not isinstance(odds_payload, dict):
+    odds_payload = {}
+  horse_numbers = [item["horse_no"] for item in master]
+  horse_name_map = {item["horse_no"]: item["horse_name"] for item in master}
+  win_odds_map = _build_win_odds_map(odds_payload)
+  model_probability_map = _build_model_win_probability_map(race_frame, master)
+  market_probability_map = _build_market_win_probability_map(win_odds_map, horse_numbers)
+  win_probability_map = _blend_win_probability_maps(model_probability_map, market_probability_map, horse_numbers)
+
+  rows_by_market: dict[str, list[dict[str, Any]]] = {}
+  for config in HARVILLE_MARKET_OPTIONS:
+    rows_by_market[config["key"]] = _build_harville_rows_for_market(
+      config=config,
+      actual_rows=odds_payload.get(config["odds_key"], []) if isinstance(odds_payload.get(config["odds_key"]), list) else [],
+      horse_name_map=horse_name_map,
+      horse_numbers=horse_numbers,
+      win_odds_map=win_odds_map,
+      win_probability_map=win_probability_map,
+    )[:HARVILLE_DETAIL_LIMIT]
+
+  summary_candidates: list[dict[str, Any]] = []
+  for config in HARVILLE_MARKET_OPTIONS:
+    key = config["key"]
+    positive_rows = [row for row in rows_by_market.get(key, []) if (_safe_float(row.get("edge")) or 0) > 0]
+    summary_candidates.extend(positive_rows[:HARVILLE_SUMMARY_PER_MARKET_LIMIT])
+  summary_rows = sorted(
+    summary_candidates,
+    key=lambda item: (
+      -9999 if _safe_float(item.get("edge")) is None else -float(item.get("edge")),
+      -9999 if _safe_float(item.get("market_odds")) is None else -float(item.get("market_odds")),
+    ),
+  )[:HARVILLE_SUMMARY_LIMIT]
+  market_options = [
+    {"key": config["key"], "label": config["label"], "rows": len(rows_by_market.get(config["key"], []))}
+    for config in HARVILLE_MARKET_OPTIONS
+    if rows_by_market.get(config["key"])
+  ]
+  race_meta = analyze_payload.get("race") if isinstance(analyze_payload.get("race"), dict) else {}
+  return {
+    "available": bool(market_options),
+    "message": "model score 正規化勝率と単勝市場の暗黙確率をブレンドして Harville 理論オッズを計算し、build 時点の市場オッズ snapshot と比較します。",
+    "meta": {
+      "oddsUpdatedAt": race_meta.get("odds_updated_at"),
+      "analyzedAt": race_meta.get("analyzed_at"),
+      "horseCount": len(master),
+      "positiveRows": len(summary_rows),
+      "probabilitySource": "blend:model35_market65",
+    },
+    "marketOptions": market_options,
+    "summaryRows": summary_rows,
+    "rowsByMarket": rows_by_market,
+  }
+
+
 def build_payload(
     *,
     prediction_path: Path,
@@ -235,12 +635,16 @@ def build_payload(
     races: list[dict[str, Any]] = []
     day_overview: list[dict[str, Any]] = []
     venue_map: dict[str, dict[str, Any]] = {}
+    harville_available_races = 0
     sorted_frame = frame.sort_values(["race_id", "pred_rank", "score"], ascending=[True, True, False], na_position="last")
     for race_id, race_frame in sorted_frame.groupby("race_id", sort=True):
         race_id_str = str(race_id)
         race_headline = _race_headline(race_frame, race_id_str)
         venue_code = _derive_venue_code(race_id_str)
         venue_name = _derive_venue_name(race_id_str)
+        harville_payload = _build_harville_payload_for_race(race_frame, race_id_str)
+        if harville_payload.get("available"):
+            harville_available_races += 1
         top_score_row = _top_row(race_frame, "score", "expected_value")
         top_raw_ev_row = _top_row(race_frame, "expected_value", "score")
         top_policy_ev_row = _top_row(race_frame, "policy_expected_value", "expected_value")
@@ -273,7 +677,7 @@ def build_payload(
             "topReasons": top_reasons if isinstance(top_reasons, list) else [],
         }
         race_rows = [{column: _coerce_cell(value) for column, value in row.items()} for row in race_frame.to_dict(orient="records")]
-        races.append({**race_summary, "rowsData": race_rows})
+        races.append({**race_summary, "rowsData": race_rows, "harville": _coerce_cell(harville_payload)})
         day_overview.append(race_summary)
         venue_key = venue_code or "unknown"
         if venue_key not in venue_map:
@@ -300,6 +704,11 @@ def build_payload(
 
     payload = {
         "metadata": {
+            "sourceVersion": (
+                live_summary_payload.get("source_version")
+                if isinstance(live_summary_payload, dict) and live_summary_payload.get("source_version")
+                else get_source_version()
+            ),
             "title": f"JRA Live Predictions {target_date}",
             "targetDate": target_date,
             "generatedAt": time.strftime("%Y-%m-%dT%H:%M:%S%z"),
@@ -315,6 +724,7 @@ def build_payload(
             "raceCount": int(frame["race_id"].nunique()) if "race_id" in frame.columns else len(races),
             "rowCount": int(len(frame)),
             "policySelectedRows": _safe_int(summary_payload.get("policy_selected_rows")),
+            "harvilleAvailableRaces": harville_available_races,
             "likelyBlockerReason": summary_payload.get("policy_diagnostics", {}).get("likely_blocker_reason"),
             "oddsLabel": "前日オッズ snapshot",
         },
@@ -326,6 +736,7 @@ def build_payload(
         "races": races,
     }
     site_manifest = {
+      "source_version": payload["metadata"]["sourceVersion"],
         "target_date": target_date,
         "title": payload["metadata"]["title"],
         "relative_path": f"jra-live/{target_date}/",
@@ -845,6 +1256,61 @@ def render_live_page(*, page_title: str) -> str:
       font-size: 13px;
       color: var(--muted);
     }
+    .market-card {
+      margin: 14px 0 18px;
+      padding: 16px;
+      border-radius: 18px;
+      border: 1px solid var(--line);
+      background: rgba(248, 251, 253, 0.78);
+      box-shadow: 0 8px 24px rgba(30, 43, 54, 0.05);
+    }
+    .market-toolbar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 10px;
+    }
+    .market-tabs {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+    .ghost-button {
+      appearance: none;
+      border: 1px solid var(--line);
+      background: rgba(255, 255, 255, 0.8);
+      color: var(--ink);
+      border-radius: 10px;
+      padding: 8px 10px;
+      font: inherit;
+      cursor: pointer;
+    }
+    .ghost-button:hover {
+      border-color: rgba(70, 98, 118, 0.28);
+      background: rgba(255, 255, 255, 0.96);
+    }
+    .market-meta {
+      margin: 0 0 10px;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.7;
+    }
+    .market-empty {
+      padding: 18px;
+      color: var(--muted);
+      border: 1px dashed var(--line);
+      border-radius: 14px;
+      background: rgba(255, 255, 255, 0.45);
+    }
+    .edge-positive {
+      color: var(--navy);
+      font-weight: 700;
+    }
+    .edge-negative {
+      color: var(--muted);
+    }
     .mono {
       font-family: "IBM Plex Mono", monospace;
       font-size: 12px;
@@ -1004,6 +1470,24 @@ def render_live_page(*, page_title: str) -> str:
           <label class="toggle"><input id="selected-only" type="checkbox"> selected only</label>
           <label class="toggle"><input id="positive-edge-only" type="checkbox"> positive edge only</label>
         </div>
+        <section class="market-card">
+          <div class="section-head">
+            <div>
+              <h3 class="section-title">Multi-Market EV</h3>
+              <p class="section-note" id="harville-note">score を race 内で正規化した勝率から Harville 理論オッズを計算し、build 時点の市場オッズ snapshot と比較します。</p>
+            </div>
+          </div>
+          <div class="market-toolbar">
+            <div class="market-tabs" id="harville-market-tabs"></div>
+            <span class="mono">build snapshot</span>
+          </div>
+          <p class="market-meta mono" id="harville-meta">building snapshot...</p>
+          <div class="table-wrap" id="harville-summary-wrap"></div>
+          <details class="details-panel" open>
+            <summary class="details-summary">Harville Detail</summary>
+            <div class="table-wrap" id="harville-detail-wrap"></div>
+          </details>
+        </section>
         <div class="section-head">
           <div>
             <h3 class="section-title">Focused Metrics</h3>
@@ -1068,12 +1552,25 @@ def render_live_page(*, page_title: str) -> str:
       "policy_reject_reason_primary",
     ];
     const markPriority = { "◎": 0, "◯": 1, "▲": 2, "★": 3, "": 4, "-": 4, "消": 5 };
+    const ODDS_API_BASE_URL = "https://nk-calculator-api.onrender.com";
+    const HARVILLE_MARKET_OPTIONS = [
+      { key: "quinella", label: "馬連", oddsKey: "馬連", comboSize: 2, ordered: false, payoutRate: 0.775 },
+      { key: "exacta", label: "馬単", oddsKey: "馬単", comboSize: 2, ordered: true, payoutRate: 0.75 },
+      { key: "wide", label: "ワイド", oddsKey: "ワイド", comboSize: 2, ordered: false, payoutRate: 0.775 },
+      { key: "trio", label: "三連複", oddsKey: "三連複", comboSize: 3, ordered: false, payoutRate: 0.75 },
+      { key: "trifecta", label: "三連単", oddsKey: "三連単", comboSize: 3, ordered: true, payoutRate: 0.75 },
+    ];
+    const HARVILLE_DETAIL_ROW_LIMIT = 120;
+    const oddsAnalyzeCache = new Map();
+    const oddsAnalyzePending = new Map();
     const state = {
       data: null,
       viewMode: "overview",
       tabsCollapsed: false,
       selectedVenueCode: null,
       selectedRaceId: null,
+      harvilleMarket: "quinella",
+      activeOddsRaceId: null,
       filter: "",
       selectedOnly: false,
       positiveEdgeOnly: false,
@@ -1127,6 +1624,424 @@ def render_live_page(*, page_title: str) -> str:
       }
       const number = Number(value);
       return Number.isFinite(number) ? number : null;
+    }
+
+    function parseOddsValue(value) {
+      if (value === null || value === undefined || value === "") {
+        return null;
+      }
+      if (typeof value === "number") {
+        return Number.isFinite(value) ? value : null;
+      }
+      const text = String(value).replaceAll(",", "").trim();
+      if (!text) {
+        return null;
+      }
+      if (text.includes("-")) {
+        const parts = text.split("-").map((item) => Number(item.trim())).filter((item) => Number.isFinite(item));
+        if (!parts.length) {
+          return null;
+        }
+        return parts.reduce((acc, item) => acc + item, 0) / parts.length;
+      }
+      const number = Number(text);
+      return Number.isFinite(number) ? number : null;
+    }
+
+    function normalizeHorseNo(value) {
+      const text = String(value ?? "").trim();
+      if (!text) {
+        return "";
+      }
+      return /^\d+$/.test(text) ? String(Number(text)) : text;
+    }
+
+    function normalizeHorseName(value) {
+      return String(value ?? "").trim();
+    }
+
+    function horseSortKey(horseNo) {
+      return /^\d+$/.test(String(horseNo)) ? Number(horseNo) : 9999;
+    }
+
+    function horsePairSort(left, right) {
+      const leftKey = horseSortKey(left);
+      const rightKey = horseSortKey(right);
+      if (leftKey !== rightKey) {
+        return leftKey - rightKey;
+      }
+      return String(left).localeCompare(String(right), "ja");
+    }
+
+    function pairKey(a, b) {
+      return [a, b].sort(horsePairSort).join("|");
+    }
+
+    function trioKey(a, b, c) {
+      return [a, b, c].sort(horsePairSort).join("|");
+    }
+
+    function comboNumbers(combo) {
+      return String(combo ?? "")
+        .split("-")
+        .map((item) => normalizeHorseNo(item))
+        .filter(Boolean);
+    }
+
+    function formatOddsText(value) {
+      const number = parseOddsValue(value);
+      if (number === null) {
+        return "-";
+      }
+      return `${number >= 100 ? number.toFixed(1) : number.toFixed(2)}倍`;
+    }
+
+    function formatEdgePercent(value) {
+      const number = numericValue(value);
+      if (number === null) {
+        return "-";
+      }
+      return `${number >= 0 ? "+" : ""}${number.toFixed(1)}%`;
+    }
+
+    function buildRaceUrl(race) {
+      return `https://race.netkeiba.com/race/shutuba.html?race_id=${encodeURIComponent(race.raceId)}&rf=race_list`;
+    }
+
+    function buildRaceHorseMaster(race, analyzeData) {
+      const master = [];
+      const seen = new Set();
+      const analyzeEntries = Array.isArray(analyzeData?.entries) ? analyzeData.entries : [];
+      for (const row of analyzeEntries) {
+        const horseNo = normalizeHorseNo(row?.["馬番"]);
+        const horseName = normalizeHorseName(row?.["馬名"]);
+        if (!horseNo || seen.has(horseNo)) {
+          continue;
+        }
+        seen.add(horseNo);
+        master.push({ horse_no: horseNo, horse_name: horseName });
+      }
+      if (master.length) {
+        return master.sort((left, right) => horsePairSort(left.horse_no, right.horse_no));
+      }
+      for (const row of race.rowsData || []) {
+        const horseNo = normalizeHorseNo(row?.gate_no);
+        const horseName = normalizeHorseName(row?.horse_name);
+        if (!horseNo || seen.has(horseNo)) {
+          continue;
+        }
+        seen.add(horseNo);
+        master.push({ horse_no: horseNo, horse_name: horseName });
+      }
+      return master.sort((left, right) => horsePairSort(left.horse_no, right.horse_no));
+    }
+
+    function buildPredictionMaps(race) {
+      const byHorseNo = new Map();
+      const byHorseName = new Map();
+      for (const row of race.rowsData || []) {
+        const horseNo = normalizeHorseNo(row?.gate_no);
+        const horseName = normalizeHorseName(row?.horse_name);
+        if (horseNo && !byHorseNo.has(horseNo)) {
+          byHorseNo.set(horseNo, row);
+        }
+        if (horseName && !byHorseName.has(horseName)) {
+          byHorseName.set(horseName, row);
+        }
+      }
+      return { byHorseNo, byHorseName };
+    }
+
+    function buildModelWinProbabilityMap(race, master) {
+      const { byHorseNo, byHorseName } = buildPredictionMaps(race);
+      const raw = {};
+      let total = 0;
+      for (const item of master) {
+        const row = byHorseNo.get(item.horse_no) || byHorseName.get(item.horse_name);
+        const score = numericValue(row?.score);
+        if (score === null || score <= 0) {
+          continue;
+        }
+        raw[item.horse_no] = score;
+        total += score;
+      }
+      if (!(total > 0)) {
+        return {};
+      }
+      const normalized = {};
+      for (const [horseNo, value] of Object.entries(raw)) {
+        normalized[horseNo] = value / total;
+      }
+      return normalized;
+    }
+
+    function buildWinOddsMap(odds) {
+      const rows = Array.isArray(odds?.["単勝"]) ? odds["単勝"] : [];
+      const out = {};
+      for (const row of rows) {
+        const horseNo = normalizeHorseNo(row?.["馬番"]);
+        const odd = parseOddsValue(row?.["オッズ"]);
+        if (!horseNo || odd === null || odd <= 0) {
+          continue;
+        }
+        out[horseNo] = odd;
+      }
+      return out;
+    }
+
+    function getPermutations(items) {
+      if (!Array.isArray(items) || items.length === 0) {
+        return [];
+      }
+      if (items.length === 1) {
+        return [items];
+      }
+      const out = [];
+      for (let index = 0; index < items.length; index += 1) {
+        const head = items[index];
+        const rest = items.slice(0, index).concat(items.slice(index + 1));
+        for (const tail of getPermutations(rest)) {
+          out.push([head, ...tail]);
+        }
+      }
+      return out;
+    }
+
+    function getHarvilleOrderedProbability(winProbabilityMap, combo) {
+      const seen = new Set();
+      let remaining = 1;
+      let probability = 1;
+      for (const horse of combo || []) {
+        if (!horse || seen.has(horse)) {
+          return null;
+        }
+        const winProbability = numericValue(winProbabilityMap?.[horse]);
+        if (winProbability === null || winProbability <= 0 || remaining <= 0 || winProbability >= remaining + 1e-12) {
+          return null;
+        }
+        probability *= winProbability / remaining;
+        remaining -= winProbability;
+        seen.add(horse);
+      }
+      return probability > 0 ? probability : null;
+    }
+
+    function getHarvilleUnorderedProbability(winProbabilityMap, combo) {
+      let total = 0;
+      for (const permutation of getPermutations(combo || [])) {
+        const value = getHarvilleOrderedProbability(winProbabilityMap, permutation);
+        if (value !== null) {
+          total += value;
+        }
+      }
+      return total > 0 ? total : null;
+    }
+
+    function getHarvilleWideProbability(winProbabilityMap, pair, horses) {
+      const [a, b] = pair || [];
+      if (!a || !b) {
+        return null;
+      }
+      let total = 0;
+      for (const c of horses || []) {
+        if (c === a || c === b) {
+          continue;
+        }
+        const value = getHarvilleUnorderedProbability(winProbabilityMap, [a, b, c]);
+        if (value !== null) {
+          total += value;
+        }
+      }
+      return total > 0 ? total : null;
+    }
+
+    function buildHarvilleRowsForMarket(config, actualRows, horseNameMap, horseNumbers, winOddsMap, winProbabilityMap) {
+      const rows = [];
+      const seen = new Set();
+      for (const row of actualRows || []) {
+        const comboRaw = comboNumbers(row?.["組み合わせ"]);
+        if (comboRaw.length !== config.comboSize) {
+          continue;
+        }
+        const combo = config.ordered ? comboRaw : [...comboRaw].sort(horsePairSort);
+        const dedupeKey = config.ordered
+          ? combo.join("|")
+          : config.comboSize === 2
+            ? pairKey(combo[0], combo[1])
+            : trioKey(combo[0], combo[1], combo[2]);
+        if (seen.has(dedupeKey)) {
+          continue;
+        }
+        seen.add(dedupeKey);
+        const actualOdds = parseOddsValue(row?.["オッズ"]);
+        if (actualOdds === null || actualOdds <= 0) {
+          continue;
+        }
+        let harvilleProbability = null;
+        if (config.key === "wide") {
+          harvilleProbability = getHarvilleWideProbability(winProbabilityMap, combo, horseNumbers);
+        } else if (config.ordered) {
+          harvilleProbability = getHarvilleOrderedProbability(winProbabilityMap, combo);
+        } else {
+          harvilleProbability = getHarvilleUnorderedProbability(winProbabilityMap, combo);
+        }
+        if (harvilleProbability === null || harvilleProbability <= 0) {
+          continue;
+        }
+        const harvilleOdds = config.payoutRate / harvilleProbability;
+        const spread = harvilleOdds > 0 ? (actualOdds / harvilleOdds) * 100 : null;
+        const payload = {
+          marketKey: config.key,
+          marketLabel: config.label,
+          market_odds: actualOdds,
+          harville_odds: harvilleOdds,
+          spread,
+          edge: spread === null ? null : spread - 100,
+          ev_ratio: harvilleOdds > 0 ? actualOdds / harvilleOdds : null,
+        };
+        combo.forEach((horseNo, index) => {
+          const suffix = ["a", "b", "c"][index];
+          if (!suffix) {
+            return;
+          }
+          payload[`horse_no_${suffix}`] = horseNo;
+          payload[`horse_name_${suffix}`] = horseNameMap[horseNo] || "";
+          payload[`win_odds_${suffix}`] = winOddsMap[horseNo] ?? null;
+        });
+        rows.push(payload);
+      }
+      return rows.sort((left, right) => {
+        const byEdge = (numericValue(right.edge) ?? -9999) - (numericValue(left.edge) ?? -9999);
+        if (byEdge !== 0) {
+          return byEdge;
+        }
+        return (numericValue(right.market_odds) ?? -9999) - (numericValue(left.market_odds) ?? -9999);
+      });
+    }
+
+    function buildHarvilleComparisons(race, analyzeData) {
+      const odds = analyzeData?.odds || {};
+      const master = buildRaceHorseMaster(race, analyzeData);
+      if (!master.length) {
+        return { rowsByMarket: {}, screenerRows: [], masterCount: 0 };
+      }
+      const horseNumbers = master.map((item) => item.horse_no);
+      const horseNameMap = Object.fromEntries(master.map((item) => [item.horse_no, item.horse_name]));
+      const winOddsMap = buildWinOddsMap(odds);
+      const winProbabilityMap = buildModelWinProbabilityMap(race, master);
+      const rowsByMarket = {};
+      for (const config of HARVILLE_MARKET_OPTIONS) {
+        rowsByMarket[config.key] = buildHarvilleRowsForMarket(
+          config,
+          Array.isArray(odds?.[config.oddsKey]) ? odds[config.oddsKey] : [],
+          horseNameMap,
+          horseNumbers,
+          winOddsMap,
+          winProbabilityMap,
+        );
+      }
+      const screenerRows = Object.values(rowsByMarket)
+        .flatMap((rows) => rows)
+        .filter((row) => (numericValue(row.edge) ?? 0) > 0)
+        .sort((left, right) => {
+          const byEdge = (numericValue(right.edge) ?? -9999) - (numericValue(left.edge) ?? -9999);
+          if (byEdge !== 0) {
+            return byEdge;
+          }
+          return (numericValue(right.market_odds) ?? -9999) - (numericValue(left.market_odds) ?? -9999);
+        });
+      return { rowsByMarket, screenerRows, masterCount: master.length };
+    }
+
+    function availableHarvilleMarkets(rowsByMarket) {
+      return HARVILLE_MARKET_OPTIONS.filter((item) => Array.isArray(rowsByMarket?.[item.key]) && rowsByMarket[item.key].length > 0);
+    }
+
+    function buildHarvilleOutcomeLabel(row) {
+      return [row.horse_no_a, row.horse_no_b, row.horse_no_c].filter(Boolean).join("-") || "-";
+    }
+
+    function harvilleSummaryTableHtml(rows) {
+      if (!rows.length) {
+        return '<div class="market-empty">Harville 理論値を上回る行がまだ見つかっていません。</div>';
+      }
+      const body = rows.slice(0, 16).map((row) => `
+        <tr>
+          <td>${escapeHtml(row.marketLabel || "-")}</td>
+          <td>${escapeHtml(buildHarvilleOutcomeLabel(row))}</td>
+          <td>${escapeHtml(formatOddsText(row.market_odds))}</td>
+          <td>${escapeHtml(formatOddsText(row.harville_odds))}</td>
+          <td>${escapeHtml((numericValue(row.ev_ratio) ?? 0).toFixed(3))}</td>
+          <td class="${(numericValue(row.edge) ?? 0) >= 0 ? "edge-positive" : "edge-negative"}">${escapeHtml(formatEdgePercent(row.edge))}</td>
+        </tr>
+      `).join("");
+      return `<table class="compact-table"><thead><tr><th>券種</th><th>対象</th><th>実オッズ</th><th>Harville</th><th>EV倍率</th><th>上振れ</th></tr></thead><tbody>${body}</tbody></table>`;
+    }
+
+    function harvilleDetailTableHtml(marketKey, rows) {
+      if (!rows.length) {
+        return '<div class="market-empty">この券種のオッズはまだ取得できていません。</div>';
+      }
+      const isTriple = ["trio", "trifecta"].includes(String(marketKey || ""));
+      const head = isTriple
+        ? "<tr><th>馬A</th><th>馬B</th><th>馬C</th><th>単勝A</th><th>単勝B</th><th>単勝C</th><th>実オッズ</th><th>Harville</th><th>EV倍率</th><th>上振れ</th></tr>"
+        : "<tr><th>馬A</th><th>馬B</th><th>単勝A</th><th>単勝B</th><th>実オッズ</th><th>Harville</th><th>EV倍率</th><th>上振れ</th></tr>";
+      const body = rows.slice(0, HARVILLE_DETAIL_ROW_LIMIT).map((row) => {
+        const nameA = `${row.horse_no_a || "-"} ${row.horse_name_a || ""}`.trim();
+        const nameB = `${row.horse_no_b || "-"} ${row.horse_name_b || ""}`.trim();
+        const nameC = `${row.horse_no_c || "-"} ${row.horse_name_c || ""}`.trim();
+        const leadingCells = isTriple
+          ? `<td>${escapeHtml(nameA)}</td><td>${escapeHtml(nameB)}</td><td>${escapeHtml(nameC)}</td>`
+          : `<td>${escapeHtml(nameA)}</td><td>${escapeHtml(nameB)}</td>`;
+        const oddsCells = isTriple
+          ? `<td>${escapeHtml(formatOddsText(row.win_odds_a))}</td><td>${escapeHtml(formatOddsText(row.win_odds_b))}</td><td>${escapeHtml(formatOddsText(row.win_odds_c))}</td>`
+          : `<td>${escapeHtml(formatOddsText(row.win_odds_a))}</td><td>${escapeHtml(formatOddsText(row.win_odds_b))}</td>`;
+        return `<tr>${leadingCells}${oddsCells}<td>${escapeHtml(formatOddsText(row.market_odds))}</td><td>${escapeHtml(formatOddsText(row.harville_odds))}</td><td>${escapeHtml((numericValue(row.ev_ratio) ?? 0).toFixed(3))}</td><td class="${(numericValue(row.edge) ?? 0) >= 0 ? "edge-positive" : "edge-negative"}">${escapeHtml(formatEdgePercent(row.edge))}</td></tr>`;
+      }).join("");
+      return `<table class="compact-table"><thead>${head}</thead><tbody>${body}</tbody></table>`;
+    }
+
+    function renderHarvilleLoading(message) {
+      document.getElementById("harville-meta").textContent = message;
+      document.getElementById("harville-market-tabs").innerHTML = "";
+      document.getElementById("harville-summary-wrap").innerHTML = '<div class="market-empty">building snapshot...</div>';
+      document.getElementById("harville-detail-wrap").innerHTML = '<div class="market-empty">loading detail...</div>';
+    }
+
+    function renderHarvilleError(error) {
+      const message = `odds api unavailable: ${error}`;
+      document.getElementById("harville-meta").textContent = message;
+      document.getElementById("harville-summary-wrap").innerHTML = `<div class="market-empty">${escapeHtml(message)}</div>`;
+      document.getElementById("harville-detail-wrap").innerHTML = '<div class="market-empty">detail unavailable</div>';
+    }
+
+    function renderHarvilleSnapshot(race) {
+      const harville = race?.harville;
+      if (!harville || !harville.available) {
+        renderHarvilleError(harville?.message || "snapshot unavailable");
+        return;
+      }
+      const availableMarkets = Array.isArray(harville.marketOptions) && harville.marketOptions.length
+        ? harville.marketOptions
+        : availableHarvilleMarkets(harville.rowsByMarket);
+      const activeMarket = availableMarkets.some((item) => item.key === state.harvilleMarket)
+        ? state.harvilleMarket
+        : availableMarkets[0]?.key || null;
+      state.harvilleMarket = activeMarket;
+      document.getElementById("harville-note").textContent = harville.message || "model score を race 内で正規化した勝率から Harville 理論オッズを計算し、市場オッズがどれだけ上振れているかを見ます。";
+      document.getElementById("harville-meta").textContent = [
+        harville?.meta?.oddsUpdatedAt ? `odds ${harville.meta.oddsUpdatedAt}` : null,
+        harville?.meta?.analyzedAt ? `analyzed ${harville.meta.analyzedAt}` : null,
+        harville?.meta?.horseCount ? `horses ${harville.meta.horseCount}` : null,
+        harville?.meta?.positiveRows !== undefined ? `positive rows ${harville.meta.positiveRows}` : null,
+      ].filter(Boolean).join(" / ");
+      document.getElementById("harville-market-tabs").innerHTML = availableMarkets.length
+        ? availableMarkets.map((item) => `<button class="tab ${activeMarket === item.key ? "active" : ""}" type="button" data-harville-market="${item.key}">${escapeHtml(item.label)}</button>`).join("")
+        : "";
+      document.getElementById("harville-summary-wrap").innerHTML = harvilleSummaryTableHtml(harville.summaryRows || []);
+      document.getElementById("harville-detail-wrap").innerHTML = activeMarket
+        ? harvilleDetailTableHtml(activeMarket, harville.rowsByMarket?.[activeMarket] || [])
+        : '<div class="market-empty">この race では multi-market odds をまだ取得できていません。</div>';
     }
 
     function scoreStrengthMap(rows, key) {
@@ -1388,7 +2303,7 @@ def render_live_page(*, page_title: str) -> str:
       document.getElementById("page-note").textContent = diag.likely_blocker_reason
         ? `主 blocker は ${diag.likely_blocker_reason}。開催別 overview からレースへ降りて市場オッズ・推論値・policy 判定を確認できます。`
         : "開催別 overview からレースへ降りて市場オッズ・推論値・policy 判定を確認できます。";
-      document.getElementById("footer-meta").textContent = `source=${meta.predictionFile} | summary=${meta.summaryFile} | built=${meta.generatedAt}`;
+      document.getElementById("footer-meta").textContent = `version=${meta.sourceVersion || "-"} | source=${meta.predictionFile} | summary=${meta.summaryFile} | built=${meta.generatedAt}`;
     }
 
     function renderOverview() {
@@ -1541,6 +2456,7 @@ def render_live_page(*, page_title: str) -> str:
       raceDataSection.hidden = false;
       renderRaceHeader(race);
       renderTables(race);
+      renderHarvilleSnapshot(race);
     }
 
     function bindEvents() {
@@ -1577,6 +2493,12 @@ def render_live_page(*, page_title: str) -> str:
           }
           state.selectedRaceId = raceId;
           renderRace();
+          return;
+        }
+        const harvilleMarket = target.getAttribute("data-harville-market");
+        if (harvilleMarket) {
+          state.harvilleMarket = harvilleMarket;
+          renderHarvilleSnapshot(currentRace());
           return;
         }
         const column = target.getAttribute("data-column");
@@ -1637,6 +2559,7 @@ def render_root_page(*, manifests: list[dict[str, Any]]) -> str:
             <a class="card" href="{relative_path}">
               <p class="card-eyebrow">{target_date}</p>
               <h2>{title}</h2>
+              <p class="card-copy mono">version={source_version}</p>
               <p class="card-copy">races={race_count} / rows={row_count} / policy_selected={policy_selected_rows}</p>
               <p class="card-copy mono">{odds_official_datetime_max}</p>
             </a>
@@ -1644,6 +2567,7 @@ def render_root_page(*, manifests: list[dict[str, Any]]) -> str:
                 relative_path=manifest.get("relative_path", "#"),
                 target_date=manifest.get("target_date", "-"),
                 title=manifest.get("title", "JRA Live Viewer"),
+                source_version=manifest.get("source_version", "-"),
                 race_count=manifest.get("race_count", "-"),
                 row_count=manifest.get("row_count", "-"),
                 policy_selected_rows=manifest.get("policy_selected_rows", "-"),

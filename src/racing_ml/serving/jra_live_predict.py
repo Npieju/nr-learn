@@ -20,6 +20,7 @@ from racing_ml.data.netkeiba_race_list import discover_netkeiba_race_ids_from_ra
 from racing_ml.features.builder import build_features
 from racing_ml.serving.predict_batch import run_predict_from_frame
 from racing_ml.serving.runtime_policy import summarize_policy_diagnostics
+from racing_ml.version import get_source_version
 
 
 def log_live_progress(message: str) -> None:
@@ -1010,6 +1011,7 @@ def run_jra_live_predict(
     write_text_file(report_path, report_text, label="live prediction report")
 
     live_summary = {
+        "source_version": get_source_version(),
         "target_date": race_date,
         "profile": profile_name,
         "prediction_file": prediction_summary["prediction_file"],

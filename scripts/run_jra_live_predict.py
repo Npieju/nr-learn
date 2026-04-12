@@ -14,6 +14,7 @@ if str(SRC) not in sys.path:
 from racing_ml.common.model_profiles import MODEL_RUN_PROFILES, format_model_run_profiles, resolve_model_run_profile
 from racing_ml.common.progress import ProgressBar
 from racing_ml.serving.jra_live_predict import run_jra_live_predict
+from racing_ml.version import get_source_version
 
 
 def log_progress(message: str) -> None:
@@ -23,6 +24,7 @@ def log_progress(message: str) -> None:
 
 def main() -> int:
     parser = argparse.ArgumentParser()
+    parser.add_argument("--version", action="store_true")
     parser.add_argument("--list-profiles", action="store_true")
     parser.add_argument("--profile", choices=sorted(MODEL_RUN_PROFILES), default=None)
     parser.add_argument("--config", default=None)
@@ -38,6 +40,10 @@ def main() -> int:
     progress = ProgressBar(total=2, prefix="[jra-live cli]", logger=log_progress, min_interval_sec=0.0)
 
     try:
+        if args.version:
+            print(get_source_version())
+            return 0
+
         if args.list_profiles:
             print(format_model_run_profiles())
             return 0

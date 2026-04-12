@@ -503,6 +503,61 @@
       font-size: 13px;
       color: var(--muted);
     }
+    .market-card {
+      margin: 14px 0 18px;
+      padding: 16px;
+      border-radius: 18px;
+      border: 1px solid var(--line);
+      background: rgba(248, 251, 253, 0.78);
+      box-shadow: 0 8px 24px rgba(30, 43, 54, 0.05);
+    }
+    .market-toolbar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 10px;
+    }
+    .market-tabs {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+    .ghost-button {
+      appearance: none;
+      border: 1px solid var(--line);
+      background: rgba(255, 255, 255, 0.8);
+      color: var(--ink);
+      border-radius: 10px;
+      padding: 8px 10px;
+      font: inherit;
+      cursor: pointer;
+    }
+    .ghost-button:hover {
+      border-color: rgba(70, 98, 118, 0.28);
+      background: rgba(255, 255, 255, 0.96);
+    }
+    .market-meta {
+      margin: 0 0 10px;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.7;
+    }
+    .market-empty {
+      padding: 18px;
+      color: var(--muted);
+      border: 1px dashed var(--line);
+      border-radius: 14px;
+      background: rgba(255, 255, 255, 0.45);
+    }
+    .edge-positive {
+      color: var(--navy);
+      font-weight: 700;
+    }
+    .edge-negative {
+      color: var(--muted);
+    }
     .mono {
       font-family: "IBM Plex Mono", monospace;
       font-size: 12px;
@@ -662,6 +717,24 @@
           <label class="toggle"><input id="selected-only" type="checkbox"> selected only</label>
           <label class="toggle"><input id="positive-edge-only" type="checkbox"> positive edge only</label>
         </div>
+        <section class="market-card">
+          <div class="section-head">
+            <div>
+              <h3 class="section-title">Multi-Market EV</h3>
+              <p class="section-note" id="harville-note">score を race 内で正規化した勝率から Harville 理論オッズを計算し、build 時点の市場オッズ snapshot と比較します。</p>
+            </div>
+          </div>
+          <div class="market-toolbar">
+            <div class="market-tabs" id="harville-market-tabs"></div>
+            <span class="mono">build snapshot</span>
+          </div>
+          <p class="market-meta mono" id="harville-meta">building snapshot...</p>
+          <div class="table-wrap" id="harville-summary-wrap"></div>
+          <details class="details-panel" open>
+            <summary class="details-summary">Harville Detail</summary>
+            <div class="table-wrap" id="harville-detail-wrap"></div>
+          </details>
+        </section>
         <div class="section-head">
           <div>
             <h3 class="section-title">Focused Metrics</h3>
@@ -726,12 +799,25 @@
       "policy_reject_reason_primary",
     ];
     const markPriority = { "◎": 0, "◯": 1, "▲": 2, "★": 3, "": 4, "-": 4, "消": 5 };
+    const ODDS_API_BASE_URL = "https://nk-calculator-api.onrender.com";
+    const HARVILLE_MARKET_OPTIONS = [
+      { key: "quinella", label: "馬連", oddsKey: "馬連", comboSize: 2, ordered: false, payoutRate: 0.775 },
+      { key: "exacta", label: "馬単", oddsKey: "馬単", comboSize: 2, ordered: true, payoutRate: 0.75 },
+      { key: "wide", label: "ワイド", oddsKey: "ワイド", comboSize: 2, ordered: false, payoutRate: 0.775 },
+      { key: "trio", label: "三連複", oddsKey: "三連複", comboSize: 3, ordered: false, payoutRate: 0.75 },
+      { key: "trifecta", label: "三連単", oddsKey: "三連単", comboSize: 3, ordered: true, payoutRate: 0.75 },
+    ];
+    const HARVILLE_DETAIL_ROW_LIMIT = 120;
+    const oddsAnalyzeCache = new Map();
+    const oddsAnalyzePending = new Map();
     const state = {
       data: null,
       viewMode: "overview",
       tabsCollapsed: false,
       selectedVenueCode: null,
       selectedRaceId: null,
+      harvilleMarket: "quinella",
+      activeOddsRaceId: null,
       filter: "",
       selectedOnly: false,
       positiveEdgeOnly: false,
@@ -785,6 +871,424 @@
       }
       const number = Number(value);
       return Number.isFinite(number) ? number : null;
+    }
+
+    function parseOddsValue(value) {
+      if (value === null || value === undefined || value === "") {
+        return null;
+      }
+      if (typeof value === "number") {
+        return Number.isFinite(value) ? value : null;
+      }
+      const text = String(value).replaceAll(",", "").trim();
+      if (!text) {
+        return null;
+      }
+      if (text.includes("-")) {
+        const parts = text.split("-").map((item) => Number(item.trim())).filter((item) => Number.isFinite(item));
+        if (!parts.length) {
+          return null;
+        }
+        return parts.reduce((acc, item) => acc + item, 0) / parts.length;
+      }
+      const number = Number(text);
+      return Number.isFinite(number) ? number : null;
+    }
+
+    function normalizeHorseNo(value) {
+      const text = String(value ?? "").trim();
+      if (!text) {
+        return "";
+      }
+      return /^\d+$/.test(text) ? String(Number(text)) : text;
+    }
+
+    function normalizeHorseName(value) {
+      return String(value ?? "").trim();
+    }
+
+    function horseSortKey(horseNo) {
+      return /^\d+$/.test(String(horseNo)) ? Number(horseNo) : 9999;
+    }
+
+    function horsePairSort(left, right) {
+      const leftKey = horseSortKey(left);
+      const rightKey = horseSortKey(right);
+      if (leftKey !== rightKey) {
+        return leftKey - rightKey;
+      }
+      return String(left).localeCompare(String(right), "ja");
+    }
+
+    function pairKey(a, b) {
+      return [a, b].sort(horsePairSort).join("|");
+    }
+
+    function trioKey(a, b, c) {
+      return [a, b, c].sort(horsePairSort).join("|");
+    }
+
+    function comboNumbers(combo) {
+      return String(combo ?? "")
+        .split("-")
+        .map((item) => normalizeHorseNo(item))
+        .filter(Boolean);
+    }
+
+    function formatOddsText(value) {
+      const number = parseOddsValue(value);
+      if (number === null) {
+        return "-";
+      }
+      return `${number >= 100 ? number.toFixed(1) : number.toFixed(2)}倍`;
+    }
+
+    function formatEdgePercent(value) {
+      const number = numericValue(value);
+      if (number === null) {
+        return "-";
+      }
+      return `${number >= 0 ? "+" : ""}${number.toFixed(1)}%`;
+    }
+
+    function buildRaceUrl(race) {
+      return `https://race.netkeiba.com/race/shutuba.html?race_id=${encodeURIComponent(race.raceId)}&rf=race_list`;
+    }
+
+    function buildRaceHorseMaster(race, analyzeData) {
+      const master = [];
+      const seen = new Set();
+      const analyzeEntries = Array.isArray(analyzeData?.entries) ? analyzeData.entries : [];
+      for (const row of analyzeEntries) {
+        const horseNo = normalizeHorseNo(row?.["馬番"]);
+        const horseName = normalizeHorseName(row?.["馬名"]);
+        if (!horseNo || seen.has(horseNo)) {
+          continue;
+        }
+        seen.add(horseNo);
+        master.push({ horse_no: horseNo, horse_name: horseName });
+      }
+      if (master.length) {
+        return master.sort((left, right) => horsePairSort(left.horse_no, right.horse_no));
+      }
+      for (const row of race.rowsData || []) {
+        const horseNo = normalizeHorseNo(row?.gate_no);
+        const horseName = normalizeHorseName(row?.horse_name);
+        if (!horseNo || seen.has(horseNo)) {
+          continue;
+        }
+        seen.add(horseNo);
+        master.push({ horse_no: horseNo, horse_name: horseName });
+      }
+      return master.sort((left, right) => horsePairSort(left.horse_no, right.horse_no));
+    }
+
+    function buildPredictionMaps(race) {
+      const byHorseNo = new Map();
+      const byHorseName = new Map();
+      for (const row of race.rowsData || []) {
+        const horseNo = normalizeHorseNo(row?.gate_no);
+        const horseName = normalizeHorseName(row?.horse_name);
+        if (horseNo && !byHorseNo.has(horseNo)) {
+          byHorseNo.set(horseNo, row);
+        }
+        if (horseName && !byHorseName.has(horseName)) {
+          byHorseName.set(horseName, row);
+        }
+      }
+      return { byHorseNo, byHorseName };
+    }
+
+    function buildModelWinProbabilityMap(race, master) {
+      const { byHorseNo, byHorseName } = buildPredictionMaps(race);
+      const raw = {};
+      let total = 0;
+      for (const item of master) {
+        const row = byHorseNo.get(item.horse_no) || byHorseName.get(item.horse_name);
+        const score = numericValue(row?.score);
+        if (score === null || score <= 0) {
+          continue;
+        }
+        raw[item.horse_no] = score;
+        total += score;
+      }
+      if (!(total > 0)) {
+        return {};
+      }
+      const normalized = {};
+      for (const [horseNo, value] of Object.entries(raw)) {
+        normalized[horseNo] = value / total;
+      }
+      return normalized;
+    }
+
+    function buildWinOddsMap(odds) {
+      const rows = Array.isArray(odds?.["単勝"]) ? odds["単勝"] : [];
+      const out = {};
+      for (const row of rows) {
+        const horseNo = normalizeHorseNo(row?.["馬番"]);
+        const odd = parseOddsValue(row?.["オッズ"]);
+        if (!horseNo || odd === null || odd <= 0) {
+          continue;
+        }
+        out[horseNo] = odd;
+      }
+      return out;
+    }
+
+    function getPermutations(items) {
+      if (!Array.isArray(items) || items.length === 0) {
+        return [];
+      }
+      if (items.length === 1) {
+        return [items];
+      }
+      const out = [];
+      for (let index = 0; index < items.length; index += 1) {
+        const head = items[index];
+        const rest = items.slice(0, index).concat(items.slice(index + 1));
+        for (const tail of getPermutations(rest)) {
+          out.push([head, ...tail]);
+        }
+      }
+      return out;
+    }
+
+    function getHarvilleOrderedProbability(winProbabilityMap, combo) {
+      const seen = new Set();
+      let remaining = 1;
+      let probability = 1;
+      for (const horse of combo || []) {
+        if (!horse || seen.has(horse)) {
+          return null;
+        }
+        const winProbability = numericValue(winProbabilityMap?.[horse]);
+        if (winProbability === null || winProbability <= 0 || remaining <= 0 || winProbability >= remaining + 1e-12) {
+          return null;
+        }
+        probability *= winProbability / remaining;
+        remaining -= winProbability;
+        seen.add(horse);
+      }
+      return probability > 0 ? probability : null;
+    }
+
+    function getHarvilleUnorderedProbability(winProbabilityMap, combo) {
+      let total = 0;
+      for (const permutation of getPermutations(combo || [])) {
+        const value = getHarvilleOrderedProbability(winProbabilityMap, permutation);
+        if (value !== null) {
+          total += value;
+        }
+      }
+      return total > 0 ? total : null;
+    }
+
+    function getHarvilleWideProbability(winProbabilityMap, pair, horses) {
+      const [a, b] = pair || [];
+      if (!a || !b) {
+        return null;
+      }
+      let total = 0;
+      for (const c of horses || []) {
+        if (c === a || c === b) {
+          continue;
+        }
+        const value = getHarvilleUnorderedProbability(winProbabilityMap, [a, b, c]);
+        if (value !== null) {
+          total += value;
+        }
+      }
+      return total > 0 ? total : null;
+    }
+
+    function buildHarvilleRowsForMarket(config, actualRows, horseNameMap, horseNumbers, winOddsMap, winProbabilityMap) {
+      const rows = [];
+      const seen = new Set();
+      for (const row of actualRows || []) {
+        const comboRaw = comboNumbers(row?.["組み合わせ"]);
+        if (comboRaw.length !== config.comboSize) {
+          continue;
+        }
+        const combo = config.ordered ? comboRaw : [...comboRaw].sort(horsePairSort);
+        const dedupeKey = config.ordered
+          ? combo.join("|")
+          : config.comboSize === 2
+            ? pairKey(combo[0], combo[1])
+            : trioKey(combo[0], combo[1], combo[2]);
+        if (seen.has(dedupeKey)) {
+          continue;
+        }
+        seen.add(dedupeKey);
+        const actualOdds = parseOddsValue(row?.["オッズ"]);
+        if (actualOdds === null || actualOdds <= 0) {
+          continue;
+        }
+        let harvilleProbability = null;
+        if (config.key === "wide") {
+          harvilleProbability = getHarvilleWideProbability(winProbabilityMap, combo, horseNumbers);
+        } else if (config.ordered) {
+          harvilleProbability = getHarvilleOrderedProbability(winProbabilityMap, combo);
+        } else {
+          harvilleProbability = getHarvilleUnorderedProbability(winProbabilityMap, combo);
+        }
+        if (harvilleProbability === null || harvilleProbability <= 0) {
+          continue;
+        }
+        const harvilleOdds = config.payoutRate / harvilleProbability;
+        const spread = harvilleOdds > 0 ? (actualOdds / harvilleOdds) * 100 : null;
+        const payload = {
+          marketKey: config.key,
+          marketLabel: config.label,
+          market_odds: actualOdds,
+          harville_odds: harvilleOdds,
+          spread,
+          edge: spread === null ? null : spread - 100,
+          ev_ratio: harvilleOdds > 0 ? actualOdds / harvilleOdds : null,
+        };
+        combo.forEach((horseNo, index) => {
+          const suffix = ["a", "b", "c"][index];
+          if (!suffix) {
+            return;
+          }
+          payload[`horse_no_${suffix}`] = horseNo;
+          payload[`horse_name_${suffix}`] = horseNameMap[horseNo] || "";
+          payload[`win_odds_${suffix}`] = winOddsMap[horseNo] ?? null;
+        });
+        rows.push(payload);
+      }
+      return rows.sort((left, right) => {
+        const byEdge = (numericValue(right.edge) ?? -9999) - (numericValue(left.edge) ?? -9999);
+        if (byEdge !== 0) {
+          return byEdge;
+        }
+        return (numericValue(right.market_odds) ?? -9999) - (numericValue(left.market_odds) ?? -9999);
+      });
+    }
+
+    function buildHarvilleComparisons(race, analyzeData) {
+      const odds = analyzeData?.odds || {};
+      const master = buildRaceHorseMaster(race, analyzeData);
+      if (!master.length) {
+        return { rowsByMarket: {}, screenerRows: [], masterCount: 0 };
+      }
+      const horseNumbers = master.map((item) => item.horse_no);
+      const horseNameMap = Object.fromEntries(master.map((item) => [item.horse_no, item.horse_name]));
+      const winOddsMap = buildWinOddsMap(odds);
+      const winProbabilityMap = buildModelWinProbabilityMap(race, master);
+      const rowsByMarket = {};
+      for (const config of HARVILLE_MARKET_OPTIONS) {
+        rowsByMarket[config.key] = buildHarvilleRowsForMarket(
+          config,
+          Array.isArray(odds?.[config.oddsKey]) ? odds[config.oddsKey] : [],
+          horseNameMap,
+          horseNumbers,
+          winOddsMap,
+          winProbabilityMap,
+        );
+      }
+      const screenerRows = Object.values(rowsByMarket)
+        .flatMap((rows) => rows)
+        .filter((row) => (numericValue(row.edge) ?? 0) > 0)
+        .sort((left, right) => {
+          const byEdge = (numericValue(right.edge) ?? -9999) - (numericValue(left.edge) ?? -9999);
+          if (byEdge !== 0) {
+            return byEdge;
+          }
+          return (numericValue(right.market_odds) ?? -9999) - (numericValue(left.market_odds) ?? -9999);
+        });
+      return { rowsByMarket, screenerRows, masterCount: master.length };
+    }
+
+    function availableHarvilleMarkets(rowsByMarket) {
+      return HARVILLE_MARKET_OPTIONS.filter((item) => Array.isArray(rowsByMarket?.[item.key]) && rowsByMarket[item.key].length > 0);
+    }
+
+    function buildHarvilleOutcomeLabel(row) {
+      return [row.horse_no_a, row.horse_no_b, row.horse_no_c].filter(Boolean).join("-") || "-";
+    }
+
+    function harvilleSummaryTableHtml(rows) {
+      if (!rows.length) {
+        return '<div class="market-empty">Harville 理論値を上回る行がまだ見つかっていません。</div>';
+      }
+      const body = rows.slice(0, 16).map((row) => `
+        <tr>
+          <td>${escapeHtml(row.marketLabel || "-")}</td>
+          <td>${escapeHtml(buildHarvilleOutcomeLabel(row))}</td>
+          <td>${escapeHtml(formatOddsText(row.market_odds))}</td>
+          <td>${escapeHtml(formatOddsText(row.harville_odds))}</td>
+          <td>${escapeHtml((numericValue(row.ev_ratio) ?? 0).toFixed(3))}</td>
+          <td class="${(numericValue(row.edge) ?? 0) >= 0 ? "edge-positive" : "edge-negative"}">${escapeHtml(formatEdgePercent(row.edge))}</td>
+        </tr>
+      `).join("");
+      return `<table class="compact-table"><thead><tr><th>券種</th><th>対象</th><th>実オッズ</th><th>Harville</th><th>EV倍率</th><th>上振れ</th></tr></thead><tbody>${body}</tbody></table>`;
+    }
+
+    function harvilleDetailTableHtml(marketKey, rows) {
+      if (!rows.length) {
+        return '<div class="market-empty">この券種のオッズはまだ取得できていません。</div>';
+      }
+      const isTriple = ["trio", "trifecta"].includes(String(marketKey || ""));
+      const head = isTriple
+        ? "<tr><th>馬A</th><th>馬B</th><th>馬C</th><th>単勝A</th><th>単勝B</th><th>単勝C</th><th>実オッズ</th><th>Harville</th><th>EV倍率</th><th>上振れ</th></tr>"
+        : "<tr><th>馬A</th><th>馬B</th><th>単勝A</th><th>単勝B</th><th>実オッズ</th><th>Harville</th><th>EV倍率</th><th>上振れ</th></tr>";
+      const body = rows.slice(0, HARVILLE_DETAIL_ROW_LIMIT).map((row) => {
+        const nameA = `${row.horse_no_a || "-"} ${row.horse_name_a || ""}`.trim();
+        const nameB = `${row.horse_no_b || "-"} ${row.horse_name_b || ""}`.trim();
+        const nameC = `${row.horse_no_c || "-"} ${row.horse_name_c || ""}`.trim();
+        const leadingCells = isTriple
+          ? `<td>${escapeHtml(nameA)}</td><td>${escapeHtml(nameB)}</td><td>${escapeHtml(nameC)}</td>`
+          : `<td>${escapeHtml(nameA)}</td><td>${escapeHtml(nameB)}</td>`;
+        const oddsCells = isTriple
+          ? `<td>${escapeHtml(formatOddsText(row.win_odds_a))}</td><td>${escapeHtml(formatOddsText(row.win_odds_b))}</td><td>${escapeHtml(formatOddsText(row.win_odds_c))}</td>`
+          : `<td>${escapeHtml(formatOddsText(row.win_odds_a))}</td><td>${escapeHtml(formatOddsText(row.win_odds_b))}</td>`;
+        return `<tr>${leadingCells}${oddsCells}<td>${escapeHtml(formatOddsText(row.market_odds))}</td><td>${escapeHtml(formatOddsText(row.harville_odds))}</td><td>${escapeHtml((numericValue(row.ev_ratio) ?? 0).toFixed(3))}</td><td class="${(numericValue(row.edge) ?? 0) >= 0 ? "edge-positive" : "edge-negative"}">${escapeHtml(formatEdgePercent(row.edge))}</td></tr>`;
+      }).join("");
+      return `<table class="compact-table"><thead>${head}</thead><tbody>${body}</tbody></table>`;
+    }
+
+    function renderHarvilleLoading(message) {
+      document.getElementById("harville-meta").textContent = message;
+      document.getElementById("harville-market-tabs").innerHTML = "";
+      document.getElementById("harville-summary-wrap").innerHTML = '<div class="market-empty">building snapshot...</div>';
+      document.getElementById("harville-detail-wrap").innerHTML = '<div class="market-empty">loading detail...</div>';
+    }
+
+    function renderHarvilleError(error) {
+      const message = `odds api unavailable: ${error}`;
+      document.getElementById("harville-meta").textContent = message;
+      document.getElementById("harville-summary-wrap").innerHTML = `<div class="market-empty">${escapeHtml(message)}</div>`;
+      document.getElementById("harville-detail-wrap").innerHTML = '<div class="market-empty">detail unavailable</div>';
+    }
+
+    function renderHarvilleSnapshot(race) {
+      const harville = race?.harville;
+      if (!harville || !harville.available) {
+        renderHarvilleError(harville?.message || "snapshot unavailable");
+        return;
+      }
+      const availableMarkets = Array.isArray(harville.marketOptions) && harville.marketOptions.length
+        ? harville.marketOptions
+        : availableHarvilleMarkets(harville.rowsByMarket);
+      const activeMarket = availableMarkets.some((item) => item.key === state.harvilleMarket)
+        ? state.harvilleMarket
+        : availableMarkets[0]?.key || null;
+      state.harvilleMarket = activeMarket;
+      document.getElementById("harville-note").textContent = harville.message || "model score を race 内で正規化した勝率から Harville 理論オッズを計算し、市場オッズがどれだけ上振れているかを見ます。";
+      document.getElementById("harville-meta").textContent = [
+        harville?.meta?.oddsUpdatedAt ? `odds ${harville.meta.oddsUpdatedAt}` : null,
+        harville?.meta?.analyzedAt ? `analyzed ${harville.meta.analyzedAt}` : null,
+        harville?.meta?.horseCount ? `horses ${harville.meta.horseCount}` : null,
+        harville?.meta?.positiveRows !== undefined ? `positive rows ${harville.meta.positiveRows}` : null,
+      ].filter(Boolean).join(" / ");
+      document.getElementById("harville-market-tabs").innerHTML = availableMarkets.length
+        ? availableMarkets.map((item) => `<button class="tab ${activeMarket === item.key ? "active" : ""}" type="button" data-harville-market="${item.key}">${escapeHtml(item.label)}</button>`).join("")
+        : "";
+      document.getElementById("harville-summary-wrap").innerHTML = harvilleSummaryTableHtml(harville.summaryRows || []);
+      document.getElementById("harville-detail-wrap").innerHTML = activeMarket
+        ? harvilleDetailTableHtml(activeMarket, harville.rowsByMarket?.[activeMarket] || [])
+        : '<div class="market-empty">この race では multi-market odds をまだ取得できていません。</div>';
     }
 
     function scoreStrengthMap(rows, key) {
@@ -1046,7 +1550,7 @@
       document.getElementById("page-note").textContent = diag.likely_blocker_reason
         ? `主 blocker は ${diag.likely_blocker_reason}。開催別 overview からレースへ降りて市場オッズ・推論値・policy 判定を確認できます。`
         : "開催別 overview からレースへ降りて市場オッズ・推論値・policy 判定を確認できます。";
-      document.getElementById("footer-meta").textContent = `source=${meta.predictionFile} | summary=${meta.summaryFile} | built=${meta.generatedAt}`;
+      document.getElementById("footer-meta").textContent = `version=${meta.sourceVersion || "-"} | source=${meta.predictionFile} | summary=${meta.summaryFile} | built=${meta.generatedAt}`;
     }
 
     function renderOverview() {
@@ -1199,6 +1703,7 @@
       raceDataSection.hidden = false;
       renderRaceHeader(race);
       renderTables(race);
+      renderHarvilleSnapshot(race);
     }
 
     function bindEvents() {
@@ -1235,6 +1740,12 @@
           }
           state.selectedRaceId = raceId;
           renderRace();
+          return;
+        }
+        const harvilleMarket = target.getAttribute("data-harville-market");
+        if (harvilleMarket) {
+          state.harvilleMarket = harvilleMarket;
+          renderHarvilleSnapshot(currentRace());
           return;
         }
         const column = target.getAttribute("data-column");

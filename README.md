@@ -2,6 +2,8 @@
 
 JRA競馬予想を、再現可能な機械学習パイプラインとして扱うためのリポジトリです。
 
+source version の正本は `src/racing_ml/version.py` です。docs tag や snapshot 名は、この source 更新に対応する batch を後から識別するために使います。
+
 この README は詳細手順ではなく、プロジェクト全体への入口として使います。
 
 ## New Operating System

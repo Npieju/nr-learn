@@ -118,7 +118,7 @@ git push origin <branch>
 
 ### 2.5 tag
 
-docs の snapshot batch や review package を凍結するときだけ annotated tag を切る。
+source version の正本は `src/racing_ml/version.py` に置く。annotated tag は、その source 更新に対応する docs の snapshot batch や review package を凍結するときだけ切る。
 
 ```bash
 git tag -a docs-v0.2.1 -m "docs source-of-truth patch"
@@ -140,6 +140,7 @@ git show docs-v0.2.1 --stat
 補足:
 
 - tag は `docs-v<major>.<minor>.<patch>` を基本形にし、review package、運用 boundary、または current source-of-truth の再編 batch にだけ使う。
+- docs tag は source version の代わりではない。先に source 側を更新し、その変更と対応づく batch だけ tag で固定する。
 - current source-of-truth の大きい再編は minor を上げ、小さい追補だけなら patch を上げる。
 - typo や wording fix のたびには切らない。
 
