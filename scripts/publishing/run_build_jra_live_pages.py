@@ -1288,6 +1288,69 @@ def render_live_page(*, page_title: str) -> str:
       flex-wrap: wrap;
       gap: 8px;
     }
+      .harville-anchor-card {
+        margin: 10px 0 12px;
+        padding: 12px;
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        background: rgba(255, 255, 255, 0.72);
+      }
+      .harville-anchor-header {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px 12px;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 10px;
+      }
+      .harville-anchor-title {
+        font-weight: 700;
+        font-size: 0.95rem;
+      }
+      .harville-anchor-meta {
+        color: var(--muted);
+        font-size: 0.85rem;
+      }
+      .harville-anchor-actions {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+      }
+      .harville-anchor-clear {
+        border: 1px solid var(--line);
+        border-radius: 999px;
+        background: transparent;
+        padding: 6px 10px;
+        font-size: 0.82rem;
+        cursor: pointer;
+      }
+      .harville-anchor-clear:disabled {
+        opacity: 0.45;
+        cursor: default;
+      }
+      .harville-anchor-chips {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+      }
+      .harville-anchor-chip {
+        border: 1px solid var(--line);
+        border-radius: 999px;
+        background: #fff;
+        padding: 6px 10px;
+        font-size: 0.82rem;
+        cursor: pointer;
+        max-width: 100%;
+      }
+      .harville-anchor-chip.active {
+        border-color: var(--accent);
+        background: rgba(30, 136, 229, 0.12);
+        color: var(--accent-strong);
+        font-weight: 700;
+      }
+      .harville-anchor-chip.locked {
+        opacity: 0.45;
+      }
     .ghost-button {
       appearance: none;
       border: 1px solid var(--line);
@@ -1509,6 +1572,18 @@ def render_live_page(*, page_title: str) -> str:
             <div class="market-tabs" id="harville-market-tabs"></div>
             <span class="mono">build snapshot</span>
           </div>
+          <div class="harville-anchor-card">
+            <div class="harville-anchor-header">
+              <div>
+                <div class="harville-anchor-title">軸馬フィルタ</div>
+                <div class="harville-anchor-meta" id="harville-anchor-meta">軸馬なしで全表示。最大2頭まで指定できます。</div>
+              </div>
+              <div class="harville-anchor-actions">
+                <button class="harville-anchor-clear" id="harville-anchor-clear" type="button" data-harville-anchor-clear>全表示</button>
+              </div>
+            </div>
+            <div class="harville-anchor-chips" id="harville-anchor-chips"></div>
+          </div>
           <p class="market-meta mono" id="harville-meta">building snapshot...</p>
           <div class="table-wrap" id="harville-summary-wrap"></div>
         </section>
@@ -1584,6 +1659,8 @@ def render_live_page(*, page_title: str) -> str:
       selectedRaceId: null,
       racePanel: "focused",
       harvilleMarket: "overview",
+      harvilleAnchors: [],
+      harvilleAnchorRaceId: null,
       activeOddsRaceId: null,
       filter: "",
       selectedOnly: false,
@@ -1986,6 +2063,55 @@ def render_live_page(*, page_title: str) -> str:
       return [row.horse_no_a, row.horse_no_b, row.horse_no_c].filter(Boolean).join("-") || "-";
     }
 
+    function harvilleRowHorseNumbers(row) {
+      return [row?.horse_no_a, row?.horse_no_b, row?.horse_no_c]
+        .map((item) => normalizeHorseNo(item))
+        .filter(Boolean);
+    }
+
+    function filteredHarvilleRows(rows, anchors) {
+      if (!Array.isArray(anchors) || !anchors.length) {
+        return Array.isArray(rows) ? rows : [];
+      }
+      return (Array.isArray(rows) ? rows : []).filter((row) => {
+        const horseNumbers = harvilleRowHorseNumbers(row);
+        return anchors.every((anchor) => horseNumbers.includes(anchor));
+      });
+    }
+
+    function getHarvilleAnchorOptions(race) {
+      const seen = new Set();
+      const harvilleRows = Object.values(race?.harville?.rowsByMarket || {})
+        .flatMap((rows) => Array.isArray(rows) ? rows : []);
+      return harvilleRows
+        .flatMap((row) => [
+          { horseNo: normalizeHorseNo(row?.horse_no_a), horseName: normalizeHorseName(row?.horse_name_a) },
+          { horseNo: normalizeHorseNo(row?.horse_no_b), horseName: normalizeHorseName(row?.horse_name_b) },
+          { horseNo: normalizeHorseNo(row?.horse_no_c), horseName: normalizeHorseName(row?.horse_name_c) },
+        ])
+        .filter((item) => item.horseNo && !seen.has(item.horseNo) && seen.add(item.horseNo))
+        .sort((left, right) => horsePairSort(left.horseNo, right.horseNo));
+    }
+
+    function renderHarvilleAnchorControls(race, anchors) {
+      const options = getHarvilleAnchorOptions(race);
+      const selectedAnchors = Array.isArray(anchors) ? anchors : [];
+      const maxAnchors = 2;
+      document.getElementById("harville-anchor-meta").textContent = selectedAnchors.length
+        ? `軸馬 ${selectedAnchors.join(" / ")} を表示中。最大${maxAnchors}頭まで指定できます。`
+        : `軸馬なしで全表示。最大${maxAnchors}頭まで指定できます。`;
+      document.getElementById("harville-anchor-clear").disabled = selectedAnchors.length === 0;
+      document.getElementById("harville-anchor-chips").innerHTML = options.length
+        ? options.map((item) => {
+          const active = selectedAnchors.includes(item.horseNo);
+          const locked = !active && selectedAnchors.length >= maxAnchors;
+          const classes = ["harville-anchor-chip", active ? "active" : "", locked ? "locked" : ""].filter(Boolean).join(" ");
+          const label = `${item.horseNo} ${item.horseName}`.trim();
+          return `<button class="${classes}" type="button" data-harville-anchor="${escapeHtml(item.horseNo)}">${escapeHtml(label)}</button>`;
+        }).join("")
+        : '<div class="market-empty">軸馬候補をまだ表示できません。</div>';
+    }
+
     function harvilleSummaryTableHtml(rows) {
       if (!rows.length) {
         return '<div class="market-empty">Harville 理論値を上回る行がまだ見つかっていません。</div>';
@@ -2029,12 +2155,18 @@ def render_live_page(*, page_title: str) -> str:
     function renderHarvilleLoading(message) {
       document.getElementById("harville-meta").textContent = message;
       document.getElementById("harville-market-tabs").innerHTML = "";
+      document.getElementById("harville-anchor-meta").textContent = "軸馬なしで全表示。最大2頭まで指定できます。";
+      document.getElementById("harville-anchor-chips").innerHTML = "";
+      document.getElementById("harville-anchor-clear").disabled = true;
       document.getElementById("harville-summary-wrap").innerHTML = '<div class="market-empty">building snapshot...</div>';
     }
 
     function renderHarvilleError(error) {
       const message = `odds api unavailable: ${error}`;
       document.getElementById("harville-meta").textContent = message;
+      document.getElementById("harville-anchor-meta").textContent = "軸馬フィルタは snapshot 読み込み後に使えます。";
+      document.getElementById("harville-anchor-chips").innerHTML = "";
+      document.getElementById("harville-anchor-clear").disabled = true;
       document.getElementById("harville-summary-wrap").innerHTML = `<div class="market-empty">${escapeHtml(message)}</div>`;
     }
 
@@ -2051,7 +2183,13 @@ def render_live_page(*, page_title: str) -> str:
       const activeMarket = availableTabs.some((item) => item.key === state.harvilleMarket)
         ? state.harvilleMarket
         : "overview";
+      if (state.harvilleAnchorRaceId !== race?.raceId) {
+        state.harvilleAnchors = [];
+        state.harvilleAnchorRaceId = race?.raceId || null;
+      }
       state.harvilleMarket = activeMarket;
+      const selectedAnchors = state.harvilleAnchors.slice(0, 2);
+      renderHarvilleAnchorControls(race, selectedAnchors);
       document.getElementById("harville-note").textContent = harville.message || "model score を race 内で正規化した勝率から Harville 理論オッズを計算し、市場オッズがどれだけ上振れているかを見ます。";
       document.getElementById("harville-meta").textContent = [
         harville?.meta?.oddsUpdatedAt ? `odds ${harville.meta.oddsUpdatedAt}` : null,
@@ -2062,9 +2200,11 @@ def render_live_page(*, page_title: str) -> str:
       document.getElementById("harville-market-tabs").innerHTML = availableTabs.length
         ? availableTabs.map((item) => `<button class="tab ${activeMarket === item.key ? "active" : ""}" type="button" data-harville-market="${item.key}">${escapeHtml(item.label)}</button>`).join("")
         : "";
+      const filteredSummaryRows = filteredHarvilleRows(harville.summaryRows || [], selectedAnchors);
+      const filteredMarketRows = filteredHarvilleRows(harville.rowsByMarket?.[activeMarket] || [], selectedAnchors);
       document.getElementById("harville-summary-wrap").innerHTML = activeMarket === "overview"
-        ? harvilleSummaryTableHtml(harville.summaryRows || [])
-        : harvilleDetailTableHtml(activeMarket, harville.rowsByMarket?.[activeMarket] || []);
+        ? harvilleSummaryTableHtml(filteredSummaryRows)
+        : harvilleDetailTableHtml(activeMarket, filteredMarketRows);
     }
 
     function scoreStrengthMap(rows, key) {
@@ -2535,6 +2675,25 @@ def render_live_page(*, page_title: str) -> str:
         const harvilleMarket = target.getAttribute("data-harville-market");
         if (harvilleMarket) {
           state.harvilleMarket = harvilleMarket;
+          renderHarvilleSnapshot(currentRace());
+          return;
+        }
+        const harvilleAnchor = target.getAttribute("data-harville-anchor");
+        if (harvilleAnchor) {
+          const anchor = normalizeHorseNo(harvilleAnchor);
+          const selected = [...state.harvilleAnchors];
+          const existingIndex = selected.indexOf(anchor);
+          if (existingIndex >= 0) {
+            selected.splice(existingIndex, 1);
+          } else if (selected.length < 2) {
+            selected.push(anchor);
+          }
+          state.harvilleAnchors = selected;
+          renderHarvilleSnapshot(currentRace());
+          return;
+        }
+        if (target.hasAttribute("data-harville-anchor-clear")) {
+          state.harvilleAnchors = [];
           renderHarvilleSnapshot(currentRace());
           return;
         }
