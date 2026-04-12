@@ -1109,6 +1109,15 @@ def render_live_page(*, page_title: str) -> str:
       grid-template-columns: 1fr;
       gap: 8px;
     }
+    .race-subtabs {
+      display: flex;
+      gap: 6px;
+      flex-wrap: wrap;
+      margin: 2px 0 10px;
+    }
+    .race-panel[hidden] {
+      display: none !important;
+    }
     .race-header {
       display: grid;
       gap: 5px;
@@ -1465,12 +1474,29 @@ def render_live_page(*, page_title: str) -> str:
 
     <section class="section race-layout race-section" id="race-data-section" hidden>
       <div>
-        <div class="controls">
-          <input id="horse-filter" class="search" type="search" placeholder="馬名または reject reason で絞り込み">
-          <label class="toggle"><input id="selected-only" type="checkbox"> selected only</label>
-          <label class="toggle"><input id="positive-edge-only" type="checkbox"> positive edge only</label>
+        <div class="race-subtabs" id="race-subtabs">
+          <button class="tab active" type="button" data-race-panel="focused">Focused Metrics</button>
+          <button class="tab" type="button" data-race-panel="harville">Multi-Market EV</button>
         </div>
-        <section class="market-card">
+        <section class="race-panel" id="focused-panel">
+          <div class="controls">
+            <input id="horse-filter" class="search" type="search" placeholder="馬名または reject reason で絞り込み">
+            <label class="toggle"><input id="selected-only" type="checkbox"> selected only</label>
+            <label class="toggle"><input id="positive-edge-only" type="checkbox"> positive edge only</label>
+          </div>
+          <div class="section-head">
+            <div>
+              <h3 class="section-title">Focused Metrics</h3>
+              <p class="section-note">市場オッズ、推論値、policy 指標を中心に並べた主表です。header を押すと列ソートできます。</p>
+            </div>
+            <details class="info-panel">
+              <summary class="info-summary">info</summary>
+              <div class="guide-grid" id="column-guide"></div>
+            </details>
+          </div>
+          <div class="table-wrap" id="focused-table-wrap"></div>
+        </section>
+        <section class="market-card race-panel" id="harville-panel" hidden>
           <div class="section-head">
             <div>
               <h3 class="section-title">Multi-Market EV</h3>
@@ -1488,20 +1514,9 @@ def render_live_page(*, page_title: str) -> str:
             <div class="table-wrap" id="harville-detail-wrap"></div>
           </details>
         </section>
-        <div class="section-head">
-          <div>
-            <h3 class="section-title">Focused Metrics</h3>
-            <p class="section-note">市場オッズ、推論値、policy 指標を中心に並べた主表です。header を押すと列ソートできます。</p>
-          </div>
-          <details class="info-panel">
-            <summary class="info-summary">info</summary>
-            <div class="guide-grid" id="column-guide"></div>
-          </details>
-        </div>
-        <div class="table-wrap" id="focused-table-wrap"></div>
       </div>
 
-      <div>
+      <div id="raw-panel-wrap">
         <details class="details-panel">
           <summary class="details-summary">All Columns</summary>
           <p class="section-note">予想 CSV の全列をそのまま出しています。必要なときだけ開いて、生データ確認や downstream 加工前の inspection に使ってください。</p>
@@ -1569,6 +1584,7 @@ def render_live_page(*, page_title: str) -> str:
       tabsCollapsed: false,
       selectedVenueCode: null,
       selectedRaceId: null,
+      racePanel: "focused",
       harvilleMarket: "quinella",
       activeOddsRaceId: null,
       filter: "",
@@ -2434,6 +2450,17 @@ def render_live_page(*, page_title: str) -> str:
       document.getElementById("raw-table-wrap").innerHTML = tableHtml(rawColumnDefs(), rows, state.rawSort, "raw");
     }
 
+    function renderRacePanels() {
+      const focusedActive = state.racePanel !== "harville";
+      document.getElementById("focused-panel").hidden = !focusedActive;
+      document.getElementById("harville-panel").hidden = focusedActive;
+      document.getElementById("raw-panel-wrap").hidden = !focusedActive;
+      document.getElementById("race-subtabs").innerHTML = [
+        { key: "focused", label: "Focused Metrics" },
+        { key: "harville", label: "Multi-Market EV" },
+      ].map((item) => `<button class="tab ${state.racePanel === item.key ? "active" : ""}" type="button" data-race-panel="${item.key}">${escapeHtml(item.label)}</button>`).join("");
+    }
+
     function renderRace() {
       syncSelection();
       renderTabsToggle();
@@ -2455,6 +2482,7 @@ def render_live_page(*, page_title: str) -> str:
       raceSection.hidden = false;
       raceDataSection.hidden = false;
       renderRaceHeader(race);
+      renderRacePanels();
       renderTables(race);
       renderHarvilleSnapshot(race);
     }
@@ -2499,6 +2527,12 @@ def render_live_page(*, page_title: str) -> str:
         if (harvilleMarket) {
           state.harvilleMarket = harvilleMarket;
           renderHarvilleSnapshot(currentRace());
+          return;
+        }
+        const racePanel = target.getAttribute("data-race-panel");
+        if (racePanel) {
+          state.racePanel = racePanel;
+          renderRacePanels();
           return;
         }
         const column = target.getAttribute("data-column");
