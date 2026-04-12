@@ -1511,10 +1511,6 @@ def render_live_page(*, page_title: str) -> str:
           </div>
           <p class="market-meta mono" id="harville-meta">building snapshot...</p>
           <div class="table-wrap" id="harville-summary-wrap"></div>
-          <details class="details-panel" open>
-            <summary class="details-summary">Harville Detail</summary>
-            <div class="table-wrap" id="harville-detail-wrap"></div>
-          </details>
         </section>
       </div>
 
@@ -1587,7 +1583,7 @@ def render_live_page(*, page_title: str) -> str:
       selectedVenueCode: null,
       selectedRaceId: null,
       racePanel: "focused",
-      harvilleMarket: "quinella",
+      harvilleMarket: "overview",
       activeOddsRaceId: null,
       filter: "",
       selectedOnly: false,
@@ -2034,14 +2030,12 @@ def render_live_page(*, page_title: str) -> str:
       document.getElementById("harville-meta").textContent = message;
       document.getElementById("harville-market-tabs").innerHTML = "";
       document.getElementById("harville-summary-wrap").innerHTML = '<div class="market-empty">building snapshot...</div>';
-      document.getElementById("harville-detail-wrap").innerHTML = '<div class="market-empty">loading detail...</div>';
     }
 
     function renderHarvilleError(error) {
       const message = `odds api unavailable: ${error}`;
       document.getElementById("harville-meta").textContent = message;
       document.getElementById("harville-summary-wrap").innerHTML = `<div class="market-empty">${escapeHtml(message)}</div>`;
-      document.getElementById("harville-detail-wrap").innerHTML = '<div class="market-empty">detail unavailable</div>';
     }
 
     function renderHarvilleSnapshot(race) {
@@ -2053,9 +2047,10 @@ def render_live_page(*, page_title: str) -> str:
       const availableMarkets = Array.isArray(harville.marketOptions) && harville.marketOptions.length
         ? harville.marketOptions
         : availableHarvilleMarkets(harville.rowsByMarket);
-      const activeMarket = availableMarkets.some((item) => item.key === state.harvilleMarket)
+      const availableTabs = [{ key: "overview", label: "Overview" }, ...availableMarkets];
+      const activeMarket = availableTabs.some((item) => item.key === state.harvilleMarket)
         ? state.harvilleMarket
-        : availableMarkets[0]?.key || null;
+        : "overview";
       state.harvilleMarket = activeMarket;
       document.getElementById("harville-note").textContent = harville.message || "model score を race 内で正規化した勝率から Harville 理論オッズを計算し、市場オッズがどれだけ上振れているかを見ます。";
       document.getElementById("harville-meta").textContent = [
@@ -2064,13 +2059,12 @@ def render_live_page(*, page_title: str) -> str:
         harville?.meta?.horseCount ? `horses ${harville.meta.horseCount}` : null,
         harville?.meta?.positiveRows !== undefined ? `positive rows ${harville.meta.positiveRows}` : null,
       ].filter(Boolean).join(" / ");
-      document.getElementById("harville-market-tabs").innerHTML = availableMarkets.length
-        ? availableMarkets.map((item) => `<button class="tab ${activeMarket === item.key ? "active" : ""}" type="button" data-harville-market="${item.key}">${escapeHtml(item.label)}</button>`).join("")
+      document.getElementById("harville-market-tabs").innerHTML = availableTabs.length
+        ? availableTabs.map((item) => `<button class="tab ${activeMarket === item.key ? "active" : ""}" type="button" data-harville-market="${item.key}">${escapeHtml(item.label)}</button>`).join("")
         : "";
-      document.getElementById("harville-summary-wrap").innerHTML = harvilleSummaryTableHtml(harville.summaryRows || []);
-      document.getElementById("harville-detail-wrap").innerHTML = activeMarket
-        ? harvilleDetailTableHtml(activeMarket, harville.rowsByMarket?.[activeMarket] || [])
-        : '<div class="market-empty">この race では multi-market odds をまだ取得できていません。</div>';
+      document.getElementById("harville-summary-wrap").innerHTML = activeMarket === "overview"
+        ? harvilleSummaryTableHtml(harville.summaryRows || [])
+        : harvilleDetailTableHtml(activeMarket, harville.rowsByMarket?.[activeMarket] || []);
     }
 
     function scoreStrengthMap(rows, key) {
