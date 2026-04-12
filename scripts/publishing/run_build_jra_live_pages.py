@@ -1328,28 +1328,30 @@ def render_live_page(*, page_title: str) -> str:
         opacity: 0.45;
         cursor: default;
       }
-      .harville-anchor-chips {
+      .harville-anchor-selects {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 10px;
+      }
+      .harville-anchor-select {
         display: flex;
-        flex-wrap: wrap;
-        gap: 8px;
+        flex-direction: column;
+        gap: 6px;
+        min-width: 0;
       }
-      .harville-anchor-chip {
+      .harville-anchor-select label {
+        color: var(--muted);
+        font-size: 0.8rem;
+      }
+      .harville-anchor-select select {
+        width: 100%;
+        min-width: 0;
         border: 1px solid var(--line);
-        border-radius: 999px;
+        border-radius: 10px;
         background: #fff;
-        padding: 6px 10px;
-        font-size: 0.82rem;
-        cursor: pointer;
-        max-width: 100%;
-      }
-      .harville-anchor-chip.active {
-        border-color: var(--accent);
-        background: rgba(30, 136, 229, 0.12);
-        color: var(--accent-strong);
-        font-weight: 700;
-      }
-      .harville-anchor-chip.locked {
-        opacity: 0.45;
+        padding: 8px 10px;
+        font: inherit;
+        color: var(--ink);
       }
     .ghost-button {
       appearance: none;
@@ -1384,6 +1386,15 @@ def render_live_page(*, page_title: str) -> str:
     }
     .edge-negative {
       color: var(--muted);
+    }
+    .harville-row-positive td {
+      background: rgba(30, 136, 229, 0.08);
+    }
+    .harville-row-negative td {
+      background: rgba(123, 141, 156, 0.10);
+    }
+    .harville-row-neutral td {
+      background: rgba(255, 255, 255, 0.72);
     }
     .mono {
       font-family: "IBM Plex Mono", monospace;
@@ -1582,7 +1593,7 @@ def render_live_page(*, page_title: str) -> str:
                 <button class="harville-anchor-clear" id="harville-anchor-clear" type="button" data-harville-anchor-clear>全表示</button>
               </div>
             </div>
-            <div class="harville-anchor-chips" id="harville-anchor-chips"></div>
+            <div class="harville-anchor-selects" id="harville-anchor-selects"></div>
           </div>
           <p class="market-meta mono" id="harville-meta">building snapshot...</p>
           <div class="table-wrap" id="harville-summary-wrap"></div>
@@ -2063,10 +2074,44 @@ def render_live_page(*, page_title: str) -> str:
       return [row.horse_no_a, row.horse_no_b, row.horse_no_c].filter(Boolean).join("-") || "-";
     }
 
+    function harvilleEdgeClass(edge) {
+      const value = numericValue(edge);
+      if (value === null) {
+        return "harville-row-neutral";
+      }
+      return value >= 0 ? "harville-row-positive" : "harville-row-negative";
+    }
+
     function harvilleRowHorseNumbers(row) {
       return [row?.horse_no_a, row?.horse_no_b, row?.horse_no_c]
         .map((item) => normalizeHorseNo(item))
         .filter(Boolean);
+    }
+
+    function harvilleDisplayLegs(row, anchors) {
+      const fixed = new Set((anchors || []).map((item) => normalizeHorseNo(item)).filter(Boolean));
+      const allLegs = [
+        { horseNo: normalizeHorseNo(row?.horse_no_a), horseName: normalizeHorseName(row?.horse_name_a), winOdds: row?.win_odds_a },
+        { horseNo: normalizeHorseNo(row?.horse_no_b), horseName: normalizeHorseName(row?.horse_name_b), winOdds: row?.win_odds_b },
+        { horseNo: normalizeHorseNo(row?.horse_no_c), horseName: normalizeHorseName(row?.horse_name_c), winOdds: row?.win_odds_c },
+      ].filter((item) => item.horseNo);
+      if (!fixed.size) {
+        return allLegs;
+      }
+      return allLegs.filter((item) => !fixed.has(item.horseNo));
+    }
+
+    function buildHarvilleTargetLabel(row, anchors) {
+      const legs = harvilleDisplayLegs(row, anchors);
+      if (!legs.length) {
+        return "固定済み";
+      }
+      return legs.map((item) => item.horseNo).join("-");
+    }
+
+    function flattenHarvilleRows(rowsByMarket) {
+      return Object.values(rowsByMarket || {})
+        .flatMap((rows) => Array.isArray(rows) ? rows : []);
     }
 
     function filteredHarvilleRows(rows, anchors) {
@@ -2101,25 +2146,35 @@ def render_live_page(*, page_title: str) -> str:
         ? `軸馬 ${selectedAnchors.join(" / ")} を表示中。最大${maxAnchors}頭まで指定できます。`
         : `軸馬なしで全表示。最大${maxAnchors}頭まで指定できます。`;
       document.getElementById("harville-anchor-clear").disabled = selectedAnchors.length === 0;
-      document.getElementById("harville-anchor-chips").innerHTML = options.length
-        ? options.map((item) => {
-          const active = selectedAnchors.includes(item.horseNo);
-          const locked = !active && selectedAnchors.length >= maxAnchors;
-          const classes = ["harville-anchor-chip", active ? "active" : "", locked ? "locked" : ""].filter(Boolean).join(" ");
-          const label = `${item.horseNo} ${item.horseName}`.trim();
-          return `<button class="${classes}" type="button" data-harville-anchor="${escapeHtml(item.horseNo)}">${escapeHtml(label)}</button>`;
+      document.getElementById("harville-anchor-selects").innerHTML = options.length
+        ? Array.from({ length: maxAnchors }, (_, index) => {
+          const selectedValue = selectedAnchors[index] || "";
+          const otherSelected = new Set(selectedAnchors.filter((item, itemIndex) => item && itemIndex !== index));
+          const optionHtml = [
+            '<option value="">未指定</option>',
+            ...options.map((item) => {
+              const disabled = otherSelected.has(item.horseNo) ? ' disabled' : '';
+              const selected = item.horseNo === selectedValue ? ' selected' : '';
+              const label = `${item.horseNo} ${item.horseName}`.trim();
+              return `<option value="${escapeHtml(item.horseNo)}"${selected}${disabled}>${escapeHtml(label)}</option>`;
+            }),
+          ].join("");
+          return `<div class="harville-anchor-select"><label for="harville-anchor-select-${index + 1}">軸馬${index + 1}</label><select id="harville-anchor-select-${index + 1}" data-harville-anchor-select="${index}">${optionHtml}</select></div>`;
         }).join("")
         : '<div class="market-empty">軸馬候補をまだ表示できません。</div>';
     }
 
-    function harvilleSummaryTableHtml(rows) {
+    function harvilleSummaryTableHtml(rows, anchors, exhaustive = false) {
       if (!rows.length) {
-        return '<div class="market-empty">Harville 理論値を上回る行がまだ見つかっていません。</div>';
+        return exhaustive
+          ? '<div class="market-empty">この軸馬条件に一致する組み合わせはありません。</div>'
+          : '<div class="market-empty">Harville 理論値を上回る行がまだ見つかっていません。</div>';
       }
-      const body = rows.slice(0, 16).map((row) => `
-        <tr>
+      const visibleRows = exhaustive ? rows : rows.slice(0, 16);
+      const body = visibleRows.map((row) => `
+        <tr class="${harvilleEdgeClass(row.edge)}">
           <td>${escapeHtml(row.marketLabel || "-")}</td>
-          <td>${escapeHtml(buildHarvilleOutcomeLabel(row))}</td>
+          <td>${escapeHtml(buildHarvilleTargetLabel(row, anchors))}</td>
           <td>${escapeHtml(formatOddsText(row.market_odds))}</td>
           <td>${escapeHtml(formatOddsText(row.harville_odds))}</td>
           <td>${escapeHtml((numericValue(row.ev_ratio) ?? 0).toFixed(3))}</td>
@@ -2129,25 +2184,24 @@ def render_live_page(*, page_title: str) -> str:
       return `<table class="compact-table"><thead><tr><th>券種</th><th>対象</th><th>実オッズ</th><th>Harville</th><th>EV倍率</th><th>上振れ</th></tr></thead><tbody>${body}</tbody></table>`;
     }
 
-    function harvilleDetailTableHtml(marketKey, rows) {
+    function harvilleDetailTableHtml(marketKey, rows, anchors) {
       if (!rows.length) {
         return '<div class="market-empty">この券種のオッズはまだ取得できていません。</div>';
       }
-      const isTriple = ["trio", "trifecta"].includes(String(marketKey || ""));
-      const head = isTriple
-        ? "<tr><th>馬A</th><th>馬B</th><th>馬C</th><th>単勝A</th><th>単勝B</th><th>単勝C</th><th>実オッズ</th><th>Harville</th><th>EV倍率</th><th>上振れ</th></tr>"
-        : "<tr><th>馬A</th><th>馬B</th><th>単勝A</th><th>単勝B</th><th>実オッズ</th><th>Harville</th><th>EV倍率</th><th>上振れ</th></tr>";
+      const displayedLegCount = Math.max(...rows.slice(0, HARVILLE_DETAIL_ROW_LIMIT).map((row) => harvilleDisplayLegs(row, anchors).length), 0);
+      const head = `<tr>${Array.from({ length: displayedLegCount }, (_, index) => `<th>相手${index + 1}</th>`).join("")}${Array.from({ length: displayedLegCount }, (_, index) => `<th>単勝${index + 1}</th>`).join("")}<th>実オッズ</th><th>Harville</th><th>EV倍率</th><th>上振れ</th></tr>`;
       const body = rows.slice(0, HARVILLE_DETAIL_ROW_LIMIT).map((row) => {
-        const nameA = `${row.horse_no_a || "-"} ${row.horse_name_a || ""}`.trim();
-        const nameB = `${row.horse_no_b || "-"} ${row.horse_name_b || ""}`.trim();
-        const nameC = `${row.horse_no_c || "-"} ${row.horse_name_c || ""}`.trim();
-        const leadingCells = isTriple
-          ? `<td>${escapeHtml(nameA)}</td><td>${escapeHtml(nameB)}</td><td>${escapeHtml(nameC)}</td>`
-          : `<td>${escapeHtml(nameA)}</td><td>${escapeHtml(nameB)}</td>`;
-        const oddsCells = isTriple
-          ? `<td>${escapeHtml(formatOddsText(row.win_odds_a))}</td><td>${escapeHtml(formatOddsText(row.win_odds_b))}</td><td>${escapeHtml(formatOddsText(row.win_odds_c))}</td>`
-          : `<td>${escapeHtml(formatOddsText(row.win_odds_a))}</td><td>${escapeHtml(formatOddsText(row.win_odds_b))}</td>`;
-        return `<tr>${leadingCells}${oddsCells}<td>${escapeHtml(formatOddsText(row.market_odds))}</td><td>${escapeHtml(formatOddsText(row.harville_odds))}</td><td>${escapeHtml((numericValue(row.ev_ratio) ?? 0).toFixed(3))}</td><td class="${(numericValue(row.edge) ?? 0) >= 0 ? "edge-positive" : "edge-negative"}">${escapeHtml(formatEdgePercent(row.edge))}</td></tr>`;
+        const displayLegs = harvilleDisplayLegs(row, anchors);
+        const leadingCells = Array.from({ length: displayedLegCount }, (_, index) => {
+          const leg = displayLegs[index];
+          const label = leg ? `${leg.horseNo} ${leg.horseName}`.trim() : "-";
+          return `<td>${escapeHtml(label)}</td>`;
+        }).join("");
+        const oddsCells = Array.from({ length: displayedLegCount }, (_, index) => {
+          const leg = displayLegs[index];
+          return `<td>${escapeHtml(formatOddsText(leg?.winOdds))}</td>`;
+        }).join("");
+        return `<tr class="${harvilleEdgeClass(row.edge)}">${leadingCells}${oddsCells}<td>${escapeHtml(formatOddsText(row.market_odds))}</td><td>${escapeHtml(formatOddsText(row.harville_odds))}</td><td>${escapeHtml((numericValue(row.ev_ratio) ?? 0).toFixed(3))}</td><td class="${(numericValue(row.edge) ?? 0) >= 0 ? "edge-positive" : "edge-negative"}">${escapeHtml(formatEdgePercent(row.edge))}</td></tr>`;
       }).join("");
       return `<table class="compact-table"><thead>${head}</thead><tbody>${body}</tbody></table>`;
     }
@@ -2156,7 +2210,7 @@ def render_live_page(*, page_title: str) -> str:
       document.getElementById("harville-meta").textContent = message;
       document.getElementById("harville-market-tabs").innerHTML = "";
       document.getElementById("harville-anchor-meta").textContent = "軸馬なしで全表示。最大2頭まで指定できます。";
-      document.getElementById("harville-anchor-chips").innerHTML = "";
+      document.getElementById("harville-anchor-selects").innerHTML = "";
       document.getElementById("harville-anchor-clear").disabled = true;
       document.getElementById("harville-summary-wrap").innerHTML = '<div class="market-empty">building snapshot...</div>';
     }
@@ -2165,7 +2219,7 @@ def render_live_page(*, page_title: str) -> str:
       const message = `odds api unavailable: ${error}`;
       document.getElementById("harville-meta").textContent = message;
       document.getElementById("harville-anchor-meta").textContent = "軸馬フィルタは snapshot 読み込み後に使えます。";
-      document.getElementById("harville-anchor-chips").innerHTML = "";
+      document.getElementById("harville-anchor-selects").innerHTML = "";
       document.getElementById("harville-anchor-clear").disabled = true;
       document.getElementById("harville-summary-wrap").innerHTML = `<div class="market-empty">${escapeHtml(message)}</div>`;
     }
@@ -2201,10 +2255,11 @@ def render_live_page(*, page_title: str) -> str:
         ? availableTabs.map((item) => `<button class="tab ${activeMarket === item.key ? "active" : ""}" type="button" data-harville-market="${item.key}">${escapeHtml(item.label)}</button>`).join("")
         : "";
       const filteredSummaryRows = filteredHarvilleRows(harville.summaryRows || [], selectedAnchors);
+      const exhaustiveOverviewRows = filteredHarvilleRows(flattenHarvilleRows(harville.rowsByMarket || {}), selectedAnchors);
       const filteredMarketRows = filteredHarvilleRows(harville.rowsByMarket?.[activeMarket] || [], selectedAnchors);
       document.getElementById("harville-summary-wrap").innerHTML = activeMarket === "overview"
-        ? harvilleSummaryTableHtml(filteredSummaryRows)
-        : harvilleDetailTableHtml(activeMarket, filteredMarketRows);
+        ? harvilleSummaryTableHtml(selectedAnchors.length ? exhaustiveOverviewRows : filteredSummaryRows, selectedAnchors, selectedAnchors.length > 0)
+        : harvilleDetailTableHtml(activeMarket, filteredMarketRows, selectedAnchors);
     }
 
     function scoreStrengthMap(rows, key) {
@@ -2678,20 +2733,6 @@ def render_live_page(*, page_title: str) -> str:
           renderHarvilleSnapshot(currentRace());
           return;
         }
-        const harvilleAnchor = target.getAttribute("data-harville-anchor");
-        if (harvilleAnchor) {
-          const anchor = normalizeHorseNo(harvilleAnchor);
-          const selected = [...state.harvilleAnchors];
-          const existingIndex = selected.indexOf(anchor);
-          if (existingIndex >= 0) {
-            selected.splice(existingIndex, 1);
-          } else if (selected.length < 2) {
-            selected.push(anchor);
-          }
-          state.harvilleAnchors = selected;
-          renderHarvilleSnapshot(currentRace());
-          return;
-        }
         if (target.hasAttribute("data-harville-anchor-clear")) {
           state.harvilleAnchors = [];
           renderHarvilleSnapshot(currentRace());
@@ -2727,6 +2768,33 @@ def render_live_page(*, page_title: str) -> str:
       document.getElementById("positive-edge-only").addEventListener("change", (event) => {
         state.positiveEdgeOnly = Boolean(event.target.checked);
         renderTables(currentRace());
+      });
+      document.body.addEventListener("change", (event) => {
+        const target = event.target;
+        if (!(target instanceof HTMLSelectElement)) {
+          return;
+        }
+        const anchorIndex = target.getAttribute("data-harville-anchor-select");
+        if (anchorIndex === null) {
+          return;
+        }
+        const index = Number(anchorIndex);
+        if (!Number.isInteger(index) || index < 0 || index > 1) {
+          return;
+        }
+        const selected = ["", ""];
+        selected[index] = normalizeHorseNo(target.value);
+        for (const otherIndex of [0, 1]) {
+          if (otherIndex === index) {
+            continue;
+          }
+          const otherSelect = document.querySelector(`[data-harville-anchor-select="${otherIndex}"]`);
+          if (otherSelect instanceof HTMLSelectElement) {
+            selected[otherIndex] = normalizeHorseNo(otherSelect.value);
+          }
+        }
+        state.harvilleAnchors = selected.filter((value, itemIndex, values) => value && values.indexOf(value) === itemIndex);
+        renderHarvilleSnapshot(currentRace());
       });
     }
 
