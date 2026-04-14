@@ -87,6 +87,7 @@ class LocalNankanBootstrapTest(unittest.TestCase):
             self.assertEqual(payload["read_order"][0], "status")
             self.assertIn("upstream_fresh=false", payload["highlights"])
             self.assertIn("upstream_baseline_chain=None", payload["highlights"])
+            self.assertIn("upstream_pre_filter_rows=None", payload["highlights"])
             self.assertIn("upstream_filtered_out=None", payload["highlights"])
             self.assertIn("--oneshot", payload["followup_command"]["command"])
 
@@ -374,6 +375,7 @@ class LocalNankanBootstrapTest(unittest.TestCase):
             self.assertEqual(payload["read_order"][3], "upstream_refresh.upstream_fresh")
             self.assertIn("followup_exit_code=0", payload["highlights"])
             self.assertIn("upstream_baseline_chain=artifacts/reports/capture_baseline_seed.json->artifacts/reports/capture_pass_001_summary.json", payload["highlights"])
+            self.assertIn("upstream_pre_filter_rows=11", payload["highlights"])
             self.assertIn("upstream_filtered_out=7", payload["highlights"])
             self.assertEqual(payload["followup_command"]["command"][1], "scripts/run_local_nankan_future_only_wait_then_cycle.py")
             self.assertTrue(str(payload["followup_command"]["log_file"]).startswith("artifacts/logs/"))
@@ -487,6 +489,7 @@ class LocalNankanBootstrapTest(unittest.TestCase):
         self.assertEqual(wrapper_manifest["execution_mode"], "single_cycle")
         self.assertEqual(wrapper_manifest["trigger_contract"], "direct_refresh_plus_readiness")
         self.assertIn("capture_baseline_chain=artifacts/reports/capture_baseline_seed.json->artifacts/reports/capture_pass_001_summary.json", wrapper_manifest["highlights"])
+        self.assertIn("capture_pre_filter_rows=11", wrapper_manifest["highlights"])
         self.assertIn("capture_filtered_out=4", wrapper_manifest["highlights"])
         self.assertEqual(wrapper_manifest["capture_provenance"]["initial_baseline_summary_input"], "artifacts/reports/capture_baseline_seed.json")
         self.assertEqual(wrapper_manifest["capture_provenance"]["latest_baseline_summary_input"], "artifacts/reports/capture_pass_001_summary.json")
@@ -1383,6 +1386,7 @@ class LocalNankanBootstrapTest(unittest.TestCase):
             self.assertIn("supervisor_capture_baseline_chain=artifacts/reports/capture_baseline_seed.json->artifacts/reports/capture_pass_001_summary.json", operator_board["highlights"])
             self.assertIn("supervisor_capture_upcoming_only=True", operator_board["highlights"])
             self.assertIn("supervisor_capture_as_of=2026-04-11T15:10:00+09:00", operator_board["highlights"])
+            self.assertIn("supervisor_capture_pre_filter_rows=12", operator_board["highlights"])
             self.assertIn("supervisor_capture_filtered_out=3", operator_board["highlights"])
 
     def test_build_operator_board_payload_surfaces_live_supervisor_state(self) -> None:
@@ -1476,6 +1480,7 @@ class LocalNankanBootstrapTest(unittest.TestCase):
         self.assertIn("supervisor_capture_baseline_chain=artifacts/reports/capture_baseline_seed.json->artifacts/reports/capture_pass_001_summary.json", operator_board["highlights"])
         self.assertIn("supervisor_capture_upcoming_only=True", operator_board["highlights"])
         self.assertIn("supervisor_capture_as_of=2026-04-11T15:10:00+09:00", operator_board["highlights"])
+        self.assertIn("supervisor_capture_pre_filter_rows=12", operator_board["highlights"])
         self.assertIn("supervisor_capture_filtered_out=3", operator_board["highlights"])
 
     def test_resolve_operator_board_path_skips_canonical_for_external_manifest(self) -> None:

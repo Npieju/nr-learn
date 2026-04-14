@@ -1019,6 +1019,7 @@ def _build_operator_board_payload(
             f"supervisor_capture_baseline_chain={supervisor_baseline_chain}",
             f"supervisor_capture_upcoming_only={supervisor_capture_filter_report.get('upcoming_only')}",
             f"supervisor_capture_as_of={supervisor_capture_filter_report.get('as_of')}",
+            f"supervisor_capture_pre_filter_rows={supervisor_capture_filter_report.get('pre_filter_row_count')}",
             f"supervisor_capture_filtered_out={supervisor_capture_filter_report.get('filtered_out_count')}",
         ]
     )

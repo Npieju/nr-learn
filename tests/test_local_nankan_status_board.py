@@ -174,6 +174,7 @@ class LocalNankanStatusBoardTest(unittest.TestCase):
             self.assertIn("watcher_status=not_ready", payload["highlights"])
             self.assertIn("capture_baseline_chain=None", payload["highlights"])
             self.assertIn("capture_upcoming_only=None", payload["highlights"])
+            self.assertIn("capture_pre_filter_rows=None", payload["highlights"])
 
     def test_status_board_overrides_stale_coverage_ready_with_not_ready_handoff(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:

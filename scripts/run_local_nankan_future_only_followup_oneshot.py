@@ -217,6 +217,7 @@ def _build_output_payload(
         f"upstream_baseline_chain={upstream_baseline_chain}",
         f"upstream_upcoming_only={upstream_latest_race_id_source_report.get('upcoming_only')}",
         f"upstream_as_of={upstream_latest_race_id_source_report.get('as_of')}",
+        f"upstream_pre_filter_rows={upstream_latest_race_id_source_report.get('pre_filter_row_count')}",
         f"upstream_filtered_out={upstream_latest_race_id_source_report.get('filtered_out_count')}",
     ]
     if child_exit_code is not None:

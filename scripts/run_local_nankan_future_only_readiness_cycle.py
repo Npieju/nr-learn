@@ -367,6 +367,7 @@ def main() -> int:
                 f"capture_baseline_chain={capture_baseline_chain}",
                 f"capture_upcoming_only={capture_filter_report.get('upcoming_only')}",
                 f"capture_as_of={capture_filter_report.get('as_of')}",
+                f"capture_pre_filter_rows={capture_filter_report.get('pre_filter_row_count')}",
                 f"capture_filtered_out={capture_filter_report.get('filtered_out_count')}",
             ],
             "capture_provenance": {

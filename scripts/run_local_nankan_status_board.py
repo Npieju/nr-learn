@@ -581,6 +581,7 @@ def main() -> int:
             f"capture_baseline_chain={capture_baseline_chain}",
             f"capture_upcoming_only={latest_race_id_source_report.get('upcoming_only')}",
             f"capture_as_of={latest_race_id_source_report.get('as_of')}",
+            f"capture_pre_filter_rows={latest_race_id_source_report.get('pre_filter_row_count')}",
             f"capture_filtered_out={latest_race_id_source_report.get('filtered_out_count')}",
         ],
     }
