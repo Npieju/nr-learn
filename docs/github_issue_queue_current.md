@@ -64,11 +64,14 @@
   - [../artifacts/reports/local_nankan_data_status_board.json](../artifacts/reports/local_nankan_data_status_board.json)
   - `readiness_surfaces.readiness_supervisor`
   - `operator_runtime`
+  - `readiness_surfaces.readiness_supervisor.current_refs.capture_upcoming_only|capture_as_of|capture_pre_filter_row_count|capture_filtered_out_count`
+  - `highlights.supervisor_capture_upcoming_only|supervisor_capture_as_of|supervisor_capture_pre_filter_rows|supervisor_capture_filtered_out`
 - command/source docs:
   - [command_reference.md](command_reference.md)
   - [scripts_guide.md](scripts_guide.md)
 - current meaning:
   - future-only pre-race pool は維持されている
+  - current top-level operator surfaces から strict upcoming filter の cutoff と母数を child capture manifest 深掘りなしで読める
   - historical local Nankan ROI は diagnostic-only に降格しており、`local_nankan_recommended` も operator convenience alias であって trust-carrying benchmark default ではない
   - `result_ready_races>0` が来るまでは readiness blocker 継続
 

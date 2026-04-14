@@ -1086,6 +1086,7 @@ local_nankan の current blocker を 1 本の board で読む入口:
   - `local_nankan_result_ready_bootstrap_handoff_manifest.json`
   - `local_nankan_readiness_watcher_manifest.json`
 - bounded supervisor を workspace 配下の report manifest で走らせている間は、同じ board に `readiness_surfaces.readiness_supervisor` と `operator_runtime` も重ねて書かれる。したがって live wait / running-cycle の operator read は、separate な wait manifest を開く前にこの canonical board から始めてよい。
+- current canonical board では capture cutoff も top-level から読める。`readiness_surfaces.readiness_supervisor.current_refs.capture_upcoming_only`、`capture_as_of`、`capture_pre_filter_row_count`、`capture_filtered_out_count` と highlights の `supervisor_capture_*` を見れば、strict upcoming filter の cutoff と母数を child capture manifest を開かずに監査できる。
 - `readiness_surfaces.followup_entrypoint` には `run_local_nankan_future_only_followup_oneshot.py` の正本入口を残す。ここで capture loop manifest path、accepted upstream contract、`dry_run_command_preview`、`run_command_preview` を board から直接読める。
 - current NAR 運用では `#101/#103` の readiness はまずこの board を一次参照にし、必要なときだけ個別 manifest に降りる。
 
@@ -1134,6 +1135,7 @@ idle wait を持たせず 1 cycle だけ実行したいとき:
 - `--oneshot` を付けると `max_cycles=1` かつ `wait-seconds=0` として扱い、idle wait を持たずに 1 cycle 実行して終了する。意味があるのは、data 更新が別経路で既に走っており、その完了後に readiness だけを bounded に再評価したい場合に限る。
 - 単なる定時 cron だけでこの script を回しても、元データが更新されていなければ同じ blocker を繰り返し読むだけなので、運用上の第一選択にはしない。
 - `--run-id` を付けると、stable manifest に加えて `..._<run-id>.json` の run-scoped manifest も自動で残る。
+- `--manifest-output` 自体にすでに同じ run-id suffix を含めている場合は、その path をそのまま run-scoped manifest に使い、`..._<run-id>_<run-id>.json` のような二重名は作らない。
 - `--log-file` を付けると shell redirect なしで parent live log を残せる。restart ごとの上書きを防ぐため `..._<run-id>.log` を使う。
 - workspace 配下の `artifacts/reports/...` manifest を使う run では、cycle/wait/completed の current state が canonical `artifacts/reports/local_nankan_data_status_board.json` にも overlay される。これにより board 側から `readiness_surfaces.readiness_supervisor.monitor_state` と `operator_runtime.current_runtime` を直接読める。
 - 一方で tmp path や外部 path の manifest を使う ad hoc / test run は canonical board を自動更新しない。そうした run で board 出力が必要なときだけ `--operator-board-output` を明示する。
@@ -1193,6 +1195,7 @@ external refresh completion を条件に readiness-only oneshot を起動する 
 - wrapper の top-level `observed_at` は freshness 判定に使った基準時刻そのものであり、`upstream_refresh.age_seconds` はその同じ時刻との差分として読む。
 - wrapper 自身の contract は `execution_role=readiness_followup_gate`, `trigger_contract=external_refresh_completed_only` であり、`refresh 完了確認 -> readiness-only follow-up` の境界を 1 つの artifact に固定する。
 - wrapper manifest は `read_order`, `highlights`, `upstream_fresh`, `child_launch_allowed` も返すので、operator は freshness 判定と child 実行可否を top-level から直接読める。
+- current top-level highlights では upstream cutoff も読める。`upstream_upcoming_only`、`upstream_as_of`、`upstream_pre_filter_rows`、`upstream_filtered_out` を見れば、freshness 判定と同時に strict upcoming filter の母数を child manifest 深掘りなしで確認できる。
 
 local_nankan primary raw materialize の初期 smoke:
 
