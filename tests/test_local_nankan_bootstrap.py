@@ -429,6 +429,12 @@ class LocalNankanBootstrapTest(unittest.TestCase):
                         "current_phase": "capturing_pre_race_pool",
                         "recommended_action": "wait",
                         "initial_baseline_summary_input": str(ROOT / "artifacts/reports/capture_baseline_seed.json"),
+                        "latest_race_id_source_report": {
+                            "upcoming_only": True,
+                            "as_of": "2026-04-14T16:00:00+09:00",
+                            "pre_filter_row_count": 11,
+                            "filtered_out_count": 4,
+                        },
                         "pass_snapshots": [
                             {"baseline_summary_input": str(ROOT / "artifacts/reports/capture_baseline_seed.json")},
                             {"baseline_summary_input": str(ROOT / "artifacts/reports/capture_pass_001_summary.json")},
@@ -441,6 +447,12 @@ class LocalNankanBootstrapTest(unittest.TestCase):
                         "capture_loop_manifest_output": str(tmp_path / "capture.json"),
                         "capture_loop_manifest": {
                             "initial_baseline_summary_input": str(ROOT / "artifacts/reports/capture_baseline_seed.json"),
+                            "latest_race_id_source_report": {
+                                "upcoming_only": True,
+                                "as_of": "2026-04-14T16:00:00+09:00",
+                                "pre_filter_row_count": 11,
+                                "filtered_out_count": 4,
+                            },
                             "pass_snapshots": [
                                 {"baseline_summary_input": str(ROOT / "artifacts/reports/capture_pass_001_summary.json")},
                             ],
@@ -475,8 +487,12 @@ class LocalNankanBootstrapTest(unittest.TestCase):
         self.assertEqual(wrapper_manifest["execution_mode"], "single_cycle")
         self.assertEqual(wrapper_manifest["trigger_contract"], "direct_refresh_plus_readiness")
         self.assertIn("capture_baseline_chain=artifacts/reports/capture_baseline_seed.json->artifacts/reports/capture_pass_001_summary.json", wrapper_manifest["highlights"])
+        self.assertIn("capture_filtered_out=4", wrapper_manifest["highlights"])
         self.assertEqual(wrapper_manifest["capture_provenance"]["initial_baseline_summary_input"], "artifacts/reports/capture_baseline_seed.json")
         self.assertEqual(wrapper_manifest["capture_provenance"]["latest_baseline_summary_input"], "artifacts/reports/capture_pass_001_summary.json")
+        self.assertTrue(wrapper_manifest["capture_provenance"]["upcoming_only"])
+        self.assertEqual(wrapper_manifest["capture_provenance"]["as_of"], "2026-04-14T16:00:00+09:00")
+        self.assertEqual(wrapper_manifest["capture_provenance"]["filtered_out_count"], 4)
         self.assertEqual(wrapper_manifest["artifacts"]["capture_loop_manifest"], str((tmp_path / "capture.json").relative_to(ROOT)))
         self.assertEqual(wrapper_manifest["artifacts"]["status_board"], str((tmp_path / "board.json").relative_to(ROOT)))
         self.assertEqual(wrapper_manifest["capture_provenance"]["capture_loop_manifest"], str((tmp_path / "capture.json").relative_to(ROOT)))
@@ -487,9 +503,16 @@ class LocalNankanBootstrapTest(unittest.TestCase):
         )
         self.assertEqual(wrapper_manifest["capture_provenance"]["watcher_capture_initial_baseline_summary_input"], "artifacts/reports/capture_baseline_seed.json")
         self.assertEqual(wrapper_manifest["capture_provenance"]["watcher_capture_latest_baseline_summary_input"], "artifacts/reports/capture_pass_001_summary.json")
+        self.assertTrue(wrapper_manifest["capture_provenance"]["watcher_capture_upcoming_only"])
+        self.assertEqual(wrapper_manifest["capture_provenance"]["watcher_capture_as_of"], "2026-04-14T16:00:00+09:00")
+        self.assertEqual(wrapper_manifest["capture_provenance"]["watcher_capture_filtered_out_count"], 4)
         self.assertEqual(
             wrapper_manifest["steps"]["capture_loop"]["manifest"]["initial_baseline_summary_input"],
             "artifacts/reports/capture_baseline_seed.json",
+        )
+        self.assertEqual(
+            wrapper_manifest["steps"]["capture_loop"]["manifest"]["latest_race_id_source_report"]["filtered_out_count"],
+            4,
         )
         self.assertEqual(
             wrapper_manifest["steps"]["capture_loop"]["manifest"]["pass_snapshots"][0]["baseline_summary_input"],
@@ -502,6 +525,10 @@ class LocalNankanBootstrapTest(unittest.TestCase):
         self.assertEqual(
             wrapper_manifest["steps"]["readiness_watcher"]["manifest"]["capture_loop_manifest"]["initial_baseline_summary_input"],
             "artifacts/reports/capture_baseline_seed.json",
+        )
+        self.assertEqual(
+            wrapper_manifest["steps"]["readiness_watcher"]["manifest"]["capture_loop_manifest"]["latest_race_id_source_report"]["filtered_out_count"],
+            4,
         )
         self.assertEqual(
             wrapper_manifest["steps"]["readiness_watcher"]["manifest"]["capture_loop_manifest"]["pass_snapshots"][0]["baseline_summary_input"],

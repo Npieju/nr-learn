@@ -104,6 +104,20 @@ def _extract_latest_baseline_summary_input(capture_payload: dict[str, Any]) -> s
     return None
 
 
+def _extract_latest_race_id_source_report(capture_payload: dict[str, Any]) -> dict[str, Any]:
+    direct_report = capture_payload.get("latest_race_id_source_report")
+    if isinstance(direct_report, dict):
+        return direct_report
+    pass_snapshots = capture_payload.get("pass_snapshots")
+    if isinstance(pass_snapshots, list) and pass_snapshots:
+        latest_snapshot = pass_snapshots[-1]
+        if isinstance(latest_snapshot, dict):
+            snapshot_report = latest_snapshot.get("race_id_source_report")
+            if isinstance(snapshot_report, dict):
+                return snapshot_report
+    return {}
+
+
 def _run_command(*, label: str, command: list[str]) -> int:
     print(f"[local-nankan-future-readiness] running {label}: {shlex.join(command)}", flush=True)
     with Heartbeat("[local-nankan-future-readiness]", f"{label} child command", logger=log_progress):
@@ -308,6 +322,8 @@ def main() -> int:
         status_board = _read_json_dict(_resolve_path(args.status_board_output))
         progress.update(current=4, message=f"status_board exit_code={board_exit} phase={status_board.get('current_phase')}")
         watcher_capture_manifest = watcher_manifest.get("capture_loop_manifest") if isinstance(watcher_manifest.get("capture_loop_manifest"), dict) else {}
+        capture_filter_report = _extract_latest_race_id_source_report(capture_manifest)
+        watcher_capture_filter_report = _extract_latest_race_id_source_report(watcher_capture_manifest)
 
         capture_baseline_chain = _format_baseline_chain(
             capture_manifest.get("initial_baseline_summary_input"),
@@ -349,15 +365,28 @@ def main() -> int:
                 f"status={str(status_board.get('status') or ('failed' if board_exit != 0 else 'completed'))}",
                 f"current_phase={str(status_board.get('current_phase') or watcher_manifest.get('current_phase') or capture_manifest.get('current_phase') or 'future_only_readiness_track')}",
                 f"capture_baseline_chain={capture_baseline_chain}",
+                f"capture_upcoming_only={capture_filter_report.get('upcoming_only')}",
+                f"capture_as_of={capture_filter_report.get('as_of')}",
+                f"capture_filtered_out={capture_filter_report.get('filtered_out_count')}",
             ],
             "capture_provenance": {
                 "capture_loop_manifest": args.capture_loop_manifest_output,
                 "initial_baseline_summary_input": _display_path_value(capture_manifest.get("initial_baseline_summary_input")),
                 "latest_baseline_summary_input": _display_path_value(_extract_latest_baseline_summary_input(capture_manifest)),
+                "latest_race_id_source_report": _normalize_display_paths(capture_filter_report),
+                "upcoming_only": capture_filter_report.get("upcoming_only"),
+                "as_of": capture_filter_report.get("as_of"),
+                "pre_filter_row_count": capture_filter_report.get("pre_filter_row_count"),
+                "filtered_out_count": capture_filter_report.get("filtered_out_count"),
                 "watcher_manifest": args.watcher_manifest_output,
                 "watcher_capture_loop_manifest_output": watcher_manifest.get("capture_loop_manifest_output"),
                 "watcher_capture_initial_baseline_summary_input": _display_path_value(watcher_capture_manifest.get("initial_baseline_summary_input")),
                 "watcher_capture_latest_baseline_summary_input": _display_path_value(_extract_latest_baseline_summary_input(watcher_capture_manifest)),
+                "watcher_capture_latest_race_id_source_report": _normalize_display_paths(watcher_capture_filter_report),
+                "watcher_capture_upcoming_only": watcher_capture_filter_report.get("upcoming_only"),
+                "watcher_capture_as_of": watcher_capture_filter_report.get("as_of"),
+                "watcher_capture_pre_filter_row_count": watcher_capture_filter_report.get("pre_filter_row_count"),
+                "watcher_capture_filtered_out_count": watcher_capture_filter_report.get("filtered_out_count"),
             },
             "steps": {
                 "capture_loop": {"exit_code": capture_exit, "manifest": _normalize_display_paths(capture_manifest)},
