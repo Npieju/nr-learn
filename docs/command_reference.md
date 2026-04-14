@@ -1133,6 +1133,7 @@ idle wait を持たせず 1 cycle だけ実行したいとき:
 - `run_local_nankan_future_only_wait_then_cycle.py` 自体は data ingest を行わず、既に更新された local data / artifact を読んで readiness を再評価する supervisor である。
 - したがってこれは `refresh + readiness read` の入口ではなく、更新済み data に対する `readiness-only follow-up` の入口として使う。
 - 出力 manifest には `execution_role=readiness_supervisor`, `data_update_mode=readiness_recheck_only`, `execution_mode=bounded_wait_cycle|oneshot`, `trigger_contract=external_refresh_completed_only` を持たせ、artifact 単体でも「refresh 完了後だけ意味がある readiness-only follow-up」だと判別できるようにしている。
+- wait manifest 本体にも top-level `read_order` が入り、`monitor_state -> summary_code -> capture cutoff` の first read を parent artifact 単体で固定できる。
 - operator board overlay を有効にした run では、board 側にも top-level `read_order` が入り、`monitor_state -> summary_code -> capture cutoff` の first read を artifact 単体で固定できる。
 - `--oneshot` を付けると `max_cycles=1` かつ `wait-seconds=0` として扱い、idle wait を持たずに 1 cycle 実行して終了する。意味があるのは、data 更新が別経路で既に走っており、その完了後に readiness だけを bounded に再評価したい場合に限る。
 - 単なる定時 cron だけでこの script を回しても、元データが更新されていなければ同じ blocker を繰り返し読むだけなので、運用上の第一選択にはしない。
