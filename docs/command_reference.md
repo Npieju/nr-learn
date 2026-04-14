@@ -1192,6 +1192,7 @@ external refresh completion を条件に readiness-only oneshot を起動する 
 
 - `run_local_nankan_future_only_wait_then_cycle.py --oneshot` を直接 scheduler から叩く代わりに使う thin wrapper。
 - accepted upstream manifest contract は `execution_role=pre_race_capture_refresh_loop`, `data_update_mode=capture_refresh_only`, `trigger_contract=direct_capture_refresh` である。
+- upstream manifest 自体も top-level `read_order` を返すので、まず `status`, `current_phase`, `recommended_action`, `latest_race_id_source_report.upcoming_only`, `latest_race_id_source_report.as_of`, `latest_race_id_source_report.pre_filter_row_count`, `latest_race_id_source_report.filtered_out_count` の順で読めば cutoff の first-read が完結する。
 - upstream manifest が missing または stale のときは child を起動せず、wrapper manifest を `status=not_ready`, `current_phase=await_external_refresh_completion|await_fresh_external_refresh_completion` で閉じる。
 - upstream manifest の contract が不正なときも child を起動せず、`current_phase=invalid_upstream_refresh_contract` で閉じる。
 - fresh と判定されたときだけ child の `--oneshot` を同期実行し、その child command / log path / wait-cycle manifest を wrapper manifest から辿れる。
