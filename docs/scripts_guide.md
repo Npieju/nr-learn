@@ -352,6 +352,10 @@ capture refresh 側の正本 manifest は `run_local_nankan_pre_race_capture_loo
 
 wait-cycle manifest には `execution_role=readiness_supervisor`, `data_update_mode=readiness_recheck_only`, `execution_mode=bounded_wait_cycle|oneshot`, `trigger_contract=external_refresh_completed_only` を持たせ、artifact 単体でも「data 更新 job ではなく、refresh 完了後だけ意味がある readiness 再評価 surface」であることを判別できるようにしている。
 
+さらに current top-level では capture cutoff も fixed-position shortcut と highlights へ昇格している。したがって wait-cycle manifest / canonical board の first read では、`current_refs.capture_upcoming_only`、`current_refs.capture_as_of`、`current_refs.capture_pre_filter_row_count`、`current_refs.capture_filtered_out_count` と、board 側の `supervisor_capture_upcoming_only`、`supervisor_capture_as_of`、`supervisor_capture_pre_filter_rows`、`supervisor_capture_filtered_out` を見れば、child capture manifest を開かなくても strict upcoming filter の cutoff と母数を確認できる。
+
+`--run-id` を使う run-scoped manifest path は idempotent に扱う。つまり `--manifest-output` 自体にすでに同じ run-id suffix を含めている場合、wait-cycle は `..._<run_id>_<run_id>.json` のような二重名を作らず、その指定 path をそのまま `run_manifest_output` と `readiness_supervisor_manifest` に使う。
+
 workspace 配下の `artifacts/reports/...` manifest を使う bounded supervisor run では、cycle / wait / completed の current state が canonical `artifacts/reports/local_nankan_data_status_board.json` にも overlay される。したがって live operator の first read は board 側の `readiness_surfaces.readiness_supervisor` と `operator_runtime` から始めてよく、必要なときだけ wait-cycle manifest や cycle-scoped child manifest に降りればよい。
 
 一方で tmp path や外部 path の manifest を使う ad hoc / test run は canonical board を自動更新しない。こうした run で board 出力も欲しい場合だけ `--operator-board-output` を明示する。
@@ -359,6 +363,8 @@ workspace 配下の `artifacts/reports/...` manifest を使う bounded superviso
 `--oneshot` は idle wait を持たずに 1 cycle だけ readiness を再評価するための補助モードである。外部 scheduler と組み合わせる意味があるのは、data ingest 完了や artifact refresh が別経路で担保されていて、その直後に bounded な再評価を差し込みたい場合だけである。
 
 この境界を operator entrypoint として固定したい場合は `run_local_nankan_future_only_followup_oneshot.py` を使う。これは upstream refresh manifest の fresh/stale を先に確認し、fresh な場合だけ `run_local_nankan_future_only_wait_then_cycle.py --oneshot` を同期実行する。したがって外部 scheduler / hook 側は「refresh 完了後にこの wrapper を 1 回呼ぶ」だけでよく、stale artifact への誤発火は wrapper manifest の `status=not_ready` で止められる。wrapper manifest は `read_order`, `highlights`, `upstream_fresh`, `child_launch_allowed` も返すため、child を起動したかどうかを top-level だけで追える。
+
+followup oneshot の top-level highlights でも upstream cutoff を読める。`upstream_upcoming_only`、`upstream_as_of`、`upstream_pre_filter_rows`、`upstream_filtered_out` が揃っているので、scheduler / hook 側の first read は freshness 判定と同時に「何件を strict upcoming filter 前提で見たか」まで child manifest 深掘りなしで監査できる。
 
 launch 前に freshness / contract 判定だけ見たい場合は `--dry-run` を使う。この場合は child を起動せず、`status=dry_run`, `current_phase=followup_plan_ready` を返して operator 側の事前確認に使える。
 
