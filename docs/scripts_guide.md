@@ -344,6 +344,8 @@ local_nankan future-only readiness を 1 cycle 更新する入口は `run_local_
 
 この wrapper manifest には `execution_role=readiness_cycle_wrapper`, `data_update_mode=capture_refresh_with_readiness`, `execution_mode=single_cycle`, `trigger_contract=direct_refresh_plus_readiness` を持たせ、capture loop を含む `refresh + readiness read` 入口だと artifact 単体でも判別できるようにしている。
 
+wrapper manifest 自体も top-level `read_order` を返す。したがって operator は `status -> current_phase -> recommended_action -> capture_provenance.upcoming_only -> capture_provenance.as_of -> capture_provenance.pre_filter_row_count -> capture_provenance.filtered_out_count` の順を wrapper artifact 単体で固定できる。
+
 つまり operator 判断は次の 2 段に分ける。future-only pool の recrawl / refresh も同時に進めたいならこの wrapper を使う。data / artifact 更新が別経路で終わっており readiness だけ再確認したいなら、下段の wait-cycle `--oneshot` または bounded supervisor を使う。
 
 manual rerun を減らす bounded supervisor は `run_local_nankan_future_only_wait_then_cycle.py` である。これは future-only readiness cycle を反復し、cycle ごとの wrapper / status board / capture loop history を artifact に残す。`--run-bootstrap-on-ready` を付けると、cycle 内の `bootstrap_handoff` が `benchmark_ready` に進んだ時点で `run_local_nankan_result_ready_bootstrap_handoff.py --run-bootstrap` を即時 follow-up し、`#101 -> #103` 再開結果も同じ cycle artifact 群に残す。ここでいう `result arrival / 到着` は、future-only strict `pre_race_only` races に対応する official result rows が実データへ反映され、artifact 上で `result_ready_races>0` になることを指す。
@@ -352,11 +354,15 @@ capture refresh 側の正本 manifest は `run_local_nankan_pre_race_capture_loo
 
 wait-cycle manifest には `execution_role=readiness_supervisor`, `data_update_mode=readiness_recheck_only`, `execution_mode=bounded_wait_cycle|oneshot`, `trigger_contract=external_refresh_completed_only` を持たせ、artifact 単体でも「data 更新 job ではなく、refresh 完了後だけ意味がある readiness 再評価 surface」であることを判別できるようにしている。
 
+wait-cycle manifest 本体も top-level `read_order` を返す。したがって parent manifest の first read は `status -> current_phase -> recommended_action -> monitor_state -> current_outcome.summary_code -> current_refs.capture_upcoming_only -> current_refs.capture_as_of -> current_refs.capture_pre_filter_row_count -> current_refs.capture_filtered_out_count` で固定してよい。
+
 さらに current top-level では capture cutoff も fixed-position shortcut と highlights へ昇格している。したがって wait-cycle manifest / canonical board の first read では、`current_refs.capture_upcoming_only`、`current_refs.capture_as_of`、`current_refs.capture_pre_filter_row_count`、`current_refs.capture_filtered_out_count` と、board 側の `supervisor_capture_upcoming_only`、`supervisor_capture_as_of`、`supervisor_capture_pre_filter_rows`、`supervisor_capture_filtered_out` を見れば、child capture manifest を開かなくても strict upcoming filter の cutoff と母数を確認できる。
 
 `--run-id` を使う run-scoped manifest path は idempotent に扱う。つまり `--manifest-output` 自体にすでに同じ run-id suffix を含めている場合、wait-cycle は `..._<run_id>_<run_id>.json` のような二重名を作らず、その指定 path をそのまま `run_manifest_output` と `readiness_supervisor_manifest` に使う。
 
 workspace 配下の `artifacts/reports/...` manifest を使う bounded supervisor run では、cycle / wait / completed の current state が canonical `artifacts/reports/local_nankan_data_status_board.json` にも overlay される。したがって live operator の first read は board 側の `readiness_surfaces.readiness_supervisor` と `operator_runtime` から始めてよく、必要なときだけ wait-cycle manifest や cycle-scoped child manifest に降りればよい。
+
+canonical board と operator board overlay も top-level `read_order` を返すので、board first-read でも `status/current_phase/recommended_action` の後に supervisor monitor state と capture cutoff へ同じ順で入れる。
 
 一方で tmp path や外部 path の manifest を使う ad hoc / test run は canonical board を自動更新しない。こうした run で board 出力も欲しい場合だけ `--operator-board-output` を明示する。
 
