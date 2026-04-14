@@ -152,6 +152,20 @@ def _extract_latest_baseline_summary_input(upstream_payload: dict[str, Any]) -> 
     return None
 
 
+def _extract_latest_race_id_source_report(upstream_payload: dict[str, Any]) -> dict[str, Any]:
+    direct_report = upstream_payload.get("latest_race_id_source_report")
+    if isinstance(direct_report, dict):
+        return direct_report
+    pass_snapshots = upstream_payload.get("pass_snapshots")
+    if isinstance(pass_snapshots, list) and pass_snapshots:
+        latest_snapshot = pass_snapshots[-1]
+        if isinstance(latest_snapshot, dict):
+            snapshot_report = latest_snapshot.get("race_id_source_report")
+            if isinstance(snapshot_report, dict):
+                return snapshot_report
+    return {}
+
+
 def _run_command(*, label: str, command: list[str]) -> int:
     print(f"[local-nankan-followup-oneshot] running {label}: {shlex.join(command)}", flush=True)
     with Heartbeat("[local-nankan-followup-oneshot]", f"{label} child command", logger=log_progress):
@@ -182,6 +196,7 @@ def _build_output_payload(
 ) -> dict[str, Any]:
     upstream_contract_valid, upstream_contract_errors = _evaluate_upstream_contract(upstream_payload)
     upstream_latest_baseline = _extract_latest_baseline_summary_input(upstream_payload)
+    upstream_latest_race_id_source_report = _extract_latest_race_id_source_report(upstream_payload)
     upstream_baseline_chain = _format_baseline_chain(
         upstream_payload.get("initial_baseline_summary_input"),
         upstream_latest_baseline,
@@ -200,6 +215,9 @@ def _build_output_payload(
         f"status={status}",
         f"current_phase={current_phase}",
         f"upstream_baseline_chain={upstream_baseline_chain}",
+        f"upstream_upcoming_only={upstream_latest_race_id_source_report.get('upcoming_only')}",
+        f"upstream_as_of={upstream_latest_race_id_source_report.get('as_of')}",
+        f"upstream_filtered_out={upstream_latest_race_id_source_report.get('filtered_out_count')}",
     ]
     if child_exit_code is not None:
         highlights.append(f"followup_exit_code={int(child_exit_code)}")
@@ -242,6 +260,11 @@ def _build_output_payload(
             "trigger_contract": upstream_payload.get("trigger_contract"),
             "initial_baseline_summary_input": _display_path_value(upstream_payload.get("initial_baseline_summary_input")),
             "latest_baseline_summary_input": _display_path_value(upstream_latest_baseline),
+            "upcoming_only": upstream_latest_race_id_source_report.get("upcoming_only"),
+            "as_of": upstream_latest_race_id_source_report.get("as_of"),
+            "pre_filter_row_count": upstream_latest_race_id_source_report.get("pre_filter_row_count"),
+            "filtered_out_count": upstream_latest_race_id_source_report.get("filtered_out_count"),
+            "latest_race_id_source_report": _normalize_display_paths(upstream_latest_race_id_source_report),
             "observed_at": upstream_observed_at,
             "age_seconds": upstream_age_seconds,
             "max_allowed_age_seconds": int(max_upstream_age_seconds),

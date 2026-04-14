@@ -79,11 +79,15 @@ class LocalNankanBootstrapTest(unittest.TestCase):
             self.assertFalse(payload["upstream_refresh"]["contract_valid"])
             self.assertIsNone(payload["upstream_refresh"]["initial_baseline_summary_input"])
             self.assertIsNone(payload["upstream_refresh"]["latest_baseline_summary_input"])
+            self.assertIsNone(payload["upstream_refresh"]["upcoming_only"])
+            self.assertIsNone(payload["upstream_refresh"]["as_of"])
+            self.assertIsNone(payload["upstream_refresh"]["filtered_out_count"])
             self.assertEqual(payload["followup_command"]["command"][1], "scripts/run_local_nankan_future_only_wait_then_cycle.py")
             self.assertTrue(str(payload["followup_command"]["log_file"]).startswith("artifacts/logs/"))
             self.assertEqual(payload["read_order"][0], "status")
             self.assertIn("upstream_fresh=false", payload["highlights"])
             self.assertIn("upstream_baseline_chain=None", payload["highlights"])
+            self.assertIn("upstream_filtered_out=None", payload["highlights"])
             self.assertIn("--oneshot", payload["followup_command"]["command"])
 
     def test_followup_oneshot_blocks_invalid_upstream_contract(self) -> None:
@@ -139,6 +143,12 @@ class LocalNankanBootstrapTest(unittest.TestCase):
                         "execution_mode": "bounded_pass_loop",
                         "trigger_contract": "direct_capture_refresh",
                         "initial_baseline_summary_input": "artifacts/reports/capture_baseline_seed.json",
+                        "latest_race_id_source_report": {
+                            "upcoming_only": True,
+                            "as_of": "2026-04-14T15:00:00+09:00",
+                            "pre_filter_row_count": 11,
+                            "filtered_out_count": 5,
+                        },
                         "pass_snapshots": [
                             {"baseline_summary_input": "artifacts/reports/capture_baseline_seed.json"},
                         ],
@@ -180,6 +190,9 @@ class LocalNankanBootstrapTest(unittest.TestCase):
             self.assertEqual(payload["upstream_refresh"]["age_seconds"], 121)
             self.assertEqual(payload["upstream_refresh"]["initial_baseline_summary_input"], "artifacts/reports/capture_baseline_seed.json")
             self.assertEqual(payload["upstream_refresh"]["latest_baseline_summary_input"], "artifacts/reports/capture_baseline_seed.json")
+            self.assertTrue(payload["upstream_refresh"]["upcoming_only"])
+            self.assertEqual(payload["upstream_refresh"]["as_of"], "2026-04-14T15:00:00+09:00")
+            self.assertEqual(payload["upstream_refresh"]["filtered_out_count"], 5)
 
     def test_followup_oneshot_dry_run_plans_child_without_launching_it(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
@@ -198,6 +211,12 @@ class LocalNankanBootstrapTest(unittest.TestCase):
                         "execution_mode": "bounded_pass_loop",
                         "trigger_contract": "direct_capture_refresh",
                         "initial_baseline_summary_input": "artifacts/reports/capture_baseline_seed.json",
+                        "latest_race_id_source_report": {
+                            "upcoming_only": True,
+                            "as_of": "2026-04-14T15:30:00+09:00",
+                            "pre_filter_row_count": 11,
+                            "filtered_out_count": 6,
+                        },
                         "pass_snapshots": [
                             {"baseline_summary_input": "artifacts/reports/capture_baseline_seed.json"},
                             {"baseline_summary_input": "artifacts/reports/capture_pass_001_summary.json"},
@@ -248,6 +267,9 @@ class LocalNankanBootstrapTest(unittest.TestCase):
             self.assertEqual(payload["upstream_refresh"]["age_seconds"], 30)
             self.assertEqual(payload["upstream_refresh"]["initial_baseline_summary_input"], "artifacts/reports/capture_baseline_seed.json")
             self.assertEqual(payload["upstream_refresh"]["latest_baseline_summary_input"], "artifacts/reports/capture_pass_001_summary.json")
+            self.assertTrue(payload["upstream_refresh"]["upcoming_only"])
+            self.assertEqual(payload["upstream_refresh"]["as_of"], "2026-04-14T15:30:00+09:00")
+            self.assertEqual(payload["upstream_refresh"]["filtered_out_count"], 6)
             self.assertNotIn("exit_code", payload["followup_command"])
             self.assertIn("followup_exit_code=planned", payload["highlights"])
 
@@ -267,6 +289,12 @@ class LocalNankanBootstrapTest(unittest.TestCase):
                         "data_update_mode": "capture_refresh_only",
                         "trigger_contract": "direct_capture_refresh",
                         "initial_baseline_summary_input": "artifacts/reports/capture_baseline_seed.json",
+                        "latest_race_id_source_report": {
+                            "upcoming_only": True,
+                            "as_of": "2026-04-14T15:45:00+09:00",
+                            "pre_filter_row_count": 11,
+                            "filtered_out_count": 7,
+                        },
                         "pass_snapshots": [
                             {"baseline_summary_input": "artifacts/reports/capture_baseline_seed.json"},
                             {"baseline_summary_input": "artifacts/reports/capture_pass_001_summary.json"},
@@ -340,9 +368,13 @@ class LocalNankanBootstrapTest(unittest.TestCase):
             self.assertEqual(payload["upstream_refresh"]["age_seconds"], 45)
             self.assertEqual(payload["upstream_refresh"]["initial_baseline_summary_input"], "artifacts/reports/capture_baseline_seed.json")
             self.assertEqual(payload["upstream_refresh"]["latest_baseline_summary_input"], "artifacts/reports/capture_pass_001_summary.json")
+            self.assertTrue(payload["upstream_refresh"]["upcoming_only"])
+            self.assertEqual(payload["upstream_refresh"]["as_of"], "2026-04-14T15:45:00+09:00")
+            self.assertEqual(payload["upstream_refresh"]["filtered_out_count"], 7)
             self.assertEqual(payload["read_order"][3], "upstream_refresh.upstream_fresh")
             self.assertIn("followup_exit_code=0", payload["highlights"])
             self.assertIn("upstream_baseline_chain=artifacts/reports/capture_baseline_seed.json->artifacts/reports/capture_pass_001_summary.json", payload["highlights"])
+            self.assertIn("upstream_filtered_out=7", payload["highlights"])
             self.assertEqual(payload["followup_command"]["command"][1], "scripts/run_local_nankan_future_only_wait_then_cycle.py")
             self.assertTrue(str(payload["followup_command"]["log_file"]).startswith("artifacts/logs/"))
             self.assertEqual(len(commands), 1)
