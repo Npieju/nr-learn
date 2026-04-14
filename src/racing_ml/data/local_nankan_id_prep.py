@@ -299,7 +299,7 @@ def prepare_local_nankan_ids_from_config(
         "race_id_source": normalized_race_id_source,
         "race_id_source_default": str(crawl_cfg.get("race_id_source_default") or crawl_cfg.get("race_id_source") or "race_list"),
         "upcoming_only": bool(upcoming_only),
-        "as_of": as_of,
+        "as_of": str(race_source_report.get("as_of")) if isinstance(race_source_report, dict) and race_source_report.get("as_of") else as_of,
         "seed_file": artifact_display_path(seed_path, workspace_root=base_dir) if seed_path is not None else None,
         "reports": [],
     }
