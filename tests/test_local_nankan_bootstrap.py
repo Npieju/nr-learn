@@ -1166,6 +1166,12 @@ class LocalNankanBootstrapTest(unittest.TestCase):
                 if name.endswith("pre_race_capture_loop.json"):
                     return {
                         "initial_baseline_summary_input": "artifacts/reports/capture_baseline_seed.json",
+                        "latest_race_id_source_report": {
+                            "upcoming_only": True,
+                            "as_of": "2026-04-11T15:10:00+09:00",
+                            "pre_filter_row_count": 12,
+                            "filtered_out_count": 3,
+                        },
                         "pass_snapshots": [
                             {"baseline_summary_input": "artifacts/reports/capture_baseline_seed.json"},
                             {"baseline_summary_input": "artifacts/reports/capture_pass_001_summary.json"},
@@ -1285,6 +1291,10 @@ class LocalNankanBootstrapTest(unittest.TestCase):
             self.assertTrue(wait_payloads[0]["current_refs"]["blocking_manifest"].endswith("cycle_001_pre_race_capture_loop.json"))
             self.assertEqual(wait_payloads[0]["current_refs"]["capture_initial_baseline_summary_input"], "artifacts/reports/capture_baseline_seed.json")
             self.assertEqual(wait_payloads[0]["current_refs"]["capture_latest_baseline_summary_input"], "artifacts/reports/capture_pass_001_summary.json")
+            self.assertEqual(wait_payloads[0]["current_refs"]["capture_upcoming_only"], True)
+            self.assertEqual(wait_payloads[0]["current_refs"]["capture_as_of"], "2026-04-11T15:10:00+09:00")
+            self.assertEqual(wait_payloads[0]["current_refs"]["capture_pre_filter_row_count"], 12)
+            self.assertEqual(wait_payloads[0]["current_refs"]["capture_filtered_out_count"], 3)
             self.assertEqual(wait_payloads[0]["current_operator_card"]["headline"], "result arrival pending")
             self.assertEqual(wait_payloads[0]["current_operator_card"]["state"], "blocked")
             self.assertEqual(wait_payloads[0]["current_operator_card"]["focus_surface"], "status_board")
@@ -1337,6 +1347,10 @@ class LocalNankanBootstrapTest(unittest.TestCase):
             self.assertEqual(wait_payloads[0]["current_surface_summaries"]["readiness_cycle"]["status"], "partial")
             self.assertEqual(wait_payloads[0]["current_surface_summaries"]["readiness_cycle"]["elapsed_seconds"], 10)
             self.assertEqual(wait_payloads[0]["current_surface_summaries"]["capture_loop"]["pending_result_races"], 24)
+            self.assertEqual(wait_payloads[0]["current_surface_summaries"]["capture_loop"]["upcoming_only"], True)
+            self.assertEqual(wait_payloads[0]["current_surface_summaries"]["capture_loop"]["as_of"], "2026-04-11T15:10:00+09:00")
+            self.assertEqual(wait_payloads[0]["current_surface_summaries"]["capture_loop"]["pre_filter_row_count"], 12)
+            self.assertEqual(wait_payloads[0]["current_surface_summaries"]["capture_loop"]["filtered_out_count"], 3)
             self.assertEqual(wait_payloads[0]["wait_state"]["seconds_total"], 5)
             self.assertEqual(wait_payloads[0]["wait_state"]["seconds_remaining"], 5)
             self.assertEqual(wait_payloads[0]["wait_state"]["heartbeat_seconds"], 2)
@@ -1359,10 +1373,17 @@ class LocalNankanBootstrapTest(unittest.TestCase):
             self.assertEqual(operator_board["readiness_surfaces"]["readiness_supervisor"]["completed_cycles"], 2)
             self.assertEqual(operator_board["readiness_surfaces"]["readiness_supervisor"]["current_refs"]["capture_initial_baseline_summary_input"], "artifacts/reports/capture_baseline_seed.json")
             self.assertEqual(operator_board["readiness_surfaces"]["readiness_supervisor"]["current_refs"]["capture_latest_baseline_summary_input"], "artifacts/reports/capture_pass_001_summary.json")
+            self.assertEqual(operator_board["readiness_surfaces"]["readiness_supervisor"]["current_refs"]["capture_upcoming_only"], True)
+            self.assertEqual(operator_board["readiness_surfaces"]["readiness_supervisor"]["current_refs"]["capture_as_of"], "2026-04-11T15:10:00+09:00")
+            self.assertEqual(operator_board["readiness_surfaces"]["readiness_supervisor"]["current_refs"]["capture_pre_filter_row_count"], 12)
+            self.assertEqual(operator_board["readiness_surfaces"]["readiness_supervisor"]["current_refs"]["capture_filtered_out_count"], 3)
             self.assertEqual(operator_board["operator_runtime"]["monitor_state"], "completed")
             self.assertTrue(operator_board["artifacts"]["readiness_supervisor_manifest"].endswith("wait_then_cycle_run02.json"))
             self.assertIn("supervisor_monitor_state=completed", operator_board["highlights"])
             self.assertIn("supervisor_capture_baseline_chain=artifacts/reports/capture_baseline_seed.json->artifacts/reports/capture_pass_001_summary.json", operator_board["highlights"])
+            self.assertIn("supervisor_capture_upcoming_only=True", operator_board["highlights"])
+            self.assertIn("supervisor_capture_as_of=2026-04-11T15:10:00+09:00", operator_board["highlights"])
+            self.assertIn("supervisor_capture_filtered_out=3", operator_board["highlights"])
 
     def test_build_operator_board_payload_surfaces_live_supervisor_state(self) -> None:
         board_payload = {
@@ -1416,6 +1437,16 @@ class LocalNankanBootstrapTest(unittest.TestCase):
                 "focus_manifest": "artifacts/reports/cycle_002_status_board.json",
                 "capture_initial_baseline_summary_input": "artifacts/reports/capture_baseline_seed.json",
                 "capture_latest_baseline_summary_input": "artifacts/reports/capture_pass_001_summary.json",
+                "capture_latest_race_id_source_report": {
+                    "upcoming_only": True,
+                    "as_of": "2026-04-11T15:10:00+09:00",
+                    "pre_filter_row_count": 12,
+                    "filtered_out_count": 3,
+                },
+                "capture_upcoming_only": True,
+                "capture_as_of": "2026-04-11T15:10:00+09:00",
+                "capture_pre_filter_row_count": 12,
+                "capture_filtered_out_count": 3,
             },
             "started_at": "2026-04-11T06:04:34Z",
             "updated_at": "2026-04-11T07:47:41Z",
@@ -1434,11 +1465,18 @@ class LocalNankanBootstrapTest(unittest.TestCase):
         self.assertEqual(operator_board["readiness_surfaces"]["readiness_supervisor"]["current_runtime"]["seconds_remaining"], 1200)
         self.assertEqual(operator_board["readiness_surfaces"]["readiness_supervisor"]["current_refs"]["capture_initial_baseline_summary_input"], "artifacts/reports/capture_baseline_seed.json")
         self.assertEqual(operator_board["readiness_surfaces"]["readiness_supervisor"]["current_refs"]["capture_latest_baseline_summary_input"], "artifacts/reports/capture_pass_001_summary.json")
+        self.assertEqual(operator_board["readiness_surfaces"]["readiness_supervisor"]["current_refs"]["capture_upcoming_only"], True)
+        self.assertEqual(operator_board["readiness_surfaces"]["readiness_supervisor"]["current_refs"]["capture_as_of"], "2026-04-11T15:10:00+09:00")
+        self.assertEqual(operator_board["readiness_surfaces"]["readiness_supervisor"]["current_refs"]["capture_pre_filter_row_count"], 12)
+        self.assertEqual(operator_board["readiness_surfaces"]["readiness_supervisor"]["current_refs"]["capture_filtered_out_count"], 3)
         self.assertEqual(operator_board["operator_runtime"]["monitor_phase"], "waiting_next_cycle")
         self.assertEqual(operator_board["artifacts"]["live_status_board_source"], "artifacts/reports/cycle_002_status_board.json")
         self.assertEqual(operator_board["artifacts"]["readiness_supervisor_manifest"], "artifacts/reports/wait_then_cycle_live.json")
         self.assertIn("supervisor_monitor_state=waiting_next_cycle", operator_board["highlights"])
         self.assertIn("supervisor_capture_baseline_chain=artifacts/reports/capture_baseline_seed.json->artifacts/reports/capture_pass_001_summary.json", operator_board["highlights"])
+        self.assertIn("supervisor_capture_upcoming_only=True", operator_board["highlights"])
+        self.assertIn("supervisor_capture_as_of=2026-04-11T15:10:00+09:00", operator_board["highlights"])
+        self.assertIn("supervisor_capture_filtered_out=3", operator_board["highlights"])
 
     def test_resolve_operator_board_path_skips_canonical_for_external_manifest(self) -> None:
         resolved = wait_then_cycle_script._resolve_operator_board_path(

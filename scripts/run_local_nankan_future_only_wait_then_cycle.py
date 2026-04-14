@@ -155,6 +155,32 @@ def _extract_latest_baseline_summary_input(capture_payload: dict[str, Any]) -> s
     return None
 
 
+def _extract_latest_race_id_source_report(capture_payload: dict[str, Any]) -> dict[str, Any]:
+    direct_report = capture_payload.get("latest_race_id_source_report")
+    if isinstance(direct_report, dict):
+        return direct_report
+
+    pass_snapshots = capture_payload.get("pass_snapshots")
+    if isinstance(pass_snapshots, list):
+        for snapshot in reversed(pass_snapshots):
+            if not isinstance(snapshot, dict):
+                continue
+            prepare_summary = snapshot.get("prepare_summary")
+            if not isinstance(prepare_summary, dict):
+                continue
+            race_id_source_report = prepare_summary.get("race_id_source_report")
+            if isinstance(race_id_source_report, dict):
+                return race_id_source_report
+
+    latest_summary = capture_payload.get("latest_summary")
+    if isinstance(latest_summary, dict):
+        race_id_source_report = latest_summary.get("race_id_source_report")
+        if isinstance(race_id_source_report, dict):
+            return race_id_source_report
+
+    return {}
+
+
 def _elapsed_seconds_from_timestamps(started_at: str | None, finished_at: str | None) -> int:
     started = _parse_utc_iso(started_at)
     finished = _parse_utc_iso(finished_at)
@@ -557,6 +583,11 @@ def _build_current_refs(
     blocker_details = blockers.get("details") if isinstance(blockers.get("details"), list) else []
     primary_blocker = blocker_details[0] if blocker_details else {}
     capture_loop = summaries.get("capture_loop") if isinstance(summaries.get("capture_loop"), dict) else {}
+    capture_filter_report = (
+        capture_loop.get("latest_race_id_source_report")
+        if isinstance(capture_loop.get("latest_race_id_source_report"), dict)
+        else {}
+    )
 
     focus_surface = focus.get("current_surface")
     blocking_surface = primary_blocker.get("surface")
@@ -571,6 +602,11 @@ def _build_current_refs(
         "capture_loop_manifest": artifacts.get("capture_loop_manifest"),
         "capture_initial_baseline_summary_input": _display_path_value(capture_loop.get("initial_baseline_summary_input")),
         "capture_latest_baseline_summary_input": _display_path_value(capture_loop.get("latest_baseline_summary_input")),
+        "capture_latest_race_id_source_report": _normalize_display_paths(capture_filter_report),
+        "capture_upcoming_only": capture_filter_report.get("upcoming_only"),
+        "capture_as_of": capture_filter_report.get("as_of"),
+        "capture_pre_filter_row_count": capture_filter_report.get("pre_filter_row_count"),
+        "capture_filtered_out_count": capture_filter_report.get("filtered_out_count"),
         "status_board_manifest": artifacts.get("status_board_manifest"),
         "wrapper_manifest": artifacts.get("wrapper_manifest"),
     }
@@ -943,6 +979,7 @@ def _build_operator_board_payload(
         current_refs.get("capture_initial_baseline_summary_input"),
         current_refs.get("capture_latest_baseline_summary_input"),
     )
+    supervisor_capture_filter_report = _dict_payload(current_refs.get("capture_latest_race_id_source_report"))
 
     supervisor_manifest = _display_path(run_manifest_path or stable_manifest_path)
     supervisor_surface = {
@@ -980,6 +1017,9 @@ def _build_operator_board_payload(
             f"supervisor_completed_cycles={supervisor_surface['completed_cycles']}",
             f"supervisor_seconds_remaining={current_runtime.get('seconds_remaining')}",
             f"supervisor_capture_baseline_chain={supervisor_baseline_chain}",
+            f"supervisor_capture_upcoming_only={supervisor_capture_filter_report.get('upcoming_only')}",
+            f"supervisor_capture_as_of={supervisor_capture_filter_report.get('as_of')}",
+            f"supervisor_capture_filtered_out={supervisor_capture_filter_report.get('filtered_out_count')}",
         ]
     )
 
@@ -1191,12 +1231,18 @@ def _build_cycle_surface_summaries(
     capture_payload = _read_json_dict(_resolve_path(artifacts["capture_loop_manifest"]))
     if capture_payload:
         latest_summary = capture_payload.get("latest_summary") if isinstance(capture_payload.get("latest_summary"), dict) else {}
+        latest_race_id_source_report = _extract_latest_race_id_source_report(capture_payload)
         summaries["capture_loop"] = {
             "status": capture_payload.get("status"),
             "current_phase": capture_payload.get("current_phase"),
             "completed_passes": capture_payload.get("completed_passes"),
             "initial_baseline_summary_input": _display_path_value(capture_payload.get("initial_baseline_summary_input")),
             "latest_baseline_summary_input": _display_path_value(_extract_latest_baseline_summary_input(capture_payload)),
+            "latest_race_id_source_report": _normalize_display_paths(latest_race_id_source_report),
+            "upcoming_only": latest_race_id_source_report.get("upcoming_only"),
+            "as_of": latest_race_id_source_report.get("as_of"),
+            "pre_filter_row_count": latest_race_id_source_report.get("pre_filter_row_count"),
+            "filtered_out_count": latest_race_id_source_report.get("filtered_out_count"),
             "pre_race_only_rows": latest_summary.get("pre_race_only_rows"),
             "pre_race_only_races": latest_summary.get("pre_race_only_races"),
             "result_ready_races": latest_summary.get("result_ready_races"),
