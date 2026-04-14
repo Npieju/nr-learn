@@ -936,6 +936,8 @@ def _run_manifest_path(*, manifest_output: str, run_id: str | None) -> str | Non
     if not run_id:
         return None
     manifest_path = Path(manifest_output)
+    if manifest_path.stem.endswith(f"_{run_id}"):
+        return str(manifest_output)
     return str(manifest_path.with_name(f"{manifest_path.stem}_{run_id}{manifest_path.suffix}"))
 
 

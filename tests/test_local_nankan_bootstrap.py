@@ -1498,6 +1498,17 @@ class LocalNankanBootstrapTest(unittest.TestCase):
 
         self.assertEqual(resolved_workspace, Path("/workspaces/nr-learn/artifacts/reports/local_nankan_data_status_board.json"))
 
+    def test_run_manifest_path_is_idempotent_when_manifest_already_has_run_id(self) -> None:
+        resolved = wait_then_cycle_script._run_manifest_path(
+            manifest_output="artifacts/reports/local_nankan_future_only_wait_then_cycle_dryrun_20260414_operator.json",
+            run_id="dryrun_20260414_operator",
+        )
+
+        self.assertEqual(
+            resolved,
+            "artifacts/reports/local_nankan_future_only_wait_then_cycle_dryrun_20260414_operator.json",
+        )
+
     def test_wait_then_cycle_oneshot_skips_idle_wait(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
             tmp_path = Path(tmp_dir)
