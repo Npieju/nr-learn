@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import unittest
+from unittest.mock import patch
 
 from racing_ml.data.local_nankan_race_list import _filter_upcoming_races, parse_local_nankan_program_html
 
@@ -98,6 +99,39 @@ class LocalNankanRaceListTest(unittest.TestCase):
             source_page_url="https://www.nankankeiba.com/program/20260414200102.do",
         )
         filtered = _filter_upcoming_races(frame, as_of="2026-04-14T15:00:00+09:00")
+
+        self.assertEqual(filtered["race_id"].tolist(), ["2026041420010202"])
+
+    def test_filter_upcoming_races_defaults_as_of_to_current_tokyo_time(self) -> None:
+        html = """
+        <html>
+          <body>
+            <li class="nk23_c-block01__list__item">
+              <div class="nk23_c-block01__list__top">
+                <span class="nk23_c-block01__label">1R</span>
+                <p class="nk23_c-block01__texts"><span class="nk23_c-block01__text">14:30</span></p>
+              </div>
+              <a href="/syousai/2026041420010201.do">詳細</a>
+            </li>
+            <li class="nk23_c-block01__list__item">
+              <div class="nk23_c-block01__list__top">
+                <span class="nk23_c-block01__label">2R</span>
+                <p class="nk23_c-block01__texts"><span class="nk23_c-block01__text">15:35</span></p>
+              </div>
+              <a href="/syousai/2026041420010202.do">詳細</a>
+            </li>
+          </body>
+        </html>
+        """
+
+        frame = parse_local_nankan_program_html(
+            html,
+            meeting_id="20260414200102",
+            source_page_url="https://www.nankankeiba.com/program/20260414200102.do",
+        )
+
+        with patch("racing_ml.data.local_nankan_race_list.pd.Timestamp.now", return_value=parse_local_nankan_program_html.__globals__["pd"].Timestamp("2026-04-14T15:00:00+09:00")):
+            filtered = _filter_upcoming_races(frame, as_of=None)
 
         self.assertEqual(filtered["race_id"].tolist(), ["2026041420010202"])
 

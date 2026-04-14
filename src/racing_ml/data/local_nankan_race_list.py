@@ -102,10 +102,17 @@ def _normalize_as_of_timestamp(as_of: str | None) -> pd.Timestamp | None:
     return parsed.tz_convert("Asia/Tokyo")
 
 
+def _resolve_as_of_timestamp(as_of: str | None) -> pd.Timestamp:
+    normalized = _normalize_as_of_timestamp(as_of)
+    if normalized is not None:
+        return normalized
+    return pd.Timestamp.now(tz="Asia/Tokyo")
+
+
 def _filter_upcoming_races(frame: pd.DataFrame, *, as_of: str | None) -> pd.DataFrame:
-    as_of_ts = _normalize_as_of_timestamp(as_of)
-    if as_of_ts is None or frame.empty or "scheduled_post_at" not in frame.columns:
+    if frame.empty or "scheduled_post_at" not in frame.columns:
         return frame
+    as_of_ts = _resolve_as_of_timestamp(as_of)
     scheduled = pd.to_datetime(frame["scheduled_post_at"], errors="coerce")
     return frame.loc[scheduled.notna() & (scheduled > as_of_ts)].reset_index(drop=True)
 
@@ -331,14 +338,16 @@ def discover_local_nankan_race_ids_from_calendar(
 
     program_progress.complete(message=f"done races={len(records)} failures={len(failures)}")
     race_frame = pd.DataFrame(records, columns=["date", "meeting_id", "race_id", "race_no", "post_time", "scheduled_post_at", "source_page_url", "source"])
+    effective_as_of = as_of
     if upcoming_only:
-        race_frame = _filter_upcoming_races(race_frame, as_of=as_of)
+        effective_as_of = _resolve_as_of_timestamp(as_of).isoformat()
+        race_frame = _filter_upcoming_races(race_frame, as_of=effective_as_of)
     report = {
         "source": "race_list",
         "date_window": {"start": start_date, "end": normalized_end_date},
         "date_order": str(date_order),
         "upcoming_only": bool(upcoming_only),
-        "as_of": as_of,
+        "as_of": effective_as_of,
         "requested_calendar_pages": int(len(calendar_keys)),
         "calendar_pages_fetched": int(calendar_pages_fetched),
         "program_pages_fetched": int(program_pages_fetched),
