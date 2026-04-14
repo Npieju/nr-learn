@@ -90,6 +90,10 @@ def _build_pass_paths(snapshot_dir: Path, pass_index: int) -> tuple[Path, Path]:
     return summary_path, date_coverage_path
 
 
+def _build_prepare_summary_path(snapshot_dir: Path, pass_index: int) -> Path:
+    return snapshot_dir / f"pass_{pass_index:03d}_prepare_summary.json"
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--crawl-config", default="configs/crawl_local_nankan_template.yaml")
@@ -125,14 +129,18 @@ def main() -> int:
         pass_records: list[dict[str, Any]] = []
         current_baseline_path = baseline_summary_path
         latest_summary: dict[str, Any] = {}
+        latest_prepare_summary: dict[str, Any] = {}
 
         for pass_index in range(1, max_passes + 1):
             pass_summary_path, pass_date_coverage_path = _build_pass_paths(snapshot_dir, pass_index)
+            pass_prepare_summary_path = _build_prepare_summary_path(snapshot_dir, pass_index)
             prepare_command = [
                 sys.executable,
                 str(ROOT / "scripts/run_prepare_local_nankan_ids.py"),
                 "--crawl-config",
                 args.crawl_config,
+                "--summary-output",
+                str(pass_prepare_summary_path),
                 "--race-id-source",
                 "race_list",
                 "--target",
@@ -170,6 +178,7 @@ def main() -> int:
                 coverage_command.extend(["--baseline-summary-input", str(current_baseline_path)])
 
             prepare_exit = _run_command(label=f"prepare_ids pass={pass_index}/{max_passes}", command=prepare_command)
+            latest_prepare_summary = _read_json_dict(pass_prepare_summary_path)
             progress.update(current=((pass_index - 1) * 3) + 1, message=f"pass={pass_index}/{max_passes} prepare exit_code={prepare_exit}")
             if prepare_exit != 0:
                 latest_summary = {}
@@ -179,6 +188,8 @@ def main() -> int:
                         "prepare_exit_code": prepare_exit,
                         "collect_exit_code": None,
                         "coverage_exit_code": None,
+                        "prepare_summary_output": _display_path(pass_prepare_summary_path),
+                        "race_id_source_report": latest_prepare_summary.get("race_id_source_report"),
                         "summary_output": _display_path(pass_summary_path),
                         "date_coverage_output": _display_path(pass_date_coverage_path),
                         "status": "failed_prepare",
@@ -196,6 +207,8 @@ def main() -> int:
                         "prepare_exit_code": prepare_exit,
                         "collect_exit_code": collect_exit,
                         "coverage_exit_code": None,
+                        "prepare_summary_output": _display_path(pass_prepare_summary_path),
+                        "race_id_source_report": latest_prepare_summary.get("race_id_source_report"),
                         "summary_output": _display_path(pass_summary_path),
                         "date_coverage_output": _display_path(pass_date_coverage_path),
                         "status": "failed_collect",
@@ -220,9 +233,11 @@ def main() -> int:
                     "collect_exit_code": collect_exit,
                     "coverage_exit_code": coverage_exit,
                     "baseline_summary_input": _display_path(current_baseline_path),
+                    "prepare_summary_output": _display_path(pass_prepare_summary_path),
                     "summary_output": _display_path(pass_summary_path),
                     "date_coverage_output": _display_path(pass_date_coverage_path),
                     "status": "completed" if coverage_exit == 0 else "failed_coverage",
+                    "race_id_source_report": latest_prepare_summary.get("race_id_source_report"),
                     "pre_race_only_rows": latest_summary.get("pre_race_only_rows"),
                     "pre_race_only_races": latest_summary.get("pre_race_only_races"),
                     "result_ready_races": latest_summary.get("result_ready_races"),
@@ -266,6 +281,7 @@ def main() -> int:
             "poll_interval_seconds": poll_interval_seconds,
             "initial_baseline_summary_input": _display_path(baseline_summary_path),
             "snapshot_dir": _display_path(snapshot_dir),
+            "latest_race_id_source_report": _normalize_display_paths(latest_prepare_summary.get("race_id_source_report")),
             "latest_summary": _normalize_display_paths(latest_summary),
             "pass_snapshots": pass_records,
         }

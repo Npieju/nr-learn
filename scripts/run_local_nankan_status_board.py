@@ -193,6 +193,7 @@ def _build_readiness_surfaces(
     capture_execution_role = str(capture_loop_payload.get("execution_role") or "")
     capture_data_update_mode = str(capture_loop_payload.get("data_update_mode") or "")
     capture_trigger_contract = str(capture_loop_payload.get("trigger_contract") or "")
+    latest_race_id_source_report = _dict_payload(capture_loop_payload.get("latest_race_id_source_report"))
     upstream_contract_ready = bool(
         capture_execution_role == "pre_race_capture_refresh_loop"
         and capture_data_update_mode == "capture_refresh_only"
@@ -209,6 +210,7 @@ def _build_readiness_surfaces(
             "initial_baseline_summary_input": _display_path_value(capture_loop_payload.get("initial_baseline_summary_input")),
             "latest_baseline_summary_input": _display_path_value(latest_capture_baseline),
             "snapshot_dir": _display_path_value(capture_loop_payload.get("snapshot_dir")),
+            "latest_race_id_source_report": _normalize_display_paths(latest_race_id_source_report),
             "latest_summary": _normalize_display_paths(capture_loop_payload.get("latest_summary")),
         },
         "readiness_probe": {
@@ -513,6 +515,7 @@ def main() -> int:
         readiness_surfaces["capture_loop"].get("initial_baseline_summary_input"),
         readiness_surfaces["capture_loop"].get("latest_baseline_summary_input"),
     )
+    latest_race_id_source_report = _dict_payload(readiness_surfaces["capture_loop"].get("latest_race_id_source_report"))
 
     payload = {
         "started_at": utc_now_iso(),
@@ -576,6 +579,9 @@ def main() -> int:
             f"bootstrap_status={readiness_surfaces['bootstrap_handoff'].get('status')}",
             f"watcher_status={readiness_surfaces['readiness_watcher'].get('status')}",
             f"capture_baseline_chain={capture_baseline_chain}",
+            f"capture_upcoming_only={latest_race_id_source_report.get('upcoming_only')}",
+            f"capture_as_of={latest_race_id_source_report.get('as_of')}",
+            f"capture_filtered_out={latest_race_id_source_report.get('filtered_out_count')}",
         ],
     }
 

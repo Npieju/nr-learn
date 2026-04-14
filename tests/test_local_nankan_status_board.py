@@ -173,6 +173,7 @@ class LocalNankanStatusBoardTest(unittest.TestCase):
             self.assertIn("probe_status=not_ready", payload["highlights"])
             self.assertIn("watcher_status=not_ready", payload["highlights"])
             self.assertIn("capture_baseline_chain=None", payload["highlights"])
+            self.assertIn("capture_upcoming_only=None", payload["highlights"])
 
     def test_status_board_overrides_stale_coverage_ready_with_not_ready_handoff(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
@@ -282,6 +283,11 @@ class LocalNankanStatusBoardTest(unittest.TestCase):
                 "data_update_mode": "capture_refresh_only",
                 "trigger_contract": "direct_capture_refresh",
                 "initial_baseline_summary_input": "artifacts/reports/local_nankan_pre_race_capture_coverage_summary.json",
+                "latest_race_id_source_report": {
+                    "upcoming_only": True,
+                    "as_of": "2026-04-14T15:00:00+09:00",
+                    "filtered_out_count": 5,
+                },
                 "pass_snapshots": [
                     {"baseline_summary_input": "artifacts/reports/local_nankan_pre_race_capture_coverage_summary.json"},
                     {"baseline_summary_input": "artifacts/reports/pass_001_coverage_summary.json"},
@@ -303,6 +309,10 @@ class LocalNankanStatusBoardTest(unittest.TestCase):
             followup_entrypoint["upstream_latest_baseline_summary_input"],
             "artifacts/reports/pass_001_coverage_summary.json",
         )
+        self.assertEqual(
+            readiness_surfaces["capture_loop"]["latest_race_id_source_report"]["filtered_out_count"],
+            5,
+        )
         self.assertEqual(followup_entrypoint["read_order"][3], "upstream_refresh.upstream_fresh")
         self.assertEqual(followup_entrypoint["read_order"][4], "upstream_refresh.age_seconds")
         self.assertIn("artifacts/reports/local_nankan_pre_race_capture_loop_issue122_cycle.json", followup_entrypoint["dry_run_command_preview"])
@@ -317,6 +327,11 @@ class LocalNankanStatusBoardTest(unittest.TestCase):
                 "recommended_action": "wait",
                 "initial_baseline_summary_input": "artifacts/reports/initial_capture_baseline.json",
                 "snapshot_dir": "artifacts/reports/capture_snapshots",
+                "latest_race_id_source_report": {
+                    "upcoming_only": True,
+                    "as_of": "2026-04-14T15:30:00+09:00",
+                    "filtered_out_count": 6,
+                },
                 "pass_snapshots": [
                     {"baseline_summary_input": "artifacts/reports/initial_capture_baseline.json"},
                     {"baseline_summary_input": "artifacts/reports/pass_001_coverage_summary.json"},
@@ -355,6 +370,10 @@ class LocalNankanStatusBoardTest(unittest.TestCase):
         self.assertEqual(
             readiness_surfaces["readiness_watcher"]["capture_latest_baseline_summary_input"],
             "artifacts/reports/pass_001_coverage_summary.json",
+        )
+        self.assertEqual(
+            readiness_surfaces["capture_loop"]["latest_race_id_source_report"]["as_of"],
+            "2026-04-14T15:30:00+09:00",
         )
 
     def test_status_board_normalizes_nested_readiness_payload_paths(self) -> None:

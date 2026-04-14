@@ -12,7 +12,9 @@ SRC = ROOT / "src"
 if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
+from racing_ml.common.artifacts import ensure_output_file_path as artifact_ensure_output_file_path
 from racing_ml.common.config import load_yaml
+from racing_ml.common.artifacts import write_json
 from racing_ml.common.progress import Heartbeat, ProgressBar
 from racing_ml.data.local_nankan_id_prep import prepare_local_nankan_ids_from_config
 
@@ -25,6 +27,7 @@ def log_progress(message: str) -> None:
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--crawl-config", default="configs/crawl_local_nankan_template.yaml")
+    parser.add_argument("--summary-output", default=None)
     parser.add_argument("--seed-file", default=None)
     parser.add_argument("--race-id-source", choices=["seed_file", "race_list"], default=None)
     parser.add_argument("--target", choices=["all", "race_result", "race_card", "pedigree"], default="all")
@@ -57,6 +60,14 @@ def main() -> int:
                 as_of=args.as_of,
             )
         progress.update(message=f"reports ready count={len(summary.get('reports', []))}")
+
+        if args.summary_output:
+            summary_output_path = Path(args.summary_output)
+            if not summary_output_path.is_absolute():
+                summary_output_path = ROOT / summary_output_path
+            artifact_ensure_output_file_path(summary_output_path, label="summary_output", workspace_root=ROOT)
+            write_json(summary_output_path, summary)
+            print(f"[prepare-local-nankan-ids] summary_output: {summary_output_path}")
 
         for report in summary.get("reports", []):
             output_files = ", ".join(report.get("output_files", []))

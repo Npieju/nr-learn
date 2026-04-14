@@ -53,13 +53,20 @@ class LocalNankanCaptureLoopTest(unittest.TestCase):
                     "delta_pre_race_only_races": 2,
                 },
             }
+            prepare_summary = {
+                "race_id_source_report": {
+                    "upcoming_only": True,
+                    "as_of": "2026-04-14T15:00:00+09:00",
+                    "filtered_out_count": 5,
+                }
+            }
 
             baseline_summary.write_text("{}", encoding="utf-8")
 
             with patch.object(capture_loop_script, "_run_command", side_effect=[0, 0, 0]), patch.object(
                 capture_loop_script,
                 "_read_json_dict",
-                side_effect=lambda path: latest_summary if path == pass_summary else {},
+                side_effect=lambda path: prepare_summary if path and path.name == "pass_001_prepare_summary.json" else (latest_summary if path == pass_summary else {}),
             ), patch.object(
                 sys,
                 "argv",
@@ -88,8 +95,11 @@ class LocalNankanCaptureLoopTest(unittest.TestCase):
             self.assertEqual(manifest["trigger_contract"], "direct_capture_refresh")
             self.assertEqual(manifest["completed_passes"], 1)
             self.assertEqual(manifest["initial_baseline_summary_input"], str(baseline_summary))
+            self.assertEqual(manifest["latest_race_id_source_report"]["filtered_out_count"], 5)
             self.assertEqual(manifest["pass_snapshots"][0]["status"], "completed")
             self.assertEqual(manifest["pass_snapshots"][0]["baseline_summary_input"], str(baseline_summary))
+            self.assertEqual(manifest["pass_snapshots"][0]["prepare_summary_output"], str(snapshot_dir / "pass_001_prepare_summary.json"))
+            self.assertEqual(manifest["pass_snapshots"][0]["race_id_source_report"]["as_of"], "2026-04-14T15:00:00+09:00")
             self.assertEqual(manifest["pass_snapshots"][0]["pre_race_only_rows"], 562)
 
     def test_capture_loop_reports_failed_prepare_top_level_status(self) -> None:
@@ -123,6 +133,7 @@ class LocalNankanCaptureLoopTest(unittest.TestCase):
             self.assertEqual(manifest["execution_mode"], "bounded_pass_loop")
             self.assertEqual(manifest["trigger_contract"], "direct_capture_refresh")
             self.assertEqual(manifest["completed_passes"], 1)
+            self.assertEqual(manifest["pass_snapshots"][0]["prepare_summary_output"], str(snapshot_dir / "pass_001_prepare_summary.json"))
             self.assertEqual(manifest["pass_snapshots"][0]["status"], "failed_prepare")
             self.assertEqual(manifest["pass_snapshots"][0]["prepare_exit_code"], 1)
 
@@ -156,6 +167,14 @@ class LocalNankanCaptureLoopTest(unittest.TestCase):
                         "pending_result_races": 24,
                         "baseline_comparison": {},
                     }
+                if name == "pass_001_prepare_summary.json":
+                    return {
+                        "race_id_source_report": {
+                            "upcoming_only": True,
+                            "as_of": "2026-04-14T15:00:00+09:00",
+                            "filtered_out_count": 5,
+                        }
+                    }
                 if name == "pass_002_coverage_summary.json":
                     return {
                         "status": "completed",
@@ -166,6 +185,14 @@ class LocalNankanCaptureLoopTest(unittest.TestCase):
                         "result_ready_races": 1,
                         "pending_result_races": 23,
                         "baseline_comparison": {},
+                    }
+                if name == "pass_002_prepare_summary.json":
+                    return {
+                        "race_id_source_report": {
+                            "upcoming_only": True,
+                            "as_of": "2026-04-14T15:30:00+09:00",
+                            "filtered_out_count": 6,
+                        }
                     }
                 return {}
 
@@ -210,11 +237,14 @@ class LocalNankanCaptureLoopTest(unittest.TestCase):
 
             manifest = json.loads(wrapper_manifest.read_text(encoding="utf-8"))
             self.assertEqual(manifest["initial_baseline_summary_input"], str(initial_baseline))
+            self.assertEqual(manifest["latest_race_id_source_report"]["filtered_out_count"], 6)
             self.assertEqual(manifest["pass_snapshots"][0]["baseline_summary_input"], str(initial_baseline))
+            self.assertEqual(manifest["pass_snapshots"][0]["prepare_summary_output"], str(snapshot_dir / "pass_001_prepare_summary.json"))
             self.assertEqual(
                 manifest["pass_snapshots"][1]["baseline_summary_input"],
                 str(snapshot_dir / "pass_001_coverage_summary.json"),
             )
+            self.assertEqual(manifest["pass_snapshots"][1]["prepare_summary_output"], str(snapshot_dir / "pass_002_prepare_summary.json"))
 
 
 if __name__ == "__main__":
