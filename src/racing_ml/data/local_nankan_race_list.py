@@ -338,6 +338,7 @@ def discover_local_nankan_race_ids_from_calendar(
 
     program_progress.complete(message=f"done races={len(records)} failures={len(failures)}")
     race_frame = pd.DataFrame(records, columns=["date", "meeting_id", "race_id", "race_no", "post_time", "scheduled_post_at", "source_page_url", "source"])
+    pre_filter_row_count = int(len(race_frame))
     effective_as_of = as_of
     if upcoming_only:
         effective_as_of = _resolve_as_of_timestamp(as_of).isoformat()
@@ -354,7 +355,9 @@ def discover_local_nankan_race_ids_from_calendar(
         "raw_meeting_count": int(raw_meeting_count),
         "meeting_count": int(len(meeting_frame)),
         "raw_discovered_count": int(raw_race_count),
+        "pre_filter_row_count": pre_filter_row_count,
         "row_count": int(len(race_frame)),
+        "filtered_out_count": int(max(pre_filter_row_count - len(race_frame), 0)),
         "failure_count": int(len(failures)),
         "failures": failures[:50],
         "raw_html_dir": str(raw_html_dir),

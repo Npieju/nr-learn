@@ -73,7 +73,17 @@ class LocalNankanIdPrepTest(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as tmp_dir, patch(
             "racing_ml.data.local_nankan_id_prep.discover_local_nankan_race_ids_from_calendar",
-            return_value=(discovered, {"source": "race_list", "row_count": 1, "as_of": "2026-04-14T15:00:00+09:00"}),
+            return_value=(
+                discovered,
+                {
+                    "source": "race_list",
+                    "row_count": 1,
+                    "as_of": "2026-04-14T15:00:00+09:00",
+                    "upcoming_only": True,
+                    "pre_filter_row_count": 2,
+                    "filtered_out_count": 1,
+                },
+            ),
         ):
             summary = prepare_local_nankan_ids_from_config(
                 crawl_config,
@@ -86,6 +96,8 @@ class LocalNankanIdPrepTest(unittest.TestCase):
 
         self.assertTrue(summary["upcoming_only"])
         self.assertEqual(summary["as_of"], "2026-04-14T15:00:00+09:00")
+        self.assertEqual(summary["race_id_source_report"]["pre_filter_row_count"], 2)
+        self.assertEqual(summary["race_id_source_report"]["filtered_out_count"], 1)
 
     def test_prepare_ids_rejects_invalid_configured_default(self) -> None:
         crawl_config = {

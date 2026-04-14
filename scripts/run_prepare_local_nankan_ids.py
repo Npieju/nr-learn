@@ -66,6 +66,13 @@ def main() -> int:
                 f"kind={report.get('kind')} targets={targets} rows={report.get('row_count')} source={report.get('source')}"
             )
             print(f"[prepare-local-nankan-ids] outputs: {output_files}")
+        race_source_report = summary.get("race_id_source_report")
+        if isinstance(race_source_report, dict):
+            print(
+                "[prepare-local-nankan-ids] "
+                f"race_list_report upcoming_only={race_source_report.get('upcoming_only')} as_of={race_source_report.get('as_of')} "
+                f"pre_filter_rows={race_source_report.get('pre_filter_row_count')} filtered_out={race_source_report.get('filtered_out_count')}"
+            )
         progress.complete(message="id preparation completed")
         return 0
     except KeyboardInterrupt:
