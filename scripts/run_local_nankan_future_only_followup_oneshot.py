@@ -57,6 +57,40 @@ def _display_path(path: Path | None) -> str | None:
         return str(path)
 
 
+def _display_path_value(path_text: object) -> str | None:
+    if not isinstance(path_text, str) or not path_text:
+        return None
+    path = Path(path_text)
+    if not path.is_absolute():
+        return path_text
+    return _display_path(path)
+
+
+def _normalize_display_paths(value: object) -> object:
+    if isinstance(value, dict):
+        return {key: _normalize_display_paths(item) for key, item in value.items()}
+    if isinstance(value, list):
+        return [_normalize_display_paths(item) for item in value]
+    if isinstance(value, tuple):
+        return [_normalize_display_paths(item) for item in value]
+    if isinstance(value, str):
+        normalized = _display_path_value(value)
+        return value if normalized is None else normalized
+    if isinstance(value, Path):
+        return _display_path(value)
+    return value
+
+
+def _format_baseline_chain(initial_path: object, latest_path: object) -> str | None:
+    initial_display = _display_path_value(initial_path)
+    latest_display = _display_path_value(latest_path)
+    if initial_display and latest_display:
+        if initial_display == latest_display:
+            return initial_display
+        return f"{initial_display}->{latest_display}"
+    return initial_display or latest_display
+
+
 def _parse_utc_iso(timestamp: str | None) -> datetime | None:
     if not timestamp:
         return None
@@ -102,6 +136,22 @@ def _evaluate_upstream_contract(upstream_payload: dict[str, Any]) -> tuple[bool,
     return len(mismatches) == 0, mismatches
 
 
+def _extract_latest_baseline_summary_input(upstream_payload: dict[str, Any]) -> str | None:
+    pass_snapshots = upstream_payload.get("pass_snapshots")
+    if isinstance(pass_snapshots, list) and pass_snapshots:
+        latest_snapshot = pass_snapshots[-1]
+        if isinstance(latest_snapshot, dict):
+            latest_baseline = latest_snapshot.get("baseline_summary_input")
+            if isinstance(latest_baseline, str) and latest_baseline:
+                return latest_baseline
+    latest_summary = upstream_payload.get("latest_summary")
+    if isinstance(latest_summary, dict):
+        latest_baseline = latest_summary.get("baseline_summary_input")
+        if isinstance(latest_baseline, str) and latest_baseline:
+            return latest_baseline
+    return None
+
+
 def _run_command(*, label: str, command: list[str]) -> int:
     print(f"[local-nankan-followup-oneshot] running {label}: {shlex.join(command)}", flush=True)
     with Heartbeat("[local-nankan-followup-oneshot]", f"{label} child command", logger=log_progress):
@@ -131,6 +181,11 @@ def _build_output_payload(
     run_bootstrap_on_ready: bool = False,
 ) -> dict[str, Any]:
     upstream_contract_valid, upstream_contract_errors = _evaluate_upstream_contract(upstream_payload)
+    upstream_latest_baseline = _extract_latest_baseline_summary_input(upstream_payload)
+    upstream_baseline_chain = _format_baseline_chain(
+        upstream_payload.get("initial_baseline_summary_input"),
+        upstream_latest_baseline,
+    )
     upstream_fresh = bool(
         upstream_path.exists()
         and upstream_payload
@@ -144,6 +199,7 @@ def _build_output_payload(
         f"upstream_fresh={str(upstream_fresh).lower()}",
         f"status={status}",
         f"current_phase={current_phase}",
+        f"upstream_baseline_chain={upstream_baseline_chain}",
     ]
     if child_exit_code is not None:
         highlights.append(f"followup_exit_code={int(child_exit_code)}")
@@ -184,6 +240,8 @@ def _build_output_payload(
             "execution_role": upstream_payload.get("execution_role"),
             "data_update_mode": upstream_payload.get("data_update_mode"),
             "trigger_contract": upstream_payload.get("trigger_contract"),
+            "initial_baseline_summary_input": _display_path_value(upstream_payload.get("initial_baseline_summary_input")),
+            "latest_baseline_summary_input": _display_path_value(upstream_latest_baseline),
             "observed_at": upstream_observed_at,
             "age_seconds": upstream_age_seconds,
             "max_allowed_age_seconds": int(max_upstream_age_seconds),
@@ -201,7 +259,7 @@ def _build_output_payload(
         payload["followup_command"]["exit_code"] = int(child_exit_code)
     if wait_cycle_payload is not None:
         payload["wait_cycle_followup"] = wait_cycle_payload
-    return payload
+    return _normalize_display_paths(payload)
 
 
 def main() -> int:

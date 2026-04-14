@@ -37,6 +37,73 @@ def _read_json_dict(path: Path | None) -> dict[str, Any]:
     return payload if isinstance(payload, dict) else {}
 
 
+def _display_path(path: Path | None) -> str | None:
+    if path is None:
+        return None
+    try:
+        return str(path.relative_to(ROOT))
+    except ValueError:
+        return str(path)
+
+
+def _display_path_value(path_text: object) -> str | None:
+    if not isinstance(path_text, str) or not path_text:
+        return None
+    path = Path(path_text)
+    if not path.is_absolute():
+        return path_text
+    return _display_path(path)
+
+
+def _format_baseline_chain(initial_path: object, latest_path: object) -> str | None:
+    initial_display = _display_path_value(initial_path)
+    latest_display = _display_path_value(latest_path)
+    if initial_display and latest_display:
+        if initial_display == latest_display:
+            return initial_display
+        return f"{initial_display}->{latest_display}"
+    return initial_display or latest_display
+
+
+def _normalize_display_paths(value: object) -> object:
+    if isinstance(value, dict):
+        normalized: dict[str, object] = {}
+        for key, child in value.items():
+            if isinstance(child, str) and (
+                key.endswith("_input")
+                or key.endswith("_output")
+                or key.endswith("_manifest")
+                or key.endswith("_file")
+                or key.endswith("_dir")
+                or key.endswith("_path")
+            ):
+                normalized[key] = _display_path_value(child)
+            else:
+                normalized[key] = _normalize_display_paths(child)
+        return normalized
+    if isinstance(value, list):
+        return [_normalize_display_paths(child) for child in value]
+    if isinstance(value, str):
+        return _display_path_value(value) or value
+    return value
+
+
+def _extract_latest_baseline_summary_input(capture_payload: dict[str, Any]) -> str | None:
+    pass_snapshots = capture_payload.get("pass_snapshots")
+    if isinstance(pass_snapshots, list) and pass_snapshots:
+        latest_snapshot = pass_snapshots[-1]
+        if isinstance(latest_snapshot, dict):
+            latest_baseline = latest_snapshot.get("baseline_summary_input")
+            if isinstance(latest_baseline, str) and latest_baseline:
+                return latest_baseline
+    latest_summary = capture_payload.get("latest_summary")
+    if isinstance(latest_summary, dict):
+        latest_baseline = latest_summary.get("baseline_summary_input")
+        if isinstance(latest_baseline, str) and latest_baseline:
+            return latest_baseline
+    return None
+
+
 def _run_command(*, label: str, command: list[str]) -> int:
     print(f"[local-nankan-future-readiness] running {label}: {shlex.join(command)}", flush=True)
     with Heartbeat("[local-nankan-future-readiness]", f"{label} child command", logger=log_progress):
@@ -97,13 +164,13 @@ def _bootstrap_cycle_artifacts(bootstrap_manifest_output: str) -> dict[str, str]
     parent = manifest_path.parent
     raw_parent = ROOT / "data" / "local_nankan_pre_race_ready" / "raw"
     return {
-        "handoff_manifest_output": str(parent / f"{base_name}_pre_race_benchmark_handoff.json"),
-        "pre_race_summary_output": str(parent / f"{base_name}_pre_race_ready_summary.json"),
-        "primary_manifest_file": str(parent / f"{base_name}_pre_race_ready_primary_materialize.json"),
-        "benchmark_manifest_output": str(parent / f"{base_name}_pre_race_ready_benchmark_gate.json"),
-        "filtered_race_card_output": str(raw_parent / f"{base_name}_race_card.csv"),
-        "filtered_race_result_output": str(raw_parent / f"{base_name}_race_result.csv"),
-        "primary_output_file": str(raw_parent / f"{base_name}_primary.csv"),
+        "handoff_manifest_output": _display_path(parent / f"{base_name}_pre_race_benchmark_handoff.json"),
+        "pre_race_summary_output": _display_path(parent / f"{base_name}_pre_race_ready_summary.json"),
+        "primary_manifest_file": _display_path(parent / f"{base_name}_pre_race_ready_primary_materialize.json"),
+        "benchmark_manifest_output": _display_path(parent / f"{base_name}_pre_race_ready_benchmark_gate.json"),
+        "filtered_race_card_output": _display_path(raw_parent / f"{base_name}_race_card.csv"),
+        "filtered_race_result_output": _display_path(raw_parent / f"{base_name}_race_result.csv"),
+        "primary_output_file": _display_path(raw_parent / f"{base_name}_primary.csv"),
     }
 
 
@@ -119,7 +186,7 @@ def main() -> int:
     parser.add_argument("--watcher-script", default="scripts/run_local_nankan_readiness_watcher.py")
     parser.add_argument("--bootstrap-handoff-script", default="scripts/run_local_nankan_result_ready_bootstrap_handoff.py")
     parser.add_argument("--status-board-script", default="scripts/run_local_nankan_status_board.py")
-    parser.add_argument("--source-timing-summary-input", default="artifacts/reports/local_nankan_source_timing_audit_issue121.json")
+    parser.add_argument("--source-timing-summary-input", default="artifacts/reports/local_nankan_source_timing_audit.json")
     parser.add_argument("--capture-loop-manifest-output", default="artifacts/reports/local_nankan_pre_race_capture_loop_issue122_cycle.json")
     parser.add_argument("--watcher-manifest-output", default="artifacts/reports/local_nankan_readiness_watcher_issue122_cycle.json")
     parser.add_argument("--bootstrap-manifest-output", default="artifacts/reports/local_nankan_result_ready_bootstrap_handoff_issue122.json")
@@ -179,6 +246,8 @@ def main() -> int:
             str(_resolve_path(args.watcher_script)),
             "--probe-summary-output",
             _probe_summary_output(args.watcher_manifest_output),
+            "--capture-loop-manifest",
+            args.capture_loop_manifest_output,
             "--source-timing-summary-input",
             args.source_timing_summary_input,
             "--watcher-manifest-output",
@@ -238,6 +307,12 @@ def main() -> int:
         board_exit = _run_command(label="status_board", command=board_command)
         status_board = _read_json_dict(_resolve_path(args.status_board_output))
         progress.update(current=4, message=f"status_board exit_code={board_exit} phase={status_board.get('current_phase')}")
+        watcher_capture_manifest = watcher_manifest.get("capture_loop_manifest") if isinstance(watcher_manifest.get("capture_loop_manifest"), dict) else {}
+
+        capture_baseline_chain = _format_baseline_chain(
+            capture_manifest.get("initial_baseline_summary_input"),
+            _extract_latest_baseline_summary_input(capture_manifest),
+        )
 
         wrapper_manifest = {
             "started_at": run_started_at,
@@ -270,13 +345,28 @@ def main() -> int:
                 "default_horizon_days": int(args.default_horizon_days),
                 "max_passes": int(args.max_passes),
             },
+            "highlights": [
+                f"status={str(status_board.get('status') or ('failed' if board_exit != 0 else 'completed'))}",
+                f"current_phase={str(status_board.get('current_phase') or watcher_manifest.get('current_phase') or capture_manifest.get('current_phase') or 'future_only_readiness_track')}",
+                f"capture_baseline_chain={capture_baseline_chain}",
+            ],
+            "capture_provenance": {
+                "capture_loop_manifest": args.capture_loop_manifest_output,
+                "initial_baseline_summary_input": _display_path_value(capture_manifest.get("initial_baseline_summary_input")),
+                "latest_baseline_summary_input": _display_path_value(_extract_latest_baseline_summary_input(capture_manifest)),
+                "watcher_manifest": args.watcher_manifest_output,
+                "watcher_capture_loop_manifest_output": watcher_manifest.get("capture_loop_manifest_output"),
+                "watcher_capture_initial_baseline_summary_input": _display_path_value(watcher_capture_manifest.get("initial_baseline_summary_input")),
+                "watcher_capture_latest_baseline_summary_input": _display_path_value(_extract_latest_baseline_summary_input(watcher_capture_manifest)),
+            },
             "steps": {
-                "capture_loop": {"exit_code": capture_exit, "manifest": capture_manifest},
-                "readiness_watcher": {"exit_code": watcher_exit, "manifest": watcher_manifest},
-                "bootstrap_handoff": {"exit_code": bootstrap_exit, "manifest": bootstrap_manifest},
-                "status_board": {"exit_code": board_exit, "manifest": status_board},
+                "capture_loop": {"exit_code": capture_exit, "manifest": _normalize_display_paths(capture_manifest)},
+                "readiness_watcher": {"exit_code": watcher_exit, "manifest": _normalize_display_paths(watcher_manifest)},
+                "bootstrap_handoff": {"exit_code": bootstrap_exit, "manifest": _normalize_display_paths(bootstrap_manifest)},
+                "status_board": {"exit_code": board_exit, "manifest": _normalize_display_paths(status_board)},
             },
         }
+        wrapper_manifest = _normalize_display_paths(wrapper_manifest)
         write_json(wrapper_manifest_path, wrapper_manifest)
         progress.complete(message=f"future-only readiness cycle output={wrapper_manifest_path}")
 

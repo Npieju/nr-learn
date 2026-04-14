@@ -73,16 +73,21 @@ if historical corpus を diagnostic-only に降格した上で、future-only pre
 
 ## Current Evidence
 
-- `artifacts/reports/local_nankan_source_timing_audit_issue121.json`
+- current canonical source timing read:
+  - `artifacts/reports/local_nankan_source_timing_audit.json`
+- historical issue snapshot retained for audit trail:
+  - `artifacts/reports/local_nankan_source_timing_audit_issue121.json`
 - `artifacts/reports/local_nankan_future_only_readiness_cycle_issue122.json`
 - `artifacts/reports/local_nankan_future_only_tuning_probe_issue122.json`
 - `artifacts/reports/local_nankan_pre_race_capture_loop_issue122_cycle.json`
 - `artifacts/reports/local_nankan_pre_race_readiness_probe_summary.json`
 - `artifacts/reports/local_nankan_readiness_watcher_issue122_cycle.json`
-- `artifacts/reports/local_nankan_pre_race_benchmark_handoff_issue121.json`
-- `artifacts/reports/local_nankan_result_ready_bootstrap_handoff_issue122.json`
-- `artifacts/reports/local_nankan_data_status_board_issue122.json`
+- `artifacts/reports/local_nankan_pre_race_benchmark_handoff_manifest.json`
+- `artifacts/reports/local_nankan_result_ready_bootstrap_handoff_manifest.json`
+- `artifacts/reports/local_nankan_data_status_board.json`
 - `artifacts/reports/local_nankan_data_status_board_issue122_cycle.json`
+
+no-arg operator-default readiness commands は source timing input として canonical current alias `artifacts/reports/local_nankan_source_timing_audit.json` を読む。
 
 current operational read:
 

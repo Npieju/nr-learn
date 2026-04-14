@@ -60,5 +60,31 @@ class FeatureSelectionExplicitModeTest(unittest.TestCase):
         self.assertEqual(selection.feature_columns, ["age"])
 
 
+class FeatureSelectionAllSafeModeTest(unittest.TestCase):
+    def test_all_safe_mode_excludes_margin_result_leakage(self) -> None:
+        frame = pd.DataFrame(
+            {
+                "age": [3, 4],
+                "margin": ["1/2", "-"],
+                "card_fetch_mode": ["cache_legacy", "cache_manifest"],
+                "card_snapshot_relation": ["post_race", "pre_race"],
+                "odds_snapshot_at": ["2026-04-06T19:12:25Z", "2026-04-06T19:15:00Z"],
+                "horse_last_3_avg_time_margin_sec": [0.3, -0.1],
+                "is_win": [0, 1],
+            }
+        )
+        feature_config = {
+            "features": {"base": []},
+            "selection": {"mode": "all_safe"},
+        }
+
+        selection = resolve_feature_selection(frame, feature_config, label_column="is_win")
+
+        self.assertEqual(
+            selection.feature_columns,
+            ["age", "horse_last_3_avg_time_margin_sec"],
+        )
+
+
 if __name__ == "__main__":
     unittest.main()

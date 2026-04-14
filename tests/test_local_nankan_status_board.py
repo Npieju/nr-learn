@@ -172,6 +172,7 @@ class LocalNankanStatusBoardTest(unittest.TestCase):
             self.assertEqual(payload["current_phase"], "await_result_arrival")
             self.assertIn("probe_status=not_ready", payload["highlights"])
             self.assertIn("watcher_status=not_ready", payload["highlights"])
+            self.assertIn("capture_baseline_chain=None", payload["highlights"])
 
     def test_status_board_overrides_stale_coverage_ready_with_not_ready_handoff(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
@@ -280,6 +281,11 @@ class LocalNankanStatusBoardTest(unittest.TestCase):
                 "execution_role": "pre_race_capture_refresh_loop",
                 "data_update_mode": "capture_refresh_only",
                 "trigger_contract": "direct_capture_refresh",
+                "initial_baseline_summary_input": "artifacts/reports/local_nankan_pre_race_capture_coverage_summary.json",
+                "pass_snapshots": [
+                    {"baseline_summary_input": "artifacts/reports/local_nankan_pre_race_capture_coverage_summary.json"},
+                    {"baseline_summary_input": "artifacts/reports/pass_001_coverage_summary.json"},
+                ],
             },
             readiness_probe_summary={},
             pre_race_handoff_manifest={},
@@ -289,10 +295,116 @@ class LocalNankanStatusBoardTest(unittest.TestCase):
 
         followup_entrypoint = readiness_surfaces["followup_entrypoint"]
         self.assertTrue(followup_entrypoint["upstream_contract_ready"])
+        self.assertEqual(
+            followup_entrypoint["upstream_initial_baseline_summary_input"],
+            "artifacts/reports/local_nankan_pre_race_capture_coverage_summary.json",
+        )
+        self.assertEqual(
+            followup_entrypoint["upstream_latest_baseline_summary_input"],
+            "artifacts/reports/pass_001_coverage_summary.json",
+        )
         self.assertEqual(followup_entrypoint["read_order"][3], "upstream_refresh.upstream_fresh")
         self.assertEqual(followup_entrypoint["read_order"][4], "upstream_refresh.age_seconds")
         self.assertIn("artifacts/reports/local_nankan_pre_race_capture_loop_issue122_cycle.json", followup_entrypoint["dry_run_command_preview"])
         self.assertIn("--run-bootstrap-on-ready", followup_entrypoint["run_command_preview"])
+
+    def test_status_board_surfaces_capture_baseline_chain_from_watcher_and_capture_loop(self) -> None:
+        readiness_surfaces = status_board_script._build_readiness_surfaces(
+            capture_loop_manifest_path="artifacts/reports/local_nankan_pre_race_capture_loop_manifest.json",
+            capture_loop_manifest={
+                "status": "capturing",
+                "current_phase": "capturing_pre_race_pool",
+                "recommended_action": "wait",
+                "initial_baseline_summary_input": "artifacts/reports/initial_capture_baseline.json",
+                "snapshot_dir": "artifacts/reports/capture_snapshots",
+                "pass_snapshots": [
+                    {"baseline_summary_input": "artifacts/reports/initial_capture_baseline.json"},
+                    {"baseline_summary_input": "artifacts/reports/pass_001_coverage_summary.json"},
+                ],
+            },
+            readiness_probe_summary={},
+            pre_race_handoff_manifest={},
+            bootstrap_handoff_manifest={},
+            readiness_watcher_manifest={
+                "capture_loop_manifest_output": "artifacts/reports/local_nankan_pre_race_capture_loop_manifest.json",
+                "capture_loop_manifest": {
+                    "initial_baseline_summary_input": "artifacts/reports/initial_capture_baseline.json",
+                    "pass_snapshots": [
+                        {"baseline_summary_input": "artifacts/reports/pass_001_coverage_summary.json"}
+                    ],
+                },
+            },
+        )
+
+        self.assertEqual(
+            readiness_surfaces["capture_loop"]["initial_baseline_summary_input"],
+            "artifacts/reports/initial_capture_baseline.json",
+        )
+        self.assertEqual(
+            readiness_surfaces["capture_loop"]["latest_baseline_summary_input"],
+            "artifacts/reports/pass_001_coverage_summary.json",
+        )
+        self.assertEqual(
+            readiness_surfaces["readiness_watcher"]["capture_loop_manifest_output"],
+            "artifacts/reports/local_nankan_pre_race_capture_loop_manifest.json",
+        )
+        self.assertEqual(
+            readiness_surfaces["readiness_watcher"]["capture_initial_baseline_summary_input"],
+            "artifacts/reports/initial_capture_baseline.json",
+        )
+        self.assertEqual(
+            readiness_surfaces["readiness_watcher"]["capture_latest_baseline_summary_input"],
+            "artifacts/reports/pass_001_coverage_summary.json",
+        )
+
+    def test_status_board_normalizes_nested_readiness_payload_paths(self) -> None:
+        readiness_surfaces = status_board_script._build_readiness_surfaces(
+            capture_loop_manifest_path="artifacts/reports/local_nankan_pre_race_capture_loop_manifest.json",
+            capture_loop_manifest={
+                "status": "capturing",
+                "current_phase": "capturing_pre_race_pool",
+                "recommended_action": "wait",
+                "initial_baseline_summary_input": str(ROOT / "artifacts/reports/initial_capture_baseline.json"),
+                "snapshot_dir": str(ROOT / "artifacts/reports/capture_snapshots"),
+                "latest_summary": {
+                    "baseline_summary_input": str(ROOT / "artifacts/reports/pass_001_coverage_summary.json"),
+                    "source_timing_summary_input": str(ROOT / "artifacts/reports/local_nankan_source_timing_audit.json"),
+                },
+                "pass_snapshots": [
+                    {"baseline_summary_input": str(ROOT / "artifacts/reports/initial_capture_baseline.json")},
+                    {"baseline_summary_input": str(ROOT / "artifacts/reports/pass_001_coverage_summary.json")},
+                ],
+            },
+            readiness_probe_summary={
+                "historical_source_timing": {
+                    "source_timing_summary_input": str(ROOT / "artifacts/reports/local_nankan_source_timing_audit.json")
+                }
+            },
+            pre_race_handoff_manifest={},
+            bootstrap_handoff_manifest={},
+            readiness_watcher_manifest={
+                "probe_summary": {
+                    "source_timing_summary_input": str(ROOT / "artifacts/reports/local_nankan_source_timing_audit.json")
+                }
+            },
+        )
+
+        self.assertEqual(
+            readiness_surfaces["capture_loop"]["latest_summary"]["baseline_summary_input"],
+            "artifacts/reports/pass_001_coverage_summary.json",
+        )
+        self.assertEqual(
+            readiness_surfaces["capture_loop"]["latest_summary"]["source_timing_summary_input"],
+            "artifacts/reports/local_nankan_source_timing_audit.json",
+        )
+        self.assertEqual(
+            readiness_surfaces["readiness_probe"]["historical_source_timing"]["source_timing_summary_input"],
+            "artifacts/reports/local_nankan_source_timing_audit.json",
+        )
+        self.assertEqual(
+            readiness_surfaces["readiness_watcher"]["probe_summary"]["source_timing_summary_input"],
+            "artifacts/reports/local_nankan_source_timing_audit.json",
+        )
 
     def test_status_board_surfaces_benchmark_ready_from_bootstrap_handoff(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:

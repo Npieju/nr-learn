@@ -85,6 +85,51 @@ def _display_path(path: Path | None) -> str | None:
         return str(path)
 
 
+def _display_path_value(path_text: object) -> str | None:
+    if not isinstance(path_text, str) or not path_text:
+        return None
+    path = Path(path_text)
+    if not path.is_absolute():
+        return path_text
+    return _display_path(path)
+
+
+def _normalize_display_paths(value: object) -> object:
+    if isinstance(value, dict):
+        return {key: _normalize_display_paths(item) for key, item in value.items()}
+    if isinstance(value, list):
+        return [_normalize_display_paths(item) for item in value]
+    if isinstance(value, tuple):
+        return [_normalize_display_paths(item) for item in value]
+    if isinstance(value, str):
+        normalized = _display_path_value(value)
+        return value if normalized is None else normalized
+    if isinstance(value, Path):
+        return _display_path(value)
+    return value
+
+
+def _format_baseline_chain(initial_path: object, latest_path: object) -> str | None:
+    initial_display = _display_path_value(initial_path)
+    latest_display = _display_path_value(latest_path)
+    if initial_display and latest_display:
+        if initial_display == latest_display:
+            return initial_display
+        return f"{initial_display}->{latest_display}"
+    return initial_display or latest_display
+
+
+def _normalize_cycle_record_for_output(cycle_record: dict[str, Any]) -> dict[str, Any]:
+    normalized = dict(cycle_record)
+    normalized["initial_baseline_summary_input"] = _display_path_value(
+        cycle_record.get("initial_baseline_summary_input")
+    )
+    normalized["latest_baseline_summary_input"] = _display_path_value(
+        cycle_record.get("latest_baseline_summary_input")
+    )
+    return normalized
+
+
 def _parse_utc_iso(timestamp: str | None) -> datetime | None:
     if not timestamp:
         return None
@@ -92,6 +137,22 @@ def _parse_utc_iso(timestamp: str | None) -> datetime | None:
         return datetime.fromisoformat(timestamp.replace("Z", "+00:00"))
     except ValueError:
         return None
+
+
+def _extract_latest_baseline_summary_input(capture_payload: dict[str, Any]) -> str | None:
+    pass_snapshots = capture_payload.get("pass_snapshots")
+    if isinstance(pass_snapshots, list) and pass_snapshots:
+        latest_snapshot = pass_snapshots[-1]
+        if isinstance(latest_snapshot, dict):
+            latest_baseline = latest_snapshot.get("baseline_summary_input")
+            if isinstance(latest_baseline, str) and latest_baseline:
+                return latest_baseline
+    latest_summary = capture_payload.get("latest_summary")
+    if isinstance(latest_summary, dict):
+        latest_baseline = latest_summary.get("baseline_summary_input")
+        if isinstance(latest_baseline, str) and latest_baseline:
+            return latest_baseline
+    return None
 
 
 def _elapsed_seconds_from_timestamps(started_at: str | None, finished_at: str | None) -> int:
@@ -485,14 +546,17 @@ def _artifact_key_for_surface(surface: str | None) -> str | None:
 def _build_current_refs(
     *,
     current_artifacts: dict[str, Any] | None,
+    current_surface_summaries: dict[str, Any] | None,
     current_focus: dict[str, Any] | None,
     current_blockers: dict[str, Any] | None,
 ) -> dict[str, Any]:
     artifacts = current_artifacts or {}
+    summaries = current_surface_summaries or {}
     focus = current_focus or {}
     blockers = current_blockers or {}
     blocker_details = blockers.get("details") if isinstance(blockers.get("details"), list) else []
     primary_blocker = blocker_details[0] if blocker_details else {}
+    capture_loop = summaries.get("capture_loop") if isinstance(summaries.get("capture_loop"), dict) else {}
 
     focus_surface = focus.get("current_surface")
     blocking_surface = primary_blocker.get("surface")
@@ -504,6 +568,9 @@ def _build_current_refs(
         "focus_manifest": artifacts.get(focus_key) if focus_key else None,
         "blocking_surface": blocking_surface,
         "blocking_manifest": artifacts.get(blocking_key) if blocking_key else None,
+        "capture_loop_manifest": artifacts.get("capture_loop_manifest"),
+        "capture_initial_baseline_summary_input": _display_path_value(capture_loop.get("initial_baseline_summary_input")),
+        "capture_latest_baseline_summary_input": _display_path_value(capture_loop.get("latest_baseline_summary_input")),
         "status_board_manifest": artifacts.get("status_board_manifest"),
         "wrapper_manifest": artifacts.get("wrapper_manifest"),
     }
@@ -713,6 +780,7 @@ def _build_current_snapshot(
     )
     snapshot["current_refs"] = _build_current_refs(
         current_artifacts=current_artifacts,
+        current_surface_summaries=current_surface_summaries,
         current_focus=snapshot["current_focus"],
         current_blockers=snapshot["current_blockers"],
     )
@@ -783,7 +851,7 @@ def _run_command(
     log_progress(f"[local-nankan-future-wait-cycle] {label} child command done in {format_duration(elapsed_seconds)}")
     return {
         "label": label,
-        "command": command,
+        "command": _normalize_display_paths(command),
         "exit_code": int(return_code),
         "status": "completed" if return_code == 0 else "failed",
         "started_at": started_at,
@@ -871,6 +939,10 @@ def _build_operator_board_payload(
     current_outcome = _dict_payload(wait_payload.get("current_outcome"))
     current_operator_card = _dict_payload(wait_payload.get("current_operator_card"))
     current_refs = _dict_payload(wait_payload.get("current_refs"))
+    supervisor_baseline_chain = _format_baseline_chain(
+        current_refs.get("capture_initial_baseline_summary_input"),
+        current_refs.get("capture_latest_baseline_summary_input"),
+    )
 
     supervisor_manifest = _display_path(run_manifest_path or stable_manifest_path)
     supervisor_surface = {
@@ -907,6 +979,7 @@ def _build_operator_board_payload(
             f"supervisor_monitor_state={supervisor_surface['monitor_state']}",
             f"supervisor_completed_cycles={supervisor_surface['completed_cycles']}",
             f"supervisor_seconds_remaining={current_runtime.get('seconds_remaining')}",
+            f"supervisor_capture_baseline_chain={supervisor_baseline_chain}",
         ]
     )
 
@@ -1002,6 +1075,8 @@ def _build_wait_manifest_payload(
 
     top_level_finished_at = payload_finished_at if monitor_state == "completed" else None
 
+    normalized_cycle_records = [_normalize_cycle_record_for_output(record) for record in cycle_records]
+
     payload = {
         "started_at": run_started_at,
         "updated_at": payload_finished_at,
@@ -1026,12 +1101,12 @@ def _build_wait_manifest_payload(
         "data_update_mode": "readiness_recheck_only",
         "execution_mode": execution_mode,
         "trigger_contract": "external_refresh_completed_only",
-        "cycles": cycle_records,
+        "cycles": normalized_cycle_records,
     }
-    if cycle_records:
-        payload["latest_cycle"] = cycle_records[-1]
+    if normalized_cycle_records:
+        payload["latest_cycle"] = normalized_cycle_records[-1]
         payload["readiness_summary"] = _build_readiness_summary_from_cycle_record(
-            cycle_records[-1],
+            normalized_cycle_records[-1],
             recommended_action=final_action,
         )
     current_readiness_summary = payload.get("readiness_summary") if isinstance(payload.get("readiness_summary"), dict) else None
@@ -1067,7 +1142,7 @@ def _build_wait_manifest_payload(
     payload["current_snapshot"] = {
         key: value for key, value in payload.items() if key.startswith("current_")
     }
-    return payload
+    return _normalize_display_paths(payload)
 
 
 def _build_cycle_state(
@@ -1087,7 +1162,7 @@ def _build_cycle_state(
         "current_cycle": cycle_index,
         "stage": stage,
         "label": label,
-        "command": command,
+        "command": _normalize_display_paths(command),
         "heartbeat_seconds": heartbeat_seconds,
         "started_at": started_at,
         "elapsed_seconds": elapsed_seconds,
@@ -1120,6 +1195,8 @@ def _build_cycle_surface_summaries(
             "status": capture_payload.get("status"),
             "current_phase": capture_payload.get("current_phase"),
             "completed_passes": capture_payload.get("completed_passes"),
+            "initial_baseline_summary_input": _display_path_value(capture_payload.get("initial_baseline_summary_input")),
+            "latest_baseline_summary_input": _display_path_value(_extract_latest_baseline_summary_input(capture_payload)),
             "pre_race_only_rows": latest_summary.get("pre_race_only_rows"),
             "pre_race_only_races": latest_summary.get("pre_race_only_races"),
             "result_ready_races": latest_summary.get("result_ready_races"),
@@ -1196,6 +1273,8 @@ def _build_active_readiness_summary(cycle_state: dict[str, Any]) -> dict[str, An
         "current_phase": current_phase,
         "status": readiness_cycle.get("status") or "running",
         "elapsed_seconds": cycle_state.get("elapsed_seconds"),
+        "initial_baseline_summary_input": _display_path_value(capture_loop.get("initial_baseline_summary_input")),
+        "latest_baseline_summary_input": _display_path_value(capture_loop.get("latest_baseline_summary_input")),
         "pre_race_only_rows": capture_loop.get("pre_race_only_rows"),
         "pre_race_only_races": capture_loop.get("pre_race_only_races"),
         "result_ready_races": capture_loop.get("result_ready_races"),
@@ -1225,6 +1304,8 @@ def _build_readiness_summary_from_cycle_record(cycle_record: dict[str, Any], *, 
         "wrapper_status": cycle_record.get("wrapper_status"),
         "status_board_status": cycle_record.get("status_board_status"),
         "benchmark_rerun_ready": cycle_record.get("benchmark_rerun_ready"),
+        "initial_baseline_summary_input": _display_path_value(cycle_record.get("initial_baseline_summary_input")),
+        "latest_baseline_summary_input": _display_path_value(cycle_record.get("latest_baseline_summary_input")),
         "pre_race_only_rows": cycle_record.get("pre_race_only_rows"),
         "pre_race_only_races": cycle_record.get("pre_race_only_races"),
         "result_ready_races": cycle_record.get("result_ready_races"),
@@ -1571,6 +1652,8 @@ def main() -> int:
                     "wrapper_current_phase": wrapper_payload.get("current_phase"),
                     "status_board_status": board_payload.get("status"),
                     "benchmark_rerun_ready": readiness.get("benchmark_rerun_ready"),
+                    "initial_baseline_summary_input": _display_path_value(capture_payload.get("initial_baseline_summary_input")),
+                    "latest_baseline_summary_input": _display_path_value(_extract_latest_baseline_summary_input(capture_payload)),
                     "pre_race_only_rows": latest_summary.get("pre_race_only_rows"),
                     "pre_race_only_races": latest_summary.get("pre_race_only_races"),
                     "result_ready_races": latest_summary.get("result_ready_races"),

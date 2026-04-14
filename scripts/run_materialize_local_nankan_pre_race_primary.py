@@ -34,15 +34,42 @@ def _resolve_path(raw_path: str | Path) -> Path:
     return path if path.is_absolute() else (ROOT / path)
 
 
+def _display_path(path: Path) -> str:
+    try:
+        return str(path.relative_to(ROOT))
+    except ValueError:
+        return str(path)
+
+
+def _display_path_value(value: object) -> object:
+    if value is None:
+        return None
+    if isinstance(value, Path):
+        return _display_path(value)
+    if isinstance(value, str):
+        return _display_path(_resolve_path(value)) if Path(value).is_absolute() else value
+    return value
+
+
+def _normalize_display_paths(value: object) -> object:
+    if isinstance(value, dict):
+        return {key: _normalize_display_paths(item) for key, item in value.items()}
+    if isinstance(value, list):
+        return [_normalize_display_paths(item) for item in value]
+    if isinstance(value, tuple):
+        return [_normalize_display_paths(item) for item in value]
+    return _display_path_value(value)
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--data-config", default="configs/data_local_nankan.yaml")
+    parser.add_argument("--data-config", default="configs/data_local_nankan_pre_race_ready.yaml")
     parser.add_argument("--race-card-input", default="data/external/local_nankan/racecard/local_racecard.csv")
     parser.add_argument("--race-result-input", default="data/external/local_nankan/results/local_race_result.csv")
     parser.add_argument("--pedigree-input", default="data/external/local_nankan/pedigree/local_pedigree.csv")
-    parser.add_argument("--filtered-race-card-output", default="data/local_nankan/raw/local_nankan_race_card_pre_race_ready.csv")
-    parser.add_argument("--filtered-race-result-output", default="data/local_nankan/raw/local_nankan_race_result_pre_race_ready.csv")
-    parser.add_argument("--primary-output-file", default="data/local_nankan/raw/local_nankan_primary_pre_race_ready.csv")
+    parser.add_argument("--filtered-race-card-output", default="data/local_nankan_pre_race_ready/raw/local_nankan_race_card_pre_race_ready.csv")
+    parser.add_argument("--filtered-race-result-output", default="data/local_nankan_pre_race_ready/raw/local_nankan_race_result_pre_race_ready.csv")
+    parser.add_argument("--primary-output-file", default="data/local_nankan_pre_race_ready/raw/local_nankan_primary_pre_race_ready.csv")
     parser.add_argument("--manifest-file", default="artifacts/reports/local_nankan_primary_pre_race_ready_materialize_manifest.json")
     parser.add_argument("--summary-output", default="artifacts/reports/local_nankan_pre_race_ready_summary.json")
     args = parser.parse_args()
@@ -95,16 +122,16 @@ def main() -> int:
         progress.update(current=4, message=f"filtered outputs ready card_rows={len(ready_card_frame)} result_rows={len(ready_result_frame)}")
 
         if materialization_summary["result_ready_races"] == 0:
-            summary = {
+            summary = _normalize_display_paths({
                 "status": "not_ready",
                 "current_phase": "await_result_arrival",
                 "recommended_action": "wait_for_result_ready_pre_race_races",
-                "filtered_race_card_output": str(filtered_card_path),
-                "filtered_race_result_output": str(filtered_result_path),
-                "primary_output_file": str(primary_output_path),
-                "manifest_file": str(manifest_path),
+                "filtered_race_card_output": filtered_card_path,
+                "filtered_race_result_output": filtered_result_path,
+                "primary_output_file": primary_output_path,
+                "manifest_file": manifest_path,
                 "materialization_summary": materialization_summary,
-            }
+            })
             write_json(summary_path, summary)
             progress.complete(message=f"not ready output={summary_path}")
             return 2
@@ -122,17 +149,17 @@ def main() -> int:
             )
         progress.update(current=5, message=f"primary status={primary_summary.get('status')} rows={primary_summary.get('row_count')}")
 
-        summary = {
+        summary = _normalize_display_paths({
             "status": "completed" if primary_summary.get("status") == "completed" else "failed",
             "current_phase": primary_summary.get("current_phase"),
             "recommended_action": primary_summary.get("recommended_action"),
-            "filtered_race_card_output": str(filtered_card_path),
-            "filtered_race_result_output": str(filtered_result_path),
-            "primary_output_file": str(primary_output_path),
-            "manifest_file": str(manifest_path),
+            "filtered_race_card_output": filtered_card_path,
+            "filtered_race_result_output": filtered_result_path,
+            "primary_output_file": primary_output_path,
+            "manifest_file": manifest_path,
             "materialization_summary": materialization_summary,
             "primary_materialize_summary": primary_summary,
-        }
+        })
         write_json(summary_path, summary)
         progress.complete(message=f"summary ready output={summary_path}")
         return 0

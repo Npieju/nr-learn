@@ -29,6 +29,33 @@ def _resolve_path(path_text: str | Path) -> Path:
     return path if path.is_absolute() else (ROOT / path)
 
 
+def _display_path(path: Path) -> str:
+    try:
+        return str(path.relative_to(ROOT))
+    except ValueError:
+        return str(path)
+
+
+def _display_path_value(value: Any) -> Any:
+    if value is None:
+        return None
+    if isinstance(value, Path):
+        return _display_path(value)
+    if isinstance(value, str):
+        return _display_path(_resolve_path(value)) if Path(value).is_absolute() else value
+    return value
+
+
+def _normalize_display_paths(value: Any) -> Any:
+    if isinstance(value, dict):
+        return {key: _normalize_display_paths(item) for key, item in value.items()}
+    if isinstance(value, list):
+        return [_normalize_display_paths(item) for item in value]
+    if isinstance(value, tuple):
+        return [_normalize_display_paths(item) for item in value]
+    return _display_path_value(value)
+
+
 def _run_command(*, label: str, command: list[str]) -> int:
     print(f"[local-nankan-pre-race-handoff] running {label}: {shlex.join(command)}", flush=True)
     with Heartbeat("[local-nankan-pre-race-handoff]", f"{label} child command", logger=log_progress):
@@ -53,8 +80,8 @@ def _build_not_ready_manifest(
         "status": "not_ready",
         "current_phase": str(pre_race_summary.get("current_phase") or "await_result_arrival"),
         "recommended_action": str(pre_race_summary.get("recommended_action") or "wait_for_result_ready_pre_race_races"),
-        "pre_race_summary": pre_race_summary,
-        "benchmark_manifest_output": str(benchmark_manifest_output),
+        "pre_race_summary": _normalize_display_paths(pre_race_summary),
+        "benchmark_manifest_output": _display_path(benchmark_manifest_output),
         "attempts": int(attempts),
         "waited_seconds": int(waited_seconds),
         "timed_out": bool(timed_out),
@@ -75,26 +102,26 @@ def _extract_historical_source_blocker(source_timing_summary: dict[str, Any]) ->
         "status": "not_ready",
         "current_phase": "historical_source_timing_blocked",
         "recommended_action": str(source_timing_summary.get("recommended_action") or "inspect_source_timing_audit"),
-        "source_timing_summary": source_timing_summary,
+        "source_timing_summary": _normalize_display_paths(source_timing_summary),
     }
 
 
 def main() -> int:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--data-config", default="configs/data_local_nankan.yaml")
+    parser.add_argument("--data-config", default="configs/data_local_nankan_pre_race_ready.yaml")
     parser.add_argument("--model-config", default="configs/model_local_baseline.yaml")
     parser.add_argument("--feature-config", default="configs/features_local_baseline.yaml")
     parser.add_argument("--race-card-input", default="data/external/local_nankan/racecard/local_racecard.csv")
     parser.add_argument("--race-result-input", default="data/external/local_nankan/results/local_race_result.csv")
     parser.add_argument("--pedigree-input", default="data/external/local_nankan/pedigree/local_pedigree.csv")
-    parser.add_argument("--filtered-race-card-output", default="data/local_nankan/raw/local_nankan_race_card_pre_race_ready.csv")
-    parser.add_argument("--filtered-race-result-output", default="data/local_nankan/raw/local_nankan_race_result_pre_race_ready.csv")
-    parser.add_argument("--primary-output-file", default="data/local_nankan/raw/local_nankan_primary_pre_race_ready.csv")
+    parser.add_argument("--filtered-race-card-output", default="data/local_nankan_pre_race_ready/raw/local_nankan_race_card_pre_race_ready.csv")
+    parser.add_argument("--filtered-race-result-output", default="data/local_nankan_pre_race_ready/raw/local_nankan_race_result_pre_race_ready.csv")
+    parser.add_argument("--primary-output-file", default="data/local_nankan_pre_race_ready/raw/local_nankan_primary_pre_race_ready.csv")
     parser.add_argument("--pre-race-summary-output", default="artifacts/reports/local_nankan_pre_race_ready_summary.json")
     parser.add_argument("--primary-manifest-file", default="artifacts/reports/local_nankan_primary_pre_race_ready_materialize_manifest.json")
     parser.add_argument("--benchmark-manifest-output", default="artifacts/reports/benchmark_gate_local_nankan_pre_race_ready.json")
     parser.add_argument("--wrapper-manifest-output", default="artifacts/reports/local_nankan_pre_race_benchmark_handoff_manifest.json")
-    parser.add_argument("--source-timing-summary-input", default="artifacts/reports/local_nankan_source_timing_audit_issue121.json")
+    parser.add_argument("--source-timing-summary-input", default="artifacts/reports/local_nankan_source_timing_audit.json")
     parser.add_argument("--tail-rows", type=int, default=5000)
     parser.add_argument("--max-rows", type=int, default=200000)
     parser.add_argument("--pre-feature-max-rows", type=int, default=None)
@@ -118,7 +145,7 @@ def main() -> int:
             source_timing_summary = _read_json_dict(source_timing_summary_path)
             source_blocker = _extract_historical_source_blocker(source_timing_summary)
             if source_blocker is not None:
-                source_blocker["source_timing_summary_input"] = str(source_timing_summary_path)
+                source_blocker["source_timing_summary_input"] = _display_path(source_timing_summary_path)
                 write_json(wrapper_manifest_path, source_blocker)
                 progress.complete(message=f"historical source timing blocked output={wrapper_manifest_path}")
                 return 2
@@ -187,12 +214,12 @@ def main() -> int:
             time.sleep(sleep_seconds)
 
         if pre_race_exit != 0:
-            wrapper_manifest = {
+            wrapper_manifest = _normalize_display_paths({
                 "status": "failed",
                 "current_phase": "pre_race_primary",
                 "recommended_action": "inspect_pre_race_primary_summary",
                 "pre_race_summary": pre_race_summary,
-            }
+            })
             write_json(wrapper_manifest_path, wrapper_manifest)
             return 1
 
@@ -238,13 +265,13 @@ def main() -> int:
         benchmark_manifest = _read_json_dict(_resolve_path(args.benchmark_manifest_output))
         progress.update(current=2, message=f"benchmark gate exit_code={benchmark_exit} status={benchmark_manifest.get('status')}")
 
-        wrapper_manifest = {
+        wrapper_manifest = _normalize_display_paths({
             "status": "completed" if benchmark_exit == 0 else "failed",
             "current_phase": "benchmark_gate",
             "recommended_action": "review_benchmark_manifest" if benchmark_exit == 0 else "inspect_benchmark_manifest",
             "pre_race_summary": pre_race_summary,
             "benchmark_manifest": benchmark_manifest,
-        }
+        })
         write_json(wrapper_manifest_path, wrapper_manifest)
         progress.complete(message=f"handoff completed output={wrapper_manifest_path}")
         return 0 if benchmark_exit == 0 else 1

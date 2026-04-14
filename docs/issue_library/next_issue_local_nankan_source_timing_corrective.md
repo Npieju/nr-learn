@@ -60,8 +60,12 @@ if historical local Nankan cache の大半が post-race snapshot であり、そ
 
 - `artifacts/reports/local_nankan_racecard_provenance_repair_issue120.json`
 - `artifacts/reports/local_nankan_primary_materialize_issue120_repaired.json`
-- `artifacts/reports/local_nankan_provenance_audit_issue120_repaired.json`
-- `artifacts/reports/local_nankan_source_timing_audit_issue121.json`
+- current canonical read:
+  - `artifacts/reports/local_nankan_provenance_audit.json`
+  - `artifacts/reports/local_nankan_source_timing_audit.json`
+- historical issue snapshot retained for audit trail:
+  - `artifacts/reports/local_nankan_provenance_audit_issue120_repaired.json`
+  - `artifacts/reports/local_nankan_source_timing_audit_issue121.json`
 - `artifacts/reports/local_nankan_source_timing_audit_issue121_by_year.csv`
 
 source timing audit により、current cache からの復元可否はさらに narrowed された。

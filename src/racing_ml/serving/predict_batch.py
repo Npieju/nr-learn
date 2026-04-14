@@ -68,6 +68,18 @@ def _display_path(path: Path, workspace_root: Path) -> str:
         return path.as_posix()
 
 
+def _resolve_chart_labels(race_frame: pd.DataFrame) -> pd.Series:
+    horse_ids = race_frame["horse_id"].astype(str) if "horse_id" in race_frame.columns else race_frame.index.astype(str)
+    if "horse_name" not in race_frame.columns:
+        return pd.Series(horse_ids, index=race_frame.index)
+
+    horse_names = race_frame["horse_name"].fillna("").astype(str)
+    non_empty_names = horse_names[horse_names.str.len() > 0]
+    if not non_empty_names.empty and non_empty_names.map(str.isascii).all():
+        return horse_names.where(horse_names.str.len() > 0, horse_ids)
+    return pd.Series(horse_ids, index=race_frame.index)
+
+
 def _resolve_prediction_source(
     model_config: dict[str, Any],
     *,
@@ -105,12 +117,17 @@ def _plot_predictions(predictions: pd.DataFrame, out_path: Path) -> None:
     race_frame = predictions[predictions["race_id"] == target_race_id].copy()
     race_frame = race_frame.sort_values("score", ascending=False).head(12)
 
-    labels = race_frame["horse_id"].astype(str)
+    labels = _resolve_chart_labels(race_frame)
     scores = race_frame["score"].astype(float)
+    y_positions = np.arange(len(race_frame), dtype=float)
+    display_labels = labels.iloc[::-1].tolist()
+    display_scores = scores.iloc[::-1].to_numpy(dtype=float)
 
     fig, axes = plt.subplots(1, 2, figsize=(14, 5))
 
-    axes[0].barh(labels.iloc[::-1], scores.iloc[::-1], color="#3b82f6")
+    axes[0].barh(y_positions, display_scores, color="#3b82f6")
+    axes[0].set_yticks(y_positions)
+    axes[0].set_yticklabels(display_labels)
     axes[0].set_title(f"Top Scores: race_id={target_race_id}")
     axes[0].set_xlabel("Predicted win score")
 
@@ -353,6 +370,7 @@ def run_predict(
     race_date: str | None = None,
     profile_name: str | None = None,
     model_artifact_suffix: str | None = None,
+    output_file_suffix: str | None = None,
 ) -> dict[str, Any]:
     frame = prepare_prediction_frame(data_config_path)
     return run_predict_from_frame(
@@ -362,4 +380,5 @@ def run_predict(
         race_date=race_date,
         profile_name=profile_name,
         model_artifact_suffix=model_artifact_suffix,
+        output_file_suffix=output_file_suffix,
     )

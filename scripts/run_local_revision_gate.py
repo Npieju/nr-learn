@@ -133,11 +133,33 @@ def _resolve_path(path_text: str | Path) -> Path:
     return path if path.is_absolute() else (ROOT / path)
 
 
+def _display_path_value(value: object) -> object:
+    if value is None:
+        return None
+    if isinstance(value, Path):
+        return artifact_display_path(value, workspace_root=ROOT)
+    if isinstance(value, str):
+        path = Path(value)
+        if path.is_absolute():
+            return artifact_display_path(path, workspace_root=ROOT)
+    return value
+
+
+def _normalize_display_paths(value: object) -> object:
+    if isinstance(value, dict):
+        return {key: _normalize_display_paths(item) for key, item in value.items()}
+    if isinstance(value, list):
+        return [_normalize_display_paths(item) for item in value]
+    if isinstance(value, tuple):
+        return [_normalize_display_paths(item) for item in value]
+    return _display_path_value(value)
+
+
 def _safe_write_manifest(path: Path, payload: dict[str, object]) -> None:
     if path.exists() and path.is_dir():
         return
     path.parent.mkdir(parents=True, exist_ok=True)
-    write_json(path, payload)
+    write_json(path, _normalize_display_paths(payload))
 
 
 def _set_step(payload: dict[str, object], step_name: str) -> None:
@@ -1434,7 +1456,7 @@ def main() -> int:
                 evaluate_command=pointer_command,
                 evaluate_result=evaluation_result,
             )
-            write_json(evaluation_pointer_path, pointer_payload)
+            write_json(evaluation_pointer_path, _normalize_display_paths(pointer_payload))
             payload["evaluation_pointer"] = evaluation_result
             payload["evaluation_pointer_payload"] = pointer_payload
             _refresh_summary_fields(payload)

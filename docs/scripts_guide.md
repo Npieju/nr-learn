@@ -266,6 +266,8 @@ netkeiba 系は lock 待機、収集、backfill、gate 実行の各段で heartb
 
 `run_local_benchmark_gate.py` は現在、source preflight も先に実行する。ここで `data_preflight_<revision>.json` または `data_preflight_local_nankan.json` を通して raw dir / primary CSV / required source table の不足を早期に `not_ready` として返し、snapshot 深部の `No CSV files found ...` まで潜らなくても停止理由を読める。
 
+historical `local_nankan` trust guard は current alias として `artifacts/reports/local_nankan_provenance_audit.json` と `artifacts/reports/local_nankan_source_timing_audit.json` を優先して読み、current alias が未生成の間だけ `issue120_repaired` / `issue121` snapshot へ fallback する。したがって provenance audit や source timing audit を rerun した後は、generic CLI / local wrapper / benchmark gate が同じ current trust truth を参照する。
+
 さらに `--materialize-primary-before-gate` を付けると、wrapper は preflight の前に `run_materialize_local_nankan_primary.py` を呼び、external の `race_result/racecard/pedigree` から `data/local_nankan/raw` 相当の primary CSV を組み立てようとする。materialize が `status=not_ready` でも wrapper 自体は benchmark gate を続行し、正式な blocker は従来どおり preflight / benchmark manifest 側へ残す。
 
 `run_local_backfill_then_benchmark.py` を使うと、backfill は常に `--materialize-after-collect` 付きで回り、`current_phase=materialized_primary_raw` に達した場合のみ local benchmark gate へ handoff する。したがって Phase 0 の入口でも、operator は backfill blocker と benchmark blocker を wrapper manifest 1 本で追える。
@@ -274,9 +276,9 @@ netkeiba 系は lock 待機、収集、backfill、gate 実行の各段で heartb
 
 `configs/data_local_nankan.yaml` の `local_nankan_race_result_keys` は、まず results を見て schema が足りなければ racecard を fallback として見る。これにより `horse_key` が result CSV 側にまだ無い段階でも、racecard に join key が揃っていれば preflight の supplemental blocker を 1 段先へ進められる。
 
-その次段として、`run_local_data_source_validation.py`、`run_local_feature_gap_report.py`、`run_local_evaluate.py` も追加した。validation / feature gap は local-only artifact 名へ直接出し、evaluation は既存 `run_evaluate.py` の versioned output を再利用しつつ `evaluation_local_nankan_pointer.json` で local-only 側の入口を固定する。
+その次段として、`run_local_data_source_validation.py`、`run_local_feature_gap_report.py`、`run_local_evaluate.py` も追加した。validation / feature gap は local-only artifact 名へ直接出し、evaluation は既存 `run_evaluate.py` の versioned output を再利用しつつ `evaluation_local_nankan_pointer.json` で local-only 側の入口を固定する。historical `local_nankan` では strict trust 未解決時に child evaluate を起動せず、pointer 自体へ `status=blocked_by_trust` と provenance bucket / corrective action を残す。
 
-さらに `run_local_feasibility_manifest.py` を追加し、readiness snapshot、data integrity、feature gap、evaluation pointer を fail-fast で直列実行しつつ、`local_feasibility_manifest_local_nankan.json` から停止点と artifact lineage をまとめて読めるようにした。`--dry-run` でも top-level を `status=planned` で閉じつつ、`read_order`, `current_phase`, `highlights`, `snapshot_payload`, `validation_payload`, `feature_gap_payload`, `evaluation_payload` の planned preview を返すので、local feasibility 入口も completed payload と同じ読み口で確認できる。real run の completed / failed manifest でも `current_phase` と `highlights` を保つので、snapshot / validation / feature gap / evaluation のどこで止まったかを top-level だけで追える。
+さらに `run_local_feasibility_manifest.py` を追加し、readiness snapshot、data integrity、feature gap、evaluation pointer を fail-fast で直列実行しつつ、`local_feasibility_manifest_local_nankan.json` から停止点と artifact lineage をまとめて読めるようにした。`--dry-run` でも top-level を `status=planned` で閉じつつ、`read_order`, `current_phase`, `highlights`, `snapshot_payload`, `validation_payload`, `feature_gap_payload`, `evaluation_payload` の planned preview を返すので、local feasibility 入口も completed payload と同じ読み口で確認できる。real run の completed / failed manifest でも `current_phase` と `highlights` を保つので、snapshot / validation / feature gap / evaluation のどこで止まったかを top-level だけで追える。historical `local_nankan` の evaluation が trust gate で止まった場合は top-level も `status=evaluation_blocked_by_trust` となり、generic `evaluation_failed` には潰さない。
 
 その次段として `run_local_revision_gate.py` も追加し、local benchmark gate の readiness 確認、`run_revision_gate.py` による suffixed train / evaluate / promotion、evaluation pointer の書き出しを、`local_revision_gate_<revision>.json` で 1 lineage として追えるようにした。さらに `--dry-run` でも top-level を `status=planned` で閉じつつ、`read_order`, `current_phase`, `recommended_action`, `highlights` と `benchmark_gate_payload` / `data_preflight_payload` / `revision_manifest_payload` / `evaluation_pointer_payload` の planned preview を返す。real run の benchmark gate blocked / revision gate failed / interrupted でも `current_phase` と `highlights` を保つので、local revision lineage の入口も completed payload と同じ読み口で確認できる。
 
@@ -338,7 +340,7 @@ step 名も既存 gate の読み方に寄せてあり、snapshot 側は `load_co
 
 外部データの設計意図は [data_extension.md](data_extension.md) を参照する。
 
-local_nankan future-only readiness を 1 cycle 更新する入口は `run_local_nankan_future_only_readiness_cycle.py` である。これは `#122` の current operator-default path であり、completion ではなく `#123` 配下の Stage 0 readiness blocker resolution として読む。no-arg 実行で future-only readiness wrapper / capture loop / readiness probe / readiness watcher / bootstrap handoff / status board を更新する。
+local_nankan future-only readiness を 1 cycle 更新する入口は `run_local_nankan_future_only_readiness_cycle.py` である。これは `#122` の current operator-default path であり、completion ではなく `#123` 配下の Stage 0 readiness blocker resolution として読む。no-arg 実行で future-only readiness wrapper / capture loop / readiness probe / readiness watcher / bootstrap handoff / status board を更新する。source timing input も no-arg で canonical current alias `artifacts/reports/local_nankan_source_timing_audit.json` を読む。
 
 この wrapper manifest には `execution_role=readiness_cycle_wrapper`, `data_update_mode=capture_refresh_with_readiness`, `execution_mode=single_cycle`, `trigger_contract=direct_refresh_plus_readiness` を持たせ、capture loop を含む `refresh + readiness read` 入口だと artifact 単体でも判別できるようにしている。
 

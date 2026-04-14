@@ -12,6 +12,7 @@ if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
 from racing_ml.common.progress import Heartbeat, ProgressBar
+from racing_ml.common.artifacts import display_path as artifact_display_path
 from racing_ml.common.artifacts import write_json
 from racing_ml.common.config import load_yaml
 
@@ -65,6 +66,32 @@ def _resolve_primary_input_path(*, data_config_path: str, override_path: str | N
     if not raw_path.is_absolute():
         raw_path = ROOT / raw_path
     return raw_path / "local_nankan_primary.csv"
+
+
+def _display_path_value(value: object) -> object:
+    if not isinstance(value, str) or not value.startswith("/"):
+        return value
+    try:
+        path = Path(value)
+    except (TypeError, ValueError):
+        return value
+    if not path.is_absolute():
+        return value
+    try:
+        path.relative_to(ROOT)
+    except ValueError:
+        return value
+    return artifact_display_path(path, workspace_root=ROOT)
+
+
+def _normalize_display_paths(value: object) -> object:
+    if isinstance(value, dict):
+        return {key: _normalize_display_paths(item) for key, item in value.items()}
+    if isinstance(value, list):
+        return [_normalize_display_paths(item) for item in value]
+    if isinstance(value, tuple):
+        return [_normalize_display_paths(item) for item in value]
+    return _display_path_value(value)
 
 
 def _write_provenance_block_outputs(
@@ -153,8 +180,8 @@ def _write_provenance_block_outputs(
             "local_market_provenance_summary": json.loads(provenance_summary_path.read_text(encoding="utf-8")) if provenance_summary_path.exists() else None,
         },
     }
-    write_json(ROOT / args.manifest_output, benchmark_manifest)
-    write_json(ROOT / args.preflight_output, preflight_payload)
+    write_json(ROOT / args.manifest_output, _normalize_display_paths(benchmark_manifest))
+    write_json(ROOT / args.preflight_output, _normalize_display_paths(preflight_payload))
 
 
 def main() -> int:

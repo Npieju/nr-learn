@@ -46,6 +46,51 @@ def _resolve_path(path_text: str) -> Path:
     return path if path.is_absolute() else (ROOT / path)
 
 
+def _display_path_value(path_text: object) -> str | None:
+    if not isinstance(path_text, str) or not path_text:
+        return None
+    path = Path(path_text)
+    if not path.is_absolute():
+        return path_text
+    try:
+        return str(path.relative_to(ROOT))
+    except ValueError:
+        return path_text
+
+
+def _format_baseline_chain(initial_path: object, latest_path: object) -> str | None:
+    initial_display = _display_path_value(initial_path)
+    latest_display = _display_path_value(latest_path)
+    if initial_display and latest_display:
+        if initial_display == latest_display:
+            return initial_display
+        return f"{initial_display}->{latest_display}"
+    return initial_display or latest_display
+
+
+def _normalize_display_paths(value: object) -> object:
+    if isinstance(value, dict):
+        normalized: dict[str, object] = {}
+        for key, child in value.items():
+            if isinstance(child, str) and (
+                key.endswith("_input")
+                or key.endswith("_output")
+                or key.endswith("_manifest")
+                or key.endswith("_file")
+                or key.endswith("_dir")
+                or key.endswith("_path")
+            ):
+                normalized[key] = _display_path_value(child)
+            else:
+                normalized[key] = _normalize_display_paths(child)
+        return normalized
+    if isinstance(value, list):
+        return [_normalize_display_paths(child) for child in value]
+    if isinstance(value, str):
+        return _display_path_value(value) or value
+    return value
+
+
 def _read_json(path: Path) -> dict[str, object]:
     if not path.exists():
         return {}
@@ -130,6 +175,10 @@ def _build_readiness_surfaces(
 ) -> dict[str, object]:
     capture_loop_payload = _dict_payload(capture_loop_manifest)
     watcher_payload = _dict_payload(readiness_watcher_manifest)
+    capture_pass_snapshots = _list_payload(capture_loop_payload.get("pass_snapshots"))
+    latest_capture_pass = _dict_payload(capture_pass_snapshots[-1]) if capture_pass_snapshots else {}
+    latest_capture_baseline = latest_capture_pass.get("baseline_summary_input")
+    watcher_capture_loop = _dict_payload(watcher_payload.get("capture_loop_manifest"))
     probe_materialization = _dict_payload(readiness_probe_summary.get("materialization_summary"))
     probe_result_ready_races = readiness_probe_summary.get("result_ready_races")
     if probe_result_ready_races is None:
@@ -157,7 +206,10 @@ def _build_readiness_surfaces(
             "recommended_action": capture_loop_payload.get("recommended_action"),
             "completed_passes": capture_loop_payload.get("completed_passes"),
             "max_passes": capture_loop_payload.get("max_passes"),
-            "latest_summary": capture_loop_payload.get("latest_summary"),
+            "initial_baseline_summary_input": _display_path_value(capture_loop_payload.get("initial_baseline_summary_input")),
+            "latest_baseline_summary_input": _display_path_value(latest_capture_baseline),
+            "snapshot_dir": _display_path_value(capture_loop_payload.get("snapshot_dir")),
+            "latest_summary": _normalize_display_paths(capture_loop_payload.get("latest_summary")),
         },
         "readiness_probe": {
             "status": readiness_probe_summary.get("status"),
@@ -166,7 +218,7 @@ def _build_readiness_surfaces(
             "result_ready_races": probe_result_ready_races,
             "pending_result_races": probe_pending_result_races,
             "race_card_rows": probe_race_card_rows,
-            "historical_source_timing": readiness_probe_summary.get("historical_source_timing"),
+            "historical_source_timing": _normalize_display_paths(readiness_probe_summary.get("historical_source_timing")),
         },
         "pre_race_handoff": {
             "status": pre_race_handoff_manifest.get("status"),
@@ -184,7 +236,10 @@ def _build_readiness_surfaces(
             "recommended_action": watcher_payload.get("recommended_action"),
             "attempts": watcher_payload.get("attempts"),
             "timed_out": watcher_payload.get("timed_out"),
-            "probe_summary": watcher_payload.get("probe_summary"),
+            "probe_summary": _normalize_display_paths(watcher_payload.get("probe_summary")),
+            "capture_loop_manifest_output": watcher_payload.get("capture_loop_manifest_output"),
+            "capture_initial_baseline_summary_input": _display_path_value(watcher_capture_loop.get("initial_baseline_summary_input")),
+            "capture_latest_baseline_summary_input": _display_path_value(_dict_payload(_list_payload(watcher_capture_loop.get("pass_snapshots"))[-1]).get("baseline_summary_input") if _list_payload(watcher_capture_loop.get("pass_snapshots")) else None),
         },
         "followup_entrypoint": {
             "script": DEFAULT_FOLLOWUP_ONESHOT_SCRIPT,
@@ -194,6 +249,8 @@ def _build_readiness_surfaces(
             "upstream_execution_role": capture_loop_payload.get("execution_role"),
             "upstream_data_update_mode": capture_loop_payload.get("data_update_mode"),
             "upstream_trigger_contract": capture_loop_payload.get("trigger_contract"),
+            "upstream_initial_baseline_summary_input": _display_path_value(capture_loop_payload.get("initial_baseline_summary_input")),
+            "upstream_latest_baseline_summary_input": _display_path_value(latest_capture_baseline),
             "upstream_contract_ready": upstream_contract_ready,
             "recommended_mode": "dry_run_then_run",
             "read_order": [
@@ -452,6 +509,11 @@ def main() -> int:
         recommended_action=recommended_action,
     )
 
+    capture_baseline_chain = _format_baseline_chain(
+        readiness_surfaces["capture_loop"].get("initial_baseline_summary_input"),
+        readiness_surfaces["capture_loop"].get("latest_baseline_summary_input"),
+    )
+
     payload = {
         "started_at": utc_now_iso(),
         "finished_at": utc_now_iso(),
@@ -513,8 +575,11 @@ def main() -> int:
             f"handoff_status={readiness_surfaces['pre_race_handoff'].get('status')}",
             f"bootstrap_status={readiness_surfaces['bootstrap_handoff'].get('status')}",
             f"watcher_status={readiness_surfaces['readiness_watcher'].get('status')}",
+            f"capture_baseline_chain={capture_baseline_chain}",
         ],
     }
+
+    payload = _normalize_display_paths(payload)
 
     with Heartbeat("[local-nankan-status-board]", "writing status board", logger=log_progress):
         write_json(output_path, payload)

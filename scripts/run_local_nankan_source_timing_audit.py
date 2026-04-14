@@ -29,11 +29,52 @@ def _resolve_path(raw_path: str | Path) -> Path:
     return path if path.is_absolute() else (ROOT / path)
 
 
+def _display_path(path: Path | None) -> str | None:
+    if path is None:
+        return None
+    try:
+        return str(path.relative_to(ROOT))
+    except ValueError:
+        return str(path)
+
+
+def _display_path_value(path_text: object) -> str | None:
+    if not isinstance(path_text, str) or not path_text:
+        return None
+    path = Path(path_text)
+    if not path.is_absolute():
+        return path_text
+    return _display_path(path)
+
+
+def _normalize_display_paths(value: object) -> object:
+    if isinstance(value, dict):
+        normalized: dict[str, object] = {}
+        for key, child in value.items():
+            if isinstance(child, str) and (
+                key.endswith("_input")
+                or key.endswith("_output")
+                or key.endswith("_manifest")
+                or key.endswith("_file")
+                or key.endswith("_dir")
+                or key.endswith("_path")
+            ):
+                normalized[key] = _display_path_value(child)
+            else:
+                normalized[key] = _normalize_display_paths(child)
+        return normalized
+    if isinstance(value, list):
+        return [_normalize_display_paths(child) for child in value]
+    if isinstance(value, str):
+        return _display_path_value(value) or value
+    return value
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--race-card-input", default="data/external/local_nankan/racecard/local_racecard.csv")
     parser.add_argument("--race-result-input", default="data/external/local_nankan/results/local_race_result.csv")
-    parser.add_argument("--summary-output", default="artifacts/reports/local_nankan_source_timing_audit_summary.json")
+    parser.add_argument("--summary-output", default="artifacts/reports/local_nankan_source_timing_audit.json")
     parser.add_argument("--date-output", default="artifacts/reports/local_nankan_source_timing_audit_by_date.csv")
     parser.add_argument("--year-output", default="artifacts/reports/local_nankan_source_timing_audit_by_year.csv")
     args = parser.parse_args()
@@ -72,10 +113,11 @@ def main() -> int:
             ),
         )
 
-        summary["race_card_input"] = str(race_card_path)
-        summary["race_result_input"] = str(race_result_path) if race_result_path.exists() else None
-        summary["date_output"] = str(date_output)
-        summary["year_output"] = str(year_output)
+        summary = _normalize_display_paths(summary)
+        summary["race_card_input"] = _display_path(race_card_path)
+        summary["race_result_input"] = _display_path(race_result_path) if race_result_path.exists() else None
+        summary["date_output"] = _display_path(date_output)
+        summary["year_output"] = _display_path(year_output)
         write_json(summary_output, summary)
         write_csv_file(date_output, by_date, index=False, label="local_nankan source timing audit by date")
         write_csv_file(year_output, by_year, index=False, label="local_nankan source timing audit by year")

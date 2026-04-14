@@ -43,6 +43,32 @@ def _resolve_path(path_text: str | Path) -> Path:
     return path if path.is_absolute() else (ROOT / path)
 
 
+def _display_path_value(value: object) -> object:
+    if not isinstance(value, str) or not value.startswith("/"):
+        return value
+    try:
+        path = Path(value)
+    except (TypeError, ValueError):
+        return value
+    if not path.is_absolute():
+        return value
+    try:
+        path.relative_to(ROOT)
+    except ValueError:
+        return value
+    return artifact_display_path(path, workspace_root=ROOT)
+
+
+def _normalize_display_paths(value: object) -> object:
+    if isinstance(value, dict):
+        return {key: _normalize_display_paths(item) for key, item in value.items()}
+    if isinstance(value, list):
+        return [_normalize_display_paths(item) for item in value]
+    if isinstance(value, tuple):
+        return [_normalize_display_paths(item) for item in value]
+    return _display_path_value(value)
+
+
 def _normalize_revision_slug(value: str) -> str:
     normalized = "".join(character.lower() if character.isalnum() else "_" for character in str(value).strip())
     while "__" in normalized:
@@ -417,7 +443,7 @@ def main() -> int:
                 output_path=output_path,
             )
             with Heartbeat("[local-public-snapshot]", "writing planned snapshot manifest", logger=log_progress):
-                write_json(output_path, payload)
+                write_json(output_path, _normalize_display_paths(payload))
             progress.complete(message=f"planned manifest saved path={artifact_display_path(output_path, workspace_root=ROOT)}")
             print(f"[local-public-snapshot] planned snapshot saved: {artifact_display_path(output_path, workspace_root=ROOT)}", flush=True)
             return 0
@@ -510,7 +536,7 @@ def main() -> int:
 
         progress.update(message=f"snapshot payload prepared status={payload['status']}")
         with Heartbeat("[local-public-snapshot]", "writing snapshot manifest", logger=log_progress):
-            write_json(output_path, payload)
+            write_json(output_path, _normalize_display_paths(payload))
         progress.complete(message=f"saved path={artifact_display_path(output_path, workspace_root=ROOT)} status={payload['status']}")
         print(f"[local-public-snapshot] saved: {artifact_display_path(output_path, workspace_root=ROOT)}", flush=True)
         return 0
@@ -527,7 +553,7 @@ def main() -> int:
             output_path=output_path,
             error_message=str(error),
         )
-        write_json(output_path, failure_payload)
+        write_json(output_path, _normalize_display_paths(failure_payload))
         print(f"[local-public-snapshot] failed: {error}", flush=True)
         return 1
     except Exception as error:
@@ -540,7 +566,7 @@ def main() -> int:
             output_path=output_path,
             error_message=str(error),
         )
-        write_json(output_path, failure_payload)
+        write_json(output_path, _normalize_display_paths(failure_payload))
         print(f"[local-public-snapshot] failed: {error}", flush=True)
         traceback.print_exc()
         return 1

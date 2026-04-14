@@ -9,9 +9,35 @@ class ModelRunProfile:
     model_config: str
     data_config: str
     feature_config: str
+    default_model_artifact_suffix: str | None = None
 
 
 MODEL_RUN_PROFILES: dict[str, ModelRunProfile] = {
+    "local_nankan_recommended": ModelRunProfile(
+        description="Recommended local Nankan wf_runtime_narrow config for serving and replay with the stronger promoted r20260330 narrow runtime artifact suffix.",
+        model_config="configs/model_local_baseline_wf_runtime_narrow.yaml",
+        data_config="configs/data_local_nankan.yaml",
+        feature_config="configs/features_local_baseline.yaml",
+        default_model_artifact_suffix="r20260330_local_nankan_baseline_wf_runtime_narrow_v1",
+    ),
+    "local_nankan_value_blend_bootstrap": ModelRunProfile(
+        description="Local Nankan bootstrap stack profile for result-ready NAR train, evaluate, and predict flows.",
+        model_config="configs/model_catboost_value_stack_lgbm_roi_high_coverage_tune_roi012_local_nankan_value_blend_bootstrap.yaml",
+        data_config="configs/data_local_nankan.yaml",
+        feature_config="configs/features_catboost_rich_high_coverage_diag_local_nankan_value_blend_bootstrap.yaml",
+    ),
+    "local_nankan_value_blend_bootstrap_pre_race_ready": ModelRunProfile(
+        description="Local Nankan bootstrap stack profile for pre-race-ready handoff artifacts before result-ready benchmark reruns.",
+        model_config="configs/model_catboost_value_stack_lgbm_roi_high_coverage_tune_roi012_local_nankan_value_blend_bootstrap.yaml",
+        data_config="configs/data_local_nankan_pre_race_ready.yaml",
+        feature_config="configs/features_catboost_rich_high_coverage_diag_local_nankan_value_blend_bootstrap.yaml",
+    ),
+    "local_nankan_baseline_pre_race_ready": ModelRunProfile(
+        description="Local Nankan baseline profile for the dedicated strict pre-race-ready corpus after result arrival handoff.",
+        model_config="configs/model_local_baseline.yaml",
+        data_config="configs/data_local_nankan_pre_race_ready.yaml",
+        feature_config="configs/features_local_baseline.yaml",
+    ),
     "current_best_eval": ModelRunProfile(
         description="Best nested evaluation mainline with May policy and runtime score override support.",
         model_config="configs/model_catboost_value_stack_lgbm_roi_high_coverage_tune_roi012_liquidity_regime_modelswitch_f1_policy_may.yaml",
@@ -100,6 +126,7 @@ def _build_data_config_profile_variants(
             model_config=profile.model_config,
             data_config=data_config,
             feature_config=profile.feature_config,
+            default_model_artifact_suffix=profile.default_model_artifact_suffix,
         )
     return variant_profiles
 
@@ -132,6 +159,8 @@ def format_model_run_profiles() -> str:
         lines.append(f"  model_config={profile.model_config}")
         lines.append(f"  data_config={profile.data_config}")
         lines.append(f"  feature_config={profile.feature_config}")
+        if profile.default_model_artifact_suffix:
+            lines.append(f"  default_model_artifact_suffix={profile.default_model_artifact_suffix}")
     return "\n".join(lines)
 
 

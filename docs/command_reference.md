@@ -225,6 +225,41 @@ profile 一覧:
 /workspaces/nr-learn/.venv/bin/python scripts/run_train.py --list-profiles
 ```
 
+NAR / local Nankan を標準 CLI から使うときの最短入口:
+
+```bash
+/workspaces/nr-learn/.venv/bin/python scripts/run_train.py \
+  --profile local_nankan_value_blend_bootstrap \
+  --artifact-suffix r20260412_local_nankan_bootstrap_v1
+```
+
+既存の promoted NAR line を再利用するときの標準 profile は `local_nankan_recommended` である。これは `configs/model_local_baseline_wf_runtime_narrow.yaml` 系を指し、既定で `r20260330_local_nankan_baseline_wf_runtime_narrow_v1` を読む。
+
+ただし historical `local_nankan` は `#120/#121` の strict trust blocker が未解消なので、generic `run_train.py` / `run_evaluate.py` / `run_predict.py` は既定で fail-closed する。diagnostic-only run を意図するときだけ `--allow-diagnostic-local-nankan` を明示する。
+
+pre-race-ready handoff 直後の dataset で bootstrap stack を組みたいときは、次を使う。
+
+```bash
+/workspaces/nr-learn/.venv/bin/python scripts/run_train.py \
+  --profile local_nankan_value_blend_bootstrap_pre_race_ready \
+  --artifact-suffix r20260412_local_nankan_pre_race_ready_bootstrap_v1
+```
+
+strict pre-race corpus の baseline smoke を generic CLI から回すときは、次を使う。
+
+```bash
+/workspaces/nr-learn/.venv/bin/python scripts/run_train.py \
+  --profile local_nankan_baseline_pre_race_ready \
+  --artifact-suffix r20260413_local_nankan_pre_race_ready_baseline_v1
+```
+
+補足:
+
+- `local_nankan_value_blend_bootstrap` は `configs/data_local_nankan.yaml` を使う result-ready 側の標準 alias である。
+- `local_nankan_value_blend_bootstrap_pre_race_ready` は `configs/data_local_nankan_pre_race_ready.yaml` を使う readiness / handoff 確認用 alias である。
+- `local_nankan_baseline_pre_race_ready` も `configs/data_local_nankan_pre_race_ready.yaml` を使う。wrapper を使わず generic CLI で strict pre-race corpus を触りたいときの baseline 入口である。
+- pre-race-ready 側は live capture の途中状態を含みうるため、主 KPI 判定には混ぜず readiness track として扱う。
+
 ### 3.3 評価
 
 正式判断の読み筋は [evaluation_guide.md](evaluation_guide.md) を参照する。
@@ -237,6 +272,43 @@ profile 一覧:
 
 ```bash
 /workspaces/nr-learn/.venv/bin/python scripts/run_evaluate.py --profile current_best_eval_2025_latest --max-rows 120000
+```
+
+NAR / local Nankan の評価例:
+
+```bash
+/workspaces/nr-learn/.venv/bin/python scripts/run_evaluate.py \
+  --profile local_nankan_value_blend_bootstrap \
+  --artifact-suffix r20260412_local_nankan_bootstrap_eval_v1 \
+  --max-rows 120000
+```
+
+pre-race-ready dataset 側の smoke / readiness 確認例:
+
+```bash
+/workspaces/nr-learn/.venv/bin/python scripts/run_evaluate.py \
+  --profile local_nankan_value_blend_bootstrap_pre_race_ready \
+  --artifact-suffix r20260412_local_nankan_pre_race_ready_eval_v1 \
+  --max-rows 120000
+```
+
+strict pre-race corpus の baseline handoff 確認例:
+
+```bash
+/workspaces/nr-learn/.venv/bin/python scripts/run_evaluate.py \
+  --profile local_nankan_baseline_pre_race_ready \
+  --artifact-suffix r20260413_local_nankan_pre_race_ready_baseline_eval_v1 \
+  --max-rows 120000
+```
+
+既存の promoted baseline artifact を再評価するときの例:
+
+```bash
+/workspaces/nr-learn/.venv/bin/python scripts/run_evaluate.py \
+  --profile local_nankan_recommended \
+  --allow-diagnostic-local-nankan \
+  --artifact-suffix r20260412_local_nankan_recommended_recheck_v1 \
+  --max-rows 120000
 ```
 
 昇格判断の基本は、短窓の単発結果ではなく `stability_assessment=representative` を満たす評価である。
@@ -253,10 +325,40 @@ profile 一覧:
 /workspaces/nr-learn/.venv/bin/python scripts/run_predict.py --profile current_recommended_serving_2025_latest --race-date 2025-12-28
 ```
 
+NAR / local Nankan の予測例:
+
+```bash
+/workspaces/nr-learn/.venv/bin/python scripts/run_predict.py \
+  --profile local_nankan_value_blend_bootstrap \
+  --race-date 2025-04-14
+```
+
+既存の promoted baseline artifact を使って NAR predict を回すときの例:
+
+```bash
+/workspaces/nr-learn/.venv/bin/python scripts/run_predict.py \
+  --profile local_nankan_recommended \
+  --allow-diagnostic-local-nankan \
+  --output-file-suffix local_nankan_recommended \
+  --race-date 2026-03-27
+```
+
+pre-race-ready dataset を使う handoff 直後の確認例:
+
+```bash
+/workspaces/nr-learn/.venv/bin/python scripts/run_predict.py \
+  --profile local_nankan_value_blend_bootstrap_pre_race_ready \
+  --race-date 2025-04-14
+```
+
 補足:
 
 - `run_predict.py` 自体には `--artifact-suffix` はなく、prediction artifact は date 基準の canonical 名で出る。
+- `local_nankan_recommended` は既定で promoted artifact suffix `r20260330_local_nankan_baseline_wf_runtime_narrow_v1` を使う。別 artifact を読むときだけ `--model-artifact-suffix` を付ける。
+- `--model-artifact-suffix __NO_MODEL_ARTIFACT_SUFFIX__` を付けると、profile の既定 suffix を無効化して unsuffixed artifact を読む。
+- `--output-file-suffix` を付けると、同じ race date の prediction 出力を別名保存できる。
 - window 単位の provenance を残したいときは、predict 単体ではなく `run_serving_smoke.py` 側で `--artifact-suffix` と `--output-file` を明示する。
+- NAR predict が成立する前提 artifact は、対象 profile に対応する train 済み model artifact と、dataset 側の対象 race date 行が揃っていること。
 
 ### 3.5 バックテスト
 
@@ -998,6 +1100,7 @@ local_nankan future-only readiness を 1 cycle 更新する operator-default com
 - `#122` の current default operator path。
 - これは NAR solved を意味せず、`#123` 配下の Stage 0 readiness blocker resolution として読む。
 - 出力 wrapper manifest には `execution_role=readiness_cycle_wrapper`, `data_update_mode=capture_refresh_with_readiness`, `execution_mode=single_cycle`, `trigger_contract=direct_refresh_plus_readiness` を持たせ、capture loop を含む `refresh + readiness read` 入口だと artifact 単体でも判別できる。
+- source timing input は no-arg で canonical current alias `artifacts/reports/local_nankan_source_timing_audit.json` を読む。
 - future-only pool の refresh も同時に進めたい通常運用では、まずこの command を使う。内部で capture loop も走るため、`refresh + readiness read` の入口として扱う。
 - `result arrival / 到着` は、future-only strict `pre_race_only` races に対応する official result rows が実データへ反映され、artifact 上で `result_ready_races>0` になることを指す。
 

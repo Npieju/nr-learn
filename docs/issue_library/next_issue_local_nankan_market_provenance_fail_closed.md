@@ -67,6 +67,8 @@ if current high ROI の主要 risk が `provable pre-race market provenance` の
 
 ## Current Evidence
 
+- current canonical provenance read:
+  - `artifacts/reports/local_nankan_provenance_audit.json`
 - provenance audit artifact:
   - `artifacts/reports/local_nankan_provenance_audit_issue120.json`
 - benchmark gate block artifact:
@@ -79,7 +81,7 @@ if current high ROI の主要 risk が `provable pre-race market provenance` の
   - `artifacts/reports/local_nankan_racecard_provenance_repair_issue120.json`
 - repaired primary materialize artifact:
   - `artifacts/reports/local_nankan_primary_materialize_issue120_repaired.json`
-- repaired provenance audit artifact:
+- repaired provenance audit snapshot:
   - `artifacts/reports/local_nankan_provenance_audit_issue120_repaired.json`
 
 current benchmark block read は次である。

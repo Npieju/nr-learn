@@ -24,6 +24,7 @@ from racing_ml.common.artifacts import display_path as artifact_display_path
 from racing_ml.common.artifacts import append_suffix_to_file_name
 from racing_ml.common.artifacts import ensure_output_file_path as artifact_ensure_output_file_path
 from racing_ml.common.artifacts import resolve_output_artifacts, utc_now_iso, write_json, write_text_file
+from racing_ml.common.local_nankan_trust import require_local_nankan_trust_ready
 from racing_ml.common.model_profiles import MODEL_RUN_PROFILES, format_model_run_profiles, resolve_model_run_profile
 from racing_ml.common.progress import Heartbeat, ProgressBar
 from racing_ml.common.regime import resolve_regime_name
@@ -535,6 +536,7 @@ def main() -> int:
     parser.add_argument("--wf-mode", choices=["off", "fast", "full"], default="fast")
     parser.add_argument("--wf-scheme", choices=["single", "nested"], default="nested")
     parser.add_argument("--progress-interval-sec", type=float, default=5.0)
+    parser.add_argument("--allow-diagnostic-local-nankan", action="store_true")
     args = parser.parse_args()
 
     try:
@@ -551,13 +553,22 @@ def main() -> int:
             default_data_config=args.data_config or "configs/data.yaml",
             default_feature_config=args.feature_config or "configs/features.yaml",
         )
+        profile_default_suffix = None
+        if resolved_profile is not None:
+            profile_default_suffix = MODEL_RUN_PROFILES[resolved_profile].default_model_artifact_suffix
         model_cfg = load_yaml(ROOT / model_config_path)
         data_cfg = load_yaml(ROOT / data_config_path)
         feature_cfg = load_yaml(ROOT / feature_config_path)
+        require_local_nankan_trust_ready(
+            workspace_root=ROOT,
+            data_config=data_cfg,
+            data_config_path=data_config_path,
+            allow_diagnostic_override=bool(args.allow_diagnostic_local_nankan),
+            command_name="evaluate",
+            profile_name=resolved_profile,
+        )
         explicit_no_model_artifact_suffix = args.model_artifact_suffix == NO_MODEL_ARTIFACT_SUFFIX
-        resolved_model_artifact_suffix = args.model_artifact_suffix
-        if explicit_no_model_artifact_suffix:
-            resolved_model_artifact_suffix = None
+        resolved_model_artifact_suffix = None if explicit_no_model_artifact_suffix else (args.model_artifact_suffix or profile_default_suffix)
 
         progress = ProgressBar(total=9, prefix="[evaluate]", logger=log_progress, min_interval_sec=0.0)
         progress.start(
@@ -565,7 +576,8 @@ def main() -> int:
                 f"configs loaded profile={resolved_profile or 'custom'} config={model_config_path} "
                 f"data_config={data_config_path} feature_config={feature_config_path} "
                 f"artifact_suffix={args.artifact_suffix or 'none'} "
-                f"model_artifact_suffix={resolved_model_artifact_suffix if not explicit_no_model_artifact_suffix else 'none'}"
+                f"model_artifact_suffix={resolved_model_artifact_suffix if not explicit_no_model_artifact_suffix else 'none'} "
+                f"allow_diagnostic_local_nankan={args.allow_diagnostic_local_nankan}"
             )
         )
 

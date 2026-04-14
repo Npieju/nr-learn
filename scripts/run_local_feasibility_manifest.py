@@ -45,11 +45,39 @@ def _resolve_path(path_text: str | Path) -> Path:
     return path if path.is_absolute() else (ROOT / path)
 
 
+def _display_path(path: Path | None) -> str | None:
+    if path is None:
+        return None
+    return artifact_display_path(path, workspace_root=ROOT)
+
+
+def _display_path_value(value: object) -> object:
+    if value is None:
+        return None
+    if isinstance(value, Path):
+        return _display_path(value)
+    if isinstance(value, str):
+        path = Path(value)
+        if path.is_absolute():
+            return _display_path(path)
+    return value
+
+
+def _normalize_display_paths(value: object) -> object:
+    if isinstance(value, dict):
+        return {key: _normalize_display_paths(item) for key, item in value.items()}
+    if isinstance(value, list):
+        return [_normalize_display_paths(item) for item in value]
+    if isinstance(value, tuple):
+        return [_normalize_display_paths(item) for item in value]
+    return _display_path_value(value)
+
+
 def _safe_write_manifest(path: Path, payload: dict[str, object]) -> None:
     if path.exists() and path.is_dir():
         return
     path.parent.mkdir(parents=True, exist_ok=True)
-    write_json(path, payload)
+    write_json(path, _normalize_display_paths(payload))
 
 
 def _set_step(payload: dict[str, object], step_name: str) -> None:
@@ -275,6 +303,8 @@ def _current_phase(payload: dict[str, object]) -> str:
     if status == "feature_gap_failed":
         return "feature_gap"
     if status == "evaluation_failed":
+        return "evaluation_pointer"
+    if status == "evaluation_blocked_by_trust":
         return "evaluation_pointer"
     if status == "interrupted":
         return completed_step or "local_feasibility_manifest"
@@ -642,13 +672,31 @@ def main() -> int:
                 if evaluation_payload is not None:
                     payload["evaluation_payload"] = evaluation_payload
                 if int(evaluation_result["exit_code"]) != 0:
-                    _set_failure(
-                        payload,
-                        status="evaluation_failed",
-                        error_code="evaluation_failed",
-                        error_message="local evaluate returned non-zero exit code",
-                        recommended_action="inspect_local_evaluation",
-                    )
+                    if str((evaluation_payload or {}).get("status") or "") == "blocked_by_trust":
+                        _set_failure(
+                            payload,
+                            status="evaluation_blocked_by_trust",
+                            error_code=str(
+                                (evaluation_payload or {}).get("error_code")
+                                or "historical_local_nankan_trust_not_ready"
+                            ),
+                            error_message=str(
+                                (evaluation_payload or {}).get("error_message")
+                                or "local evaluation was blocked because historical local Nankan trust is not ready"
+                            ),
+                            recommended_action=str(
+                                (evaluation_payload or {}).get("recommended_action")
+                                or "inspect_local_nankan_provenance_audit"
+                            ),
+                        )
+                    else:
+                        _set_failure(
+                            payload,
+                            status="evaluation_failed",
+                            error_code="evaluation_failed",
+                            error_message="local evaluate returned non-zero exit code",
+                            recommended_action="inspect_local_evaluation",
+                        )
                     _refresh_summary_fields(payload)
                     _safe_write_manifest(manifest_path, payload)
                     return int(evaluation_result["exit_code"]) or 1

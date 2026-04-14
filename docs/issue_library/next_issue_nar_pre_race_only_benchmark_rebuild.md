@@ -122,9 +122,9 @@ result-ready subset と primary materialization までの導線も追加した�
   - [local_nankan_pre_race_ready_summary.json](/workspaces/nr-learn/artifacts/reports/local_nankan_pre_race_ready_summary.json)
   - [nar_pre_race_primary_materialize_smoke.log](/workspaces/nr-learn/artifacts/logs/nar_pre_race_primary_materialize_smoke.log)
   - default paths:
-    - `data/local_nankan/raw/local_nankan_race_card_pre_race_ready.csv`
-    - `data/local_nankan/raw/local_nankan_race_result_pre_race_ready.csv`
-    - `data/local_nankan/raw/local_nankan_primary_pre_race_ready.csv`
+    - `data/local_nankan_pre_race_ready/raw/local_nankan_race_card_pre_race_ready.csv`
+    - `data/local_nankan_pre_race_ready/raw/local_nankan_race_result_pre_race_ready.csv`
+    - `data/local_nankan_pre_race_ready/raw/local_nankan_primary_pre_race_ready.csv`
 
 confirmed read:
 

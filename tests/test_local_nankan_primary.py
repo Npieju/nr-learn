@@ -1,13 +1,39 @@
 from __future__ import annotations
 
+import importlib.util
+import json
 import tempfile
 import unittest
 from pathlib import Path
+import sys
+from unittest.mock import patch
 
 import pandas as pd
 
 from racing_ml.data.local_nankan_id_prep import _build_horse_key_frame
 from racing_ml.data.local_nankan_primary import materialize_local_nankan_primary_from_config
+
+
+ROOT = Path(__file__).resolve().parents[1]
+SRC = ROOT / "src"
+if str(SRC) not in sys.path:
+    sys.path.insert(0, str(SRC))
+
+
+def _load_script_module(name: str, relative_path: str):
+    path = ROOT / relative_path
+    spec = importlib.util.spec_from_file_location(name, path)
+    if spec is None or spec.loader is None:
+        raise RuntimeError(f"failed to load module from {path}")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+pre_race_primary_script = _load_script_module(
+    "test_run_materialize_local_nankan_pre_race_primary",
+    "scripts/run_materialize_local_nankan_pre_race_primary.py",
+)
 
 
 class LocalNankanPrimaryMaterializeTest(unittest.TestCase):
@@ -217,6 +243,138 @@ class LocalNankanHorseKeyPrepTest(unittest.TestCase):
         )
 
         self.assertEqual(frame["horse_key"].tolist(), ["2001109285"])
+
+
+class LocalNankanPreRacePrimaryScriptTest(unittest.TestCase):
+    def test_pre_race_primary_normalizes_not_ready_summary_paths(self) -> None:
+        artifacts_tmp = ROOT / "artifacts" / "tmp"
+        artifacts_tmp.mkdir(parents=True, exist_ok=True)
+        with tempfile.TemporaryDirectory(dir=artifacts_tmp) as tmp_dir:
+            tmp_path = Path(tmp_dir)
+            summary_output = tmp_path / "local_nankan_pre_race_ready_summary.json"
+            manifest_file = tmp_path / "local_nankan_primary_pre_race_ready_materialize_manifest.json"
+
+            race_card_frame = pd.DataFrame([{"race_id": "nar001"}])
+            race_result_frame = pd.DataFrame([{"race_id": "nar001"}])
+            ready_card_frame = pd.DataFrame([{"race_id": "nar001"}])
+
+            with patch.object(pre_race_primary_script, "load_yaml", return_value={"dataset": {}}), patch.object(
+                pre_race_primary_script.pd,
+                "read_csv",
+                side_effect=[race_card_frame, race_result_frame],
+            ), patch.object(
+                pre_race_primary_script,
+                "filter_result_ready_pre_race_only",
+                return_value=ready_card_frame,
+            ), patch.object(
+                pre_race_primary_script,
+                "build_pre_race_only_materialization_summary",
+                return_value={
+                    "result_ready_races": 0,
+                    "pending_result_races": 24,
+                },
+            ), patch.object(
+                pre_race_primary_script,
+                "write_csv_file",
+            ), patch.object(
+                sys,
+                "argv",
+                [
+                    "run_materialize_local_nankan_pre_race_primary.py",
+                    "--filtered-race-card-output",
+                    str(ROOT / "data/local_nankan_pre_race_ready/raw/unit_not_ready_race_card.csv"),
+                    "--filtered-race-result-output",
+                    str(ROOT / "data/local_nankan_pre_race_ready/raw/unit_not_ready_race_result.csv"),
+                    "--primary-output-file",
+                    str(ROOT / "data/local_nankan_pre_race_ready/raw/unit_not_ready_primary.csv"),
+                    "--summary-output",
+                    str(summary_output),
+                    "--manifest-file",
+                    str(manifest_file),
+                ],
+            ):
+                exit_code = pre_race_primary_script.main()
+
+            self.assertEqual(exit_code, 2)
+            summary = json.loads(summary_output.read_text(encoding="utf-8"))
+            self.assertEqual(summary["filtered_race_card_output"], "data/local_nankan_pre_race_ready/raw/unit_not_ready_race_card.csv")
+            self.assertEqual(summary["filtered_race_result_output"], "data/local_nankan_pre_race_ready/raw/unit_not_ready_race_result.csv")
+            self.assertEqual(summary["primary_output_file"], "data/local_nankan_pre_race_ready/raw/unit_not_ready_primary.csv")
+            self.assertEqual(summary["manifest_file"], str(manifest_file.relative_to(ROOT)))
+
+    def test_pre_race_primary_normalizes_completed_summary_paths(self) -> None:
+        artifacts_tmp = ROOT / "artifacts" / "tmp"
+        artifacts_tmp.mkdir(parents=True, exist_ok=True)
+        with tempfile.TemporaryDirectory(dir=artifacts_tmp) as tmp_dir:
+            tmp_path = Path(tmp_dir)
+            summary_output = tmp_path / "local_nankan_pre_race_ready_summary.json"
+            manifest_file = tmp_path / "local_nankan_primary_pre_race_ready_materialize_manifest.json"
+
+            race_card_frame = pd.DataFrame([{"race_id": "nar001"}])
+            race_result_frame = pd.DataFrame([{"race_id": "nar001"}])
+            ready_card_frame = pd.DataFrame([{"race_id": "nar001"}])
+
+            with patch.object(pre_race_primary_script, "load_yaml", return_value={"dataset": {}}), patch.object(
+                pre_race_primary_script.pd,
+                "read_csv",
+                side_effect=[race_card_frame, race_result_frame],
+            ), patch.object(
+                pre_race_primary_script,
+                "filter_result_ready_pre_race_only",
+                return_value=ready_card_frame,
+            ), patch.object(
+                pre_race_primary_script,
+                "build_pre_race_only_materialization_summary",
+                return_value={
+                    "result_ready_races": 1,
+                    "pending_result_races": 0,
+                },
+            ), patch.object(
+                pre_race_primary_script,
+                "write_csv_file",
+            ), patch.object(
+                pre_race_primary_script,
+                "materialize_local_nankan_primary_from_config",
+                return_value={
+                    "status": "completed",
+                    "current_phase": "primary_materialized",
+                    "recommended_action": "review_pre_race_primary",
+                    "generated_files": {
+                        "output_file": str(ROOT / "data/local_nankan_pre_race_ready/raw/local_nankan_primary_pre_race_ready.csv"),
+                        "manifest_file": str(ROOT / "artifacts/reports/local_nankan_primary_pre_race_ready_materialize_manifest.json"),
+                    },
+                },
+            ), patch.object(
+                sys,
+                "argv",
+                [
+                    "run_materialize_local_nankan_pre_race_primary.py",
+                    "--summary-output",
+                    str(summary_output),
+                    "--manifest-file",
+                    str(manifest_file),
+                ],
+            ):
+                exit_code = pre_race_primary_script.main()
+
+            self.assertEqual(exit_code, 0)
+            summary = json.loads(summary_output.read_text(encoding="utf-8"))
+            self.assertEqual(
+                summary["filtered_race_card_output"],
+                "data/local_nankan_pre_race_ready/raw/local_nankan_race_card_pre_race_ready.csv",
+            )
+            self.assertEqual(
+                summary["manifest_file"],
+                str(manifest_file.relative_to(ROOT)),
+            )
+            self.assertEqual(
+                summary["primary_materialize_summary"]["generated_files"]["output_file"],
+                "data/local_nankan_pre_race_ready/raw/local_nankan_primary_pre_race_ready.csv",
+            )
+            self.assertEqual(
+                summary["primary_materialize_summary"]["generated_files"]["manifest_file"],
+                "artifacts/reports/local_nankan_primary_pre_race_ready_materialize_manifest.json",
+            )
 
 
 if __name__ == "__main__":

@@ -91,6 +91,7 @@ NAR の current public message は次で固定する。
 - current formal promoted line は `jockey_trainer_combo_replay_v1_pathfix`
 - NAR は race 分母 bet rate が `12%` 台で、low-frequency candidate ではない
 - ただし NAR の高 AUC / 高 ROI は market-aware line として読むべきで、non-market skill の純粋な proxy とは扱わない
+- さらに `#120/#121` の strict provenance / source timing read が解消するまでは、historical local Nankan ROI は diagnostic-only であり、trust-carrying benchmark evidence としては説明しない
 
 追加の内部 caution は次である。
 

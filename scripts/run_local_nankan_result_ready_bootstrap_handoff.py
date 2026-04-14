@@ -69,6 +69,26 @@ def _display_path(path: Path) -> str:
         return str(path)
 
 
+def _display_path_value(value: Any) -> Any:
+    if value is None:
+        return None
+    if isinstance(value, Path):
+        return _display_path(value)
+    if isinstance(value, str):
+        return _display_path(_resolve_path(value)) if Path(value).is_absolute() else value
+    return value
+
+
+def _normalize_display_paths(value: Any) -> Any:
+    if isinstance(value, dict):
+        return {key: _normalize_display_paths(item) for key, item in value.items()}
+    if isinstance(value, list):
+        return [_normalize_display_paths(item) for item in value]
+    if isinstance(value, tuple):
+        return [_normalize_display_paths(item) for item in value]
+    return _display_path_value(value)
+
+
 def _run_command(*, label: str, command: list[str], log_path: Path | None = None) -> dict[str, Any]:
     started_at = utc_now_iso()
     print(f"[nar-bootstrap-handoff] running {label}: {shlex.join(command)}", flush=True)
@@ -86,7 +106,7 @@ def _run_command(*, label: str, command: list[str], log_path: Path | None = None
             result = subprocess.run(command, cwd=ROOT, check=False)
     return {
         "label": label,
-        "command": list(command),
+        "command": _normalize_display_paths(list(command)),
         "exit_code": int(result.returncode),
         "status": "completed" if result.returncode == 0 else "failed",
         "started_at": started_at,
@@ -113,7 +133,7 @@ def main() -> int:
     parser.add_argument("--benchmark-manifest-output", default="artifacts/reports/benchmark_gate_local_nankan_pre_race_ready.json")
     parser.add_argument("--handoff-manifest-output", default="artifacts/reports/local_nankan_pre_race_benchmark_handoff_manifest.json")
     parser.add_argument("--wrapper-manifest-output", default="artifacts/reports/local_nankan_result_ready_bootstrap_handoff_manifest.json")
-    parser.add_argument("--source-timing-summary-input", default="artifacts/reports/local_nankan_source_timing_audit_issue121.json")
+    parser.add_argument("--source-timing-summary-input", default="artifacts/reports/local_nankan_source_timing_audit.json")
     parser.add_argument("--wait-for-results", action="store_true")
     parser.add_argument("--max-wait-seconds", type=int, default=0)
     parser.add_argument("--poll-interval-seconds", type=int, default=60)
@@ -136,14 +156,14 @@ def main() -> int:
         python_executable = resolve_python_executable(workspace_root=ROOT, fallback=args.python_executable or sys.executable)
         progress.start(message="starting result-ready bootstrap handoff")
 
-        runtime_configs = materialize_local_nankan_bootstrap_runtime_configs(
+        runtime_configs = _normalize_display_paths(materialize_local_nankan_bootstrap_runtime_configs(
             workspace_root=ROOT,
             revision=args.bootstrap_revision,
             win_config=args.bootstrap_win_config,
             roi_config=args.bootstrap_roi_config,
             stack_config=args.bootstrap_stack_config,
             output_dir=args.runtime_config_dir,
-        )
+        ))
         log_dir = _resolve_path(args.log_dir)
         handoff_log_path = _build_log_path(
             log_dir=log_dir,
@@ -212,7 +232,7 @@ def main() -> int:
             stack_config=runtime_configs["stack_config"],
             revision=args.bootstrap_revision,
         )
-        command_plan = [
+        command_plan = _normalize_display_paths([
             {
                 **step,
                 "log_file": _display_path(
@@ -225,10 +245,10 @@ def main() -> int:
                 ),
             }
             for step in base_command_plan
-        ]
+        ])
 
         if handoff_exit == 2 or str(handoff_manifest.get("status")) == "not_ready":
-            manifest = {
+            manifest = _normalize_display_paths({
                 "status": "not_ready",
                 "current_phase": str(handoff_manifest.get("current_phase") or "await_result_arrival"),
                 "recommended_action": str(handoff_manifest.get("recommended_action") or "wait_for_result_ready_pre_race_races"),
@@ -237,13 +257,13 @@ def main() -> int:
                 "runtime_configs": runtime_configs,
                 "log_dir": _display_path(log_dir),
                 "bootstrap_command_plan": command_plan,
-            }
+            })
             write_json(wrapper_manifest_path, manifest)
             progress.complete(message=f"not ready output={wrapper_manifest_path}")
             return 2
 
         if handoff_exit != 0 or str(handoff_manifest.get("status")) != "completed":
-            manifest = {
+            manifest = _normalize_display_paths({
                 "status": "failed",
                 "current_phase": "benchmark_handoff",
                 "recommended_action": "inspect_handoff_manifest",
@@ -252,14 +272,14 @@ def main() -> int:
                 "runtime_configs": runtime_configs,
                 "log_dir": _display_path(log_dir),
                 "bootstrap_command_plan": command_plan,
-            }
+            })
             write_json(wrapper_manifest_path, manifest)
             return 1
 
         progress.update(current=2, message="benchmark handoff completed; bootstrap surface ready")
 
         if not args.run_bootstrap:
-            manifest = {
+            manifest = _normalize_display_paths({
                 "status": "benchmark_ready",
                 "current_phase": "bootstrap_pending",
                 "recommended_action": "run_bootstrap_command_plan",
@@ -268,7 +288,7 @@ def main() -> int:
                 "runtime_configs": runtime_configs,
                 "log_dir": _display_path(log_dir),
                 "bootstrap_command_plan": command_plan,
-            }
+            })
             write_json(wrapper_manifest_path, manifest)
             progress.complete(message=f"bootstrap plan ready output={wrapper_manifest_path}")
             return 0
@@ -283,7 +303,7 @@ def main() -> int:
             bootstrap_runs.append(step_result)
             exit_code = int(step_result["exit_code"])
             if exit_code != 0:
-                manifest = {
+                manifest = _normalize_display_paths({
                     "status": "failed",
                     "current_phase": str(step["label"]),
                     "recommended_action": "inspect_bootstrap_child_command",
@@ -292,11 +312,11 @@ def main() -> int:
                     "runtime_configs": runtime_configs,
                     "log_dir": _display_path(log_dir),
                     "bootstrap_runs": bootstrap_runs,
-                }
+                })
                 write_json(wrapper_manifest_path, manifest)
                 return 1
 
-        manifest = {
+        manifest = _normalize_display_paths({
             "status": "completed",
             "current_phase": "bootstrap_completed",
             "recommended_action": "review_bootstrap_revision_outputs",
@@ -305,7 +325,7 @@ def main() -> int:
             "runtime_configs": runtime_configs,
             "log_dir": _display_path(log_dir),
             "bootstrap_runs": bootstrap_runs,
-        }
+        })
         write_json(wrapper_manifest_path, manifest)
         progress.complete(message=f"bootstrap completed output={wrapper_manifest_path}")
         return 0

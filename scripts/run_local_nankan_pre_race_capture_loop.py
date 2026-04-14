@@ -43,6 +43,47 @@ def _read_json_dict(path: Path | None) -> dict[str, Any]:
     return payload if isinstance(payload, dict) else {}
 
 
+def _display_path(path: Path | None) -> str | None:
+    if path is None:
+        return None
+    try:
+        return str(path.relative_to(ROOT))
+    except ValueError:
+        return str(path)
+
+
+def _display_path_value(path_text: object) -> str | None:
+    if not isinstance(path_text, str) or not path_text:
+        return None
+    path = Path(path_text)
+    if not path.is_absolute():
+        return path_text
+    return _display_path(path)
+
+
+def _normalize_display_paths(value: object) -> object:
+    if isinstance(value, dict):
+        normalized: dict[str, object] = {}
+        for key, child in value.items():
+            if isinstance(child, str) and (
+                key.endswith("_input")
+                or key.endswith("_output")
+                or key.endswith("_manifest")
+                or key.endswith("_file")
+                or key.endswith("_dir")
+                or key.endswith("_path")
+            ):
+                normalized[key] = _display_path_value(child)
+            else:
+                normalized[key] = _normalize_display_paths(child)
+        return normalized
+    if isinstance(value, list):
+        return [_normalize_display_paths(child) for child in value]
+    if isinstance(value, str):
+        return _display_path_value(value) or value
+    return value
+
+
 def _build_pass_paths(snapshot_dir: Path, pass_index: int) -> tuple[Path, Path]:
     summary_path = snapshot_dir / f"pass_{pass_index:03d}_coverage_summary.json"
     date_coverage_path = snapshot_dir / f"pass_{pass_index:03d}_date_coverage.csv"
@@ -137,8 +178,8 @@ def main() -> int:
                         "prepare_exit_code": prepare_exit,
                         "collect_exit_code": None,
                         "coverage_exit_code": None,
-                        "summary_output": str(pass_summary_path),
-                        "date_coverage_output": str(pass_date_coverage_path),
+                        "summary_output": _display_path(pass_summary_path),
+                        "date_coverage_output": _display_path(pass_date_coverage_path),
                         "status": "failed_prepare",
                     }
                 )
@@ -154,8 +195,8 @@ def main() -> int:
                         "prepare_exit_code": prepare_exit,
                         "collect_exit_code": collect_exit,
                         "coverage_exit_code": None,
-                        "summary_output": str(pass_summary_path),
-                        "date_coverage_output": str(pass_date_coverage_path),
+                        "summary_output": _display_path(pass_summary_path),
+                        "date_coverage_output": _display_path(pass_date_coverage_path),
                         "status": "failed_collect",
                     }
                 )
@@ -177,8 +218,9 @@ def main() -> int:
                     "prepare_exit_code": prepare_exit,
                     "collect_exit_code": collect_exit,
                     "coverage_exit_code": coverage_exit,
-                    "summary_output": str(pass_summary_path),
-                    "date_coverage_output": str(pass_date_coverage_path),
+                    "baseline_summary_input": _display_path(current_baseline_path),
+                    "summary_output": _display_path(pass_summary_path),
+                    "date_coverage_output": _display_path(pass_date_coverage_path),
                     "status": "completed" if coverage_exit == 0 else "failed_coverage",
                     "pre_race_only_rows": latest_summary.get("pre_race_only_rows"),
                     "pre_race_only_races": latest_summary.get("pre_race_only_races"),
@@ -221,8 +263,9 @@ def main() -> int:
             "max_passes": max_passes,
             "completed_passes": completed_passes,
             "poll_interval_seconds": poll_interval_seconds,
-            "snapshot_dir": str(snapshot_dir),
-            "latest_summary": latest_summary,
+            "initial_baseline_summary_input": _display_path(baseline_summary_path),
+            "snapshot_dir": _display_path(snapshot_dir),
+            "latest_summary": _normalize_display_paths(latest_summary),
             "pass_snapshots": pass_records,
         }
         write_json(wrapper_manifest_path, wrapper_manifest)

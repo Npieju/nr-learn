@@ -10,8 +10,13 @@ if str(SRC) not in sys.path:
     sys.path.append(str(SRC))
 
 from racing_ml.serving.predict_batch import run_predict
+from racing_ml.common.config import load_yaml
+from racing_ml.common.local_nankan_trust import require_local_nankan_trust_ready
 from racing_ml.common.model_profiles import MODEL_RUN_PROFILES, format_model_run_profiles, resolve_model_run_profile
 from racing_ml.common.progress import ProgressBar
+
+
+NO_MODEL_ARTIFACT_SUFFIX = "__NO_MODEL_ARTIFACT_SUFFIX__"
 
 
 def log_progress(message: str) -> None:
@@ -27,6 +32,9 @@ def main() -> int:
     parser.add_argument("--data-config", default=None)
     parser.add_argument("--feature-config", default=None)
     parser.add_argument("--race-date", default=None)
+    parser.add_argument("--model-artifact-suffix", default=None)
+    parser.add_argument("--output-file-suffix", default=None)
+    parser.add_argument("--allow-diagnostic-local-nankan", action="store_true")
     args = parser.parse_args()
     progress = ProgressBar(total=2, prefix="[predict cli]", logger=log_progress, min_interval_sec=0.0)
 
@@ -44,10 +52,27 @@ def main() -> int:
             default_data_config=args.data_config or "configs/data.yaml",
             default_feature_config=args.feature_config or "configs/features.yaml",
         )
+        data_cfg = load_yaml(ROOT / data_config_path)
+        require_local_nankan_trust_ready(
+            workspace_root=ROOT,
+            data_config=data_cfg,
+            data_config_path=data_config_path,
+            allow_diagnostic_override=bool(args.allow_diagnostic_local_nankan),
+            command_name="predict",
+            profile_name=resolved_profile,
+        )
+        explicit_no_model_artifact_suffix = args.model_artifact_suffix == NO_MODEL_ARTIFACT_SUFFIX
+        profile_default_suffix = None
+        if resolved_profile is not None:
+            profile_default_suffix = MODEL_RUN_PROFILES[resolved_profile].default_model_artifact_suffix
+        resolved_model_artifact_suffix = None if explicit_no_model_artifact_suffix else (args.model_artifact_suffix or profile_default_suffix)
         progress.start(
             message=(
                 f"starting profile={resolved_profile or 'custom'} config={config_path} data_config={data_config_path} "
-                f"feature_config={feature_config_path} race_date={args.race_date or 'latest'}"
+                f"feature_config={feature_config_path} race_date={args.race_date or 'latest'} "
+                f"model_artifact_suffix={resolved_model_artifact_suffix if not explicit_no_model_artifact_suffix else 'none'} "
+                f"output_file_suffix={args.output_file_suffix or 'none'} "
+                f"allow_diagnostic_local_nankan={args.allow_diagnostic_local_nankan}"
             )
         )
         run_predict(
@@ -56,6 +81,8 @@ def main() -> int:
             feature_config_path=feature_config_path,
             race_date=args.race_date,
             profile_name=resolved_profile,
+            model_artifact_suffix=resolved_model_artifact_suffix,
+            output_file_suffix=args.output_file_suffix,
         )
         progress.complete(message="prediction flow finished")
         return 0

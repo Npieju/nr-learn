@@ -43,15 +43,57 @@ def _read_json_dict(path: Path) -> dict[str, Any]:
     return payload if isinstance(payload, dict) else {}
 
 
+def _display_path(path: Path | None) -> str | None:
+    if path is None:
+        return None
+    try:
+        return str(path.relative_to(ROOT))
+    except ValueError:
+        return str(path)
+
+
+def _display_path_value(path_text: object) -> str | None:
+    if not isinstance(path_text, str) or not path_text:
+        return None
+    path = Path(path_text)
+    if not path.is_absolute():
+        return path_text
+    return _display_path(path)
+
+
+def _normalize_display_paths(value: object) -> object:
+    if isinstance(value, dict):
+        normalized: dict[str, object] = {}
+        for key, child in value.items():
+            if isinstance(child, str) and (
+                key.endswith("_input")
+                or key.endswith("_output")
+                or key.endswith("_manifest")
+                or key.endswith("_file")
+                or key.endswith("_dir")
+                or key.endswith("_path")
+            ):
+                normalized[key] = _display_path_value(child)
+            else:
+                normalized[key] = _normalize_display_paths(child)
+        return normalized
+    if isinstance(value, list):
+        return [_normalize_display_paths(child) for child in value]
+    if isinstance(value, str):
+        return _display_path_value(value) or value
+    return value
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--python-executable", default=None)
     parser.add_argument("--probe-script", default="scripts/run_local_nankan_pre_race_readiness_probe.py")
     parser.add_argument("--handoff-script", default="scripts/run_local_nankan_result_ready_bootstrap_handoff.py")
     parser.add_argument("--probe-summary-output", default="artifacts/reports/local_nankan_pre_race_readiness_probe_summary.json")
+    parser.add_argument("--capture-loop-manifest", default="artifacts/reports/local_nankan_pre_race_capture_loop_manifest.json")
     parser.add_argument("--handoff-manifest-output", default="artifacts/reports/local_nankan_result_ready_bootstrap_handoff_manifest.json")
     parser.add_argument("--watcher-manifest-output", default="artifacts/reports/local_nankan_readiness_watcher_manifest.json")
-    parser.add_argument("--source-timing-summary-input", default="artifacts/reports/local_nankan_source_timing_audit_issue121.json")
+    parser.add_argument("--source-timing-summary-input", default="artifacts/reports/local_nankan_source_timing_audit.json")
     parser.add_argument("--wait-for-ready", action="store_true")
     parser.add_argument("--max-wait-seconds", type=int, default=0)
     parser.add_argument("--poll-interval-seconds", type=int, default=60)
@@ -89,6 +131,7 @@ def main() -> int:
             attempts += 1
             probe_exit = _run_command(label=f"probe attempt={attempts}", command=probe_command)
             probe_summary = _read_json_dict(_resolve_path(args.probe_summary_output))
+            capture_loop_manifest = _read_json_dict(_resolve_path(args.capture_loop_manifest))
             progress.update(
                 current=1,
                 message=f"probe attempt={attempts} exit_code={probe_exit} status={probe_summary.get('status')}",
@@ -105,9 +148,11 @@ def main() -> int:
                     attempts=attempts,
                     waited_seconds=int(max(0, time.monotonic() - wait_started)),
                     timed_out=False,
-                    probe_summary_output=args.probe_summary_output,
-                    probe_summary=probe_summary,
-                    handoff_manifest=handoff_manifest,
+                    probe_summary_output=_display_path(_resolve_path(args.probe_summary_output)),
+                    probe_summary=_normalize_display_paths(probe_summary),
+                    capture_loop_manifest_output=_display_path(_resolve_path(args.capture_loop_manifest)),
+                    capture_loop_manifest=_normalize_display_paths(capture_loop_manifest),
+                    handoff_manifest=_normalize_display_paths(handoff_manifest),
                 )
                 write_json(watcher_manifest_path, manifest)
                 progress.complete(message=f"watcher completed output={watcher_manifest_path}")
@@ -126,8 +171,10 @@ def main() -> int:
                     attempts=attempts,
                     waited_seconds=waited_seconds,
                     timed_out=True,
-                    probe_summary_output=args.probe_summary_output,
-                    probe_summary=probe_summary,
+                    probe_summary_output=_display_path(_resolve_path(args.probe_summary_output)),
+                    probe_summary=_normalize_display_paths(probe_summary),
+                    capture_loop_manifest_output=_display_path(_resolve_path(args.capture_loop_manifest)),
+                    capture_loop_manifest=_normalize_display_paths(capture_loop_manifest),
                 )
                 write_json(watcher_manifest_path, manifest)
                 progress.complete(message=f"not ready output={watcher_manifest_path}")

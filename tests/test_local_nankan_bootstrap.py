@@ -77,8 +77,13 @@ class LocalNankanBootstrapTest(unittest.TestCase):
             self.assertFalse(payload["upstream_refresh"]["exists"])
             self.assertFalse(payload["upstream_refresh"]["upstream_fresh"])
             self.assertFalse(payload["upstream_refresh"]["contract_valid"])
+            self.assertIsNone(payload["upstream_refresh"]["initial_baseline_summary_input"])
+            self.assertIsNone(payload["upstream_refresh"]["latest_baseline_summary_input"])
+            self.assertEqual(payload["followup_command"]["command"][1], "scripts/run_local_nankan_future_only_wait_then_cycle.py")
+            self.assertTrue(str(payload["followup_command"]["log_file"]).startswith("artifacts/logs/"))
             self.assertEqual(payload["read_order"][0], "status")
             self.assertIn("upstream_fresh=false", payload["highlights"])
+            self.assertIn("upstream_baseline_chain=None", payload["highlights"])
             self.assertIn("--oneshot", payload["followup_command"]["command"])
 
     def test_followup_oneshot_blocks_invalid_upstream_contract(self) -> None:
@@ -133,6 +138,10 @@ class LocalNankanBootstrapTest(unittest.TestCase):
                         "data_update_mode": "capture_refresh_only",
                         "execution_mode": "bounded_pass_loop",
                         "trigger_contract": "direct_capture_refresh",
+                        "initial_baseline_summary_input": "artifacts/reports/capture_baseline_seed.json",
+                        "pass_snapshots": [
+                            {"baseline_summary_input": "artifacts/reports/capture_baseline_seed.json"},
+                        ],
                         "finished_at": "2024-01-01T00:00:00+00:00",
                     }
                 ),
@@ -169,6 +178,8 @@ class LocalNankanBootstrapTest(unittest.TestCase):
             self.assertFalse(payload["upstream_refresh"]["upstream_fresh"])
             self.assertTrue(payload["upstream_refresh"]["contract_valid"])
             self.assertEqual(payload["upstream_refresh"]["age_seconds"], 121)
+            self.assertEqual(payload["upstream_refresh"]["initial_baseline_summary_input"], "artifacts/reports/capture_baseline_seed.json")
+            self.assertEqual(payload["upstream_refresh"]["latest_baseline_summary_input"], "artifacts/reports/capture_baseline_seed.json")
 
     def test_followup_oneshot_dry_run_plans_child_without_launching_it(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
@@ -186,6 +197,11 @@ class LocalNankanBootstrapTest(unittest.TestCase):
                         "data_update_mode": "capture_refresh_only",
                         "execution_mode": "bounded_pass_loop",
                         "trigger_contract": "direct_capture_refresh",
+                        "initial_baseline_summary_input": "artifacts/reports/capture_baseline_seed.json",
+                        "pass_snapshots": [
+                            {"baseline_summary_input": "artifacts/reports/capture_baseline_seed.json"},
+                            {"baseline_summary_input": "artifacts/reports/capture_pass_001_summary.json"},
+                        ],
                         "finished_at": "2024-01-01T00:00:00+00:00",
                     }
                 ),
@@ -230,6 +246,8 @@ class LocalNankanBootstrapTest(unittest.TestCase):
             self.assertTrue(payload["upstream_fresh"])
             self.assertTrue(payload["child_launch_allowed"])
             self.assertEqual(payload["upstream_refresh"]["age_seconds"], 30)
+            self.assertEqual(payload["upstream_refresh"]["initial_baseline_summary_input"], "artifacts/reports/capture_baseline_seed.json")
+            self.assertEqual(payload["upstream_refresh"]["latest_baseline_summary_input"], "artifacts/reports/capture_pass_001_summary.json")
             self.assertNotIn("exit_code", payload["followup_command"])
             self.assertIn("followup_exit_code=planned", payload["highlights"])
 
@@ -248,6 +266,11 @@ class LocalNankanBootstrapTest(unittest.TestCase):
                         "execution_role": "pre_race_capture_refresh_loop",
                         "data_update_mode": "capture_refresh_only",
                         "trigger_contract": "direct_capture_refresh",
+                        "initial_baseline_summary_input": "artifacts/reports/capture_baseline_seed.json",
+                        "pass_snapshots": [
+                            {"baseline_summary_input": "artifacts/reports/capture_baseline_seed.json"},
+                            {"baseline_summary_input": "artifacts/reports/capture_pass_001_summary.json"},
+                        ],
                         "finished_at": "2024-01-01T00:00:00+00:00",
                     }
                 ),
@@ -315,8 +338,13 @@ class LocalNankanBootstrapTest(unittest.TestCase):
             self.assertTrue(payload["upstream_refresh"]["exists"])
             self.assertEqual(payload["upstream_refresh"]["observed_at"], "2024-01-01T00:00:00+00:00")
             self.assertEqual(payload["upstream_refresh"]["age_seconds"], 45)
+            self.assertEqual(payload["upstream_refresh"]["initial_baseline_summary_input"], "artifacts/reports/capture_baseline_seed.json")
+            self.assertEqual(payload["upstream_refresh"]["latest_baseline_summary_input"], "artifacts/reports/capture_pass_001_summary.json")
             self.assertEqual(payload["read_order"][3], "upstream_refresh.upstream_fresh")
             self.assertIn("followup_exit_code=0", payload["highlights"])
+            self.assertIn("upstream_baseline_chain=artifacts/reports/capture_baseline_seed.json->artifacts/reports/capture_pass_001_summary.json", payload["highlights"])
+            self.assertEqual(payload["followup_command"]["command"][1], "scripts/run_local_nankan_future_only_wait_then_cycle.py")
+            self.assertTrue(str(payload["followup_command"]["log_file"]).startswith("artifacts/logs/"))
             self.assertEqual(len(commands), 1)
             self.assertIn("--oneshot", commands[0])
             self.assertIn("--run-id", commands[0])
@@ -355,15 +383,37 @@ class LocalNankanBootstrapTest(unittest.TestCase):
             commands.append(list(command))
             return 0 if label != "readiness_watcher" else 2
 
-        with tempfile.TemporaryDirectory() as tmp_dir:
+        artifacts_tmp = ROOT / "artifacts" / "tmp"
+        artifacts_tmp.mkdir(parents=True, exist_ok=True)
+        with tempfile.TemporaryDirectory(dir=artifacts_tmp) as tmp_dir:
             tmp_path = Path(tmp_dir)
             expected_probe_summary = str(tmp_path / "watcher_readiness_probe_summary.json")
             with patch.object(readiness_cycle_script, "_run_command", side_effect=fake_run_command), patch.object(
                 readiness_cycle_script,
                 "_read_json_dict",
                 side_effect=[
-                    {"status": "capturing", "current_phase": "capturing_pre_race_pool", "recommended_action": "wait"},
-                    {"status": "not_ready", "current_phase": "future_only_readiness_track", "recommended_action": "wait"},
+                    {
+                        "status": "capturing",
+                        "current_phase": "capturing_pre_race_pool",
+                        "recommended_action": "wait",
+                        "initial_baseline_summary_input": str(ROOT / "artifacts/reports/capture_baseline_seed.json"),
+                        "pass_snapshots": [
+                            {"baseline_summary_input": str(ROOT / "artifacts/reports/capture_baseline_seed.json")},
+                            {"baseline_summary_input": str(ROOT / "artifacts/reports/capture_pass_001_summary.json")},
+                        ],
+                    },
+                    {
+                        "status": "not_ready",
+                        "current_phase": "future_only_readiness_track",
+                        "recommended_action": "wait",
+                        "capture_loop_manifest_output": str(tmp_path / "capture.json"),
+                        "capture_loop_manifest": {
+                            "initial_baseline_summary_input": str(ROOT / "artifacts/reports/capture_baseline_seed.json"),
+                            "pass_snapshots": [
+                                {"baseline_summary_input": str(ROOT / "artifacts/reports/capture_pass_001_summary.json")},
+                            ],
+                        },
+                    },
                     {"status": "not_ready", "current_phase": "await_result_arrival", "recommended_action": "wait"},
                     {"status": "partial", "current_phase": "future_only_readiness_track", "recommended_action": "wait"},
                 ],
@@ -392,6 +442,39 @@ class LocalNankanBootstrapTest(unittest.TestCase):
         self.assertEqual(wrapper_manifest["data_update_mode"], "capture_refresh_with_readiness")
         self.assertEqual(wrapper_manifest["execution_mode"], "single_cycle")
         self.assertEqual(wrapper_manifest["trigger_contract"], "direct_refresh_plus_readiness")
+        self.assertIn("capture_baseline_chain=artifacts/reports/capture_baseline_seed.json->artifacts/reports/capture_pass_001_summary.json", wrapper_manifest["highlights"])
+        self.assertEqual(wrapper_manifest["capture_provenance"]["initial_baseline_summary_input"], "artifacts/reports/capture_baseline_seed.json")
+        self.assertEqual(wrapper_manifest["capture_provenance"]["latest_baseline_summary_input"], "artifacts/reports/capture_pass_001_summary.json")
+        self.assertEqual(wrapper_manifest["artifacts"]["capture_loop_manifest"], str((tmp_path / "capture.json").relative_to(ROOT)))
+        self.assertEqual(wrapper_manifest["artifacts"]["status_board"], str((tmp_path / "board.json").relative_to(ROOT)))
+        self.assertEqual(wrapper_manifest["capture_provenance"]["capture_loop_manifest"], str((tmp_path / "capture.json").relative_to(ROOT)))
+        self.assertEqual(wrapper_manifest["capture_provenance"]["watcher_manifest"], str((tmp_path / "watcher.json").relative_to(ROOT)))
+        self.assertEqual(
+            wrapper_manifest["capture_provenance"]["watcher_capture_loop_manifest_output"],
+            str((tmp_path / "capture.json").relative_to(ROOT)),
+        )
+        self.assertEqual(wrapper_manifest["capture_provenance"]["watcher_capture_initial_baseline_summary_input"], "artifacts/reports/capture_baseline_seed.json")
+        self.assertEqual(wrapper_manifest["capture_provenance"]["watcher_capture_latest_baseline_summary_input"], "artifacts/reports/capture_pass_001_summary.json")
+        self.assertEqual(
+            wrapper_manifest["steps"]["capture_loop"]["manifest"]["initial_baseline_summary_input"],
+            "artifacts/reports/capture_baseline_seed.json",
+        )
+        self.assertEqual(
+            wrapper_manifest["steps"]["capture_loop"]["manifest"]["pass_snapshots"][0]["baseline_summary_input"],
+            "artifacts/reports/capture_baseline_seed.json",
+        )
+        self.assertEqual(
+            wrapper_manifest["steps"]["capture_loop"]["manifest"]["pass_snapshots"][1]["baseline_summary_input"],
+            "artifacts/reports/capture_pass_001_summary.json",
+        )
+        self.assertEqual(
+            wrapper_manifest["steps"]["readiness_watcher"]["manifest"]["capture_loop_manifest"]["initial_baseline_summary_input"],
+            "artifacts/reports/capture_baseline_seed.json",
+        )
+        self.assertEqual(
+            wrapper_manifest["steps"]["readiness_watcher"]["manifest"]["capture_loop_manifest"]["pass_snapshots"][0]["baseline_summary_input"],
+            "artifacts/reports/capture_pass_001_summary.json",
+        )
         capture_command = commands[0]
         watcher_command = commands[1]
         bootstrap_command = commands[2]
@@ -400,6 +483,8 @@ class LocalNankanBootstrapTest(unittest.TestCase):
         self.assertIn(str(tmp_path / "capture_pre_race_capture_snapshots"), capture_command)
         self.assertIn("--probe-summary-output", watcher_command)
         self.assertIn(expected_probe_summary, watcher_command)
+        self.assertIn("--capture-loop-manifest", watcher_command)
+        self.assertIn(str(tmp_path / "capture.json"), watcher_command)
         self.assertIn("--log-prefix", bootstrap_command)
         self.assertIn("custom_bootstrap_manifest", bootstrap_command)
         self.assertIn("--bootstrap-revision", bootstrap_command)
@@ -672,6 +757,205 @@ class LocalNankanBootstrapTest(unittest.TestCase):
             self.assertEqual(manifest["bootstrap_runs"][1]["exit_code"], 1)
             self.assertEqual(manifest["bootstrap_runs"][1]["log_file"], "artifacts/logs/train_roi.log")
 
+    def test_bootstrap_handoff_normalizes_nested_workspace_paths(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            tmp_path = Path(tmp_dir)
+            wrapper_manifest = tmp_path / "local_nankan_result_ready_bootstrap_handoff_manifest.json"
+            handoff_manifest = tmp_path / "local_nankan_pre_race_benchmark_handoff_manifest.json"
+
+            with patch.object(bootstrap_handoff_script, "resolve_python_executable", return_value=str(ROOT / ".venv/bin/python")), patch.object(
+                bootstrap_handoff_script,
+                "materialize_local_nankan_bootstrap_runtime_configs",
+                return_value={
+                    "win_config": str(ROOT / "artifacts/runtime_configs/win.yaml"),
+                    "roi_config": str(ROOT / "artifacts/runtime_configs/roi.yaml"),
+                    "stack_config": str(ROOT / "artifacts/runtime_configs/stack.yaml"),
+                },
+            ), patch.object(
+                bootstrap_handoff_script,
+                "build_value_blend_bootstrap_command_plan",
+                return_value=[
+                    {
+                        "label": "train_win_component",
+                        "command": [
+                            str(ROOT / ".venv/bin/python"),
+                            str(ROOT / "scripts/run_train.py"),
+                            "--config",
+                            str(ROOT / "artifacts/runtime_configs/win.yaml"),
+                        ],
+                    }
+                ],
+            ), patch.object(
+                bootstrap_handoff_script,
+                "_run_command",
+                return_value={
+                    "label": "pre_race_benchmark_handoff",
+                    "command": [
+                        str(ROOT / ".venv/bin/python"),
+                        str(ROOT / "scripts/run_local_nankan_pre_race_benchmark_handoff.py"),
+                    ],
+                    "exit_code": 0,
+                    "status": "completed",
+                    "started_at": "2026-04-07T00:00:00Z",
+                    "finished_at": "2026-04-07T00:00:01Z",
+                    "log_file": "artifacts/logs/handoff.log",
+                },
+            ), patch.object(
+                bootstrap_handoff_script,
+                "_read_json_dict",
+                return_value={
+                    "status": "completed",
+                    "current_phase": "benchmark_handoff_completed",
+                    "pre_race_summary": {
+                        "filtered_race_card_output": str(ROOT / "data/local_nankan_pre_race_ready/raw/local_nankan_race_card_pre_race_ready.csv"),
+                    },
+                    "benchmark_manifest": {
+                        "command": [
+                            str(ROOT / ".venv/bin/python"),
+                            str(ROOT / "scripts/run_train.py"),
+                        ],
+                    },
+                },
+            ), patch.object(
+                sys,
+                "argv",
+                [
+                    "run_local_nankan_result_ready_bootstrap_handoff.py",
+                    "--wrapper-manifest-output",
+                    str(wrapper_manifest),
+                    "--handoff-manifest-output",
+                    str(handoff_manifest),
+                ],
+            ):
+                exit_code = bootstrap_handoff_script.main()
+
+            self.assertEqual(exit_code, 0)
+            manifest = json.loads(wrapper_manifest.read_text(encoding="utf-8"))
+            self.assertEqual(manifest["handoff_command_result"]["command"][0], ".venv/bin/python")
+            self.assertEqual(
+                manifest["handoff_command_result"]["command"][1],
+                "scripts/run_local_nankan_pre_race_benchmark_handoff.py",
+            )
+            self.assertEqual(
+                manifest["handoff_manifest"]["pre_race_summary"]["filtered_race_card_output"],
+                "data/local_nankan_pre_race_ready/raw/local_nankan_race_card_pre_race_ready.csv",
+            )
+            self.assertEqual(manifest["handoff_manifest"]["benchmark_manifest"]["command"][0], ".venv/bin/python")
+            self.assertEqual(manifest["handoff_manifest"]["benchmark_manifest"]["command"][1], "scripts/run_train.py")
+            self.assertEqual(manifest["runtime_configs"]["stack_config"], "artifacts/runtime_configs/stack.yaml")
+            self.assertEqual(manifest["bootstrap_command_plan"][0]["command"][0], ".venv/bin/python")
+            self.assertEqual(manifest["bootstrap_command_plan"][0]["command"][1], "scripts/run_train.py")
+            self.assertEqual(manifest["bootstrap_command_plan"][0]["command"][3], "artifacts/runtime_configs/win.yaml")
+
+    def test_bootstrap_handoff_not_ready_manifest_normalizes_workspace_paths(self) -> None:
+        artifacts_tmp = ROOT / "artifacts" / "tmp"
+        artifacts_tmp.mkdir(parents=True, exist_ok=True)
+        with tempfile.TemporaryDirectory(dir=artifacts_tmp) as tmp_dir:
+            tmp_path = Path(tmp_dir)
+            wrapper_manifest = tmp_path / "local_nankan_result_ready_bootstrap_handoff_manifest.json"
+            handoff_manifest = tmp_path / "local_nankan_pre_race_benchmark_handoff_manifest.json"
+
+            with patch.object(bootstrap_handoff_script, "resolve_python_executable", return_value=str(ROOT / ".venv/bin/python")), patch.object(
+                bootstrap_handoff_script,
+                "materialize_local_nankan_bootstrap_runtime_configs",
+                return_value={
+                    "win_config": str(ROOT / "artifacts/runtime_configs/win.yaml"),
+                    "roi_config": str(ROOT / "artifacts/runtime_configs/roi.yaml"),
+                    "stack_config": str(ROOT / "artifacts/runtime_configs/stack.yaml"),
+                },
+            ), patch.object(
+                bootstrap_handoff_script,
+                "build_value_blend_bootstrap_command_plan",
+                return_value=[
+                    {
+                        "label": "train_win_component",
+                        "command": [
+                            str(ROOT / ".venv/bin/python"),
+                            str(ROOT / "scripts/run_train.py"),
+                            "--config",
+                            str(ROOT / "artifacts/runtime_configs/win.yaml"),
+                        ],
+                    }
+                ],
+            ), patch.object(
+                bootstrap_handoff_script,
+                "_run_command",
+                return_value={
+                    "label": "pre_race_benchmark_handoff",
+                    "command": [
+                        str(ROOT / ".venv/bin/python"),
+                        str(ROOT / "scripts/run_local_nankan_pre_race_benchmark_handoff.py"),
+                    ],
+                    "exit_code": 2,
+                    "status": "failed",
+                    "started_at": "2026-04-07T00:00:00Z",
+                    "finished_at": "2026-04-07T00:00:01Z",
+                    "log_file": str(ROOT / "artifacts/logs/handoff.log"),
+                },
+            ), patch.object(
+                bootstrap_handoff_script,
+                "_read_json_dict",
+                return_value={
+                    "status": "not_ready",
+                    "current_phase": "await_result_arrival",
+                    "recommended_action": "wait_for_result_ready_pre_race_races",
+                    "pre_race_summary": {
+                        "filtered_race_card_output": str(ROOT / "data/local_nankan_pre_race_ready/raw/unit_not_ready_race_card.csv"),
+                    },
+                    "benchmark_manifest_output": str(tmp_path / "unit_not_ready_benchmark.json"),
+                },
+            ), patch.object(
+                sys,
+                "argv",
+                [
+                    "run_local_nankan_result_ready_bootstrap_handoff.py",
+                    "--wrapper-manifest-output",
+                    str(wrapper_manifest),
+                    "--handoff-manifest-output",
+                    str(handoff_manifest),
+                    "--log-prefix",
+                    "unit_not_ready_bootstrap",
+                ],
+            ):
+                exit_code = bootstrap_handoff_script.main()
+
+            self.assertEqual(exit_code, 2)
+            manifest = json.loads(wrapper_manifest.read_text(encoding="utf-8"))
+            self.assertEqual(manifest["handoff_command_result"]["command"][0], ".venv/bin/python")
+            self.assertEqual(manifest["handoff_command_result"]["command"][1], "scripts/run_local_nankan_pre_race_benchmark_handoff.py")
+            self.assertEqual(manifest["handoff_command_result"]["log_file"], "artifacts/logs/handoff.log")
+            self.assertEqual(
+                manifest["handoff_manifest"]["pre_race_summary"]["filtered_race_card_output"],
+                "data/local_nankan_pre_race_ready/raw/unit_not_ready_race_card.csv",
+            )
+            self.assertEqual(
+                manifest["handoff_manifest"]["benchmark_manifest_output"],
+                str((tmp_path / "unit_not_ready_benchmark.json").relative_to(ROOT)),
+            )
+            self.assertEqual(manifest["runtime_configs"]["win_config"], "artifacts/runtime_configs/win.yaml")
+
+    def test_readiness_cycle_bootstrap_artifacts_use_workspace_relative_paths(self) -> None:
+        readiness_cycle_script = _load_script_module(
+            "test_run_local_nankan_future_only_readiness_cycle_bootstrap_artifacts",
+            "scripts/run_local_nankan_future_only_readiness_cycle.py",
+        )
+        artifacts = readiness_cycle_script._bootstrap_cycle_artifacts(
+            "artifacts/reports/unit_cycle_001_bootstrap_handoff.json"
+        )
+
+        self.assertEqual(
+            artifacts["handoff_manifest_output"],
+            "artifacts/reports/unit_cycle_001_pre_race_benchmark_handoff.json",
+        )
+        self.assertEqual(
+            artifacts["filtered_race_card_output"],
+            "data/local_nankan_pre_race_ready/raw/unit_cycle_001_race_card.csv",
+        )
+        self.assertEqual(
+            artifacts["primary_output_file"],
+            "data/local_nankan_pre_race_ready/raw/unit_cycle_001_primary.csv",
+        )
+
     def test_wait_then_cycle_runs_bootstrap_followup_when_ready(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
             tmp_path = Path(tmp_dir)
@@ -822,6 +1106,11 @@ class LocalNankanBootstrapTest(unittest.TestCase):
                     }
                 if name.endswith("pre_race_capture_loop.json"):
                     return {
+                        "initial_baseline_summary_input": "artifacts/reports/capture_baseline_seed.json",
+                        "pass_snapshots": [
+                            {"baseline_summary_input": "artifacts/reports/capture_baseline_seed.json"},
+                            {"baseline_summary_input": "artifacts/reports/capture_pass_001_summary.json"},
+                        ],
                         "latest_summary": {
                             "pre_race_only_rows": 426,
                             "pre_race_only_races": 24,
@@ -935,6 +1224,8 @@ class LocalNankanBootstrapTest(unittest.TestCase):
             self.assertTrue(wait_payloads[0]["current_refs"]["focus_manifest"].endswith("cycle_001_status_board.json"))
             self.assertEqual(wait_payloads[0]["current_refs"]["blocking_surface"], "capture_loop")
             self.assertTrue(wait_payloads[0]["current_refs"]["blocking_manifest"].endswith("cycle_001_pre_race_capture_loop.json"))
+            self.assertEqual(wait_payloads[0]["current_refs"]["capture_initial_baseline_summary_input"], "artifacts/reports/capture_baseline_seed.json")
+            self.assertEqual(wait_payloads[0]["current_refs"]["capture_latest_baseline_summary_input"], "artifacts/reports/capture_pass_001_summary.json")
             self.assertEqual(wait_payloads[0]["current_operator_card"]["headline"], "result arrival pending")
             self.assertEqual(wait_payloads[0]["current_operator_card"]["state"], "blocked")
             self.assertEqual(wait_payloads[0]["current_operator_card"]["focus_surface"], "status_board")
@@ -943,6 +1234,8 @@ class LocalNankanBootstrapTest(unittest.TestCase):
             self.assertEqual(wait_payloads[0]["current_surface_views"]["status_board"]["status"], "partial")
             self.assertTrue(wait_payloads[0]["current_surface_views"]["status_board"]["manifest"].endswith("cycle_001_status_board.json"))
             self.assertEqual(wait_payloads[0]["current_surface_views"]["capture_loop"]["summary"]["pending_result_races"], 24)
+            self.assertEqual(wait_payloads[0]["current_surface_views"]["capture_loop"]["summary"]["initial_baseline_summary_input"], "artifacts/reports/capture_baseline_seed.json")
+            self.assertEqual(wait_payloads[0]["current_surface_views"]["capture_loop"]["summary"]["latest_baseline_summary_input"], "artifacts/reports/capture_pass_001_summary.json")
             self.assertEqual(wait_payloads[0]["current_statuses"]["monitor_state"], "waiting_next_cycle")
             self.assertEqual(wait_payloads[0]["current_statuses"]["readiness_cycle"], "partial")
             self.assertEqual(wait_payloads[0]["current_statuses"]["bootstrap_handoff"], "not_ready")
@@ -980,6 +1273,8 @@ class LocalNankanBootstrapTest(unittest.TestCase):
             self.assertTrue(wait_payloads[0]["current_artifacts"]["bootstrap_manifest"].endswith("cycle_001_bootstrap_handoff.json"))
             self.assertEqual(wait_payloads[0]["current_readiness_summary"]["cycle"], 1)
             self.assertEqual(wait_payloads[0]["current_readiness_summary"]["pending_result_races"], 24)
+            self.assertEqual(wait_payloads[0]["current_readiness_summary"]["initial_baseline_summary_input"], "artifacts/reports/capture_baseline_seed.json")
+            self.assertEqual(wait_payloads[0]["current_readiness_summary"]["latest_baseline_summary_input"], "artifacts/reports/capture_pass_001_summary.json")
             self.assertEqual(wait_payloads[0]["current_surface_summaries"]["readiness_cycle"]["status"], "partial")
             self.assertEqual(wait_payloads[0]["current_surface_summaries"]["readiness_cycle"]["elapsed_seconds"], 10)
             self.assertEqual(wait_payloads[0]["current_surface_summaries"]["capture_loop"]["pending_result_races"], 24)
@@ -1003,9 +1298,12 @@ class LocalNankanBootstrapTest(unittest.TestCase):
             operator_board = json.loads(operator_board_output.read_text(encoding="utf-8"))
             self.assertEqual(operator_board["readiness_surfaces"]["readiness_supervisor"]["monitor_state"], "completed")
             self.assertEqual(operator_board["readiness_surfaces"]["readiness_supervisor"]["completed_cycles"], 2)
+            self.assertEqual(operator_board["readiness_surfaces"]["readiness_supervisor"]["current_refs"]["capture_initial_baseline_summary_input"], "artifacts/reports/capture_baseline_seed.json")
+            self.assertEqual(operator_board["readiness_surfaces"]["readiness_supervisor"]["current_refs"]["capture_latest_baseline_summary_input"], "artifacts/reports/capture_pass_001_summary.json")
             self.assertEqual(operator_board["operator_runtime"]["monitor_state"], "completed")
             self.assertTrue(operator_board["artifacts"]["readiness_supervisor_manifest"].endswith("wait_then_cycle_run02.json"))
             self.assertIn("supervisor_monitor_state=completed", operator_board["highlights"])
+            self.assertIn("supervisor_capture_baseline_chain=artifacts/reports/capture_baseline_seed.json->artifacts/reports/capture_pass_001_summary.json", operator_board["highlights"])
 
     def test_build_operator_board_payload_surfaces_live_supervisor_state(self) -> None:
         board_payload = {
@@ -1057,6 +1355,8 @@ class LocalNankanBootstrapTest(unittest.TestCase):
             },
             "current_refs": {
                 "focus_manifest": "artifacts/reports/cycle_002_status_board.json",
+                "capture_initial_baseline_summary_input": "artifacts/reports/capture_baseline_seed.json",
+                "capture_latest_baseline_summary_input": "artifacts/reports/capture_pass_001_summary.json",
             },
             "started_at": "2026-04-11T06:04:34Z",
             "updated_at": "2026-04-11T07:47:41Z",
@@ -1073,10 +1373,13 @@ class LocalNankanBootstrapTest(unittest.TestCase):
 
         self.assertEqual(operator_board["readiness_surfaces"]["readiness_supervisor"]["monitor_state"], "waiting_next_cycle")
         self.assertEqual(operator_board["readiness_surfaces"]["readiness_supervisor"]["current_runtime"]["seconds_remaining"], 1200)
+        self.assertEqual(operator_board["readiness_surfaces"]["readiness_supervisor"]["current_refs"]["capture_initial_baseline_summary_input"], "artifacts/reports/capture_baseline_seed.json")
+        self.assertEqual(operator_board["readiness_surfaces"]["readiness_supervisor"]["current_refs"]["capture_latest_baseline_summary_input"], "artifacts/reports/capture_pass_001_summary.json")
         self.assertEqual(operator_board["operator_runtime"]["monitor_phase"], "waiting_next_cycle")
         self.assertEqual(operator_board["artifacts"]["live_status_board_source"], "artifacts/reports/cycle_002_status_board.json")
         self.assertEqual(operator_board["artifacts"]["readiness_supervisor_manifest"], "artifacts/reports/wait_then_cycle_live.json")
         self.assertIn("supervisor_monitor_state=waiting_next_cycle", operator_board["highlights"])
+        self.assertIn("supervisor_capture_baseline_chain=artifacts/reports/capture_baseline_seed.json->artifacts/reports/capture_pass_001_summary.json", operator_board["highlights"])
 
     def test_resolve_operator_board_path_skips_canonical_for_external_manifest(self) -> None:
         resolved = wait_then_cycle_script._resolve_operator_board_path(
@@ -1116,6 +1419,11 @@ class LocalNankanBootstrapTest(unittest.TestCase):
                     }
                 if name.endswith("pre_race_capture_loop.json"):
                     return {
+                        "initial_baseline_summary_input": "artifacts/reports/capture_baseline_seed.json",
+                        "pass_snapshots": [
+                            {"baseline_summary_input": "artifacts/reports/capture_baseline_seed.json"},
+                            {"baseline_summary_input": "artifacts/reports/capture_pass_001_summary.json"},
+                        ],
                         "latest_summary": {
                             "pre_race_only_rows": 426,
                             "pre_race_only_races": 24,
@@ -1211,6 +1519,11 @@ class LocalNankanBootstrapTest(unittest.TestCase):
                     }
                 if name.endswith("pre_race_capture_loop.json"):
                     return {
+                        "initial_baseline_summary_input": "artifacts/reports/capture_baseline_seed.json",
+                        "pass_snapshots": [
+                            {"baseline_summary_input": "artifacts/reports/capture_baseline_seed.json"},
+                            {"baseline_summary_input": "artifacts/reports/capture_pass_001_summary.json"},
+                        ],
                         "latest_summary": {
                             "pre_race_only_rows": 426,
                             "pre_race_only_races": 24,
@@ -1305,11 +1618,15 @@ class LocalNankanBootstrapTest(unittest.TestCase):
             self.assertTrue(cycle_payloads[0]["current_refs"]["focus_manifest"].endswith("cycle_001_status_board.json"))
             self.assertEqual(cycle_payloads[0]["current_refs"]["blocking_surface"], "capture_loop")
             self.assertTrue(cycle_payloads[0]["current_refs"]["blocking_manifest"].endswith("cycle_001_pre_race_capture_loop.json"))
+            self.assertEqual(cycle_payloads[0]["current_refs"]["capture_initial_baseline_summary_input"], "artifacts/reports/capture_baseline_seed.json")
+            self.assertEqual(cycle_payloads[0]["current_refs"]["capture_latest_baseline_summary_input"], "artifacts/reports/capture_pass_001_summary.json")
             self.assertEqual(cycle_payloads[0]["current_operator_card"]["headline"], "result arrival pending")
             self.assertEqual(cycle_payloads[0]["current_operator_card"]["recommended_action"], "capture_future_pre_race_rows_and_wait_for_results")
             self.assertTrue(cycle_payloads[0]["current_operator_card"]["focus_manifest"].endswith("cycle_001_status_board.json"))
             self.assertEqual(cycle_payloads[0]["current_surface_views"]["status_board"]["current_phase"], "future_only_readiness_track")
             self.assertTrue(cycle_payloads[0]["current_surface_views"]["readiness_cycle"]["manifest"].endswith("cycle_001_readiness_cycle.json"))
+            self.assertEqual(cycle_payloads[0]["current_surface_views"]["capture_loop"]["summary"]["initial_baseline_summary_input"], "artifacts/reports/capture_baseline_seed.json")
+            self.assertEqual(cycle_payloads[0]["current_surface_views"]["capture_loop"]["summary"]["latest_baseline_summary_input"], "artifacts/reports/capture_pass_001_summary.json")
             self.assertEqual(cycle_payloads[0]["current_statuses"]["monitor_state"], "running_cycle")
             self.assertEqual(cycle_payloads[0]["current_statuses"]["capture_loop"], None)
             self.assertEqual(cycle_payloads[0]["current_phases"]["monitor_phase"], "readiness_cycle")
@@ -1348,6 +1665,8 @@ class LocalNankanBootstrapTest(unittest.TestCase):
             self.assertEqual(cycle_payloads[1]["current_statuses"]["capture_loop"], None)
             self.assertEqual(cycle_payloads[0]["active_readiness_summary"]["cycle"], 1)
             self.assertEqual(cycle_payloads[0]["active_readiness_summary"]["current_surface"], "status_board")
+            self.assertEqual(cycle_payloads[0]["active_readiness_summary"]["initial_baseline_summary_input"], "artifacts/reports/capture_baseline_seed.json")
+            self.assertEqual(cycle_payloads[0]["active_readiness_summary"]["latest_baseline_summary_input"], "artifacts/reports/capture_pass_001_summary.json")
             self.assertEqual(cycle_payloads[0]["active_readiness_summary"]["pre_race_only_races"], 24)
             self.assertEqual(cycle_payloads[0]["active_readiness_summary"]["pending_result_races"], 24)
             self.assertEqual(cycle_payloads[0]["current_readiness_summary"]["cycle"], 1)
@@ -1401,9 +1720,137 @@ class LocalNankanBootstrapTest(unittest.TestCase):
             self.assertEqual(final_manifest["latest_cycle"]["cycle"], 1)
             self.assertEqual(final_manifest["readiness_summary"]["cycle"], 1)
             self.assertEqual(final_manifest["current_readiness_summary"]["cycle"], 1)
+            self.assertEqual(final_manifest["current_readiness_summary"]["initial_baseline_summary_input"], "artifacts/reports/capture_baseline_seed.json")
+            self.assertEqual(final_manifest["current_readiness_summary"]["latest_baseline_summary_input"], "artifacts/reports/capture_pass_001_summary.json")
             self.assertEqual(final_manifest["current_surface_summaries"]["capture_loop"]["pending_result_races"], 24)
             self.assertEqual(final_manifest["current_surface_summaries"]["readiness_cycle"]["elapsed_seconds"], 20)
             self.assertEqual(final_manifest["readiness_summary"]["artifacts"]["watcher_manifest"], final_manifest["cycles"][0]["watcher_manifest"])
+            self.assertEqual(final_manifest["readiness_summary"]["initial_baseline_summary_input"], "artifacts/reports/capture_baseline_seed.json")
+            self.assertEqual(final_manifest["readiness_summary"]["latest_baseline_summary_input"], "artifacts/reports/capture_pass_001_summary.json")
+
+    def test_wait_then_cycle_payload_normalizes_cycle_baseline_paths_for_output(self) -> None:
+        payload = wait_then_cycle_script._build_wait_manifest_payload(
+            run_started_at="2026-04-13T14:25:29Z",
+            final_status="partial",
+            final_phase="future_only_readiness_track",
+            final_action="capture_future_pre_race_rows_and_wait_for_results",
+            max_cycles=1,
+            run_id="unit",
+            artifact_prefix="wait_then_cycle_unit",
+            effective_artifact_prefix="wait_then_cycle_unit_unit",
+            run_manifest_output="artifacts/reports/wait_then_cycle_unit_unit.json",
+            log_path=ROOT / "artifacts/logs/wait_then_cycle_unit.log",
+            cycle_records=[
+                {
+                    "cycle": 1,
+                    "wrapper_manifest": "artifacts/reports/cycle_001_readiness_cycle.json",
+                    "status_board_manifest": "artifacts/reports/cycle_001_status_board.json",
+                    "capture_loop_manifest": "artifacts/reports/cycle_001_pre_race_capture_loop.json",
+                    "watcher_manifest": "artifacts/reports/cycle_001_readiness_watcher.json",
+                    "bootstrap_manifest": "artifacts/reports/cycle_001_bootstrap_handoff.json",
+                    "wrapper_status": "partial",
+                    "status_board_status": "partial",
+                    "benchmark_rerun_ready": False,
+                    "initial_baseline_summary_input": str(ROOT / "artifacts/reports/local_nankan_pre_race_capture_coverage_summary.json"),
+                    "latest_baseline_summary_input": str(ROOT / "artifacts/reports/local_nankan_pre_race_capture_coverage_summary.json"),
+                    "pre_race_only_rows": 426,
+                    "pre_race_only_races": 24,
+                    "result_ready_races": 0,
+                    "pending_result_races": 24,
+                    "bootstrap_status": "not_ready",
+                    "cycle_started_at": "2026-04-13T14:25:29Z",
+                    "cycle_finished_at": "2026-04-13T14:26:31Z",
+                    "stop_reason": "max_cycles_or_manual_stop",
+                    "bootstrap_followup": None,
+                }
+            ],
+            wait_seconds=0,
+            stopped_reason="max_cycles_reached",
+            oneshot=True,
+        )
+
+        self.assertEqual(
+            payload["cycles"][0]["initial_baseline_summary_input"],
+            "artifacts/reports/local_nankan_pre_race_capture_coverage_summary.json",
+        )
+        self.assertEqual(
+            payload["cycles"][0]["latest_baseline_summary_input"],
+            "artifacts/reports/local_nankan_pre_race_capture_coverage_summary.json",
+        )
+        self.assertEqual(
+            payload["latest_cycle"]["initial_baseline_summary_input"],
+            "artifacts/reports/local_nankan_pre_race_capture_coverage_summary.json",
+        )
+        self.assertEqual(
+            payload["latest_cycle"]["latest_baseline_summary_input"],
+            "artifacts/reports/local_nankan_pre_race_capture_coverage_summary.json",
+        )
+        self.assertEqual(
+            payload["readiness_summary"]["initial_baseline_summary_input"],
+            "artifacts/reports/local_nankan_pre_race_capture_coverage_summary.json",
+        )
+        self.assertEqual(
+            payload["readiness_summary"]["latest_baseline_summary_input"],
+            "artifacts/reports/local_nankan_pre_race_capture_coverage_summary.json",
+        )
+
+    def test_wait_then_cycle_payload_normalizes_command_paths_for_output(self) -> None:
+        payload = wait_then_cycle_script._build_wait_manifest_payload(
+            run_started_at="2026-04-13T14:25:29Z",
+            final_status="partial",
+            final_phase="future_only_readiness_track",
+            final_action="capture_future_pre_race_rows_and_wait_for_results",
+            max_cycles=1,
+            run_id="unit",
+            artifact_prefix="wait_then_cycle_unit",
+            effective_artifact_prefix="wait_then_cycle_unit_unit",
+            run_manifest_output="artifacts/reports/wait_then_cycle_unit_unit.json",
+            log_path=ROOT / "artifacts/logs/wait_then_cycle_unit.log",
+            cycle_records=[
+                {
+                    "cycle": 1,
+                    "command_result": {
+                        "label": "cycle=1",
+                        "command": [
+                            str(ROOT / ".venv/bin/python"),
+                            str(ROOT / "scripts/run_local_nankan_future_only_readiness_cycle.py"),
+                        ],
+                        "exit_code": 0,
+                        "status": "completed",
+                        "started_at": "2026-04-13T14:25:29Z",
+                        "finished_at": "2026-04-13T14:26:31Z",
+                    },
+                    "wrapper_manifest": "artifacts/reports/cycle_001_readiness_cycle.json",
+                    "status_board_manifest": "artifacts/reports/cycle_001_status_board.json",
+                    "capture_loop_manifest": "artifacts/reports/cycle_001_pre_race_capture_loop.json",
+                    "watcher_manifest": "artifacts/reports/cycle_001_readiness_watcher.json",
+                    "bootstrap_manifest": "artifacts/reports/cycle_001_bootstrap_handoff.json",
+                    "wrapper_status": "partial",
+                    "status_board_status": "partial",
+                    "benchmark_rerun_ready": False,
+                    "initial_baseline_summary_input": "artifacts/reports/capture_baseline_seed.json",
+                    "latest_baseline_summary_input": "artifacts/reports/capture_pass_001_summary.json",
+                    "pre_race_only_rows": 426,
+                    "pre_race_only_races": 24,
+                    "result_ready_races": 0,
+                    "pending_result_races": 24,
+                    "bootstrap_status": "not_ready",
+                    "cycle_started_at": "2026-04-13T14:25:29Z",
+                    "cycle_finished_at": "2026-04-13T14:26:31Z",
+                    "stop_reason": "max_cycles_or_manual_stop",
+                    "bootstrap_followup": None,
+                }
+            ],
+            wait_seconds=0,
+            stopped_reason="max_cycles_reached",
+            oneshot=True,
+        )
+
+        self.assertEqual(payload["cycles"][0]["command_result"]["command"][0], ".venv/bin/python")
+        self.assertEqual(
+            payload["cycles"][0]["command_result"]["command"][1],
+            "scripts/run_local_nankan_future_only_readiness_cycle.py",
+        )
 
     def test_wait_then_cycle_keeps_active_blockers_provisional_until_surfaces_observed(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:

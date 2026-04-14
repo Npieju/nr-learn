@@ -29,6 +29,36 @@ def _resolve_path(raw_path: str | Path) -> Path:
     return path if path.is_absolute() else (ROOT / path)
 
 
+def _display_path_value(value: object) -> object:
+    if not isinstance(value, str) or not value.startswith("/"):
+        return value
+    try:
+        path = Path(value)
+    except (TypeError, ValueError):
+        return value
+    if not path.is_absolute():
+        return value
+    try:
+        return str(path.relative_to(ROOT))
+    except ValueError:
+        return value
+
+
+def _normalize_display_paths(value: object) -> object:
+    if isinstance(value, dict):
+        return {key: _normalize_display_paths(item) for key, item in value.items()}
+    if isinstance(value, list):
+        return [_normalize_display_paths(item) for item in value]
+    if isinstance(value, tuple):
+        return [_normalize_display_paths(item) for item in value]
+    if isinstance(value, Path):
+        try:
+            return str(value.relative_to(ROOT))
+        except ValueError:
+            return str(value)
+    return _display_path_value(value)
+
+
 def _read_json_dict(path: Path | None) -> dict[str, Any]:
     if path is None or not path.exists():
         return {}
@@ -155,7 +185,7 @@ def main() -> int:
             "scenario_count": len(records),
             "scenarios": records,
         }
-        write_json(output_path, output_payload)
+        write_json(output_path, _normalize_display_paths(output_payload))
         progress.complete(message=f"probe summary output={output_path}")
         return 0
     except KeyboardInterrupt:

@@ -19,6 +19,8 @@ def build_readiness_watcher_manifest(
     timed_out: bool,
     probe_summary_output: str | None,
     probe_summary: dict[str, Any] | None,
+    capture_loop_manifest_output: str | None = None,
+    capture_loop_manifest: dict[str, Any] | None = None,
     handoff_manifest: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     manifest: dict[str, Any] = {
@@ -31,6 +33,10 @@ def build_readiness_watcher_manifest(
         "probe_summary_output": probe_summary_output,
         "probe_summary": probe_summary if isinstance(probe_summary, dict) else {},
     }
+    if capture_loop_manifest_output is not None:
+        manifest["capture_loop_manifest_output"] = str(capture_loop_manifest_output)
+    if isinstance(capture_loop_manifest, dict):
+        manifest["capture_loop_manifest"] = capture_loop_manifest
     if isinstance(handoff_manifest, dict):
         manifest["handoff_manifest"] = handoff_manifest
     return manifest

@@ -76,7 +76,10 @@
 - 一方で promotion gate の formal benchmark は `weighted_roi=0.95`、`bets_total=480` で、surface+layoff promoted line や tighter-policy promoted line より top-line は弱い。
 - `#53` の actual-date compare では、September window が baseline `32 / 216 races / -27.3` に対して `5 / 216 / -3.6`、December control が baseline `45 / 264 / +21.8` に対して `30 / 264 / -9.3` だった。surface+layoff promoted line と比べても September `8 / 216 / -8.0`、December `13 / 264 / +20.0` より強い role は示さなかった。
 - したがって current reading は family anchor ではなく、analysis-first promoted candidate である。
-- 一方で local Nankan は status board / preflight / benchmark gate 上 `ready_for_benchmark` まで到達したため、next execution queue は NAR separate-universe baseline formalization に移る。
+- 一方で local Nankan の root blocker は ROI 改善ではなく trust である。`#120` provenance trust gate と `#121` source timing audit により、historical result-ready rows の strict provenance は `pre_race=0`, `post_race=728850`, `unknown=257` と読まれ、historical local Nankan ROI は trust-carrying benchmark evidence ではなく diagnostic-only に降格した。
+- local Nankan の標準 CLI 導線として `local_nankan_recommended` は残すが、これは operator convenience alias であり、trust-ready benchmark default ではない。`r20260412_local_nankan_recommended_wf_runtime_narrow_full` の `top1_roi=0.8381912618392912`、`ev_top1_roi=1.940849373663306`、`auc=0.8775353752835744` も market-aware historical read にとどめる。
+- `odds/popularity` を外した no-market refresh train `r20260413_local_nankan_no_market_refresh_v1` は旧 no-market artifact と同水準の train AUC `0.7686` に留まった。さらに進む representative evaluate は trust blocker 解消前の追加 benchmark になるため途中で停止し、NAR execution order は `#120 -> #121 -> #122 -> #101 -> #103` に戻した。
+- result-ready `local_nankan_value_blend_bootstrap` は `all_safe` が raw `margin` を拾うリークを含んでいたため safe exclusion を修正して再学習したが、代表評価 `r20260412_local_nankan_value_blend_bootstrap_result_ready_eval_v1` でも `top1_roi=0.802260922700886`、`ev_top1_roi=0.3623179549852327`、`auc=0.743157455488589` と弱く、architecture 本線候補としても棄却した。
 
 現時点の operational baseline は `current_recommended_serving_2025_latest` とする。
 
@@ -450,11 +453,11 @@
 
 - `run_local_data_source_validation.py` を追加し、`run_validate_data_sources.py` の report を `data_source_validation_local_nankan.json` へ分離して出せるようにした。
 - `run_local_feature_gap_report.py` を追加し、feature gap summary / feature coverage / raw coverage を `local_nankan` 名義の artifact へ固定出力できるようにした。
-- `run_local_evaluate.py` を追加し、既存 `run_evaluate.py` の versioned output を再利用しつつ、local-only 側では `evaluation_local_nankan_pointer.json` から evaluation artifact lineage を辿れるようにした。
+- `run_local_evaluate.py` を追加し、既存 `run_evaluate.py` の versioned output を再利用しつつ、local-only 側では `evaluation_local_nankan_pointer.json` から evaluation artifact lineage を辿れるようにした。historical `local_nankan` は trust blocker 時に pointer 自体へ `status=blocked_by_trust` を残し、child evaluate は起動しない。
 
 ### M41. local-only orchestration manifest の追加
 
-- `run_local_feasibility_manifest.py` を追加し、readiness snapshot、data validation、feature gap、evaluation pointer を fail-fast で直列実行できるようにした。
+- `run_local_feasibility_manifest.py` を追加し、readiness snapshot、data validation、feature gap、evaluation pointer を fail-fast で直列実行できるようにした。historical `local_nankan` の evaluation 段が trust gate で止まる場合は top-level も `status=evaluation_blocked_by_trust` で閉じる。
 - 同 script は `local_feasibility_manifest_local_nankan.json` に `completed_step`, `error_code`, `recommended_action`, 各 step command / exit_code / artifact path を残し、local-only feasibility の停止点を 1 本で追えるようにする。
 - これにより local-only wrapper 群は単発 CLI の集合から、次の orchestration 単位で読める実装スケルトンへ進んだ。
 

@@ -43,11 +43,39 @@ def _resolve_path(path_text: str | Path) -> Path:
     return path if path.is_absolute() else (ROOT / path)
 
 
+def _display_path(path: Path | None) -> str | None:
+    if path is None:
+        return None
+    return artifact_display_path(path, workspace_root=ROOT)
+
+
+def _display_path_value(value: object) -> object:
+    if value is None:
+        return None
+    if isinstance(value, Path):
+        return _display_path(value)
+    if isinstance(value, str):
+        path = Path(value)
+        if path.is_absolute():
+            return _display_path(path)
+    return value
+
+
+def _normalize_display_paths(value: object) -> object:
+    if isinstance(value, dict):
+        return {key: _normalize_display_paths(item) for key, item in value.items()}
+    if isinstance(value, list):
+        return [_normalize_display_paths(item) for item in value]
+    if isinstance(value, tuple):
+        return [_normalize_display_paths(item) for item in value]
+    return _display_path_value(value)
+
+
 def _safe_write_manifest(path: Path, payload: dict[str, Any]) -> None:
     if path.exists() and path.is_dir():
         return
     path.parent.mkdir(parents=True, exist_ok=True)
-    write_json(path, payload)
+    write_json(path, _normalize_display_paths(payload))
 
 
 def _read_optional_json(path: Path) -> dict[str, Any] | None:
