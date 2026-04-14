@@ -26,7 +26,7 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--crawl-config", default="configs/crawl_local_nankan_template.yaml")
     parser.add_argument("--seed-file", default=None)
-    parser.add_argument("--race-id-source", choices=["seed_file", "race_list"], default="seed_file")
+    parser.add_argument("--race-id-source", choices=["seed_file", "race_list"], default=None)
     parser.add_argument("--target", choices=["all", "race_result", "race_card", "pedigree"], default="all")
     parser.add_argument("--start-date", default=None)
     parser.add_argument("--end-date", default=None)
@@ -39,7 +39,7 @@ def main() -> int:
         progress = ProgressBar(total=3, prefix="[prepare-local-nankan-ids]", logger=log_progress, min_interval_sec=0.0)
         crawl_config = load_yaml(ROOT / args.crawl_config)
         progress.start(message=f"config loaded target={args.target}")
-        with Heartbeat("[prepare-local-nankan-ids]", "preparing ids from seed", logger=log_progress):
+        with Heartbeat("[prepare-local-nankan-ids]", "preparing ids from configured source", logger=log_progress):
             summary = prepare_local_nankan_ids_from_config(
                 crawl_config,
                 base_dir=ROOT,

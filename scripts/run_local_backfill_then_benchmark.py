@@ -225,7 +225,7 @@ def main() -> int:
     parser.add_argument("--model-config", default=DEFAULT_MODEL_CONFIG)
     parser.add_argument("--feature-config", default=DEFAULT_FEATURE_CONFIG)
     parser.add_argument("--seed-file", default=None)
-    parser.add_argument("--race-id-source", choices=["seed_file", "race_list"], default="seed_file")
+    parser.add_argument("--race-id-source", choices=["seed_file", "race_list"], default="race_list")
     parser.add_argument("--start-date", default=None)
     parser.add_argument("--end-date", default=None)
     parser.add_argument("--date-order", choices=["asc", "desc"], default="desc")

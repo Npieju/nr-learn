@@ -235,7 +235,7 @@ def run_local_nankan_backfill_from_config(
     *,
     base_dir: Path,
     seed_file: str | Path | None = None,
-    race_id_source: str = "seed_file",
+    race_id_source: str | None = None,
     start_date: str | None = None,
     end_date: str | None = None,
     date_order: str = "desc",

@@ -10,6 +10,7 @@ crawl:
   raw_html_dir: "data/external/local_nankan/raw_html"
   manifest_file: "artifacts/reports/local_nankan_crawl_manifest.json"
   seed_file: "data/external/local_nankan/seeds/local_nankan_seed.csv"
+  race_id_source_default: "race_list"
   seed_columns:
     race_id: "race_id"
     date: "date"

@@ -48,6 +48,15 @@ def _resolve_crawl_config(config: dict[str, Any]) -> dict[str, Any]:
     return config
 
 
+def _resolve_race_id_source(crawl_cfg: dict[str, Any], race_id_source: str | None) -> str:
+    configured_default = str(crawl_cfg.get("race_id_source_default") or crawl_cfg.get("race_id_source") or "race_list").strip().lower()
+    normalized = str(race_id_source).strip().lower() if race_id_source is not None else configured_default
+    normalized = normalized or configured_default
+    if normalized not in {"seed_file", "race_list"}:
+        raise ValueError(f"Unsupported race_id_source: {race_id_source or configured_default}")
+    return normalized
+
+
 def _read_seed_frame(seed_path: Path, required_columns: list[str], *, workspace_root: Path) -> pd.DataFrame:
     try:
         frame = pd.read_csv(seed_path, dtype="string", low_memory=False)
@@ -223,16 +232,14 @@ def prepare_local_nankan_ids_from_config(
     date_order: str = "asc",
     limit: int | None = None,
     include_completed: bool = False,
-    race_id_source: str = "seed_file",
+    race_id_source: str | None = None,
 ) -> dict[str, Any]:
     crawl_cfg = _resolve_crawl_config(crawl_config)
     targets = crawl_cfg.get("targets")
     if not isinstance(targets, dict) or not targets:
         raise ValueError("crawl.targets must contain at least one target")
 
-    normalized_race_id_source = str(race_id_source).strip().lower() or "seed_file"
-    if normalized_race_id_source not in {"seed_file", "race_list"}:
-        raise ValueError(f"Unsupported race_id_source: {race_id_source}")
+    normalized_race_id_source = _resolve_race_id_source(crawl_cfg, race_id_source)
 
     seed_columns_cfg = crawl_cfg.get("seed_columns") or {}
     race_id_column = str(seed_columns_cfg.get("race_id", "race_id"))
@@ -286,6 +293,7 @@ def prepare_local_nankan_ids_from_config(
         "date_window": {"start": start_date, "end": end_date},
         "date_order": str(date_order),
         "race_id_source": normalized_race_id_source,
+        "race_id_source_default": str(crawl_cfg.get("race_id_source_default") or crawl_cfg.get("race_id_source") or "race_list"),
         "seed_file": artifact_display_path(seed_path, workspace_root=base_dir) if seed_path is not None else None,
         "reports": [],
     }

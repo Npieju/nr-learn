@@ -93,6 +93,11 @@ class LocalWrapperOpsTest(unittest.TestCase):
             self.assertEqual(manifest["backfill"]["status"], "planned")
             self.assertIn("--dry-run", manifest["backfill"]["command"])
             self.assertEqual(manifest["backfill"]["command"][1], "scripts/run_backfill_local_nankan.py")
+            self.assertIn("--race-id-source", manifest["backfill"]["command"])
+            self.assertEqual(
+                manifest["backfill"]["command"][manifest["backfill"]["command"].index("--race-id-source") + 1],
+                "race_list",
+            )
             self.assertEqual(manifest["benchmark_gate"]["command"][1], "scripts/run_local_benchmark_gate.py")
             self.assertEqual(manifest["benchmark_gate"]["status"], "planned")
             self.assertEqual(manifest["materialize"]["status"], "planned")
@@ -116,6 +121,7 @@ class LocalWrapperOpsTest(unittest.TestCase):
                     "run_local_revision_gate.py",
                     "--revision",
                     "test_revision",
+                    "--backfill-before-benchmark",
                     "--lineage-output",
                     str(lineage_path),
                     "--evaluation-pointer-output",
@@ -127,7 +133,12 @@ class LocalWrapperOpsTest(unittest.TestCase):
 
             self.assertEqual(exit_code, 0)
             payload = json.loads(lineage_path.read_text(encoding="utf-8"))
-            self.assertEqual(payload["benchmark_gate"]["command"][1], "scripts/run_local_benchmark_gate.py")
+            self.assertIn("--race-id-source", payload["benchmark_gate"]["command"])
+            self.assertEqual(
+                payload["benchmark_gate"]["command"][payload["benchmark_gate"]["command"].index("--race-id-source") + 1],
+                "race_list",
+            )
+            self.assertEqual(payload["benchmark_gate"]["command"][1], "scripts/run_local_backfill_then_benchmark.py")
             self.assertEqual(payload["revision_gate"]["command"][1], "scripts/run_revision_gate.py")
             self.assertEqual(payload["evaluation_pointer"]["command"][1], "scripts/run_local_evaluate.py")
             self.assertEqual(payload["evaluation_pointer_payload"]["evaluate_command"][1], "scripts/run_local_evaluate.py")
