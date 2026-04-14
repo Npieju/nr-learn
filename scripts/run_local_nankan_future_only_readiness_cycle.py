@@ -361,6 +361,15 @@ def main() -> int:
                 "default_horizon_days": int(args.default_horizon_days),
                 "max_passes": int(args.max_passes),
             },
+            "read_order": [
+                "status",
+                "current_phase",
+                "recommended_action",
+                "capture_provenance.upcoming_only",
+                "capture_provenance.as_of",
+                "capture_provenance.pre_filter_row_count",
+                "capture_provenance.filtered_out_count",
+            ],
             "highlights": [
                 f"status={str(status_board.get('status') or ('failed' if board_exit != 0 else 'completed'))}",
                 f"current_phase={str(status_board.get('current_phase') or watcher_manifest.get('current_phase') or capture_manifest.get('current_phase') or 'future_only_readiness_track')}",

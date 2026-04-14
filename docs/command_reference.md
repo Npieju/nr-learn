@@ -1102,6 +1102,7 @@ local_nankan future-only readiness を 1 cycle 更新する operator-default com
 - `#122` の current default operator path。
 - これは NAR solved を意味せず、`#123` 配下の Stage 0 readiness blocker resolution として読む。
 - 出力 wrapper manifest には `execution_role=readiness_cycle_wrapper`, `data_update_mode=capture_refresh_with_readiness`, `execution_mode=single_cycle`, `trigger_contract=direct_refresh_plus_readiness` を持たせ、capture loop を含む `refresh + readiness read` 入口だと artifact 単体でも判別できる。
+- wrapper manifest 自体も top-level `read_order` を返すので、operator は `status -> current_phase -> recommended_action -> capture cutoff` の順を artifact 単体で固定できる。
 - source timing input は no-arg で canonical current alias `artifacts/reports/local_nankan_source_timing_audit.json` を読む。
 - future-only pool の refresh も同時に進めたい通常運用では、まずこの command を使う。内部で capture loop も走るため、`refresh + readiness read` の入口として扱う。
 - `result arrival / 到着` は、future-only strict `pre_race_only` races に対応する official result rows が実データへ反映され、artifact 上で `result_ready_races>0` になることを指す。
