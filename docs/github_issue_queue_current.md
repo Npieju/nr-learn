@@ -62,6 +62,7 @@
 - source-of-truth: GitHub issue `#122`
 - first read:
   - [../artifacts/reports/local_nankan_data_status_board.json](../artifacts/reports/local_nankan_data_status_board.json)
+  - `read_order`
   - `readiness_surfaces.readiness_supervisor`
   - `operator_runtime`
   - `readiness_surfaces.readiness_supervisor.current_refs.capture_upcoming_only|capture_as_of|capture_pre_filter_row_count|capture_filtered_out_count`

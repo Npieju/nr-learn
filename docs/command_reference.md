@@ -1086,6 +1086,7 @@ local_nankan の current blocker を 1 本の board で読む入口:
   - `local_nankan_result_ready_bootstrap_handoff_manifest.json`
   - `local_nankan_readiness_watcher_manifest.json`
 - bounded supervisor を workspace 配下の report manifest で走らせている間は、同じ board に `readiness_surfaces.readiness_supervisor` と `operator_runtime` も重ねて書かれる。したがって live wait / running-cycle の operator read は、separate な wait manifest を開く前にこの canonical board から始めてよい。
+- current canonical board 自体も top-level `read_order` を返す。operator はまずその順を見てから `readiness_surfaces.readiness_supervisor` と `operator_runtime` を読めばよい。
 - current canonical board では capture cutoff も top-level から読める。`readiness_surfaces.readiness_supervisor.current_refs.capture_upcoming_only`、`capture_as_of`、`capture_pre_filter_row_count`、`capture_filtered_out_count` と highlights の `supervisor_capture_*` を見れば、strict upcoming filter の cutoff と母数を child capture manifest を開かずに監査できる。
 - `readiness_surfaces.followup_entrypoint` には `run_local_nankan_future_only_followup_oneshot.py` の正本入口を残す。ここで capture loop manifest path、accepted upstream contract、`dry_run_command_preview`、`run_command_preview` を board から直接読める。
 - current NAR 運用では `#101/#103` の readiness はまずこの board を一次参照にし、必要なときだけ個別 manifest に降りる。
@@ -1132,6 +1133,7 @@ idle wait を持たせず 1 cycle だけ実行したいとき:
 - `run_local_nankan_future_only_wait_then_cycle.py` 自体は data ingest を行わず、既に更新された local data / artifact を読んで readiness を再評価する supervisor である。
 - したがってこれは `refresh + readiness read` の入口ではなく、更新済み data に対する `readiness-only follow-up` の入口として使う。
 - 出力 manifest には `execution_role=readiness_supervisor`, `data_update_mode=readiness_recheck_only`, `execution_mode=bounded_wait_cycle|oneshot`, `trigger_contract=external_refresh_completed_only` を持たせ、artifact 単体でも「refresh 完了後だけ意味がある readiness-only follow-up」だと判別できるようにしている。
+- operator board overlay を有効にした run では、board 側にも top-level `read_order` が入り、`monitor_state -> summary_code -> capture cutoff` の first read を artifact 単体で固定できる。
 - `--oneshot` を付けると `max_cycles=1` かつ `wait-seconds=0` として扱い、idle wait を持たずに 1 cycle 実行して終了する。意味があるのは、data 更新が別経路で既に走っており、その完了後に readiness だけを bounded に再評価したい場合に限る。
 - 単なる定時 cron だけでこの script を回しても、元データが更新されていなければ同じ blocker を繰り返し読むだけなので、運用上の第一選択にはしない。
 - `--run-id` を付けると、stable manifest に加えて `..._<run-id>.json` の run-scoped manifest も自動で残る。

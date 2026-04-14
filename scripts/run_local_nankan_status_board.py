@@ -562,6 +562,15 @@ def main() -> int:
             "current_phase": archive_payload.get("current_phase"),
             "archive_report_count": len(archive_reports),
         },
+        "read_order": [
+            "status",
+            "current_phase",
+            "recommended_action",
+            "readiness_surfaces.capture_loop.latest_race_id_source_report.upcoming_only",
+            "readiness_surfaces.capture_loop.latest_race_id_source_report.as_of",
+            "readiness_surfaces.capture_loop.latest_race_id_source_report.pre_filter_row_count",
+            "readiness_surfaces.capture_loop.latest_race_id_source_report.filtered_out_count",
+        ],
         "readiness_surfaces": readiness_surfaces,
         "readiness": readiness,
         "highlights": [

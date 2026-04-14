@@ -1026,6 +1026,18 @@ def _build_operator_board_payload(
         ]
     )
 
+    merged_payload["read_order"] = [
+        "status",
+        "current_phase",
+        "recommended_action",
+        "readiness_surfaces.readiness_supervisor.monitor_state",
+        "readiness_surfaces.readiness_supervisor.current_outcome.summary_code",
+        "readiness_surfaces.readiness_supervisor.current_refs.capture_upcoming_only",
+        "readiness_surfaces.readiness_supervisor.current_refs.capture_as_of",
+        "readiness_surfaces.readiness_supervisor.current_refs.capture_pre_filter_row_count",
+        "readiness_surfaces.readiness_supervisor.current_refs.capture_filtered_out_count",
+    ]
+
     merged_payload["readiness_surfaces"] = readiness_surfaces
     merged_payload["artifacts"] = artifacts
     merged_payload["operator_runtime"] = {
