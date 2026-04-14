@@ -139,6 +139,7 @@ def main() -> int:
                 args.target,
                 "--date-order",
                 args.date_order,
+                "--upcoming-only",
             ]
             if args.start_date:
                 prepare_command.extend(["--start-date", args.start_date])

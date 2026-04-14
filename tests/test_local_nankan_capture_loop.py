@@ -195,6 +195,9 @@ class LocalNankanCaptureLoopTest(unittest.TestCase):
                 exit_code = capture_loop_script.main()
 
             self.assertEqual(exit_code, 0)
+            prepare_commands = [command for command in commands if "run_prepare_local_nankan_ids.py" in command[1]]
+            self.assertEqual(len(prepare_commands), 2)
+            self.assertIn("--upcoming-only", prepare_commands[0])
             coverage_commands = [command for command in commands if "run_local_nankan_pre_race_capture_coverage.py" in command[1]]
             self.assertEqual(len(coverage_commands), 2)
             first_baseline_index = coverage_commands[0].index("--baseline-summary-input") + 1

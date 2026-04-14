@@ -17,6 +17,7 @@ PROGRAM_URL_TEMPLATE = "https://www.nankankeiba.com/program/{meeting_id}.do"
 PROGRAM_LINK_PATTERN = re.compile(r"/program/(?P<meeting_id>\d{14})\.do")
 RESULT_LINK_PATTERN = re.compile(r"/result/(?P<race_id>\d{16})\.do")
 RACE_CARD_LINK_PATTERN = re.compile(r"/syousai/(?P<race_id>\d{16})\.do")
+POST_TIME_PATTERN = re.compile(r"(?P<time>\d{1,2}:\d{2})")
 
 
 def _parse_date(value: str) -> pd.Timestamp:
@@ -59,6 +60,54 @@ def _build_request_settings(crawl_cfg: dict[str, Any]) -> RequestSettings:
         retry_backoff_sec=float(crawl_cfg.get("retry_backoff_sec", 2.0)),
         overwrite=bool(crawl_cfg.get("overwrite", False)),
     )
+
+
+def _build_scheduled_post_at(date_text: str, post_time: str | None) -> str | None:
+    if not post_time:
+        return None
+    try:
+        return pd.Timestamp(f"{date_text} {post_time}", tz="Asia/Tokyo").isoformat()
+    except Exception:
+        return None
+
+
+def _extract_program_post_time(anchor: Tag) -> str | None:
+    list_item = anchor.find_parent("li", class_=re.compile(r"nk23_c-block01__list__item"))
+    if not isinstance(list_item, Tag):
+        return None
+    texts = list_item.find(class_=re.compile(r"nk23_c-block01__texts"))
+    if not isinstance(texts, Tag):
+        return None
+    for text_node in texts.find_all(class_=re.compile(r"nk23_c-block01__text")):
+        if not isinstance(text_node, Tag):
+            continue
+        text = str(text_node.get_text(" ", strip=True)).strip()
+        match = POST_TIME_PATTERN.search(text)
+        if match is not None:
+            return match.group("time")
+    match = POST_TIME_PATTERN.search(str(texts.get_text(" ", strip=True)).strip())
+    if match is not None:
+        return match.group("time")
+    return None
+
+
+def _normalize_as_of_timestamp(as_of: str | None) -> pd.Timestamp | None:
+    if not as_of:
+        return None
+    parsed = pd.Timestamp(as_of)
+    if pd.isna(parsed):
+        return None
+    if parsed.tzinfo is None:
+        return parsed.tz_localize("Asia/Tokyo")
+    return parsed.tz_convert("Asia/Tokyo")
+
+
+def _filter_upcoming_races(frame: pd.DataFrame, *, as_of: str | None) -> pd.DataFrame:
+    as_of_ts = _normalize_as_of_timestamp(as_of)
+    if as_of_ts is None or frame.empty or "scheduled_post_at" not in frame.columns:
+        return frame
+    scheduled = pd.to_datetime(frame["scheduled_post_at"], errors="coerce")
+    return frame.loc[scheduled.notna() & (scheduled > as_of_ts)].reset_index(drop=True)
 
 
 def parse_local_nankan_calendar_html(
@@ -114,6 +163,7 @@ def parse_local_nankan_program_html(
     soup = BeautifulSoup(html, "html.parser")
     records: list[dict[str, Any]] = []
     seen_race_ids: set[str] = set()
+    date_text = f"{meeting_id[:4]}-{meeting_id[4:6]}-{meeting_id[6:8]}"
 
     def _matching_anchors(pattern: re.Pattern[str]) -> list[Tag]:
         anchors: list[Tag] = []
@@ -135,7 +185,7 @@ def parse_local_nankan_program_html(
         candidate_anchors = result_links
         candidate_pattern = RESULT_LINK_PATTERN
     elif require_result_link:
-        return pd.DataFrame(columns=["date", "meeting_id", "race_id", "race_no", "source_page_url", "source"])
+        return pd.DataFrame(columns=["date", "meeting_id", "race_id", "race_no", "post_time", "scheduled_post_at", "source_page_url", "source"])
     else:
         candidate_anchors = _matching_anchors(RACE_CARD_LINK_PATTERN)
         candidate_pattern = RACE_CARD_LINK_PATTERN
@@ -149,18 +199,21 @@ def parse_local_nankan_program_html(
         if race_id in seen_race_ids:
             continue
         seen_race_ids.add(race_id)
+        post_time = _extract_program_post_time(anchor)
         records.append(
             {
-                "date": f"{race_id[:4]}-{race_id[4:6]}-{race_id[6:8]}",
+                "date": date_text,
                 "meeting_id": meeting_id,
                 "race_id": race_id,
                 "race_no": int(race_id[-2:]),
+                "post_time": post_time,
+                "scheduled_post_at": _build_scheduled_post_at(date_text, post_time),
                 "source_page_url": source_page_url,
                 "source": "local_nankan_program",
             }
         )
 
-    return pd.DataFrame(records, columns=["date", "meeting_id", "race_id", "race_no", "source_page_url", "source"])
+    return pd.DataFrame(records, columns=["date", "meeting_id", "race_id", "race_no", "post_time", "scheduled_post_at", "source_page_url", "source"])
 
 
 def discover_local_nankan_race_ids_from_calendar(
@@ -173,6 +226,8 @@ def discover_local_nankan_race_ids_from_calendar(
     date_order: str = "asc",
     exclude_race_ids: set[str] | None = None,
     require_result_link: bool = False,
+    upcoming_only: bool = False,
+    as_of: str | None = None,
 ) -> tuple[pd.DataFrame, dict[str, Any]]:
     crawl_cfg = _resolve_crawl_config(crawl_config)
     normalized_end_date = end_date or start_date
@@ -275,11 +330,15 @@ def discover_local_nankan_race_ids_from_calendar(
             break
 
     program_progress.complete(message=f"done races={len(records)} failures={len(failures)}")
-    race_frame = pd.DataFrame(records, columns=["date", "meeting_id", "race_id", "race_no", "source_page_url", "source"])
+    race_frame = pd.DataFrame(records, columns=["date", "meeting_id", "race_id", "race_no", "post_time", "scheduled_post_at", "source_page_url", "source"])
+    if upcoming_only:
+        race_frame = _filter_upcoming_races(race_frame, as_of=as_of)
     report = {
         "source": "race_list",
         "date_window": {"start": start_date, "end": normalized_end_date},
         "date_order": str(date_order),
+        "upcoming_only": bool(upcoming_only),
+        "as_of": as_of,
         "requested_calendar_pages": int(len(calendar_keys)),
         "calendar_pages_fetched": int(calendar_pages_fetched),
         "program_pages_fetched": int(program_pages_fetched),

@@ -33,6 +33,8 @@ def main() -> int:
     parser.add_argument("--date-order", choices=["asc", "desc"], default="asc")
     parser.add_argument("--limit", type=int, default=None)
     parser.add_argument("--include-completed", action="store_true")
+    parser.add_argument("--upcoming-only", action="store_true")
+    parser.add_argument("--as-of", default=None)
     args = parser.parse_args()
 
     try:
@@ -51,6 +53,8 @@ def main() -> int:
                 limit=args.limit,
                 include_completed=args.include_completed,
                 race_id_source=args.race_id_source,
+                upcoming_only=args.upcoming_only,
+                as_of=args.as_of,
             )
         progress.update(message=f"reports ready count={len(summary.get('reports', []))}")
 

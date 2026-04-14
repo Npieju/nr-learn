@@ -233,6 +233,8 @@ def prepare_local_nankan_ids_from_config(
     limit: int | None = None,
     include_completed: bool = False,
     race_id_source: str | None = None,
+    upcoming_only: bool = False,
+    as_of: str | None = None,
 ) -> dict[str, Any]:
     crawl_cfg = _resolve_crawl_config(crawl_config)
     targets = crawl_cfg.get("targets")
@@ -272,6 +274,8 @@ def prepare_local_nankan_ids_from_config(
             date_order=date_order,
             exclude_race_ids=completed_ids,
             require_result_link=target_filter == "race_result",
+            upcoming_only=upcoming_only,
+            as_of=as_of,
         )
         if not discovered_frame.empty:
             race_source_frame = discovered_frame.rename(columns={"race_id": race_id_column, "date": date_column})
@@ -294,6 +298,8 @@ def prepare_local_nankan_ids_from_config(
         "date_order": str(date_order),
         "race_id_source": normalized_race_id_source,
         "race_id_source_default": str(crawl_cfg.get("race_id_source_default") or crawl_cfg.get("race_id_source") or "race_list"),
+        "upcoming_only": bool(upcoming_only),
+        "as_of": as_of,
         "seed_file": artifact_display_path(seed_path, workspace_root=base_dir) if seed_path is not None else None,
         "reports": [],
     }
