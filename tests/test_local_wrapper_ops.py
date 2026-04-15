@@ -449,6 +449,12 @@ class LocalWrapperOpsTest(unittest.TestCase):
 
             self.assertEqual(exit_code, 0)
             payload = json.loads(output_path.read_text(encoding="utf-8"))
+            self.assertEqual(payload["status"], "completed")
+            self.assertEqual(payload["current_phase"], "scenario_matrix_completed")
+            self.assertEqual(payload["recommended_action"], "review_probe_scenarios")
+            self.assertEqual(payload["read_order"][0], "status")
+            self.assertEqual(payload["read_order"][3], "scenario_count")
+            self.assertEqual(payload["read_order"][5], "scenarios[0].pending_result_races")
             scenario = payload["scenarios"][0]
             self.assertEqual(
                 scenario["run_context"]["status_board_output"],

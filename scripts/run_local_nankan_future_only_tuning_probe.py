@@ -182,6 +182,16 @@ def main() -> int:
 
         output_payload = {
             "status": "completed",
+            "current_phase": "scenario_matrix_completed",
+            "recommended_action": "review_probe_scenarios",
+            "read_order": [
+                "status",
+                "current_phase",
+                "recommended_action",
+                "scenario_count",
+                "scenarios[0].wrapper_status",
+                "scenarios[0].pending_result_races",
+            ],
             "scenario_count": len(records),
             "scenarios": records,
         }
