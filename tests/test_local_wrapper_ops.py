@@ -409,6 +409,18 @@ class LocalWrapperOpsTest(unittest.TestCase):
             self.assertEqual(payload["run_context"]["config"], "configs/model_local_baseline.yaml")
             self.assertEqual(payload["run_context"]["data_config"], "configs/data_local_nankan.yaml")
             self.assertEqual(payload["run_context"]["feature_config"], "configs/features_local_baseline.yaml")
+            self.assertEqual(payload["current_phase"], "trust_preflight_blocked")
+            self.assertEqual(
+                payload["read_order"],
+                [
+                    "status",
+                    "current_phase",
+                    "recommended_action",
+                    "error_code",
+                    "trust_context.strict_trust_ready",
+                    "trust_context.provenance_manifest",
+                ],
+            )
             self.assertEqual(
                 payload["trust_context"]["provenance_manifest"],
                 "artifacts/reports/local_nankan_provenance_audit.json",

@@ -73,6 +73,31 @@ def _normalize_display_paths(value: object) -> object:
     return _display_path_value(value)
 
 
+def _pointer_read_order(*, blocked_by_trust: bool) -> list[str]:
+    read_order = [
+        "status",
+        "current_phase",
+        "recommended_action",
+    ]
+    if blocked_by_trust:
+        read_order.extend(
+            [
+                "error_code",
+                "trust_context.strict_trust_ready",
+                "trust_context.provenance_manifest",
+            ]
+        )
+    else:
+        read_order.extend(
+            [
+                "exit_code",
+                "latest_manifest_payload.status",
+                "latest_summary",
+            ]
+        )
+    return read_order
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--config", default=DEFAULT_CONFIG)
@@ -112,6 +137,8 @@ def main() -> int:
         payload: dict[str, object] = {
             "started_at": utc_now_iso(),
             "status": "blocked_by_trust",
+            "current_phase": "trust_preflight_blocked",
+            "read_order": _pointer_read_order(blocked_by_trust=True),
             "universe": args.universe,
             "source_scope": args.source_scope,
             "baseline_reference": args.baseline_reference,
@@ -183,6 +210,9 @@ def main() -> int:
     payload: dict[str, object] = {
         "started_at": utc_now_iso(),
         "status": "completed" if result.returncode == 0 else "failed",
+        "current_phase": "evaluate_completed" if result.returncode == 0 else "evaluate_failed",
+        "recommended_action": "review_local_evaluation_pointer" if result.returncode == 0 else "inspect_local_evaluate_failure",
+        "read_order": _pointer_read_order(blocked_by_trust=False),
         "universe": args.universe,
         "source_scope": args.source_scope,
         "baseline_reference": args.baseline_reference,

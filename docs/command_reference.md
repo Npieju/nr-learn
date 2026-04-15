@@ -1277,6 +1277,8 @@ local_nankan revision gate で backfill handoff を先に差し込む dry-run sm
 
 live progress は既定で `artifacts/logs/local_revision_gate_local_nankan_handoff_smoke.log` にも書かれる。
 
+`run_local_evaluate.py` の pointer も top-level `read_order` を返す。historical trust block の first-read は `status -> current_phase -> recommended_action -> error_code -> trust_context.strict_trust_ready -> trust_context.provenance_manifest`、completed/failed pointer の first-read は `status -> current_phase -> recommended_action -> exit_code -> latest_manifest_payload.status -> latest_summary` で固定してよい。
+
 補足:
 
 - `--backfill-before-benchmark` を付けると、revision lineage は benchmark gate の直前で `run_local_backfill_then_benchmark.py` を planned/real path に含める。
