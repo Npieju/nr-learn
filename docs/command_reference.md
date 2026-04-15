@@ -912,6 +912,7 @@ seed CSV を使う従来 smoke:
 - `run_prepare_local_nankan_ids.py` は provider crawler 実装前の入口として、operator が用意した seed CSV から `race_ids.csv` と `horse_keys.csv` を生成する。
 - `--race-id-source race_list` を使うと、`calendar/<quarter>.do` と `program/<meeting_id>.do` から date range 内の `race_id` を直接 discovery できる。
 - 初期 smoke では `race_result` または `race_card` から始め、pedigree は seed に `horse_key` 列が揃ってから有効化する。
+- `run_prepare_local_nankan_ids.py` の summary も top-level `read_order` を返すので、first-read は `status -> current_phase -> recommended_action -> race_id_source -> upcoming_only -> as_of` を先に見て、race_list 起点なら続けて `race_id_source_report.pre_filter_row_count` と `filtered_out_count` を確認すればよい。
 
 local_nankan collect planning の初期 smoke:
 
@@ -927,6 +928,7 @@ local_nankan collect planning の初期 smoke:
 
 - `run_collect_local_nankan.py --dry-run` は target ごとの ID 件数、output path、manifest path を planned shape で書き出す。
 - provider fetch 本体はまだ未実装なので、`--dry-run` なしの実行は blocked manifest を返し、次アクションを `implement_source_provider` として残す。
+- collect の base manifest も top-level `read_order` を返すので、first-read は `status -> current_phase -> recommended_action -> selected_targets -> highlights -> targets[0].status` で固定してよい。
 
 local_nankan backfill planning の初期 smoke:
 

@@ -50,6 +50,18 @@ class LocalNankanIdPrepTest(unittest.TestCase):
 
         self.assertEqual(summary["race_id_source"], "race_list")
         self.assertEqual(summary["race_id_source_default"], "race_list")
+        self.assertEqual(summary["status"], "completed")
+        self.assertEqual(summary["current_phase"], "ids_prepared")
+        self.assertEqual(summary["recommended_action"], "run_local_collect")
+        self.assertEqual(summary["read_order"][0:7], [
+            "status",
+            "current_phase",
+            "recommended_action",
+            "race_id_source",
+            "upcoming_only",
+            "as_of",
+            "reports[0].row_count",
+        ])
         discover_mock.assert_called_once()
         self.assertEqual(summary["reports"][0]["row_count"], 2)
 
@@ -96,6 +108,10 @@ class LocalNankanIdPrepTest(unittest.TestCase):
 
         self.assertTrue(summary["upcoming_only"])
         self.assertEqual(summary["as_of"], "2026-04-14T15:00:00+09:00")
+        self.assertEqual(summary["read_order"][-2:], [
+            "race_id_source_report.pre_filter_row_count",
+            "race_id_source_report.filtered_out_count",
+        ])
         self.assertEqual(summary["race_id_source_report"]["pre_filter_row_count"], 2)
         self.assertEqual(summary["race_id_source_report"]["filtered_out_count"], 1)
 

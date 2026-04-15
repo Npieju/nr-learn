@@ -57,6 +57,26 @@ def _resolve_race_id_source(crawl_cfg: dict[str, Any], race_id_source: str | Non
     return normalized
 
 
+def _prepare_ids_read_order(*, include_race_source_report: bool) -> list[str]:
+    read_order = [
+        "status",
+        "current_phase",
+        "recommended_action",
+        "race_id_source",
+        "upcoming_only",
+        "as_of",
+        "reports[0].row_count",
+    ]
+    if include_race_source_report:
+        read_order.extend(
+            [
+                "race_id_source_report.pre_filter_row_count",
+                "race_id_source_report.filtered_out_count",
+            ]
+        )
+    return read_order
+
+
 def _read_seed_frame(seed_path: Path, required_columns: list[str], *, workspace_root: Path) -> pd.DataFrame:
     try:
         frame = pd.read_csv(seed_path, dtype="string", low_memory=False)
@@ -293,6 +313,9 @@ def prepare_local_nankan_ids_from_config(
     selected_pedigree_targets = ["pedigree"] if target_filter in {"all", "pedigree"} and "pedigree" in targets else []
 
     summary: dict[str, Any] = {
+        "status": "completed",
+        "current_phase": "ids_prepared",
+        "recommended_action": "run_local_collect",
         "target_filter": target_filter,
         "date_window": {"start": start_date, "end": end_date},
         "date_order": str(date_order),
@@ -302,6 +325,7 @@ def prepare_local_nankan_ids_from_config(
         "as_of": str(race_source_report.get("as_of")) if isinstance(race_source_report, dict) and race_source_report.get("as_of") else as_of,
         "seed_file": artifact_display_path(seed_path, workspace_root=base_dir) if seed_path is not None else None,
         "reports": [],
+        "read_order": _prepare_ids_read_order(include_race_source_report=race_source_report is not None),
     }
     if race_source_report is not None:
         summary["race_id_source_report"] = race_source_report

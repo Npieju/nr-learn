@@ -1,13 +1,60 @@
 from __future__ import annotations
 
+import json
 import tempfile
 import unittest
 from pathlib import Path
 
-from racing_ml.data.local_nankan_collect import RequestSettings, _decode_html_bytes, _load_or_fetch_html, parse_local_nankan_race_card_html, parse_local_nankan_race_result_html
+import pandas as pd
+
+from racing_ml.data.local_nankan_collect import RequestSettings, _decode_html_bytes, _load_or_fetch_html, collect_local_nankan_from_config, parse_local_nankan_race_card_html, parse_local_nankan_race_result_html
 
 
 class LocalNankanCollectParserTest(unittest.TestCase):
+    def test_collect_dry_run_exposes_top_level_read_order(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            base_dir = Path(tmp_dir)
+            id_dir = base_dir / "data/external/local_nankan/ids"
+            id_dir.mkdir(parents=True, exist_ok=True)
+            pd.DataFrame([{"id": "2026041400000101"}]).to_csv(id_dir / "race_ids.csv", index=False)
+
+            summary = collect_local_nankan_from_config(
+                {
+                    "crawl": {
+                        "manifest_file": "artifacts/reports/local_nankan_crawl_manifest.json",
+                        "targets": {
+                            "race_result": {
+                                "enabled": True,
+                                "id_file": "data/external/local_nankan/ids/race_ids.csv",
+                                "id_column": "id",
+                                "output_file": "data/external/local_nankan/results/local_race_result.csv",
+                            }
+                        },
+                    }
+                },
+                base_dir=base_dir,
+                target_filter="race_result",
+                dry_run=True,
+            )
+
+            self.assertEqual(summary["status"], "planned")
+            self.assertEqual(summary["current_phase"], "planned")
+            self.assertEqual(summary["recommended_action"], "review_collect_plan")
+            self.assertEqual(
+                summary["read_order"],
+                [
+                    "status",
+                    "current_phase",
+                    "recommended_action",
+                    "selected_targets",
+                    "highlights",
+                    "targets[0].status",
+                ],
+            )
+            manifest_path = base_dir / "artifacts/reports/local_nankan_crawl_manifest.json"
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+            self.assertEqual(manifest["read_order"], summary["read_order"])
+
     def test_load_or_fetch_html_persists_sidecar_metadata(self) -> None:
         class _DummyResponse:
             def __init__(self, content: bytes) -> None:

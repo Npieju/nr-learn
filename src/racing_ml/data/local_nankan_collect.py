@@ -896,6 +896,17 @@ def _build_target_report(
     }
 
 
+def _collect_summary_read_order() -> list[str]:
+    return [
+        "status",
+        "current_phase",
+        "recommended_action",
+        "selected_targets",
+        "highlights",
+        "targets[0].status",
+    ]
+
+
 def _build_summary(
     *,
     crawl_cfg: dict[str, Any],
@@ -944,6 +955,7 @@ def _build_summary(
         "started_at": started_at,
         "finished_at": utc_now_iso(),
         "status": status,
+        "read_order": _collect_summary_read_order(),
         "provider": str(crawl_cfg.get("provider", "nankankeiba")),
         "manifest_file": display_path(base_manifest_path, workspace_root=base_dir),
         "lock_file": display_path(lock_path, workspace_root=base_dir),
@@ -1117,6 +1129,7 @@ def collect_local_nankan_from_config(
             "started_at": started_at,
             "finished_at": None,
             "status": "running",
+            "read_order": _collect_summary_read_order(),
             "provider": str(crawl_cfg.get("provider", "nankankeiba")),
             "manifest_file": display_path(base_manifest_path, workspace_root=base_dir),
             "lock_file": display_path(lock_path, workspace_root=base_dir),
@@ -1255,6 +1268,7 @@ def collect_local_nankan_from_config(
                     "started_at": started_at,
                     "finished_at": None,
                     "status": "running",
+                    "read_order": _collect_summary_read_order(),
                     "provider": str(crawl_cfg.get("provider", "nankankeiba")),
                     "manifest_file": display_path(base_manifest_path, workspace_root=base_dir),
                     "lock_file": display_path(lock_path, workspace_root=base_dir),
