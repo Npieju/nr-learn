@@ -354,6 +354,8 @@ capture refresh 側の正本 manifest は `run_local_nankan_pre_race_capture_loo
 
 この loop manifest 自体も top-level `read_order` を返す。したがって upstream first-read は `status -> current_phase -> recommended_action -> latest_race_id_source_report.upcoming_only -> latest_race_id_source_report.as_of -> latest_race_id_source_report.pre_filter_row_count -> latest_race_id_source_report.filtered_out_count` の順で固定してよい。
 
+direct に capture loop を叩く場合も、`--start-date/--end-date` 未指定なら today から `--default-horizon-days` 日先までの future-only 窓を自動補完する。したがって `race_id_source=race_list` でも no-arg smoke が `start_date` 欠落で fail-fast しない。
+
 wait-cycle manifest には `execution_role=readiness_supervisor`, `data_update_mode=readiness_recheck_only`, `execution_mode=bounded_wait_cycle|oneshot`, `trigger_contract=external_refresh_completed_only` を持たせ、artifact 単体でも「data 更新 job ではなく、refresh 完了後だけ意味がある readiness 再評価 surface」であることを判別できるようにしている。
 
 wait-cycle manifest 本体も top-level `read_order` を返す。したがって parent manifest の first read は `status -> current_phase -> recommended_action -> monitor_state -> current_outcome.summary_code -> current_refs.capture_upcoming_only -> current_refs.capture_as_of -> current_refs.capture_pre_filter_row_count -> current_refs.capture_filtered_out_count` で固定してよい。

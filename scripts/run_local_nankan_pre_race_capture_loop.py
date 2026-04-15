@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+from datetime import date, timedelta
 from pathlib import Path
 import shlex
 import subprocess
@@ -94,6 +95,15 @@ def _build_prepare_summary_path(snapshot_dir: Path, pass_index: int) -> Path:
     return snapshot_dir / f"pass_{pass_index:03d}_prepare_summary.json"
 
 
+def _resolve_capture_window(*, start_date_text: str | None, end_date_text: str | None, horizon_days: int) -> tuple[str, str]:
+    if start_date_text and end_date_text:
+        return start_date_text, end_date_text
+    today = date.today()
+    start_date_value = start_date_text or today.isoformat()
+    end_date_value = end_date_text or (today + timedelta(days=max(0, int(horizon_days)))).isoformat()
+    return start_date_value, end_date_value
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--crawl-config", default="configs/crawl_local_nankan_template.yaml")
@@ -104,6 +114,7 @@ def main() -> int:
     parser.add_argument("--target", choices=["race_card", "all"], default="race_card")
     parser.add_argument("--max-passes", type=int, default=1)
     parser.add_argument("--poll-interval-seconds", type=int, default=300)
+    parser.add_argument("--default-horizon-days", type=int, default=7)
     parser.add_argument("--snapshot-dir", default="artifacts/reports/local_nankan_pre_race_capture_snapshots")
     parser.add_argument("--wrapper-manifest-output", default="artifacts/reports/local_nankan_pre_race_capture_loop_manifest.json")
     parser.add_argument("--baseline-summary-input", default="artifacts/reports/local_nankan_pre_race_capture_coverage_summary.json")
@@ -122,6 +133,11 @@ def main() -> int:
         snapshot_dir = _resolve_path(args.snapshot_dir)
         wrapper_manifest_path = _resolve_path(args.wrapper_manifest_output)
         baseline_summary_path = _resolve_path(args.baseline_summary_input) if args.baseline_summary_input else None
+        start_date_text, end_date_text = _resolve_capture_window(
+            start_date_text=args.start_date,
+            end_date_text=args.end_date,
+            horizon_days=args.default_horizon_days,
+        )
 
         progress.start(message=f"starting bounded pre-race capture loop max_passes={max_passes}")
         snapshot_dir.mkdir(parents=True, exist_ok=True)
@@ -149,10 +165,7 @@ def main() -> int:
                 args.date_order,
                 "--upcoming-only",
             ]
-            if args.start_date:
-                prepare_command.extend(["--start-date", args.start_date])
-            if args.end_date:
-                prepare_command.extend(["--end-date", args.end_date])
+            prepare_command.extend(["--start-date", start_date_text, "--end-date", end_date_text])
             if args.include_completed:
                 prepare_command.append("--include-completed")
 

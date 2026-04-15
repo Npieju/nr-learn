@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import date
 import importlib.util
 import json
 from pathlib import Path
@@ -32,6 +33,86 @@ capture_loop_script = _load_script_module(
 
 
 class LocalNankanCaptureLoopTest(unittest.TestCase):
+    def test_capture_loop_defaults_date_window_for_race_list_source(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            tmp_path = Path(tmp_dir)
+            snapshot_dir = tmp_path / "snapshots"
+            wrapper_manifest = tmp_path / "local_nankan_pre_race_capture_loop_manifest.json"
+            baseline_summary = tmp_path / "capture_coverage_summary.json"
+            baseline_summary.write_text("{}", encoding="utf-8")
+
+            commands: list[list[str]] = []
+
+            def run_command(*, label: str, command: list[str]) -> int:
+                del label
+                commands.append(command)
+                return 0
+
+            def read_json_dict(path: Path | None) -> dict[str, object]:
+                if path is None:
+                    return {}
+                if path.name == "pass_001_prepare_summary.json":
+                    return {
+                        "race_id_source_report": {
+                            "upcoming_only": True,
+                            "as_of": "2026-04-15T09:00:00+09:00",
+                            "pre_filter_row_count": 4,
+                            "filtered_out_count": 1,
+                        }
+                    }
+                if path.name == "pass_001_coverage_summary.json":
+                    return {
+                        "status": "capturing",
+                        "current_phase": "capturing_pre_race_pool",
+                        "recommended_action": "continue_recrawl_cadence_and_wait_for_results",
+                        "pre_race_only_rows": 4,
+                        "pre_race_only_races": 1,
+                        "result_ready_races": 0,
+                        "pending_result_races": 1,
+                        "baseline_comparison": {},
+                    }
+                return {}
+
+            class FakeDate(date):
+                @classmethod
+                def today(cls) -> date:
+                    return cls(2026, 4, 15)
+
+            with patch.object(capture_loop_script, "_run_command", side_effect=run_command), patch.object(
+                capture_loop_script,
+                "_read_json_dict",
+                side_effect=read_json_dict,
+            ), patch.object(
+                capture_loop_script,
+                "date",
+                FakeDate,
+            ), patch.object(
+                sys,
+                "argv",
+                [
+                    "run_local_nankan_pre_race_capture_loop.py",
+                    "--max-passes",
+                    "1",
+                    "--snapshot-dir",
+                    str(snapshot_dir),
+                    "--wrapper-manifest-output",
+                    str(wrapper_manifest),
+                    "--baseline-summary-input",
+                    str(baseline_summary),
+                ],
+            ):
+                exit_code = capture_loop_script.main()
+
+            self.assertEqual(exit_code, 0)
+            prepare_commands = [command for command in commands if "run_prepare_local_nankan_ids.py" in command[1]]
+            self.assertEqual(len(prepare_commands), 1)
+            self.assertIn("--start-date", prepare_commands[0])
+            self.assertIn("--end-date", prepare_commands[0])
+            start_date_index = prepare_commands[0].index("--start-date") + 1
+            end_date_index = prepare_commands[0].index("--end-date") + 1
+            self.assertEqual(prepare_commands[0][start_date_index], "2026-04-15")
+            self.assertEqual(prepare_commands[0][end_date_index], "2026-04-22")
+
     def test_capture_loop_writes_completed_manifest_from_latest_summary(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
             tmp_path = Path(tmp_dir)
