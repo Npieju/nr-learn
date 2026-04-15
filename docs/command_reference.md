@@ -1246,6 +1246,7 @@ local_nankan benchmark gate で primary raw materialize を先に差し込む sm
 
 - `--materialize-primary-before-gate` を付けると、benchmark gate wrapper は preflight 前に `run_materialize_local_nankan_primary.py` を呼ぶ。
 - materialize が `status=not_ready` でも wrapper は benchmark gate を続行し、最終的な blocker は通常どおり preflight manifest と benchmark manifest に残す。
+- strict provenance trust gate で止まるときも、`benchmark_gate_local_nankan.json` と `data_preflight_local_nankan.json` は top-level `read_order` を返す。first-read は benchmark manifest なら `status -> current_phase -> recommended_action -> error_code -> readiness.benchmark_rerun_ready -> readiness.reasons`、preflight なら `status -> current_phase -> recommended_action -> error_code -> source_report.local_market_provenance_summary` で固定してよい。
 
 local_nankan revision gate で backfill handoff を先に差し込む dry-run smoke:
 

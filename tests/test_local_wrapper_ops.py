@@ -330,6 +330,17 @@ class LocalWrapperOpsTest(unittest.TestCase):
             preflight_payload = json.loads(preflight_output.read_text(encoding="utf-8"))
             self.assertEqual(manifest_payload["configs"]["data_config"], "configs/data_local_nankan.yaml")
             self.assertEqual(
+                manifest_payload["read_order"],
+                [
+                    "status",
+                    "current_phase",
+                    "recommended_action",
+                    "error_code",
+                    "readiness.benchmark_rerun_ready",
+                    "readiness.reasons",
+                ],
+            )
+            self.assertEqual(
                 manifest_payload["artifacts"]["provenance_manifest"],
                 str(provenance_manifest_path.relative_to(ROOT)),
             )
@@ -340,6 +351,16 @@ class LocalWrapperOpsTest(unittest.TestCase):
             self.assertEqual(
                 preflight_payload["source_report"]["local_market_provenance_summary"]["summary_path"],
                 "artifacts/reports/summary.csv",
+            )
+            self.assertEqual(
+                preflight_payload["read_order"],
+                [
+                    "status",
+                    "current_phase",
+                    "recommended_action",
+                    "error_code",
+                    "source_report.local_market_provenance_summary",
+                ],
             )
 
     def test_local_evaluate_trust_block_normalizes_workspace_paths(self) -> None:

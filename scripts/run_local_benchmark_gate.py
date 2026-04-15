@@ -94,6 +94,25 @@ def _normalize_display_paths(value: object) -> object:
     return _display_path_value(value)
 
 
+def _provenance_block_read_order(*, include_readiness: bool = True) -> list[str]:
+    read_order = [
+        "status",
+        "current_phase",
+        "recommended_action",
+        "error_code",
+    ]
+    if include_readiness:
+        read_order.extend(
+            [
+                "readiness.benchmark_rerun_ready",
+                "readiness.reasons",
+            ]
+        )
+    else:
+        read_order.append("source_report.local_market_provenance_summary")
+    return read_order
+
+
 def _write_provenance_block_outputs(
     *,
     args: argparse.Namespace,
@@ -110,6 +129,7 @@ def _write_provenance_block_outputs(
         "started_at": None,
         "finished_at": None,
         "status": "not_ready",
+        "read_order": _provenance_block_read_order(),
         "completed_step": "provenance_preflight",
         "current_phase": "provenance_preflight",
         "universe": args.universe,
@@ -157,6 +177,7 @@ def _write_provenance_block_outputs(
         "started_at": None,
         "finished_at": None,
         "status": "not_ready",
+        "read_order": _provenance_block_read_order(include_readiness=False),
         "completed_step": "provenance_preflight",
         "artifact_type": "dataset_source_preflight",
         "config": args.data_config,
