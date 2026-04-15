@@ -8,6 +8,8 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
+from racing_ml.data.local_nankan_backfill import run_local_nankan_backfill_from_config
+
 
 ROOT = Path(__file__).resolve().parents[1]
 SRC = ROOT / "src"
@@ -27,9 +29,54 @@ def _load_script_module(name: str, relative_path: str):
 
 next_window_script = _load_script_module("test_run_local_nankan_next_window", "scripts/run_local_nankan_next_window.py")
 window_queue_script = _load_script_module("test_run_local_nankan_window_queue", "scripts/run_local_nankan_window_queue.py")
+backfill_script = _load_script_module("test_run_backfill_local_nankan", "scripts/run_backfill_local_nankan.py")
 
 
 class LocalNankanWindowOpsTest(unittest.TestCase):
+    def test_backfill_manifest_exposes_top_level_read_order(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            base_dir = Path(tmp_dir)
+            manifest_path = base_dir / "local_nankan_backfill.json"
+
+            with patch("racing_ml.data.local_nankan_backfill.prepare_local_nankan_ids_from_config", return_value={
+                "reports": [{"kind": "race_ids", "row_count": 1}],
+            }), patch("racing_ml.data.local_nankan_backfill.collect_local_nankan_from_config", return_value={
+                "status": "completed",
+                "targets": [{"requested_ids": 1, "failure_count": 0}],
+            }), patch("racing_ml.data.local_nankan_backfill.materialize_local_nankan_primary_from_config", return_value={
+                "status": "completed",
+                "current_phase": "materialized_primary_raw",
+                "recommended_action": "run_local_preflight",
+                "row_count": 12,
+            }):
+                summary = run_local_nankan_backfill_from_config(
+                    {"crawl": {"targets": {}}},
+                    base_dir=base_dir,
+                    start_date="2026-04-01",
+                    end_date="2026-04-02",
+                    manifest_file=manifest_path,
+                    data_config={"dataset": {}},
+                    materialize_after_collect=True,
+                    dry_run=False,
+                )
+
+            self.assertEqual(summary["status"], "completed")
+            self.assertEqual(summary["current_phase"], "materialized_primary_raw")
+            self.assertEqual(summary["recommended_action"], "run_local_preflight")
+            self.assertEqual(
+                summary["read_order"],
+                [
+                    "status",
+                    "current_phase",
+                    "recommended_action",
+                    "stopped_reason",
+                    "highlights",
+                    "cycle_reports[0].materialize_summary.status",
+                ],
+            )
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+            self.assertEqual(manifest["read_order"], summary["read_order"])
+
     def test_next_window_runs_backfill_coverage_then_status_board(self) -> None:
         with patch.object(next_window_script, "_run", side_effect=[0, 0, 0]) as run_mock, patch.object(
             sys,
@@ -184,6 +231,61 @@ class LocalNankanWindowOpsTest(unittest.TestCase):
 
         self.assertEqual(exit_code, 2)
         self.assertEqual(run_mock.call_count, 1)
+
+    def test_windowed_backfill_manifest_exposes_top_level_read_order(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            manifest_path = Path(tmp_dir) / "local_nankan_backfill_windowed.json"
+
+            with patch.object(backfill_script, "log_progress", return_value=None), patch.object(
+                backfill_script.time, "sleep", return_value=None
+            ), patch.object(
+                backfill_script, "run_local_nankan_backfill_from_config",
+                return_value={
+                    "status": "completed",
+                    "current_phase": "crawl_completed",
+                    "recommended_action": "run_local_materialize",
+                    "stopped_reason": "requested_window_collected",
+                },
+            ):
+                aggregate = backfill_script._run_windowed_backfill(
+                    crawl_config={"crawl": {"targets": {}}},
+                    data_config=None,
+                    seed_file=None,
+                    race_id_source="race_list",
+                    target_filter="all",
+                    start_date="2026-01-01",
+                    end_date="2026-01-31",
+                    date_order="asc",
+                    limit=10,
+                    max_cycles=1,
+                    manifest_file=str(manifest_path),
+                    materialize_after_collect=False,
+                    race_result_path=None,
+                    race_card_path=None,
+                    pedigree_path=None,
+                    materialize_output_file=None,
+                    materialize_manifest_file=str(Path(tmp_dir) / "materialize.json"),
+                    dry_run=False,
+                    chunk_months=1,
+                    max_date_windows=1,
+                    sleep_sec_between_windows=0.0,
+                )
+
+            self.assertEqual(
+                aggregate["read_order"],
+                [
+                    "status",
+                    "current_phase",
+                    "recommended_action",
+                    "completed_window_count",
+                    "remaining_window_count",
+                    "active_window",
+                    "highlights",
+                ],
+            )
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+            self.assertEqual(manifest["read_order"], aggregate["read_order"])
+            self.assertEqual(manifest["status"], "completed")
 
 
 if __name__ == "__main__":

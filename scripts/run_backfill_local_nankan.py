@@ -218,6 +218,18 @@ def _aggregate_window_stop_reason(
     return default_stop_reason
 
 
+def _windowed_backfill_read_order() -> list[str]:
+    return [
+        "status",
+        "current_phase",
+        "recommended_action",
+        "completed_window_count",
+        "remaining_window_count",
+        "active_window",
+        "highlights",
+    ]
+
+
 def _write_windowed_running_manifest(manifest_path: Path, aggregate: dict[str, Any], *, active_window: int | None, active_window_date_window: dict[str, str] | None, active_phase: str, stop_reason: str | None = None) -> None:
     payload = dict(aggregate)
     payload["finished_at"] = None
@@ -229,6 +241,7 @@ def _write_windowed_running_manifest(manifest_path: Path, aggregate: dict[str, A
     payload["completed_window_count"] = len(_completed_window_keys(payload.get("window_reports", [])))
     payload["stop_reason"] = stop_reason
     payload["last_updated_at"] = utc_now_iso()
+    payload["read_order"] = _windowed_backfill_read_order()
     write_json(manifest_path, payload)
 
 
@@ -284,6 +297,7 @@ def _run_windowed_backfill(
         "status": "running" if not dry_run else "planned",
         "current_phase": "window_batch_running" if not dry_run else "planned",
         "recommended_action": None,
+        "read_order": _windowed_backfill_read_order(),
         "manifest_file": str(manifest_file),
         "date_window": {"start": start_date, "end": end_date},
         "date_order": date_order,
@@ -427,6 +441,7 @@ def _run_windowed_backfill(
         f"chunk_months={chunk_months}",
         f"sleep_sec_between_windows={sleep_sec_between_windows}",
     ]
+    aggregate["read_order"] = _windowed_backfill_read_order()
     write_json(manifest_path, aggregate)
     progress.complete(message=f"windowed backfill status={status}")
     return aggregate

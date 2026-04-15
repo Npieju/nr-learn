@@ -971,6 +971,7 @@ local_nankan を 6 か月ずつ順送りで backfill する長期取得:
 - aggregate manifest には `requested_window_count`, `executed_window_count`, `window_reports[]` が入り、各 window の個別 manifest も `..._windowNNN_YYYYMMDD_YYYYMMDD.json` として残る。
 - 同じ aggregate manifest path で再実行すると、既に `status=completed` になっている window は自動で skip され、次の未完了 window から再開する。
 - 実行中の aggregate manifest も逐次更新され、`active_window`, `active_window_date_window`, `completed_window_count`, `current_phase`, `last_updated_at` から現在位置を確認できる。window 内の個別 manifest も cycle ごとに `running` 更新される。
+- windowed aggregate manifest も top-level `read_order` を返すので、first-read は `status -> current_phase -> recommended_action -> completed_window_count -> remaining_window_count -> active_window -> highlights` で固定してよい。
 - 少しずつ取得したい場合は `--date-order asc` を基本にして古い window から順送りにする。新しい側から埋めたいときだけ `desc` を使う。
 - `--materialize-after-collect` を併用すると、各 window 後に primary raw materialize まで進められる。collect 出力は累積しつつ、window ごとの materialize manifest も残る。
 - 標準出力でも window 開始・完了・sleep が出るが、長時間実行では manifest を見るほうが確実である。
@@ -1041,6 +1042,7 @@ local_nankan backfill から primary raw materialize まで一続きで確認す
 
 - `--materialize-after-collect` を付けると、backfill は各 cycle の `collect_summary` の後に `materialize_summary` も残す。
 - provider 未実装で collect が blocked でも、既存 external outputs から primary raw が materialize できれば backfill manifest は `status=partial`, `current_phase=materialized_primary_raw`, `recommended_action=run_local_preflight` を返す。
+- non-windowed backfill manifest も top-level `read_order` を返すので、first-read は `status -> current_phase -> recommended_action -> stopped_reason -> highlights` を先に見て、必要なときだけ `cycle_reports[0].collect_summary.status` または `cycle_reports[0].materialize_summary.status` に降りればよい。
 
 local_nankan backfill から benchmark まで一続きで handoff する smoke:
 

@@ -74,6 +74,21 @@ def _format_counts_by_kind(counts: dict[str, int]) -> str:
     return ", ".join(f"{kind}={int(count)}" for kind, count in sorted(counts.items()))
 
 
+def _backfill_read_order(*, materialize_after_collect: bool) -> list[str]:
+    read_order = [
+        "status",
+        "current_phase",
+        "recommended_action",
+        "stopped_reason",
+        "highlights",
+    ]
+    if materialize_after_collect:
+        read_order.append("cycle_reports[0].materialize_summary.status")
+    else:
+        read_order.append("cycle_reports[0].collect_summary.status")
+    return read_order
+
+
 def _build_running_summary(
     *,
     started_at: str,
@@ -117,6 +132,7 @@ def _build_running_summary(
         "finished_at": None,
         "status": "running",
         "stopped_reason": None,
+        "read_order": _backfill_read_order(materialize_after_collect=materialize_after_collect),
         "manifest_file": display_path(manifest_path, workspace_root=base_dir),
         "date_window": {"start": start_date, "end": end_date},
         "date_order": date_order,
@@ -216,6 +232,7 @@ def _build_summary(
         "finished_at": finished_at,
         "status": status,
         "stopped_reason": stopped_reason,
+        "read_order": _backfill_read_order(materialize_after_collect=materialize_after_collect),
         "manifest_file": display_path(manifest_path, workspace_root=base_dir),
         "date_window": {"start": start_date, "end": end_date},
         "date_order": date_order,
