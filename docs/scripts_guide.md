@@ -266,6 +266,8 @@ netkeiba 系は lock 待機、収集、backfill、gate 実行の各段で heartb
 
 `run_local_benchmark_gate.py` は現在、source preflight も先に実行する。ここで `data_preflight_<revision>.json` または `data_preflight_local_nankan.json` を通して raw dir / primary CSV / required source table の不足を早期に `not_ready` として返し、snapshot 深部の `No CSV files found ...` まで潜らなくても停止理由を読める。
 
+`run_materialize_local_nankan_pre_race_only.py` と `run_materialize_local_nankan_pre_race_primary.py` の summary artifact も top-level `read_order` を返す。したがって strict pre-race corpus を手動更新するときも、まず `status -> current_phase -> recommended_action` を読み、そのあと `pre_race_only_rows` または `result_ready_races/pending_result_races` を追えば child manifest を開く前に現在地を判断できる。 
+
 historical `local_nankan` trust guard は current alias として `artifacts/reports/local_nankan_provenance_audit.json` と `artifacts/reports/local_nankan_source_timing_audit.json` を優先して読み、current alias が未生成の間だけ `issue120_repaired` / `issue121` snapshot へ fallback する。したがって provenance audit や source timing audit を rerun した後は、generic CLI / local wrapper / benchmark gate が同じ current trust truth を参照する。
 
 `run_local_nankan_provenance_audit.py` の current alias manifest も top-level `read_order` を返す。したがって `#120` first-read は `status -> current_phase -> recommended_action -> readiness.strict_trust_ready -> readiness.pre_race_rows -> readiness.blocking_reasons` の順で固定してよい。

@@ -34,6 +34,10 @@ pre_race_primary_script = _load_script_module(
     "test_run_materialize_local_nankan_pre_race_primary",
     "scripts/run_materialize_local_nankan_pre_race_primary.py",
 )
+pre_race_only_script = _load_script_module(
+    "test_run_materialize_local_nankan_pre_race_only",
+    "scripts/run_materialize_local_nankan_pre_race_only.py",
+)
 
 
 class LocalNankanPrimaryMaterializeTest(unittest.TestCase):
@@ -133,6 +137,17 @@ class LocalNankanPrimaryMaterializeTest(unittest.TestCase):
             )
 
             self.assertEqual(summary["status"], "completed")
+            self.assertEqual(
+                summary["read_order"],
+                [
+                    "status",
+                    "current_phase",
+                    "recommended_action",
+                    "row_count",
+                    "source_files.race_result",
+                    "highlights",
+                ],
+            )
             self.assertIn("generated_files", summary)
 
             frame = pd.read_csv(output_path)
@@ -213,6 +228,7 @@ class LocalNankanPrimaryMaterializeTest(unittest.TestCase):
             )
 
             self.assertEqual(summary["status"], "completed")
+            self.assertEqual(summary["read_order"][0:3], ["status", "current_phase", "recommended_action"])
             frame = pd.read_csv(output_path)
             row = frame.iloc[0]
             self.assertEqual(str(row["owner_name"]), "Owner X")
@@ -301,6 +317,17 @@ class LocalNankanPreRacePrimaryScriptTest(unittest.TestCase):
             self.assertEqual(summary["filtered_race_result_output"], "data/local_nankan_pre_race_ready/raw/unit_not_ready_race_result.csv")
             self.assertEqual(summary["primary_output_file"], "data/local_nankan_pre_race_ready/raw/unit_not_ready_primary.csv")
             self.assertEqual(summary["manifest_file"], str(manifest_file.relative_to(ROOT)))
+            self.assertEqual(
+                summary["read_order"],
+                [
+                    "status",
+                    "current_phase",
+                    "recommended_action",
+                    "materialization_summary.result_ready_races",
+                    "materialization_summary.pending_result_races",
+                    "filtered_race_card_output",
+                ],
+            )
 
     def test_pre_race_primary_normalizes_completed_summary_paths(self) -> None:
         artifacts_tmp = ROOT / "artifacts" / "tmp"
@@ -375,6 +402,91 @@ class LocalNankanPreRacePrimaryScriptTest(unittest.TestCase):
                 summary["primary_materialize_summary"]["generated_files"]["manifest_file"],
                 "artifacts/reports/local_nankan_primary_pre_race_ready_materialize_manifest.json",
             )
+            self.assertEqual(
+                summary["read_order"],
+                [
+                    "status",
+                    "current_phase",
+                    "recommended_action",
+                    "materialization_summary.result_ready_races",
+                    "materialization_summary.pending_result_races",
+                    "primary_materialize_summary.status",
+                ],
+            )
+
+
+class LocalNankanPreRaceOnlyScriptTest(unittest.TestCase):
+    def test_pre_race_only_summary_exposes_top_level_read_order(self) -> None:
+        artifacts_tmp = ROOT / "artifacts" / "tmp"
+        artifacts_tmp.mkdir(parents=True, exist_ok=True)
+        with tempfile.TemporaryDirectory(dir=artifacts_tmp) as tmp_dir:
+            tmp_path = Path(tmp_dir)
+            summary_output = tmp_path / "local_nankan_pre_race_only_materialize_summary.json"
+
+            race_card_frame = pd.DataFrame([{"race_id": "nar001"}])
+            race_result_frame = pd.DataFrame([{"race_id": "nar001"}])
+            pre_race_only_frame = pd.DataFrame([{"race_id": "nar001"}])
+
+            with patch.object(
+                pre_race_only_script.pd,
+                "read_csv",
+                side_effect=[race_card_frame, race_result_frame],
+            ), patch.object(
+                pre_race_only_script,
+                "filter_pre_race_only",
+                return_value=pre_race_only_frame,
+            ), patch.object(
+                pre_race_only_script,
+                "build_provenance_summary",
+                return_value={"pre_race_rows": 1, "post_race_rows": 0, "unknown_rows": 0},
+            ), patch.object(
+                pre_race_only_script,
+                "build_pre_race_only_materialization_summary",
+                return_value={
+                    "pre_race_only_rows": 1,
+                    "pre_race_only_races": 1,
+                    "result_ready_races": 0,
+                    "pending_result_races": 1,
+                },
+            ), patch.object(
+                pre_race_only_script,
+                "write_csv_file",
+            ), patch.object(
+                sys,
+                "argv",
+                [
+                    "run_materialize_local_nankan_pre_race_only.py",
+                    "--race-card-input",
+                    str(ROOT / "data/external/local_nankan/racecard/unit_pre_race_only_racecard.csv"),
+                    "--race-result-input",
+                    str(ROOT / "data/external/local_nankan/results/unit_pre_race_only_result.csv"),
+                    "--output-file",
+                    str(ROOT / "data/local_nankan/raw/unit_pre_race_only.csv"),
+                    "--summary-output",
+                    str(summary_output),
+                ],
+            ):
+                exit_code = pre_race_only_script.main()
+
+            self.assertEqual(exit_code, 0)
+            summary = json.loads(summary_output.read_text(encoding="utf-8"))
+            self.assertEqual(summary["status"], "completed")
+            self.assertEqual(summary["current_phase"], "pre_race_only_materialized")
+            self.assertEqual(summary["recommended_action"], "run_pre_race_primary_materialization")
+            self.assertEqual(
+                summary["read_order"],
+                [
+                    "status",
+                    "current_phase",
+                    "recommended_action",
+                    "materialization_summary.pre_race_only_rows",
+                    "materialization_summary.result_ready_races",
+                    "provenance_summary.pre_race_rows",
+                ],
+            )
+            self.assertEqual(summary["race_card_input"], "data/external/local_nankan/racecard/unit_pre_race_only_racecard.csv")
+            self.assertEqual(summary["race_result_input"], "data/external/local_nankan/results/unit_pre_race_only_result.csv")
+            self.assertEqual(summary["output_file"], "data/local_nankan/raw/unit_pre_race_only.csv")
 
 
 if __name__ == "__main__":

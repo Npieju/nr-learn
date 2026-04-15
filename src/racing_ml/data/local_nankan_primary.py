@@ -246,6 +246,14 @@ def _build_manifest(
     error_message: str | None = None,
     generated_files: dict[str, str] | None = None,
 ) -> dict[str, Any]:
+    read_order = [
+        "status",
+        "current_phase",
+        "recommended_action",
+        "row_count",
+        "source_files.race_result",
+        "highlights",
+    ]
     highlights = [
         f"row_count={row_count}",
         f"columns={len(columns)}",
@@ -264,6 +272,7 @@ def _build_manifest(
         "status": status,
         "current_phase": current_phase,
         "recommended_action": recommended_action,
+        "read_order": read_order,
         "error_code": error_code,
         "error_message": error_message,
         "output_file": _display(output_path, base_dir),

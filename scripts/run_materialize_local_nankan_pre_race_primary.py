@@ -61,6 +61,21 @@ def _normalize_display_paths(value: object) -> object:
     return _display_path_value(value)
 
 
+def _summary_read_order(primary_summary: dict[str, object] | None = None) -> list[str]:
+    read_order = [
+        "status",
+        "current_phase",
+        "recommended_action",
+        "materialization_summary.result_ready_races",
+        "materialization_summary.pending_result_races",
+    ]
+    if primary_summary is None:
+        read_order.append("filtered_race_card_output")
+    else:
+        read_order.append("primary_materialize_summary.status")
+    return read_order
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--data-config", default="configs/data_local_nankan_pre_race_ready.yaml")
@@ -126,6 +141,7 @@ def main() -> int:
                 "status": "not_ready",
                 "current_phase": "await_result_arrival",
                 "recommended_action": "wait_for_result_ready_pre_race_races",
+                "read_order": _summary_read_order(),
                 "filtered_race_card_output": filtered_card_path,
                 "filtered_race_result_output": filtered_result_path,
                 "primary_output_file": primary_output_path,
@@ -153,6 +169,7 @@ def main() -> int:
             "status": "completed" if primary_summary.get("status") == "completed" else "failed",
             "current_phase": primary_summary.get("current_phase"),
             "recommended_action": primary_summary.get("recommended_action"),
+            "read_order": _summary_read_order(primary_summary),
             "filtered_race_card_output": filtered_card_path,
             "filtered_race_result_output": filtered_result_path,
             "primary_output_file": primary_output_path,

@@ -33,6 +33,13 @@ def _resolve_path(raw_path: str | Path) -> Path:
     return path if path.is_absolute() else (ROOT / path)
 
 
+def _display_path(path: Path) -> str:
+    try:
+        return str(path.relative_to(ROOT))
+    except ValueError:
+        return str(path)
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--race-card-input", default="data/external/local_nankan/racecard/local_racecard.csv")
@@ -79,9 +86,20 @@ def main() -> int:
         progress.update(current=4, message=f"subset output ready rows={len(pre_race_only)}")
 
         summary = {
-            "race_card_input": str(race_card_path),
-            "race_result_input": str(race_result_path) if race_result_path.exists() else None,
-            "output_file": str(output_path),
+            "status": "completed",
+            "current_phase": "pre_race_only_materialized",
+            "recommended_action": "run_pre_race_primary_materialization",
+            "read_order": [
+                "status",
+                "current_phase",
+                "recommended_action",
+                "materialization_summary.pre_race_only_rows",
+                "materialization_summary.result_ready_races",
+                "provenance_summary.pre_race_rows",
+            ],
+            "race_card_input": _display_path(race_card_path),
+            "race_result_input": _display_path(race_result_path),
+            "output_file": _display_path(output_path),
             "provenance_summary": provenance_summary,
             "materialization_summary": materialization_summary,
         }
