@@ -268,6 +268,8 @@ netkeiba 系は lock 待機、収集、backfill、gate 実行の各段で heartb
 
 historical `local_nankan` trust guard は current alias として `artifacts/reports/local_nankan_provenance_audit.json` と `artifacts/reports/local_nankan_source_timing_audit.json` を優先して読み、current alias が未生成の間だけ `issue120_repaired` / `issue121` snapshot へ fallback する。したがって provenance audit や source timing audit を rerun した後は、generic CLI / local wrapper / benchmark gate が同じ current trust truth を参照する。
 
+`run_local_nankan_provenance_audit.py` の current alias manifest も top-level `read_order` を返す。したがって `#120` first-read は `status -> current_phase -> recommended_action -> readiness.strict_trust_ready -> readiness.pre_race_rows -> readiness.blocking_reasons` の順で固定してよい。
+
 さらに `--materialize-primary-before-gate` を付けると、wrapper は preflight の前に `run_materialize_local_nankan_primary.py` を呼び、external の `race_result/racecard/pedigree` から `data/local_nankan/raw` 相当の primary CSV を組み立てようとする。materialize が `status=not_ready` でも wrapper 自体は benchmark gate を続行し、正式な blocker は従来どおり preflight / benchmark manifest 側へ残す。
 
 `run_local_backfill_then_benchmark.py` を使うと、backfill は常に `--materialize-after-collect` 付きで回り、`current_phase=materialized_primary_raw` に達した場合のみ local benchmark gate へ handoff する。したがって Phase 0 の入口でも、operator は backfill blocker と benchmark blocker を wrapper manifest 1 本で追える。

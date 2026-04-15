@@ -327,6 +327,10 @@ class LocalNankanProvenanceScriptsTest(unittest.TestCase):
             pre_race_mock.assert_called_once_with(annotated_frame)
             self.assertEqual(json_writes[0][0], summary_output)
             self.assertEqual(json_writes[0][1]["pre_race_only_rows"], 1)
+            manifest_written = json_writes[-1][1]
+            self.assertEqual(manifest_written["read_order"][0], "status")
+            self.assertEqual(manifest_written["read_order"][3], "readiness.strict_trust_ready")
+            self.assertEqual(manifest_written["read_order"][5], "readiness.blocking_reasons")
             self.assertEqual([path for path, _ in csv_writes], [annotated_output, pre_race_output])
 
     def test_provenance_audit_normalizes_workspace_relative_artifact_paths(self) -> None:
@@ -388,6 +392,9 @@ class LocalNankanProvenanceScriptsTest(unittest.TestCase):
 
         self.assertEqual(exit_code, 0)
         manifest_written = json_writes[-1][1]
+        self.assertEqual(manifest_written["read_order"][0], "status")
+        self.assertEqual(manifest_written["read_order"][3], "readiness.strict_trust_ready")
+        self.assertEqual(manifest_written["read_order"][5], "readiness.blocking_reasons")
         self.assertEqual(manifest_written["artifacts"]["input_file"], "data/local_nankan/raw/local_nankan_primary.csv")
         self.assertEqual(manifest_written["artifacts"]["summary_output"], "artifacts/tmp/provenance_summary.json")
         self.assertEqual(manifest_written["artifacts"]["annotated_output"], "artifacts/tmp/provenance_annotated.csv")

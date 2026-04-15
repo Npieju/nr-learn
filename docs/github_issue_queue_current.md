@@ -22,6 +22,7 @@
 - first read:
   - [nar_jra_parity_issue_ladder.md](nar_jra_parity_issue_ladder.md)
   - [../artifacts/reports/local_nankan_provenance_audit.json](../artifacts/reports/local_nankan_provenance_audit.json)
+  - `read_order`
   - [../artifacts/reports/benchmark_gate_local_nankan.json](../artifacts/reports/benchmark_gate_local_nankan.json)
 - current meaning:
   - historical local Nankan result-ready rows は `provable pre-race market capture` を持たず、strict provenance read は `pre_race=0`, `post_race=728850`, `unknown=257`
