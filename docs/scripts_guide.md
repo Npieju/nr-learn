@@ -378,6 +378,8 @@ child surface を直接開くときも first-read を固定できる。`run_loca
 
 さらに 1 段下の drill-down でも同じで、`run_local_nankan_pre_race_readiness_probe.py` は `status -> current_phase -> recommended_action -> materialization_summary.result_ready_races -> materialization_summary.pending_result_races -> historical_source_timing.status` を、`run_local_nankan_pre_race_benchmark_handoff.py` は `status -> current_phase -> recommended_action -> pre_race_summary.status -> pre_race_summary.current_phase -> benchmark_manifest.status` を top-level `read_order` で返す。
 
+lowest-level の support artifact でも first-read を固定する。`run_local_nankan_source_timing_audit.py` は `status -> current_phase -> recommended_action -> historical_pre_race_recoverability.result_ready_pre_race_rows -> historical_pre_race_recoverability.future_only_pre_race_rows -> historical_pre_race_recoverability.status` を、`run_local_nankan_pre_race_capture_coverage.py` は `status -> current_phase -> recommended_action -> pre_race_only_rows -> result_ready_races -> pending_result_races` を top-level `read_order` で返す。
+
 followup oneshot の top-level highlights でも upstream cutoff を読める。`upstream_upcoming_only`、`upstream_as_of`、`upstream_pre_filter_rows`、`upstream_filtered_out` が揃っているので、scheduler / hook 側の first read は freshness 判定と同時に「何件を strict upcoming filter 前提で見たか」まで child manifest 深掘りなしで監査できる。
 
 launch 前に freshness / contract 判定だけ見たい場合は `--dry-run` を使う。この場合は child を起動せず、`status=dry_run`, `current_phase=followup_plan_ready` を返して operator 側の事前確認に使える。

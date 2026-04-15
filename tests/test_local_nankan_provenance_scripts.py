@@ -114,6 +114,9 @@ class LocalNankanProvenanceScriptsTest(unittest.TestCase):
             build_dates.assert_called_once()
             summary_path, summary_written = writes["summary"]
             self.assertEqual(summary_path, summary_output)
+            self.assertEqual(summary_written["read_order"][0], "status")
+            self.assertEqual(summary_written["read_order"][3], "pre_race_only_rows")
+            self.assertEqual(summary_written["read_order"][5], "pending_result_races")
             self.assertEqual(summary_written["race_card_input"], str(race_card))
             self.assertEqual(summary_written["race_result_input"], str(race_result))
             self.assertEqual(summary_written["baseline_summary_input"], str(baseline_summary))
@@ -184,6 +187,9 @@ class LocalNankanProvenanceScriptsTest(unittest.TestCase):
 
             self.assertEqual(exit_code, 0)
             _, summary_written = writes["summary"]
+            self.assertEqual(summary_written["read_order"][0], "status")
+            self.assertEqual(summary_written["read_order"][3], "pre_race_only_rows")
+            self.assertEqual(summary_written["read_order"][5], "pending_result_races")
             self.assertEqual(
                 summary_written["baseline_comparison"]["baseline_summary_input"],
                 "artifacts/reports/local_nankan_pre_race_capture_coverage_summary.json",
@@ -250,6 +256,9 @@ class LocalNankanProvenanceScriptsTest(unittest.TestCase):
 
             self.assertEqual(exit_code, 0)
             _, summary_written = writes["summary"]
+            self.assertEqual(summary_written["read_order"][0], "status")
+            self.assertEqual(summary_written["read_order"][3], "historical_pre_race_recoverability.result_ready_pre_race_rows")
+            self.assertEqual(summary_written["read_order"][5], "historical_pre_race_recoverability.status")
             self.assertEqual(summary_written["audit_snapshot_path"], "artifacts/reports/local_nankan_source_timing_audit.json")
 
     def test_provenance_audit_main_writes_summary_and_optional_outputs(self) -> None:

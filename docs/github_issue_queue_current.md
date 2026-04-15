@@ -36,6 +36,7 @@
 - source-of-truth: GitHub issue `#121`
 - first read:
   - [../artifacts/reports/local_nankan_source_timing_audit.json](../artifacts/reports/local_nankan_source_timing_audit.json)
+  - `read_order`
   - [issue_library/next_issue_local_nankan_source_timing_corrective.md](issue_library/next_issue_local_nankan_source_timing_corrective.md)
 - current meaning:
   - current cache から historical result-ready `pre_race` capture を復元する仮説は negative read で narrowed された

@@ -125,6 +125,14 @@ def main() -> int:
         )
 
         summary = _normalize_display_paths(summary)
+        summary["read_order"] = [
+            "status",
+            "current_phase",
+            "recommended_action",
+            "pre_race_only_rows",
+            "result_ready_races",
+            "pending_result_races",
+        ]
         summary["race_card_input"] = _display_path(race_card_path)
         summary["race_result_input"] = _display_path(race_result_path) if race_result_path.exists() else None
         summary["baseline_summary_input"] = _display_path(baseline_summary_path)
