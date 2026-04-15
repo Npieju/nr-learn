@@ -80,6 +80,14 @@ def _build_not_ready_manifest(
         "status": "not_ready",
         "current_phase": str(pre_race_summary.get("current_phase") or "await_result_arrival"),
         "recommended_action": str(pre_race_summary.get("recommended_action") or "wait_for_result_ready_pre_race_races"),
+        "read_order": [
+            "status",
+            "current_phase",
+            "recommended_action",
+            "pre_race_summary.status",
+            "pre_race_summary.current_phase",
+            "pre_race_summary.recommended_action",
+        ],
         "pre_race_summary": _normalize_display_paths(pre_race_summary),
         "benchmark_manifest_output": _display_path(benchmark_manifest_output),
         "attempts": int(attempts),
@@ -102,6 +110,14 @@ def _extract_historical_source_blocker(source_timing_summary: dict[str, Any]) ->
         "status": "not_ready",
         "current_phase": "historical_source_timing_blocked",
         "recommended_action": str(source_timing_summary.get("recommended_action") or "inspect_source_timing_audit"),
+        "read_order": [
+            "status",
+            "current_phase",
+            "recommended_action",
+            "source_timing_summary.status",
+            "source_timing_summary.current_phase",
+            "source_timing_summary.recommended_action",
+        ],
         "source_timing_summary": _normalize_display_paths(source_timing_summary),
     }
 
@@ -218,6 +234,14 @@ def main() -> int:
                 "status": "failed",
                 "current_phase": "pre_race_primary",
                 "recommended_action": "inspect_pre_race_primary_summary",
+                "read_order": [
+                    "status",
+                    "current_phase",
+                    "recommended_action",
+                    "pre_race_summary.status",
+                    "pre_race_summary.current_phase",
+                    "pre_race_summary.recommended_action",
+                ],
                 "pre_race_summary": pre_race_summary,
             })
             write_json(wrapper_manifest_path, wrapper_manifest)
@@ -269,6 +293,14 @@ def main() -> int:
             "status": "completed" if benchmark_exit == 0 else "failed",
             "current_phase": "benchmark_gate",
             "recommended_action": "review_benchmark_manifest" if benchmark_exit == 0 else "inspect_benchmark_manifest",
+            "read_order": [
+                "status",
+                "current_phase",
+                "recommended_action",
+                "pre_race_summary.status",
+                "pre_race_summary.current_phase",
+                "benchmark_manifest.status",
+            ],
             "pre_race_summary": pre_race_summary,
             "benchmark_manifest": benchmark_manifest,
         })

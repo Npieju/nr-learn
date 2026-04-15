@@ -64,8 +64,11 @@ class LocalNankanReadinessProbeScriptTest(unittest.TestCase):
             self.assertEqual(exit_code, 2)
             summary = json.loads(summary_output.read_text(encoding="utf-8"))
             self.assertEqual(summary["status"], "not_ready")
-            self.assertEqual(summary["current_phase"], "await_result_arrival")
-            self.assertEqual(summary["recommended_action"], "wait_for_result_ready_pre_race_races")
+            self.assertEqual(summary["current_phase"], "future_only_readiness_track")
+            self.assertEqual(summary["recommended_action"], "capture_future_pre_race_rows_and_wait_for_results")
+            self.assertEqual(summary["read_order"][0], "status")
+            self.assertEqual(summary["read_order"][3], "materialization_summary.result_ready_races")
+            self.assertEqual(summary["read_order"][5], "historical_source_timing.status")
             self.assertEqual(summary["materialization_summary"]["result_ready_races"], 0)
             self.assertEqual(summary["materialization_summary"]["pending_result_races"], 2)
 
@@ -108,6 +111,9 @@ class LocalNankanReadinessProbeScriptTest(unittest.TestCase):
             self.assertEqual(summary["status"], "ready")
             self.assertEqual(summary["current_phase"], "ready_for_benchmark_handoff")
             self.assertEqual(summary["recommended_action"], "run_pre_race_benchmark_handoff")
+            self.assertEqual(summary["read_order"][0], "status")
+            self.assertEqual(summary["read_order"][3], "materialization_summary.result_ready_races")
+            self.assertEqual(summary["read_order"][5], "historical_source_timing.status")
             self.assertEqual(summary["materialization_summary"]["result_ready_races"], 1)
             self.assertEqual(summary["materialization_summary"]["pending_result_races"], 1)
 

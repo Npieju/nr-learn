@@ -118,6 +118,9 @@ class LocalNankanPreRaceHandoffTest(unittest.TestCase):
             self.assertEqual(manifest["status"], "not_ready")
             self.assertEqual(manifest["current_phase"], "await_result_arrival")
             self.assertEqual(manifest["recommended_action"], "wait_for_result_ready_pre_race_races")
+            self.assertEqual(manifest["read_order"][0], "status")
+            self.assertEqual(manifest["read_order"][3], "pre_race_summary.status")
+            self.assertEqual(manifest["read_order"][5], "pre_race_summary.recommended_action")
             self.assertEqual(manifest["attempts"], 1)
             self.assertTrue(manifest["timed_out"])
             self.assertEqual(manifest["benchmark_manifest_output"], str(benchmark_manifest))
@@ -212,6 +215,9 @@ class LocalNankanPreRaceHandoffTest(unittest.TestCase):
             self.assertEqual(manifest["status"], "completed")
             self.assertEqual(manifest["current_phase"], "benchmark_gate")
             self.assertEqual(manifest["recommended_action"], "review_benchmark_manifest")
+            self.assertEqual(manifest["read_order"][0], "status")
+            self.assertEqual(manifest["read_order"][3], "pre_race_summary.status")
+            self.assertEqual(manifest["read_order"][5], "benchmark_manifest.status")
             self.assertEqual(manifest["pre_race_summary"]["status"], "ready")
             self.assertEqual(manifest["benchmark_manifest"]["status"], "completed")
 
@@ -256,6 +262,9 @@ class LocalNankanPreRaceHandoffTest(unittest.TestCase):
             self.assertEqual(manifest["status"], "failed")
             self.assertEqual(manifest["current_phase"], "benchmark_gate")
             self.assertEqual(manifest["recommended_action"], "inspect_benchmark_manifest")
+            self.assertEqual(manifest["read_order"][0], "status")
+            self.assertEqual(manifest["read_order"][3], "pre_race_summary.status")
+            self.assertEqual(manifest["read_order"][5], "benchmark_manifest.status")
             self.assertEqual(manifest["benchmark_manifest"]["status"], "failed")
 
     def test_pre_race_handoff_reports_failed_pre_race_primary(self) -> None:
@@ -296,6 +305,9 @@ class LocalNankanPreRaceHandoffTest(unittest.TestCase):
             self.assertEqual(manifest["status"], "failed")
             self.assertEqual(manifest["current_phase"], "pre_race_primary")
             self.assertEqual(manifest["recommended_action"], "inspect_pre_race_primary_summary")
+            self.assertEqual(manifest["read_order"][0], "status")
+            self.assertEqual(manifest["read_order"][3], "pre_race_summary.status")
+            self.assertEqual(manifest["read_order"][5], "pre_race_summary.recommended_action")
             self.assertEqual(manifest["pre_race_summary"]["status"], "failed")
 
     def test_pre_race_handoff_normalizes_nested_workspace_paths_in_manifest(self) -> None:

@@ -117,6 +117,14 @@ def main() -> int:
             source_timing_summary=source_timing_summary,
         )
         summary = _normalize_display_paths(summary)
+        summary["read_order"] = [
+            "status",
+            "current_phase",
+            "recommended_action",
+            "materialization_summary.result_ready_races",
+            "materialization_summary.pending_result_races",
+            "historical_source_timing.status",
+        ]
         summary["race_card_input"] = _display_path(race_card_path)
         summary["race_result_input"] = _display_path(race_result_path)
         summary["source_timing_summary_input"] = _display_path(source_timing_summary_path)
