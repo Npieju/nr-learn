@@ -209,5 +209,23 @@ class RunEvaluateLocalNankanTrustGuardTest(unittest.TestCase):
         self.assertEqual(exit_code, 1)
 
 
+class RunEvaluateOutputSlugTest(unittest.TestCase):
+    def test_derive_evaluation_output_slug_shortens_long_model_names(self) -> None:
+        long_model_path = Path(
+            "artifacts/models/"
+            "catboost_value_stack_lgbm_roi_high_coverage_tune_roi012_local_nankan_value_blend_bootstrap_"
+            "model_r20260416_local_nankan_value_blend_bootstrap_pre_race_ready_formal_v1.joblib"
+        )
+
+        slug = evaluate_script._derive_evaluation_output_slug(
+            "artifacts/runtime_configs/model_value_stack_local_nankan_value_blend_bootstrap_"
+            "r20260416_local_nankan_value_blend_bootstrap_support_corrective_candidate_v1.yaml",
+            long_model_path,
+        )
+
+        self.assertLessEqual(len(slug), 96)
+        self.assertRegex(slug, r"^[a-z0-9_]+$")
+
+
 if __name__ == "__main__":
     unittest.main()

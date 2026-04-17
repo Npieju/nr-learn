@@ -4,6 +4,11 @@
 
 South-Kanto-only NAR line の reliability を担保するうえで、最優先の unresolved point は `market provenance` である。
 
+current status:
+
+- trust semantics repair 後の `#120` current alias は `strict_trust_ready=true` に到達している
+- この issue の current role は fail-closed contract と historical evidence を保持することであり、`#101` / `#103` の current blocker を説明する primary source ではない
+
 2026-04-06 の current local primary に strict provenance audit を当てた結果、次が確認された。
 
 - input: `data/local_nankan/raw/local_nankan_primary.csv`
@@ -119,6 +124,6 @@ stale primary corrective の結果、`local_nankan_primary.csv` 自体には pro
 
 ## Decision Rule
 
-- `#120` が strict trust ready になるまで `#101` は trust-carrying benchmark evidence と見なさない
-- `#103` は `#120` と `#101` の両方を通るまで blocked に維持する
+- `#120` current alias は strict trust ready に到達しており、trust 判定は `classification_basis=pre_race_feature_availability` を一次参照にする
+- current benchmark reference は `#101` formal rerun `r20260415_local_nankan_pre_race_ready_formal_v1` であり、`#103` はこの issue ではなく Stage 1 architecture parity issue として扱う
 - rebuilt provenance-aware line でも high ROI が異常に残る場合のみ、次の root-cause issue を `leak residual` か `policy optimism residual` のどちらか 1 本に narrowed する

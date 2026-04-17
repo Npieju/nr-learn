@@ -7,6 +7,11 @@ parent completion gate:
 - `#123 [nar] JRA-equivalent trust completion gate`
 - `#101` の role は `Stage 0 benchmark trust` を解く blocker issue であり、これ自体は NAR solved を意味しない
 
+current status:
+
+- completed on historical trust-ready corpus via `r20260415_local_nankan_pre_race_ready_formal_v1`
+- current meaning は blocked-state 維持ではなく、Stage 0 benchmark reference の維持である
+
 `#100` で local Nankan collector に provenance persistence を入れ、small-scope live recrawl で strict `pre_race` row の実在を確認した。
 
 - live recrawl:
@@ -17,7 +22,7 @@ parent completion gate:
   - `post_race_rows=0`
   - `unknown_rows=731941`
 
-したがって次の corrective は、strict `pre_race_only` subset を benchmark-ready な raw / primary へ materialize し、market-aware NAR line を provenance-defensible な universe で読み直すことにある。
+この issue の corrective 自体は完了しており、strict `pre_race_only` subset materialization から formal rerun まで historical trust-ready corpus 上で一度閉じている。したがって現在の役割は、blocked issue ではなく Stage 0 benchmark reference の履歴と読み筋を保持することにある。
 
 ## Objective
 
@@ -29,12 +34,14 @@ if strict `pre_race_only` subset だけで local Nankan raw / primary / evaluati
 
 ## Current Read
 
-- `#100` third cut で future / upcoming window の strict `pre_race` row は取得できた
-- current backfilled raw は provenance strict filter で落とせる
-- ただし現状の benchmark run は `unknown` を大量に含む historical raw を前提にしている
-- したがって次に必要なのは collector corrective ではなく subset rebuild と benchmark rerun である
+- `#120` trust semantics repair により、trust 判定は fetch timing ではなく `pre_race_feature_availability` basis で読む
+- `#101` formal rerun `r20260415_local_nankan_pre_race_ready_formal_v1` は trust-ready historical corpus 上で completed しており、current benchmark reference は次で固定する
+  - [evaluation_local_nankan_r20260415_local_nankan_pre_race_ready_formal_v1_pointer.json](/workspaces/nr-learn/artifacts/reports/evaluation_local_nankan_r20260415_local_nankan_pre_race_ready_formal_v1_pointer.json)
+  - [evaluation_summary_local_nankan_baseline_wf_full_nested.json](/workspaces/nr-learn/artifacts/reports/evaluation_summary_local_nankan_baseline_wf_full_nested.json)
+  - [evaluation_manifest_local_nankan_baseline_wf_full_nested.json](/workspaces/nr-learn/artifacts/reports/evaluation_manifest_local_nankan_baseline_wf_full_nested.json)
+- current next action は external result arrival 待ちではなく、この benchmark reference を baseline freeze として `#103` architecture bootstrap を進めることである
 
-blocked 中の canonical read は次である。
+historical artifact の canonical read は次である。
 
 - board:
   - [local_nankan_data_status_board.json](/workspaces/nr-learn/artifacts/reports/local_nankan_data_status_board.json)
@@ -51,9 +58,9 @@ blocked 中の canonical read は次である。
 
 rule:
 
-- board が `status=partial`, `current_phase=await_result_arrival` の間は `#101` は external result arrival 待ちのままと読む
-- refresh 完了直後の bounded re-check は `readiness_surfaces.followup_entrypoint` から follow-up oneshot preview へ降りる
-- detail が必要なときだけ、この文書の個別 manifest / smoke artifact に降りる
+- current benchmark judgment は board の `await_result_arrival` ではなく `#101` pointer / summary / manifest を一次参照にする
+- future-only operator path を確認したいときだけ board / readiness surfaces に降りる
+- detail が必要なときだけ、この文書の個別 materialize / handoff artifact に降りる
 
 ## In Scope
 
@@ -109,8 +116,8 @@ confirmed read:
 meaning:
 
 - strict `pre_race_only` subset の materialization 自体は成立した
-- ただし current subset は future races だけなので、benchmark rerun はまだ開始できない
-- 次段は result arrival 後の relabel / primary materialization か、より広い pre-race capture window の確保である
+- ここで止まっていた blocked-state が、その後の trust semantics repair と formal rerun の前提になった
+- 現在はこの subset materialization を historical benchmark reference の成立過程として読む
 
 ## Second Cut Status
 
@@ -137,9 +144,8 @@ confirmed read:
 
 meaning:
 
-- result arrival 後にそのまま strict `pre_race_only` primary まで通す導線はできた
-- current capture window だけでは benchmark rerun をまだ始められない
-- 次段は result 到着後の rerun か、capture window 拡張で labeled `pre_race` races を増やすことに narrowed された
+- strict `pre_race_only` primary materialization 導線はできており、その後の historical rerun に再利用された
+- current read では blocked-state そのものより、trust-ready corpus を固定できるようになった過程として読む
 
 ## Third Cut Status
 
@@ -159,13 +165,8 @@ confirmed read:
 
 meaning:
 
-- current dataset では benchmark gate へ進まずに formal `not_ready` で止まる
-- result-ready race が出たら、同じ wrapper で
-  - strict `pre_race_only` subset filter
-  - primary materialization
-  - benchmark gate
-  を直列実行できる
-- `#101` の remaining work は実データ到着後の first benchmark rerun に narrowed された
+- handoff wrapper 自体は current operator surface として残っている
+- その後の historical trust-ready rerun 完了により、`#101` の remaining work は消化済みであり、current role は benchmark reference maintenance に移った
 
 ## Fourth Cut Status
 
@@ -187,13 +188,27 @@ confirmed read:
 
 meaning:
 
-- result-ready race がまだ無い状態でも、wrapper は bounded timeout で止まる
-- silent wait のまま無制限に走らない
-- `#101` の残差は result arrival 後の first benchmark rerun だけである
+- bounded wait contract は `#122` future-only readiness path で引き続き有効である
+- ただし `#101` current read では、この blocked-state は historical transition であり現行 benchmark reference の primary meaning ではない
 
 ## Current Canonical Read
 
-current canonical board read:
+current benchmark reference read:
+
+- pointer:
+  - [evaluation_local_nankan_r20260415_local_nankan_pre_race_ready_formal_v1_pointer.json](/workspaces/nr-learn/artifacts/reports/evaluation_local_nankan_r20260415_local_nankan_pre_race_ready_formal_v1_pointer.json)
+- evaluate summary:
+  - `auc=0.8625051675`
+  - `logloss=0.2171821084`
+  - `top1_roi=0.8402165859`
+  - `ev_threshold_1_0_roi=2.8603751213`
+  - `ev_threshold_1_2_roi=4.5726544989`
+- nested WF:
+  - `wf_nested_test_roi_weighted=3.9660920371`
+  - `wf_nested_test_bets_total=778`
+  - `wf_nested_completed=true`
+
+historical blocked-state board read before completion:
 
 - `status=partial`
 - `current_phase=await_result_arrival`
@@ -213,8 +228,9 @@ current canonical board read:
 
 meaning:
 
-- `#101` は依然として external result arrival のみで blocked している
-- `#103` も同じ readiness 条件の後段 blocker として維持する
+- `#101` は現在 blocked ではなく completed benchmark reference である
+- historical blocked-state board read は、future-only operator path と当時の transition を理解するための補助情報に留める
+- `#103` は now active Stage 1 architecture bootstrap としてこの benchmark reference の後段に置く
 - `#101` が完了しても、それは `#123` に対する Stage 0 exit であり、NAR completion そのものではない
 
 ## Stop Condition

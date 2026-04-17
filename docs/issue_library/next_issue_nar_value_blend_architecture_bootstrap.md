@@ -61,13 +61,42 @@ if NAR strict `pre_race_only` benchmark 上で JRA-style `value_blend` architect
 
 ## Stop Condition
 
-- `#101` / `#102` が未完了で provenance-defensible benchmark が無い
+- `#101` formal rerun artifact が失効し、benchmark reference を一次参照として維持できない
 - strict `pre_race_only` benchmark の row / race support が architecture compare に足りない
-- その場合はこの issue は blocked 扱いで維持する
+- narrowed scaffold から child command を起動しても component train / stack / evaluate のどこかが再現不能
+- その場合は benchmark reference を保守したまま `hold` か implementation corrective に切り分ける
 
 ## First Read
 
-`#102` は negative read で close したため、current blocker は `#101` の result-ready strict `pre_race_only` benchmark rerun のみである。
+`#102` は negative read で close しており、`#101` formal rerun `r20260415_local_nankan_pre_race_ready_formal_v1` も trust-ready historical corpus 上で完了した。したがって `#103` の current role は blocked issue ではなく、completed benchmark reference を起点にした Stage 1 architecture bootstrap である。
+
+current benchmark reference:
+
+- pointer:
+  - [evaluation_local_nankan_r20260415_local_nankan_pre_race_ready_formal_v1_pointer.json](/workspaces/nr-learn/artifacts/reports/evaluation_local_nankan_r20260415_local_nankan_pre_race_ready_formal_v1_pointer.json)
+- evaluation summary:
+  - [evaluation_summary_local_nankan_baseline_wf_full_nested.json](/workspaces/nr-learn/artifacts/reports/evaluation_summary_local_nankan_baseline_wf_full_nested.json)
+- evaluation manifest:
+  - [evaluation_manifest_local_nankan_baseline_wf_full_nested.json](/workspaces/nr-learn/artifacts/reports/evaluation_manifest_local_nankan_baseline_wf_full_nested.json)
+- train metrics:
+  - [train_metrics_local_nankan_r20260415_local_nankan_pre_race_ready_formal_v1.json](/workspaces/nr-learn/artifacts/reports/train_metrics_local_nankan_r20260415_local_nankan_pre_race_ready_formal_v1.json)
+
+current read:
+
+- train:
+  - `auc=0.8649528380`
+  - `logloss=0.2159883155`
+  - `best_iteration=158`
+- evaluate:
+  - `auc=0.8625051675`
+  - `logloss=0.2171821084`
+  - `top1_roi=0.8402165859`
+  - `ev_threshold_1_0_roi=2.8603751213`
+  - `ev_threshold_1_2_roi=4.5726544989`
+- nested WF:
+  - `wf_nested_test_roi_weighted=3.9660920371`
+  - `wf_nested_test_bets_total=778`
+  - `wf_nested_completed=true`
 
 ただし architecture 側は、JRA current standard をそのまま NAR に落とせば済むわけではない。`rich_high_coverage_diag` を local Nankan に対して feature-gap した結果、bootstrap の block は sample support だけでなく feature schema mismatch も含むと確定した。
 
@@ -126,7 +155,7 @@ confirmed read:
 
 meaning:
 
-- `#103` の block は strict `pre_race_only` benchmark readiness だけではない
+- `#103` の main question は benchmark readiness ではなく architecture parity bootstrap に移った
 - current local Nankan では、JRA `rich_high_coverage_diag` の full parity config をそのまま one-shot で持ち込むと force-include mismatch が残る
 - したがって post-readiness の first bootstrap は
   - JRA stack / gate / artifact discipline を再利用しつつ
@@ -135,10 +164,110 @@ meaning:
 
 next cut:
 
-- `#101` result-ready benchmark ができたら
-  - NAR `value_blend` bootstrap 用の narrowed feature config
-  - NAR 用 win / ROI / stack config
-  を scaffold する
+- completed `#101` benchmark reference を baseline freeze として固定する
+- NAR `value_blend` bootstrap 用 narrowed feature / win / ROI / stack config を実行面に乗せる
+- first execution では component retrain -> stack bundle -> formal evaluation / promotion gate を revision 固有 artifact で閉じる
+
+## Current Run
+
+current execution revision:
+
+- `r20260416_local_nankan_value_blend_bootstrap_pre_race_ready_formal_v1`
+
+current artifacts:
+
+- win train:
+  - [train_metrics_catboost_win_high_coverage_diag_local_nankan_value_blend_bootstrap_r20260416_local_nankan_value_blend_bootstrap_pre_race_ready_formal_v1.json](/workspaces/nr-learn/artifacts/reports/train_metrics_catboost_win_high_coverage_diag_local_nankan_value_blend_bootstrap_r20260416_local_nankan_value_blend_bootstrap_pre_race_ready_formal_v1.json)
+- roi train:
+  - [train_metrics_lightgbm_roi_high_coverage_diag_local_nankan_value_blend_bootstrap_r20260416_local_nankan_value_blend_bootstrap_pre_race_ready_formal_v1.json](/workspaces/nr-learn/artifacts/reports/train_metrics_lightgbm_roi_high_coverage_diag_local_nankan_value_blend_bootstrap_r20260416_local_nankan_value_blend_bootstrap_pre_race_ready_formal_v1.json)
+- stack train:
+  - [train_metrics_catboost_value_stack_lgbm_roi_high_coverage_tune_roi012_local_nankan_value_blend_bootstrap_r20260416_local_nankan_value_blend_bootstrap_pre_race_ready_formal_v1.json](/workspaces/nr-learn/artifacts/reports/train_metrics_catboost_value_stack_lgbm_roi_high_coverage_tune_roi012_local_nankan_value_blend_bootstrap_r20260416_local_nankan_value_blend_bootstrap_pre_race_ready_formal_v1.json)
+- evaluation summary:
+  - [evaluation_summary_catboost_value_stack_lgbm_roi_high_coverage_tune_roi012_local_nankan_value_blend_bootstrap_model_r20260416_local_nankan_value_blend_bootstrap_pre_race_ready_formal_v1_wf_full_nested.json](/workspaces/nr-learn/artifacts/reports/evaluation_summary_catboost_value_stack_lgbm_roi_high_coverage_tune_roi012_local_nankan_value_blend_bootstrap_model_r20260416_local_nankan_value_blend_bootstrap_pre_race_ready_formal_v1_wf_full_nested.json)
+- evaluation manifest:
+  - [evaluation_manifest_catboost_value_stack_lgbm_roi_high_coverage_tune_roi012_local_nankan_value_blend_bootstrap_model_r20260416_local_nankan_value_blend_bootstrap_pre_race_ready_formal_v1_wf_full_nested.json](/workspaces/nr-learn/artifacts/reports/evaluation_manifest_catboost_value_stack_lgbm_roi_high_coverage_tune_roi012_local_nankan_value_blend_bootstrap_model_r20260416_local_nankan_value_blend_bootstrap_pre_race_ready_formal_v1_wf_full_nested.json)
+- fast feasibility summary:
+  - [wf_feasibility_diag_r20260416_local_nankan_value_blend_bootstrap_pre_race_ready_formal_v1_wf_fast_nested.json](/workspaces/nr-learn/artifacts/reports/wf_feasibility_diag_r20260416_local_nankan_value_blend_bootstrap_pre_race_ready_formal_v1_wf_fast_nested.json)
+- promotion gate:
+  - [promotion_gate_r20260416_local_nankan_value_blend_bootstrap_pre_race_ready_formal_v1_fast_gate.json](/workspaces/nr-learn/artifacts/reports/promotion_gate_r20260416_local_nankan_value_blend_bootstrap_pre_race_ready_formal_v1_fast_gate.json)
+
+current read:
+
+- component train は end-to-end で completed
+- formal evaluation は `status=completed`, `stability_assessment=representative`
+- evaluate:
+  - `auc=0.7386067382`
+  - `logloss=0.3906596985`
+  - `top1_roi=0.7955827871`
+  - `ev_threshold_1_0_roi=0.1506567164`
+  - `wf_nested_test_roi_weighted=0.6579177603`
+  - `wf_nested_test_bets_total=3429`
+- fast feasibility gate read:
+  - `wf_fold_count=3`
+  - `wf_feasible_fold_count=0`
+  - `dominant_failure_reason=min_bets`
+  - `formal_benchmark_weighted_roi=null`
+- promotion gate:
+  - `status=block`
+  - `decision=hold`
+  - `blocking_reasons=[min_feasible_folds, formal_benchmark_weighted_roi_missing]`
+
+meaning:
+
+- `#103` の first execution は train / stack / formal evaluate まで完走したが、current policy/support では walk-forward feasible fold を作れなかった
+- baseline `#101` に対して `auc`, `top1_roi`, `wf_nested_test_roi_weighted` のいずれも下回り、Stage 1 candidate として promote しない
+- next cut は family promote ではなく、`min_bets` failure を直接減らす selection/support corrective へ narrowed する
+
+## Support Corrective Follow-up
+
+first hold の直後に、retrain は行わず stack artifact を再利用した policy-only support corrective を 1 hypothesis として切り出した。目的は `dominant_failure_reason=min_bets` を直接減らし、feasible fold が回復するかを見ることだけである。
+
+current corrective artifacts:
+
+- fast feasibility summary:
+  - [wf_feasibility_diag_r20260416_local_nankan_value_blend_bootstrap_support_corrective_v1_wf_fast_nested.json](/workspaces/nr-learn/artifacts/reports/wf_feasibility_diag_r20260416_local_nankan_value_blend_bootstrap_support_corrective_v1_wf_fast_nested.json)
+- bounded candidate runtime config:
+  - [model_value_stack_local_nankan_value_blend_bootstrap_r20260416_local_nankan_value_blend_bootstrap_support_corrective_candidate_v1.yaml](/workspaces/nr-learn/artifacts/runtime_configs/model_value_stack_local_nankan_value_blend_bootstrap_r20260416_local_nankan_value_blend_bootstrap_support_corrective_candidate_v1.yaml)
+- bounded candidate evaluation summary:
+  - [evaluation_summary_catboost_value_stack_lgbm_roi_high_coverage_tune_roi012_local_nankan_value_blen_022c1411e21f36ad_wf_full_nested.json](/workspaces/nr-learn/artifacts/reports/evaluation_summary_catboost_value_stack_lgbm_roi_high_coverage_tune_roi012_local_nankan_value_blen_022c1411e21f36ad_wf_full_nested.json)
+- bounded candidate evaluation manifest:
+  - [evaluation_manifest_catboost_value_stack_lgbm_roi_high_coverage_tune_roi012_local_nankan_value_blen_022c1411e21f36ad_wf_full_nested.json](/workspaces/nr-learn/artifacts/reports/evaluation_manifest_catboost_value_stack_lgbm_roi_high_coverage_tune_roi012_local_nankan_value_blen_022c1411e21f36ad_wf_full_nested.json)
+
+corrective hypothesis:
+
+- reuse trained stack artifact from `r20260416_local_nankan_value_blend_bootstrap_pre_race_ready_formal_v1`
+- lower policy gate to `min_bet_ratio=0.03`, `min_bets_abs=90`
+- crystallize the best fast-feasible candidate to
+  - `strategy_kind=portfolio`
+  - `blend_weight=0.8`
+  - `min_prob=0.03`
+  - `odds_max=25.0`
+  - `top_k=1`
+  - `min_expected_value=0.95`
+
+current corrective read:
+
+- fast feasibility:
+  - `wf_fold_count=3`
+  - `wf_feasible_fold_count=2`
+  - fold `1/3` と `3/3` で feasible candidate が回復した
+- bounded formal evaluate:
+  - `status=completed`
+  - `stability_assessment=representative`
+  - `auc=0.7235740748`
+  - `top1_roi=0.8005172090`
+  - `ev_threshold_1_0_roi=0.1727832934`
+  - `wf_nested_test_roi_weighted=0.8160725261`
+  - `wf_nested_test_bets_total=3254`
+  - `wf_nested_actual_folds=5`
+  - `no_bet folds=2` (`fold 2`, `fold 5`)
+
+meaning:
+
+- support corrective によって first hold の `wf_feasible_fold_count=0` は崩せたため、`min_bets` block が policy/support surface に強く依存していたことは確認できた
+- ただし bounded formal read でも `wf_nested_test_roi_weighted=0.8161 < 1.0` で、`#101` baseline `3.9661` と first `#103` run `0.6579` の間にとどまる
+- `top1_roi` も first `#103` run の `0.7956` から微増に留まり、2/5 fold が `no_bet` のままなので Stage 1 candidate としてはなお promote しない
+- next cut は support-only corrective の継続ではなく、fold 2/5 の no-bet を減らしつつ ROI を上げる新しい measurable hypothesis に切り替えるべきである
 
 ## First Cut
 
@@ -177,8 +306,8 @@ included bootstrap subset:
 
 remaining blocker:
 
-- まだ strict `pre_race_only` result-ready benchmark が無いので、train / evaluate 実行はしていない
-- `#101` が ready になったら、この scaffold を起点に component retrain と stack bundle に入る
+- strict `pre_race_only` benchmark reference 自体は `#101` formal rerun で確立済みだが、`#103` child execution 自体はまだ走らせていない
+- remaining work は blocked-state 監視ではなく、この scaffold を起点に component retrain と stack bundle を実行し、formal read まで閉じることだけである
 
 validation:
 
@@ -194,13 +323,40 @@ validation:
 meaning:
 
 - `#103` の first cut scaffold は local Nankan schema に整合している
-- post-readiness rerun の blocker は config mismatch ではなく、strict `pre_race_only` result-ready benchmark 未到着だけになった
+- benchmark reference は存在するため、remaining uncertainty は config mismatch ではなく first formal execution の support / ROI / concentration read に narrowed された
 
 ## Ready-Run Plan
 
-`#101` が result-ready になった後の再開導線は、ad hoc に train / stack / gate を個別起動するのではなく、`run_local_nankan_result_ready_bootstrap_handoff.py` を entrypoint に固定する。
+current `#103` の実行は、`#101` formal rerun artifact を benchmark reference として固定した上で進める。future-only operator path の board / wrapper は引き続き `#122` 側の live readiness surface として有効だが、historical trust-ready corpus 上の `#103` current blocker ではない。
 
-blocked 中の canonical read は次である。
+current first read:
+
+- benchmark reference:
+  - [evaluation_local_nankan_r20260415_local_nankan_pre_race_ready_formal_v1_pointer.json](/workspaces/nr-learn/artifacts/reports/evaluation_local_nankan_r20260415_local_nankan_pre_race_ready_formal_v1_pointer.json)
+  - [evaluation_summary_local_nankan_baseline_wf_full_nested.json](/workspaces/nr-learn/artifacts/reports/evaluation_summary_local_nankan_baseline_wf_full_nested.json)
+  - [evaluation_manifest_local_nankan_baseline_wf_full_nested.json](/workspaces/nr-learn/artifacts/reports/evaluation_manifest_local_nankan_baseline_wf_full_nested.json)
+- scaffold inputs:
+  - [data_local_nankan_pre_race_ready.yaml](/workspaces/nr-learn/configs/data_local_nankan_pre_race_ready.yaml)
+  - [features_catboost_rich_high_coverage_diag_local_nankan_value_blend_bootstrap.yaml](/workspaces/nr-learn/configs/features_catboost_rich_high_coverage_diag_local_nankan_value_blend_bootstrap.yaml)
+  - [model_catboost_win_high_coverage_diag_local_nankan_value_blend_bootstrap.yaml](/workspaces/nr-learn/configs/model_catboost_win_high_coverage_diag_local_nankan_value_blend_bootstrap.yaml)
+  - [model_lightgbm_roi_high_coverage_diag_local_nankan_value_blend_bootstrap.yaml](/workspaces/nr-learn/configs/model_lightgbm_roi_high_coverage_diag_local_nankan_value_blend_bootstrap.yaml)
+  - [model_catboost_value_stack_lgbm_roi_high_coverage_tune_roi012_local_nankan_value_blend_bootstrap.yaml](/workspaces/nr-learn/configs/model_catboost_value_stack_lgbm_roi_high_coverage_tune_roi012_local_nankan_value_blend_bootstrap.yaml)
+
+current execution options:
+
+1. generic profile path
+   - `run_train.py --profile local_nankan_value_blend_bootstrap_pre_race_ready`
+   - component / stack / evaluate を revision 固有 suffix で実行する
+2. wrapper-derived runtime-config path
+   - [local_nankan_result_ready_bootstrap_handoff_manifest.json](/workspaces/nr-learn/artifacts/reports/local_nankan_result_ready_bootstrap_handoff_manifest.json) の `runtime_configs` と `bootstrap_command_plan` を bootstrap scaffold の canonical command plan として再利用する
+
+rule:
+
+- current benchmark judgment は board の `await_result_arrival` ではなく `#101` pointer / summary / manifest を一次参照にする
+- wrapper / status board が `not_ready` のままでも、それは `#122` future-only operator path の read であり、historical trust-ready corpus の `#103` blocker ではない
+- child run は revision 固有 artifact を出し、baseline compare は必ず `#101` formal rerun reference に対して行う
+
+future-only operator surfaces を見る必要があるときの canonical read は次である。
 
 - board:
   - [local_nankan_data_status_board.json](/workspaces/nr-learn/artifacts/reports/local_nankan_data_status_board.json)
@@ -217,8 +373,8 @@ blocked 中の canonical read は次である。
 
 rule:
 
-- blocked 中は、まず board を見る
-- board が `status=partial`, `current_phase=await_result_arrival` なら current blocker は external result arrival のままと読む
+- `#122` operator path を確認するときだけ、まず board を見る
+- board が `status=partial`, `current_phase=future_only_readiness_track` でも、これは live capture/readiness の current read であり `#103` の historical benchmark blocker と混同しない
 - refresh 完了直後の readiness-only 再確認は `readiness_surfaces.followup_entrypoint` の preview から follow-up oneshot に降りる
 - 詳細が必要なときだけ個別 manifest に降りる
 
@@ -250,17 +406,12 @@ PYTHONPATH=/workspaces/nr-learn/src /workspaces/nr-learn/.venv/bin/python \
 
 expected phase contract:
 
-1. `status=not_ready`
-   - external result arrival 待ちなので keep blocked
-   - read:
-     - [local_nankan_result_ready_bootstrap_handoff_manifest.json](/workspaces/nr-learn/artifacts/reports/local_nankan_result_ready_bootstrap_handoff_manifest.json)
-     - [local_nankan_pre_race_ready_summary.json](/workspaces/nr-learn/artifacts/reports/local_nankan_pre_race_ready_summary.json)
-2. `status=benchmark_ready`
-   - strict `pre_race_only` benchmark freeze は通ったが child execution は未実行
-   - `bootstrap_command_plan` と `runtime_configs` を確認して rerun policy を最終確認する
-3. `status=completed`
-   - win / ROI / stack / revision gate まで完走
-   - revision artifact を formal read に進める
+1. benchmark reference fixed
+  - `#101` pointer / summary / manifest が current baseline freeze として読める
+2. scaffold ready
+  - `runtime_configs` または profile-based command が child execution 可能である
+3. bootstrap completed
+  - win / ROI / stack / revision gate / local evaluate まで完走し、revision artifact を formal read に進める
 
 primary artifacts to read:
 
@@ -272,18 +423,18 @@ primary artifacts to read:
 go / no-go read:
 
 - go:
-  - handoff manifest `status=completed`
-  - wrapper manifest `status=completed` or at least `benchmark_ready`
-  - result-ready race support が 0 ではない
+  - `#101` benchmark reference が `completed` で読める
+  - scaffold config / runtime config が current workspace で再現できる
+  - `#103` child command が revision 固有 artifact を出せる
 - no-go:
-  - wrapper manifest `status=not_ready`
-  - benchmark handoff failed
-  - runtime config materialization は通るが child command が non-zero exit
+  - `#101` benchmark reference が壊れている
+  - child command が non-zero exit で止まる
+  - support / concentration read が Stage 1 compare に使えない
 
 meaning:
 
-- `#103` は now blocked issue だが、resume path 自体は fixed されている
-- unblock 後は `#101` handoff 完了確認と同時に、同じ entrypoint から architecture bootstrap を再現できる
+- `#103` は now active issue であり、resume path ではなく first architecture bootstrap execution を閉じる段階にある
+- future-only wrapper 自体は `#122` 側の operator surface として維持しつつ、historical benchmark compare は `#101` artifact reference に固定する
 - `#103` 完了は `#123` に対する Stage 1 exit であり、Stage 2/3 parity と operator trust が残る限り NAR completion ではない
 
 ## Formal Read Contract
@@ -362,54 +513,54 @@ Decision:
 
 meaning:
 
-- unblock 後の `#103` は execution だけでなく judgment surface も fixed された
-- result-ready 到着後は、wrapper 完走 -> formal artifact read -> issue decision summary まで同じ手順で閉じられる
+- current `#103` は execution と judgment surface の両方が fixed 済みである
+- 次に必要なのは external result arrival ではなく、bootstrap revision 実行 -> formal artifact read -> issue decision summary である
 
 ## Issue Thread Templates
 
 `#103` の issue thread には、phase ごとに次の template をそのまま使う。
 
-### 1. Still Blocked
+### 1. Benchmark Reference Fixed, Execution Pending
 
 ```text
 Current read:
-- wrapper status: not_ready
-- blocker: external result arrival for `#101`
-- recommended action: keep blocked
+- #101 benchmark reference: completed
+- #103 scaffold status: ready
+- recommended action: run first architecture bootstrap revision
 
 Artifacts:
-- local_nankan_pre_race_ready_summary.json
-- local_nankan_pre_race_benchmark_handoff_manifest.json
+- evaluation_local_nankan_r20260415_local_nankan_pre_race_ready_formal_v1_pointer.json
+- evaluation_summary_local_nankan_baseline_wf_full_nested.json
+- evaluation_manifest_local_nankan_baseline_wf_full_nested.json
 - local_nankan_result_ready_bootstrap_handoff_manifest.json
 
 Read:
-- result-ready race support is still zero
-- `#103` execution surface remains fixed and does not need further command reconstruction
+- Stage 0 benchmark reference is fixed on historical trust-ready corpus
+- next work is component retrain / stack / formal read, not readiness waiting
 ```
 
-### 2. Benchmark Ready, Bootstrap Pending
+### 2. Bootstrap Running / First Read
 
 ```text
 Current read:
-- wrapper status: benchmark_ready
-- benchmark handoff status: completed
-- current phase: bootstrap_pending
+- #101 benchmark reference: completed
+- #103 revision: <revision>
+- current phase: <train_win|train_roi|build_stack|evaluate|gate>
 
 Artifacts:
-- local_nankan_pre_race_ready_summary.json
-- local_nankan_pre_race_benchmark_handoff_manifest.json
-- benchmark_gate_local_nankan_pre_race_ready.json
-- local_nankan_result_ready_bootstrap_handoff_manifest.json
+- benchmark reference pointer / summary / manifest
+- runtime config set or profile name
+- child log files
 
-Runtime configs:
-- win: <runtime win config path>
-- roi: <runtime roi config path>
-- stack: <runtime stack config path>
+Execution:
+- win: <config or runtime path>
+- roi: <config or runtime path>
+- stack: <config or runtime path>
 
 Read:
-- strict `pre_race_only` benchmark freeze is complete
-- bootstrap command plan is ready
-- next action is to run child commands or confirm auto-run completion
+- benchmark reference is fixed
+- first architecture bootstrap is in progress
+- next action is to finish child commands and read formal artifacts
 ```
 
 ### 3. Completed First Read

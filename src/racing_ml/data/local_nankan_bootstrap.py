@@ -104,10 +104,17 @@ def build_value_blend_bootstrap_command_plan(
     roi_config: str,
     stack_config: str,
     revision: str,
+    evaluation_pointer_output: str | None = None,
+    universe: str = "local_nankan",
+    source_scope: str = "local_only",
+    baseline_reference: str = "local_nankan_pre_race_ready",
 ) -> list[dict[str, Any]]:
     run_train = str(workspace_root / "scripts" / "run_train.py")
     run_build_stack = str(workspace_root / "scripts" / "run_build_value_stack.py")
     run_revision_gate = str(workspace_root / "scripts" / "run_revision_gate.py")
+    run_local_evaluate = str(workspace_root / "scripts" / "run_local_evaluate.py")
+
+    pointer_output = evaluation_pointer_output or f"artifacts/reports/evaluation_{revision}_pointer.json"
 
     return [
         {
@@ -163,6 +170,27 @@ def build_value_blend_bootstrap_command_plan(
                 "--revision",
                 revision,
                 "--skip-train",
+            ],
+        },
+        {
+            "label": "write_local_evaluation_pointer",
+            "command": [
+                python_executable,
+                run_local_evaluate,
+                "--config",
+                stack_config,
+                "--data-config",
+                data_config,
+                "--feature-config",
+                feature_config,
+                "--output",
+                pointer_output,
+                "--universe",
+                universe,
+                "--source-scope",
+                source_scope,
+                "--baseline-reference",
+                baseline_reference,
             ],
         },
     ]

@@ -6,6 +6,8 @@ from typing import Any, Iterable
 import numpy as np
 import pandas as pd
 
+from racing_ml.common.regime import resolve_regime_override
+
 
 @dataclass(frozen=True)
 class PolicyConstraints:
@@ -16,13 +18,35 @@ class PolicyConstraints:
     selection_mode: str = "gate_then_roi"
 
     @classmethod
-    def from_config(cls, evaluation_cfg: dict[str, Any] | None = None) -> "PolicyConstraints":
+    def from_config(
+        cls,
+        evaluation_cfg: dict[str, Any] | None = None,
+        *,
+        frame: pd.DataFrame | None = None,
+        date_col: str = "date",
+    ) -> "PolicyConstraints":
         evaluation_cfg = evaluation_cfg or {}
         policy_cfg = evaluation_cfg.get("policy", {})
         legacy_cfg = evaluation_cfg.get("strategy_constraints", {})
 
-        merged = dict(legacy_cfg)
-        merged.update(policy_cfg)
+        merged = {key: value for key, value in dict(legacy_cfg).items() if key != "regime_overrides"}
+        merged.update({key: value for key, value in dict(policy_cfg).items() if key != "regime_overrides"})
+
+        overrides: list[dict[str, Any]] = []
+        legacy_overrides = legacy_cfg.get("regime_overrides")
+        if isinstance(legacy_overrides, list):
+            overrides.extend(item for item in legacy_overrides if isinstance(item, dict))
+        policy_overrides = policy_cfg.get("regime_overrides")
+        if isinstance(policy_overrides, list):
+            overrides.extend(item for item in policy_overrides if isinstance(item, dict))
+
+        if frame is not None and overrides:
+            resolved_override = resolve_regime_override(overrides, frame=frame, date_col=date_col)
+            if isinstance(resolved_override, dict):
+                for key, value in resolved_override.items():
+                    if key in {"when", "name"}:
+                        continue
+                    merged[key] = value
 
         return cls(
             min_bet_ratio=float(merged.get("min_bet_ratio", 0.05)),

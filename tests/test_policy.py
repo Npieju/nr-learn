@@ -6,6 +6,7 @@ import unittest
 import pandas as pd
 
 from racing_ml.evaluation.policy import (
+    PolicyConstraints,
     StrategyCandidate,
     _is_winning_rank,
     _pick_flat_candidate,
@@ -73,6 +74,66 @@ class PolicyRankSafetyTest(unittest.TestCase):
         self.assertEqual(int(top1.name), 11)
         self.assertEqual(int(ev.name), 12)
         self.assertEqual(int(edge.name), 11)
+
+    def test_policy_constraints_apply_regime_override(self) -> None:
+        frame = pd.DataFrame(
+            {
+                "date": ["2025-09-28", "2025-10-01"],
+                "race_id": [1, 2],
+            }
+        )
+
+        constraints = PolicyConstraints.from_config(
+            {
+                "policy": {
+                    "min_bet_ratio": 0.03,
+                    "min_bets_abs": 90,
+                    "selection_mode": "gate_then_roi",
+                    "regime_overrides": [
+                        {
+                            "name": "october_relaxed_support",
+                            "when": {"valid_end_month_in": [10]},
+                            "min_bets_abs": 45,
+                            "min_bet_ratio": 0.015,
+                            "selection_mode": "roi_penalized",
+                        }
+                    ],
+                }
+            },
+            frame=frame,
+        )
+
+        self.assertEqual(constraints.min_bets_abs, 45)
+        self.assertAlmostEqual(constraints.min_bet_ratio, 0.015)
+        self.assertEqual(constraints.selection_mode, "roi_penalized")
+
+    def test_policy_constraints_keep_base_when_override_does_not_match(self) -> None:
+        frame = pd.DataFrame(
+            {
+                "date": ["2025-07-01", "2025-07-15"],
+                "race_id": [1, 2],
+            }
+        )
+
+        constraints = PolicyConstraints.from_config(
+            {
+                "policy": {
+                    "min_bet_ratio": 0.03,
+                    "min_bets_abs": 90,
+                    "regime_overrides": [
+                        {
+                            "name": "october_relaxed_support",
+                            "when": {"valid_end_month_in": [10]},
+                            "min_bets_abs": 45,
+                        }
+                    ],
+                }
+            },
+            frame=frame,
+        )
+
+        self.assertEqual(constraints.min_bets_abs, 90)
+        self.assertAlmostEqual(constraints.min_bet_ratio, 0.03)
 
 
 if __name__ == "__main__":

@@ -57,12 +57,12 @@ if South-Kanto-only scope と ROI reliability unresolved state を docs / queue 
 ## Current Read
 
 - current NAR corpus は `local Nankan` only
-- current readiness blocker は `#101` result-ready strict `pre_race_only` benchmark rebuild
-- current architecture blocker は `#103` value-blend bootstrap
+- current benchmark reference は `#101` formal rerun `r20260415_local_nankan_pre_race_ready_formal_v1`
+- current next measurable hypothesis は `#103` value-blend architecture bootstrap
 - current interpretation blocker は South-Kanto-only scope と ROI reliability unresolved state である
 
 ## Decision Rule
 
-- `#101` が未完了の間は benchmark parity を優先する
+- `#101` benchmark reference は current baseline freeze として保守し、その上で Stage 1 architecture parity を読む
 - `#103` は architecture parity issue として保持するが、local Nankan line を full-NAR representative と主張しない
 - universe coverage と ROI reliability が解消されるまで、current local Nankan result は readiness / audit track として扱う

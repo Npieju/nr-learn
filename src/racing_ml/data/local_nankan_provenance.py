@@ -9,6 +9,27 @@ RELATION_PRE_RACE = "pre_race"
 RELATION_POST_RACE = "post_race"
 RELATION_UNKNOWN = "unknown"
 MARKET_TIMING_BUCKET_COLUMN = "market_timing_bucket"
+SNAPSHOT_TIMING_BUCKET_COLUMN = "snapshot_timing_bucket"
+
+CARD_VALIDITY_COLUMNS = (
+    "post_time",
+    "scheduled_post_at",
+    "horse_name",
+    "frame_no",
+    "gate_no",
+    "sex",
+    "age",
+    "carried_weight",
+    "weight",
+    "weight_change",
+    "jockey_id",
+    "trainer_id",
+)
+
+ODDS_VALIDITY_COLUMNS = (
+    "odds",
+    "popularity",
+)
 
 
 def normalize_snapshot_relation(value: object) -> str:
@@ -20,7 +41,7 @@ def normalize_snapshot_relation(value: object) -> str:
     return RELATION_UNKNOWN
 
 
-def classify_market_timing_bucket(
+def classify_snapshot_timing_bucket(
     *,
     card_snapshot_relation: object,
     odds_snapshot_relation: object,
@@ -34,7 +55,34 @@ def classify_market_timing_bucket(
     return RELATION_UNKNOWN
 
 
-def annotate_market_timing_bucket(frame: pd.DataFrame) -> pd.DataFrame:
+def _normalize_presence_series(frame: pd.DataFrame, column: str) -> pd.Series:
+    if column not in frame.columns:
+        return pd.Series([False] * len(frame), index=frame.index, dtype="bool")
+    series = frame[column]
+    if pd.api.types.is_numeric_dtype(series):
+        return series.notna()
+    normalized = series.fillna("").astype(str).str.strip().str.lower()
+    return normalized.ne("") & ~normalized.isin({"nan", "none", "null"})
+
+
+def _presence_mask(frame: pd.DataFrame, columns: tuple[str, ...]) -> pd.Series:
+    mask = pd.Series([False] * len(frame), index=frame.index, dtype="bool")
+    for column in columns:
+        mask = mask | _normalize_presence_series(frame, column)
+    return mask
+
+
+def classify_market_timing_bucket(
+    *,
+    card_features_available: bool,
+    odds_features_available: bool,
+) -> str:
+    if card_features_available and odds_features_available:
+        return RELATION_PRE_RACE
+    return RELATION_UNKNOWN
+
+
+def annotate_snapshot_timing_bucket(frame: pd.DataFrame) -> pd.DataFrame:
     output = frame.copy()
     card_relations = output.get("card_snapshot_relation")
     odds_relations = output.get("odds_snapshot_relation")
@@ -42,12 +90,32 @@ def annotate_market_timing_bucket(frame: pd.DataFrame) -> pd.DataFrame:
         card_relations = pd.Series([RELATION_UNKNOWN] * len(output), index=output.index)
     if odds_relations is None:
         odds_relations = pd.Series([RELATION_UNKNOWN] * len(output), index=output.index)
-    output[MARKET_TIMING_BUCKET_COLUMN] = [
-        classify_market_timing_bucket(
+    output[SNAPSHOT_TIMING_BUCKET_COLUMN] = [
+        classify_snapshot_timing_bucket(
             card_snapshot_relation=card_relation,
             odds_snapshot_relation=odds_relation,
         )
         for card_relation, odds_relation in zip(card_relations.tolist(), odds_relations.tolist())
+    ]
+    return output
+
+
+def annotate_market_timing_bucket(frame: pd.DataFrame) -> pd.DataFrame:
+    output = annotate_snapshot_timing_bucket(frame)
+    card_features_available = _presence_mask(
+        output,
+        CARD_VALIDITY_COLUMNS + ("card_snapshot_at", "card_source_url", "card_fetch_mode"),
+    )
+    odds_features_available = _presence_mask(
+        output,
+        ODDS_VALIDITY_COLUMNS + ("odds_snapshot_at", "odds_source_url", "odds_fetch_mode"),
+    )
+    output[MARKET_TIMING_BUCKET_COLUMN] = [
+        classify_market_timing_bucket(
+            card_features_available=bool(card_available),
+            odds_features_available=bool(odds_available),
+        )
+        for card_available, odds_available in zip(card_features_available.tolist(), odds_features_available.tolist())
     ]
     return output
 
@@ -72,6 +140,7 @@ def filter_result_ready_pre_race_only(
 def build_provenance_summary(frame: pd.DataFrame) -> dict[str, Any]:
     annotated = annotate_market_timing_bucket(frame)
     bucket_counts = annotated[MARKET_TIMING_BUCKET_COLUMN].fillna(RELATION_UNKNOWN).value_counts().to_dict()
+    snapshot_bucket_counts = annotated[SNAPSHOT_TIMING_BUCKET_COLUMN].fillna(RELATION_UNKNOWN).value_counts().to_dict()
     card_counts = (
         annotated.get("card_snapshot_relation", pd.Series([], dtype="object"))
         .map(normalize_snapshot_relation)
@@ -94,6 +163,11 @@ def build_provenance_summary(frame: pd.DataFrame) -> dict[str, Any]:
             RELATION_UNKNOWN: int(bucket_counts.get(RELATION_UNKNOWN, 0)),
             RELATION_POST_RACE: int(bucket_counts.get(RELATION_POST_RACE, 0)),
         },
+        "snapshot_timing_bucket_counts": {
+            RELATION_PRE_RACE: int(snapshot_bucket_counts.get(RELATION_PRE_RACE, 0)),
+            RELATION_UNKNOWN: int(snapshot_bucket_counts.get(RELATION_UNKNOWN, 0)),
+            RELATION_POST_RACE: int(snapshot_bucket_counts.get(RELATION_POST_RACE, 0)),
+        },
         "card_snapshot_relation_counts": {
             RELATION_PRE_RACE: int(card_counts.get(RELATION_PRE_RACE, 0)),
             RELATION_UNKNOWN: int(card_counts.get(RELATION_UNKNOWN, 0)),
@@ -107,8 +181,51 @@ def build_provenance_summary(frame: pd.DataFrame) -> dict[str, Any]:
         "pre_race_only_rows": int(bucket_counts.get(RELATION_PRE_RACE, 0)),
         "post_race_rows": int(bucket_counts.get(RELATION_POST_RACE, 0)),
         "unknown_rows": int(bucket_counts.get(RELATION_UNKNOWN, 0)),
+        "classification_basis": "pre_race_feature_availability",
     }
     return summary
+
+
+def build_snapshot_timing_summary(frame: pd.DataFrame) -> dict[str, Any]:
+    annotated = annotate_snapshot_timing_bucket(frame)
+    bucket_counts = annotated[SNAPSHOT_TIMING_BUCKET_COLUMN].fillna(RELATION_UNKNOWN).value_counts().to_dict()
+    card_counts = (
+        annotated.get("card_snapshot_relation", pd.Series([], dtype="object"))
+        .map(normalize_snapshot_relation)
+        .fillna(RELATION_UNKNOWN)
+        .value_counts()
+        .to_dict()
+    )
+    odds_counts = (
+        annotated.get("odds_snapshot_relation", pd.Series([], dtype="object"))
+        .map(normalize_snapshot_relation)
+        .fillna(RELATION_UNKNOWN)
+        .value_counts()
+        .to_dict()
+    )
+    return {
+        "row_count": int(len(annotated)),
+        "race_count": int(annotated["race_id"].nunique()) if "race_id" in annotated.columns else None,
+        "bucket_counts": {
+            RELATION_PRE_RACE: int(bucket_counts.get(RELATION_PRE_RACE, 0)),
+            RELATION_UNKNOWN: int(bucket_counts.get(RELATION_UNKNOWN, 0)),
+            RELATION_POST_RACE: int(bucket_counts.get(RELATION_POST_RACE, 0)),
+        },
+        "card_snapshot_relation_counts": {
+            RELATION_PRE_RACE: int(card_counts.get(RELATION_PRE_RACE, 0)),
+            RELATION_UNKNOWN: int(card_counts.get(RELATION_UNKNOWN, 0)),
+            RELATION_POST_RACE: int(card_counts.get(RELATION_POST_RACE, 0)),
+        },
+        "odds_snapshot_relation_counts": {
+            RELATION_PRE_RACE: int(odds_counts.get(RELATION_PRE_RACE, 0)),
+            RELATION_UNKNOWN: int(odds_counts.get(RELATION_UNKNOWN, 0)),
+            RELATION_POST_RACE: int(odds_counts.get(RELATION_POST_RACE, 0)),
+        },
+        "pre_race_only_rows": int(bucket_counts.get(RELATION_PRE_RACE, 0)),
+        "post_race_rows": int(bucket_counts.get(RELATION_POST_RACE, 0)),
+        "unknown_rows": int(bucket_counts.get(RELATION_UNKNOWN, 0)),
+        "classification_basis": "snapshot_time_vs_scheduled_post_time",
+    }
 
 
 def build_pre_race_only_materialization_summary(
@@ -326,7 +443,7 @@ def _build_source_timing_breakdown(
     working = frame.copy()
     working[group_column] = _normalize_string_series(working, group_column)
     working["race_id"] = _normalize_string_series(working, "race_id", default="")
-    working["market_timing_bucket"] = _normalize_string_series(working, MARKET_TIMING_BUCKET_COLUMN)
+    working[SNAPSHOT_TIMING_BUCKET_COLUMN] = _normalize_string_series(working, SNAPSHOT_TIMING_BUCKET_COLUMN)
     working["is_result_ready"] = working["race_id"].isin(result_ready_race_ids)
 
     records: list[dict[str, Any]] = []
@@ -334,8 +451,8 @@ def _build_source_timing_breakdown(
         row_count = int(len(group_frame))
         race_count = int(group_frame["race_id"].loc[group_frame["race_id"] != ""].nunique())
         result_ready_frame = group_frame.loc[group_frame["is_result_ready"]]
-        bucket_counts = group_frame["market_timing_bucket"].value_counts().to_dict()
-        result_ready_bucket_counts = result_ready_frame["market_timing_bucket"].value_counts().to_dict()
+        bucket_counts = group_frame[SNAPSHOT_TIMING_BUCKET_COLUMN].value_counts().to_dict()
+        result_ready_bucket_counts = result_ready_frame[SNAPSHOT_TIMING_BUCKET_COLUMN].value_counts().to_dict()
         records.append(
             {
                 group_column: str(group_value),
@@ -375,8 +492,8 @@ def build_source_timing_audit_summary(
     working["is_result_ready"] = working["race_id"].isin(result_ready_race_ids)
 
     result_ready_frame = working.loc[working["is_result_ready"]].copy()
-    overall_summary = build_provenance_summary(working)
-    result_ready_summary = build_provenance_summary(result_ready_frame)
+    overall_summary = build_snapshot_timing_summary(working)
+    result_ready_summary = build_snapshot_timing_summary(result_ready_frame)
 
     by_date = _build_source_timing_breakdown(working, group_column="date", result_ready_race_ids=result_ready_race_ids)
     by_year = _build_source_timing_breakdown(working, group_column="year", result_ready_race_ids=result_ready_race_ids)
@@ -384,8 +501,8 @@ def build_source_timing_audit_summary(
     fetch_mode_records: list[dict[str, Any]] = []
     for fetch_mode_pair, pair_frame in working.groupby("fetch_mode_pair", dropna=False):
         result_ready_pair = pair_frame.loc[pair_frame["is_result_ready"]]
-        bucket_counts = pair_frame[MARKET_TIMING_BUCKET_COLUMN].value_counts().to_dict()
-        result_ready_bucket_counts = result_ready_pair[MARKET_TIMING_BUCKET_COLUMN].value_counts().to_dict()
+        bucket_counts = pair_frame[SNAPSHOT_TIMING_BUCKET_COLUMN].value_counts().to_dict()
+        result_ready_bucket_counts = result_ready_pair[SNAPSHOT_TIMING_BUCKET_COLUMN].value_counts().to_dict()
         card_mode, odds_mode = str(fetch_mode_pair).split("|", 1)
         fetch_mode_records.append(
             {
@@ -405,18 +522,18 @@ def build_source_timing_audit_summary(
         )
 
     fetch_mode_summary = sorted(fetch_mode_records, key=lambda record: (record["card_fetch_mode"], record["odds_fetch_mode"]))
-    pre_race_dates = sorted({str(value) for value in working.loc[working[MARKET_TIMING_BUCKET_COLUMN] == RELATION_PRE_RACE, "date"].tolist() if str(value)})
+    pre_race_dates = sorted({str(value) for value in working.loc[working[SNAPSHOT_TIMING_BUCKET_COLUMN] == RELATION_PRE_RACE, "date"].tolist() if str(value)})
     result_ready_pre_race_dates = sorted(
         {
             str(value)
-            for value in result_ready_frame.loc[result_ready_frame[MARKET_TIMING_BUCKET_COLUMN] == RELATION_PRE_RACE, "date"].tolist()
+            for value in result_ready_frame.loc[result_ready_frame[SNAPSHOT_TIMING_BUCKET_COLUMN] == RELATION_PRE_RACE, "date"].tolist()
             if str(value)
         }
     )
     result_ready_unknown_dates = sorted(
         {
             str(value)
-            for value in result_ready_frame.loc[result_ready_frame[MARKET_TIMING_BUCKET_COLUMN] == RELATION_UNKNOWN, "date"].tolist()
+            for value in result_ready_frame.loc[result_ready_frame[SNAPSHOT_TIMING_BUCKET_COLUMN] == RELATION_UNKNOWN, "date"].tolist()
             if str(value)
         }
     )

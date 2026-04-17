@@ -231,6 +231,8 @@ def _build_readiness_surfaces(
             "status": bootstrap_handoff_manifest.get("status"),
             "current_phase": bootstrap_handoff_manifest.get("current_phase"),
             "recommended_action": bootstrap_handoff_manifest.get("recommended_action"),
+            "evaluation_pointer_output": _display_path_value(bootstrap_handoff_manifest.get("evaluation_pointer_output")),
+            "evaluation_pointer_payload": _normalize_display_paths(bootstrap_handoff_manifest.get("evaluation_pointer_payload")),
         },
         "readiness_watcher": {
             "status": watcher_payload.get("status"),
@@ -349,10 +351,11 @@ def _derive_board_state(
         )
 
     if bootstrap_handoff_status == "completed":
+        bootstrap_pointer = _dict_payload(bootstrap_handoff.get("evaluation_pointer_payload"))
         return (
             "completed",
-            str(bootstrap_handoff.get("current_phase") or "bootstrap_completed"),
-            str(bootstrap_handoff.get("recommended_action") or "review_bootstrap_revision_outputs"),
+            str(bootstrap_pointer.get("current_phase") or bootstrap_handoff.get("current_phase") or "bootstrap_completed"),
+            str(bootstrap_pointer.get("recommended_action") or bootstrap_handoff.get("recommended_action") or "review_bootstrap_revision_outputs"),
         )
 
     return _derive_status(coverage=coverage, backfill=backfill)
@@ -586,6 +589,7 @@ def main() -> int:
             f"probe_status={readiness_surfaces['readiness_probe'].get('status')}",
             f"handoff_status={readiness_surfaces['pre_race_handoff'].get('status')}",
             f"bootstrap_status={readiness_surfaces['bootstrap_handoff'].get('status')}",
+            f"bootstrap_eval_pointer_status={_dict_payload(readiness_surfaces['bootstrap_handoff'].get('evaluation_pointer_payload')).get('status')}",
             f"watcher_status={readiness_surfaces['readiness_watcher'].get('status')}",
             f"capture_baseline_chain={capture_baseline_chain}",
             f"capture_upcoming_only={latest_race_id_source_report.get('upcoming_only')}",

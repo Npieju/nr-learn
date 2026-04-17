@@ -89,6 +89,16 @@ def _normalize_display_paths(value: Any) -> Any:
     return _display_path_value(value)
 
 
+def _extract_command_option(command: list[Any], option_name: str) -> str | None:
+    for index, item in enumerate(command):
+        if str(item) != option_name:
+            continue
+        next_index = index + 1
+        if next_index < len(command):
+            return str(command[next_index])
+    return None
+
+
 def _run_command(*, label: str, command: list[str], log_path: Path | None = None) -> dict[str, Any]:
     started_at = utc_now_iso()
     print(f"[nar-bootstrap-handoff] running {label}: {shlex.join(command)}", flush=True)
@@ -144,6 +154,10 @@ def main() -> int:
     parser.add_argument("--bootstrap-roi-config", default="configs/model_lightgbm_roi_high_coverage_diag_local_nankan_value_blend_bootstrap.yaml")
     parser.add_argument("--bootstrap-stack-config", default="configs/model_catboost_value_stack_lgbm_roi_high_coverage_tune_roi012_local_nankan_value_blend_bootstrap.yaml")
     parser.add_argument("--bootstrap-revision", default="r20260404_local_nankan_value_blend_bootstrap_pre_race_ready_v1")
+    parser.add_argument("--evaluation-pointer-output", default=None)
+    parser.add_argument("--universe", default="local_nankan")
+    parser.add_argument("--source-scope", default="local_only")
+    parser.add_argument("--baseline-reference", default="local_nankan_pre_race_ready")
     parser.add_argument("--log-dir", default="artifacts/logs")
     parser.add_argument("--log-prefix", default="local_nankan_result_ready_bootstrap_handoff")
     args = parser.parse_args()
@@ -231,6 +245,10 @@ def main() -> int:
             roi_config=runtime_configs["roi_config"],
             stack_config=runtime_configs["stack_config"],
             revision=args.bootstrap_revision,
+            evaluation_pointer_output=args.evaluation_pointer_output,
+            universe=args.universe,
+            source_scope=args.source_scope,
+            baseline_reference=args.baseline_reference,
         )
         command_plan = _normalize_display_paths([
             {
@@ -246,6 +264,13 @@ def main() -> int:
             }
             for step in base_command_plan
         ])
+        evaluation_pointer_output = None
+        for step in command_plan:
+            if str(step.get("label") or "") != "write_local_evaluation_pointer":
+                continue
+            command = list(step.get("command") or [])
+            evaluation_pointer_output = _extract_command_option(command, "--output")
+            break
 
         if handoff_exit == 2 or str(handoff_manifest.get("status")) == "not_ready":
             manifest = _normalize_display_paths({
@@ -264,6 +289,7 @@ def main() -> int:
                 "handoff_manifest": handoff_manifest,
                 "runtime_configs": runtime_configs,
                 "log_dir": _display_path(log_dir),
+                "evaluation_pointer_output": evaluation_pointer_output,
                 "bootstrap_command_plan": command_plan,
             })
             write_json(wrapper_manifest_path, manifest)
@@ -287,6 +313,7 @@ def main() -> int:
                 "handoff_manifest": handoff_manifest,
                 "runtime_configs": runtime_configs,
                 "log_dir": _display_path(log_dir),
+                "evaluation_pointer_output": evaluation_pointer_output,
                 "bootstrap_command_plan": command_plan,
             })
             write_json(wrapper_manifest_path, manifest)
@@ -311,6 +338,7 @@ def main() -> int:
                 "handoff_manifest": handoff_manifest,
                 "runtime_configs": runtime_configs,
                 "log_dir": _display_path(log_dir),
+                "evaluation_pointer_output": evaluation_pointer_output,
                 "bootstrap_command_plan": command_plan,
             })
             write_json(wrapper_manifest_path, manifest)
@@ -343,15 +371,18 @@ def main() -> int:
                     "handoff_manifest": handoff_manifest,
                     "runtime_configs": runtime_configs,
                     "log_dir": _display_path(log_dir),
+                    "evaluation_pointer_output": evaluation_pointer_output,
+                    "evaluation_pointer_payload": _read_json_dict(_resolve_path(evaluation_pointer_output)) if evaluation_pointer_output else {},
                     "bootstrap_runs": bootstrap_runs,
                 })
                 write_json(wrapper_manifest_path, manifest)
                 return 1
 
+        evaluation_pointer_payload = _read_json_dict(_resolve_path(evaluation_pointer_output)) if evaluation_pointer_output else {}
         manifest = _normalize_display_paths({
             "status": "completed",
-            "current_phase": "bootstrap_completed",
-            "recommended_action": "review_bootstrap_revision_outputs",
+            "current_phase": str(evaluation_pointer_payload.get("current_phase") or "bootstrap_completed"),
+            "recommended_action": str(evaluation_pointer_payload.get("recommended_action") or "review_bootstrap_revision_outputs"),
             "read_order": [
                 "status",
                 "current_phase",
@@ -364,6 +395,8 @@ def main() -> int:
             "handoff_manifest": handoff_manifest,
             "runtime_configs": runtime_configs,
             "log_dir": _display_path(log_dir),
+            "evaluation_pointer_output": evaluation_pointer_output,
+            "evaluation_pointer_payload": evaluation_pointer_payload,
             "bootstrap_runs": bootstrap_runs,
         })
         write_json(wrapper_manifest_path, manifest)

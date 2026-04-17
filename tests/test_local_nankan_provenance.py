@@ -6,22 +6,25 @@ import pandas as pd
 
 from racing_ml.data.local_nankan_provenance import (
     MARKET_TIMING_BUCKET_COLUMN,
+    SNAPSHOT_TIMING_BUCKET_COLUMN,
     RELATION_POST_RACE,
     RELATION_PRE_RACE,
     RELATION_UNKNOWN,
     annotate_market_timing_bucket,
+    annotate_snapshot_timing_bucket,
     build_pre_race_capture_coverage_summary,
     build_pre_race_capture_date_coverage,
     build_pre_race_readiness_probe_summary,
     build_pre_race_only_materialization_summary,
     build_provenance_summary,
+    build_snapshot_timing_summary,
     filter_pre_race_only,
     filter_result_ready_pre_race_only,
 )
 
 
 class LocalNankanProvenanceTest(unittest.TestCase):
-    def test_annotate_market_timing_bucket_is_conservative(self) -> None:
+    def test_annotate_snapshot_timing_bucket_is_conservative(self) -> None:
         frame = pd.DataFrame(
             [
                 {"race_id": "r1", "card_snapshot_relation": "pre_race", "odds_snapshot_relation": "pre_race"},
@@ -30,17 +33,49 @@ class LocalNankanProvenanceTest(unittest.TestCase):
             ]
         )
 
+        annotated = annotate_snapshot_timing_bucket(frame)
+
+        self.assertEqual(annotated.loc[0, SNAPSHOT_TIMING_BUCKET_COLUMN], RELATION_PRE_RACE)
+        self.assertEqual(annotated.loc[1, SNAPSHOT_TIMING_BUCKET_COLUMN], RELATION_UNKNOWN)
+        self.assertEqual(annotated.loc[2, SNAPSHOT_TIMING_BUCKET_COLUMN], RELATION_POST_RACE)
+
+    def test_annotate_market_timing_bucket_uses_feature_validity_not_fetch_order(self) -> None:
+        frame = pd.DataFrame(
+            [
+                {
+                    "race_id": "r1",
+                    "horse_id": "r1:1",
+                    "horse_name": "Alpha",
+                    "frame_no": 1,
+                    "gate_no": 1,
+                    "odds": 2.1,
+                    "popularity": 1,
+                    "card_snapshot_relation": "post_race",
+                    "odds_snapshot_relation": "post_race",
+                },
+                {
+                    "race_id": "r2",
+                    "horse_id": "r2:1",
+                    "horse_name": "Beta",
+                    "frame_no": 2,
+                    "gate_no": 2,
+                    "card_snapshot_relation": "post_race",
+                    "odds_snapshot_relation": "unknown",
+                },
+            ]
+        )
+
         annotated = annotate_market_timing_bucket(frame)
 
         self.assertEqual(annotated.loc[0, MARKET_TIMING_BUCKET_COLUMN], RELATION_PRE_RACE)
+        self.assertEqual(annotated.loc[0, SNAPSHOT_TIMING_BUCKET_COLUMN], RELATION_POST_RACE)
         self.assertEqual(annotated.loc[1, MARKET_TIMING_BUCKET_COLUMN], RELATION_UNKNOWN)
-        self.assertEqual(annotated.loc[2, MARKET_TIMING_BUCKET_COLUMN], RELATION_POST_RACE)
 
-    def test_filter_pre_race_only_requires_both_card_and_odds(self) -> None:
+    def test_filter_pre_race_only_requires_both_card_and_odds_features(self) -> None:
         frame = pd.DataFrame(
             [
-                {"race_id": "r1", "horse_id": "r1:1", "card_snapshot_relation": "pre_race", "odds_snapshot_relation": "pre_race"},
-                {"race_id": "r2", "horse_id": "r2:1", "card_snapshot_relation": "pre_race", "odds_snapshot_relation": "unknown"},
+                {"race_id": "r1", "horse_id": "r1:1", "horse_name": "Alpha", "frame_no": 1, "gate_no": 1, "odds": 2.1, "popularity": 1},
+                {"race_id": "r2", "horse_id": "r2:1", "horse_name": "Beta", "frame_no": 2, "gate_no": 2},
             ]
         )
 
@@ -52,10 +87,10 @@ class LocalNankanProvenanceTest(unittest.TestCase):
     def test_build_provenance_summary_counts_buckets(self) -> None:
         frame = pd.DataFrame(
             [
-                {"race_id": "r1", "card_snapshot_relation": "pre_race", "odds_snapshot_relation": "pre_race"},
-                {"race_id": "r1", "card_snapshot_relation": "pre_race", "odds_snapshot_relation": "pre_race"},
-                {"race_id": "r2", "card_snapshot_relation": "unknown", "odds_snapshot_relation": "unknown"},
-                {"race_id": "r3", "card_snapshot_relation": "pre_race", "odds_snapshot_relation": "post_race"},
+                {"race_id": "r1", "horse_name": "Alpha", "frame_no": 1, "gate_no": 1, "odds": 2.1, "popularity": 1, "card_snapshot_relation": "pre_race", "odds_snapshot_relation": "pre_race"},
+                {"race_id": "r1", "horse_name": "Beta", "frame_no": 2, "gate_no": 2, "odds": 3.4, "popularity": 2, "card_snapshot_relation": "pre_race", "odds_snapshot_relation": "pre_race"},
+                {"race_id": "r2", "horse_name": "Gamma", "frame_no": 3, "gate_no": 3, "card_snapshot_relation": "unknown", "odds_snapshot_relation": "unknown"},
+                {"race_id": "r3", "horse_name": "Delta", "frame_no": 4, "gate_no": 4, "odds": 4.8, "popularity": 4, "card_snapshot_relation": "pre_race", "odds_snapshot_relation": "post_race"},
             ]
         )
 
@@ -63,17 +98,32 @@ class LocalNankanProvenanceTest(unittest.TestCase):
 
         self.assertEqual(summary["row_count"], 4)
         self.assertEqual(summary["race_count"], 3)
-        self.assertEqual(summary["bucket_counts"][RELATION_PRE_RACE], 2)
+        self.assertEqual(summary["bucket_counts"][RELATION_PRE_RACE], 3)
         self.assertEqual(summary["bucket_counts"][RELATION_UNKNOWN], 1)
+        self.assertEqual(summary["bucket_counts"][RELATION_POST_RACE], 0)
+        self.assertEqual(summary["snapshot_timing_bucket_counts"][RELATION_POST_RACE], 1)
+
+    def test_build_snapshot_timing_summary_preserves_fetch_timing_counts(self) -> None:
+        frame = pd.DataFrame(
+            [
+                {"race_id": "r1", "card_snapshot_relation": "pre_race", "odds_snapshot_relation": "pre_race"},
+                {"race_id": "r2", "card_snapshot_relation": "pre_race", "odds_snapshot_relation": "post_race"},
+            ]
+        )
+
+        summary = build_snapshot_timing_summary(frame)
+
+        self.assertEqual(summary["bucket_counts"][RELATION_PRE_RACE], 1)
         self.assertEqual(summary["bucket_counts"][RELATION_POST_RACE], 1)
+        self.assertEqual(summary["classification_basis"], "snapshot_time_vs_scheduled_post_time")
 
     def test_build_pre_race_only_materialization_summary_reports_label_readiness(self) -> None:
         frame = pd.DataFrame(
             [
-                {"race_id": "r1", "date": "2026-04-06", "card_snapshot_relation": "pre_race", "odds_snapshot_relation": "pre_race"},
-                {"race_id": "r1", "date": "2026-04-06", "card_snapshot_relation": "pre_race", "odds_snapshot_relation": "pre_race"},
-                {"race_id": "r2", "date": "2026-04-07", "card_snapshot_relation": "pre_race", "odds_snapshot_relation": "pre_race"},
-                {"race_id": "r3", "date": "2026-04-07", "card_snapshot_relation": "unknown", "odds_snapshot_relation": "unknown"},
+                {"race_id": "r1", "date": "2026-04-06", "horse_name": "Alpha", "frame_no": 1, "gate_no": 1, "odds": 2.1, "popularity": 1},
+                {"race_id": "r1", "date": "2026-04-06", "horse_name": "Beta", "frame_no": 2, "gate_no": 2, "odds": 3.2, "popularity": 2},
+                {"race_id": "r2", "date": "2026-04-07", "horse_name": "Gamma", "frame_no": 3, "gate_no": 3, "odds": 4.3, "popularity": 3},
+                {"race_id": "r3", "date": "2026-04-07", "horse_name": "Delta", "frame_no": 4, "gate_no": 4},
             ]
         )
         result_frame = pd.DataFrame([{"race_id": "r1"}])
@@ -92,9 +142,9 @@ class LocalNankanProvenanceTest(unittest.TestCase):
     def test_filter_result_ready_pre_race_only_keeps_only_labeled_races(self) -> None:
         frame = pd.DataFrame(
             [
-                {"race_id": "r1", "horse_id": "r1:1", "card_snapshot_relation": "pre_race", "odds_snapshot_relation": "pre_race"},
-                {"race_id": "r2", "horse_id": "r2:1", "card_snapshot_relation": "pre_race", "odds_snapshot_relation": "pre_race"},
-                {"race_id": "r3", "horse_id": "r3:1", "card_snapshot_relation": "unknown", "odds_snapshot_relation": "unknown"},
+                {"race_id": "r1", "horse_id": "r1:1", "horse_name": "Alpha", "frame_no": 1, "gate_no": 1, "odds": 2.1, "popularity": 1},
+                {"race_id": "r2", "horse_id": "r2:1", "horse_name": "Beta", "frame_no": 2, "gate_no": 2, "odds": 3.2, "popularity": 2},
+                {"race_id": "r3", "horse_id": "r3:1", "horse_name": "Gamma", "frame_no": 3, "gate_no": 3},
             ]
         )
         result_frame = pd.DataFrame([{"race_id": "r2"}])
@@ -107,10 +157,10 @@ class LocalNankanProvenanceTest(unittest.TestCase):
     def test_build_pre_race_capture_date_coverage_groups_by_date(self) -> None:
         frame = pd.DataFrame(
             [
-                {"race_id": "r1", "date": "2026-04-06", "card_snapshot_relation": "pre_race", "odds_snapshot_relation": "pre_race"},
-                {"race_id": "r1", "date": "2026-04-06", "card_snapshot_relation": "pre_race", "odds_snapshot_relation": "pre_race"},
-                {"race_id": "r2", "date": "2026-04-07", "card_snapshot_relation": "pre_race", "odds_snapshot_relation": "pre_race"},
-                {"race_id": "r3", "date": "2026-04-07", "card_snapshot_relation": "unknown", "odds_snapshot_relation": "unknown"},
+                {"race_id": "r1", "date": "2026-04-06", "horse_name": "Alpha", "frame_no": 1, "gate_no": 1, "odds": 2.1, "popularity": 1},
+                {"race_id": "r1", "date": "2026-04-06", "horse_name": "Beta", "frame_no": 2, "gate_no": 2, "odds": 3.2, "popularity": 2},
+                {"race_id": "r2", "date": "2026-04-07", "horse_name": "Gamma", "frame_no": 3, "gate_no": 3, "odds": 4.3, "popularity": 3},
+                {"race_id": "r3", "date": "2026-04-07", "horse_name": "Delta", "frame_no": 4, "gate_no": 4},
             ]
         )
         result_frame = pd.DataFrame([{"race_id": "r1"}])
@@ -125,9 +175,9 @@ class LocalNankanProvenanceTest(unittest.TestCase):
     def test_build_pre_race_capture_coverage_summary_sets_capturing_phase_and_delta(self) -> None:
         frame = pd.DataFrame(
             [
-                {"race_id": "r1", "date": "2026-04-06", "card_snapshot_relation": "pre_race", "odds_snapshot_relation": "pre_race"},
-                {"race_id": "r1", "date": "2026-04-06", "card_snapshot_relation": "pre_race", "odds_snapshot_relation": "pre_race"},
-                {"race_id": "r2", "date": "2026-04-07", "card_snapshot_relation": "pre_race", "odds_snapshot_relation": "pre_race"},
+                {"race_id": "r1", "date": "2026-04-06", "horse_name": "Alpha", "frame_no": 1, "gate_no": 1, "odds": 2.1, "popularity": 1},
+                {"race_id": "r1", "date": "2026-04-06", "horse_name": "Beta", "frame_no": 2, "gate_no": 2, "odds": 3.2, "popularity": 2},
+                {"race_id": "r2", "date": "2026-04-07", "horse_name": "Gamma", "frame_no": 3, "gate_no": 3, "odds": 4.3, "popularity": 3},
             ]
         )
         result_frame = pd.DataFrame([{"race_id": "r1"}])
@@ -160,8 +210,8 @@ class LocalNankanProvenanceTest(unittest.TestCase):
     def test_build_pre_race_readiness_probe_summary_marks_ready_when_any_ready_race_exists(self) -> None:
         frame = pd.DataFrame(
             [
-                {"race_id": "r1", "date": "2026-04-06", "card_snapshot_relation": "pre_race", "odds_snapshot_relation": "pre_race"},
-                {"race_id": "r2", "date": "2026-04-07", "card_snapshot_relation": "pre_race", "odds_snapshot_relation": "pre_race"},
+                {"race_id": "r1", "date": "2026-04-06", "horse_name": "Alpha", "frame_no": 1, "gate_no": 1, "odds": 2.1, "popularity": 1},
+                {"race_id": "r2", "date": "2026-04-07", "horse_name": "Beta", "frame_no": 2, "gate_no": 2, "odds": 3.2, "popularity": 2},
             ]
         )
         result_frame = pd.DataFrame([{"race_id": "r2"}])

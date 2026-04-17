@@ -4,7 +4,13 @@
 
 `#101` で strict `pre_race_only` subset から benchmark gate まで進む handoff は実装済みで、`#103` では NAR `value_blend` bootstrap scaffold も整合済みである。
 
-ただし current surface では、result-ready race が到着しても
+current status:
+
+- wrapper / runtime-config orchestration surface は実装済み
+- `#101` historical trust-ready formal rerun も完了済み
+- current role は external result arrival 後の将来再開だけでなく、`#103` child execution に再利用できる command plan / operator surface を保持することにある
+
+historical issue としては、result-ready race が到着したときに
 
 - `#101` handoff rerun
 - strict `pre_race_only` benchmark freeze
@@ -12,7 +18,7 @@
 
 を 1 本の再開導線として起動できない。
 
-したがって次の practical issue は、result-ready 到着時に `#101 -> #103` を再現可能な 1 entrypoint に束ねることにある。
+したがってこの practical issue 自体は実装済みであり、current read では `#101` benchmark reference と `#103` bootstrap scaffold を結ぶ reusable orchestration surface として扱う。
 
 ## Objective
 
@@ -27,7 +33,7 @@ result-ready strict `pre_race_only` race が到着した時点で、dedicated pr
 
 ## Hypothesis
 
-if result-ready strict `pre_race_only` handoff と `#103` bootstrap scaffold を 1 本の orchestration に束ねる, then NAR parity work は external result arrival 後に手作業なしで immediately resume できる。
+if result-ready strict `pre_race_only` handoff と `#103` bootstrap scaffold を 1 本の orchestration に束ねる, then NAR parity work は future-only operator path でも historical benchmark-reference maintenance でも同じ command discipline を再利用できる。
 
 ## In Scope
 
@@ -113,8 +119,8 @@ confirmed read:
 
 meaning:
 
-- current blocker は引き続き result-ready race の未到着だけである
-- ただし到着後の resume path は now fixed:
+- current blocker そのものではなく、到着後の resume path と runtime-config discipline が fixed されたことが主成果である
+- 実装された surface は historical trust-ready rerun 完了後も再利用できる:
   - benchmark handoff
   - bootstrap win / ROI train
   - stack build
@@ -153,12 +159,12 @@ confirmed read:
 
 meaning:
 
-- external result arrival 後の rerun は revision 固有 artifact で隔離できる
-- bootstrap rerun ごとの上書き衝突を避けられる
+- revision 固有 runtime config により rerun は artifact 単位で隔離できる
+- current `#103` first execution でも、この runtime-config discipline をそのまま再利用できる
 
 ## Operator Runbook
 
-external result arrival 後の再開は、この文書の wrapper を唯一の operator entrypoint として扱う。
+future-only operator path の再開や wrapper-based bootstrap 実行では、この文書の wrapper を唯一の operator entrypoint として扱う。一方で historical trust-ready benchmark judgment 自体は `#101` pointer / summary / manifest を一次参照にする。
 
 current blocker を読むときの一次参照は次である。
 
@@ -181,6 +187,11 @@ operator rule:
 - board が `bootstrap_handoff.status=benchmark_ready` または `completed` に進んだときだけ child execution / formal read に移る
 - refresh 完了直後の readiness-only 再確認は `readiness_surfaces.followup_entrypoint` の dry-run/run preview を正本入口として使う
 - board だけで足りないときに限り、この文書の個別 manifest 順へ降りる
+
+current benchmark-reference rule:
+
+- `#101` の current benchmark judgment は board の blocked-state ではなく、[evaluation_local_nankan_r20260415_local_nankan_pre_race_ready_formal_v1_pointer.json](/workspaces/nr-learn/artifacts/reports/evaluation_local_nankan_r20260415_local_nankan_pre_race_ready_formal_v1_pointer.json) と versioned summary / manifest を一次参照にする
+- wrapper manifest の `runtime_configs` と `bootstrap_command_plan` は、`#103` 実行時の canonical command surface として再利用してよい
 
 default command:
 
@@ -217,6 +228,7 @@ decision rule:
 - `status=not_ready` は infra failure ではなく external blocker として扱う
 - `status=failed` は `current_phase` を見て `#101` handoff failure か `#103` child command failure かを切り分ける
 - `status=completed` のときだけ architecture parity first read に進める
+- `#101` formal rerun 完了後は、board / wrapper の `not_ready` をそのまま historical benchmark blocker と誤読しない
 
 ## Queue Update Template
 

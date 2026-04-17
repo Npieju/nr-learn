@@ -599,11 +599,16 @@ class LocalNankanBootstrapTest(unittest.TestCase):
             "train_roi_component",
             "build_value_stack",
             "run_revision_gate",
+            "write_local_evaluation_pointer",
         ])
         self.assertIn("configs/data_local_nankan_pre_race_ready.yaml", plan[0]["command"])
         self.assertIn("configs/data_local_nankan_pre_race_ready.yaml", plan[1]["command"])
         self.assertIn("--skip-train", plan[3]["command"])
         self.assertIn("r20260404_local_nankan_value_blend_bootstrap_pre_race_ready_v1", plan[3]["command"])
+        self.assertEqual(plan[4]["command"][1], str(root / "scripts/run_local_evaluate.py"))
+        self.assertNotIn("--model-artifact-suffix", plan[4]["command"])
+        self.assertIn("--baseline-reference", plan[4]["command"])
+        self.assertIn("local_nankan_pre_race_ready", plan[4]["command"])
 
     def test_materialize_local_nankan_bootstrap_runtime_configs_suffixes_outputs(self) -> None:
         root = Path("/workspaces/nr-learn")
@@ -645,7 +650,10 @@ class LocalNankanBootstrapTest(unittest.TestCase):
             ), patch.object(
                 bootstrap_handoff_script,
                 "build_value_blend_bootstrap_command_plan",
-                return_value=[{"label": "train_win_component", "command": ["python", "train_win"]}],
+                return_value=[
+                    {"label": "train_win_component", "command": ["python", "train_win"]},
+                    {"label": "write_local_evaluation_pointer", "command": ["python", "scripts/run_local_evaluate.py"]},
+                ],
             ), patch.object(
                 bootstrap_handoff_script,
                 "_run_command",
@@ -687,6 +695,8 @@ class LocalNankanBootstrapTest(unittest.TestCase):
             self.assertEqual(manifest["runtime_configs"]["stack_config"], "artifacts/runtime_configs/stack.yaml")
             self.assertEqual(manifest["bootstrap_command_plan"][0]["label"], "train_win_component")
             self.assertIn("artifacts/logs/", manifest["bootstrap_command_plan"][0]["log_file"])
+            self.assertEqual(manifest["bootstrap_command_plan"][-1]["label"], "write_local_evaluation_pointer")
+            self.assertEqual(manifest["bootstrap_command_plan"][-1]["command"][1], "scripts/run_local_evaluate.py")
 
     def test_bootstrap_handoff_returns_benchmark_ready_without_running_children(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
@@ -705,7 +715,10 @@ class LocalNankanBootstrapTest(unittest.TestCase):
             ), patch.object(
                 bootstrap_handoff_script,
                 "build_value_blend_bootstrap_command_plan",
-                return_value=[{"label": "train_win_component", "command": ["python", "train_win"]}],
+                return_value=[
+                    {"label": "train_win_component", "command": ["python", "train_win"]},
+                    {"label": "write_local_evaluation_pointer", "command": ["python", "scripts/run_local_evaluate.py"]},
+                ],
             ), patch.object(
                 bootstrap_handoff_script,
                 "_run_command",
@@ -746,6 +759,8 @@ class LocalNankanBootstrapTest(unittest.TestCase):
             self.assertEqual(manifest["read_order"][5], "handoff_manifest.recommended_action")
             self.assertEqual(manifest["handoff_command_result"]["log_file"], "artifacts/logs/handoff.log")
             self.assertIn("artifacts/logs/", manifest["bootstrap_command_plan"][0]["log_file"])
+            self.assertEqual(manifest["bootstrap_command_plan"][-1]["label"], "write_local_evaluation_pointer")
+            self.assertEqual(manifest["bootstrap_command_plan"][-1]["command"][1], "scripts/run_local_evaluate.py")
 
     def test_bootstrap_handoff_reports_failed_child_phase(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
@@ -830,6 +845,98 @@ class LocalNankanBootstrapTest(unittest.TestCase):
             self.assertEqual([run["label"] for run in manifest["bootstrap_runs"]], ["train_win_component", "train_roi_component"])
             self.assertEqual(manifest["bootstrap_runs"][1]["exit_code"], 1)
             self.assertEqual(manifest["bootstrap_runs"][1]["log_file"], "artifacts/logs/train_roi.log")
+
+    def test_bootstrap_handoff_completed_manifest_includes_local_evaluation_pointer(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            tmp_path = Path(tmp_dir)
+            wrapper_manifest = tmp_path / "local_nankan_result_ready_bootstrap_handoff_manifest.json"
+            handoff_manifest = tmp_path / "local_nankan_pre_race_benchmark_handoff_manifest.json"
+            pointer_path = tmp_path / "evaluation_pointer.json"
+            command_plan = [
+                {"label": "train_win_component", "command": ["python", "train_win"]},
+                {"label": "write_local_evaluation_pointer", "command": ["python", "scripts/run_local_evaluate.py", "--output", str(pointer_path)]},
+            ]
+
+            def fake_read_json_dict(path: Path):
+                if path == handoff_manifest:
+                    return {"status": "completed", "current_phase": "benchmark_handoff_completed"}
+                if path == pointer_path:
+                    return {
+                        "status": "completed",
+                        "current_phase": "evaluate_completed",
+                        "recommended_action": "review_local_evaluation_pointer",
+                    }
+                return {}
+
+            with patch.object(bootstrap_handoff_script, "resolve_python_executable", return_value="/usr/bin/python3"), patch.object(
+                bootstrap_handoff_script,
+                "materialize_local_nankan_bootstrap_runtime_configs",
+                return_value={
+                    "win_config": "artifacts/runtime_configs/win.yaml",
+                    "roi_config": "artifacts/runtime_configs/roi.yaml",
+                    "stack_config": "artifacts/runtime_configs/stack.yaml",
+                },
+            ), patch.object(
+                bootstrap_handoff_script,
+                "build_value_blend_bootstrap_command_plan",
+                return_value=command_plan,
+            ), patch.object(
+                bootstrap_handoff_script,
+                "_run_command",
+                side_effect=[
+                    {
+                        "label": "pre_race_benchmark_handoff",
+                        "command": ["python", "handoff"],
+                        "exit_code": 0,
+                        "status": "completed",
+                        "started_at": "2026-04-07T00:00:00Z",
+                        "finished_at": "2026-04-07T00:00:01Z",
+                        "log_file": "artifacts/logs/handoff.log",
+                    },
+                    {
+                        "label": "train_win_component",
+                        "command": ["python", "train_win"],
+                        "exit_code": 0,
+                        "status": "completed",
+                        "started_at": "2026-04-07T00:00:02Z",
+                        "finished_at": "2026-04-07T00:00:03Z",
+                        "log_file": "artifacts/logs/train_win.log",
+                    },
+                    {
+                        "label": "write_local_evaluation_pointer",
+                        "command": ["python", "scripts/run_local_evaluate.py"],
+                        "exit_code": 0,
+                        "status": "completed",
+                        "started_at": "2026-04-07T00:00:04Z",
+                        "finished_at": "2026-04-07T00:00:05Z",
+                        "log_file": "artifacts/logs/evaluation_pointer.log",
+                    },
+                ],
+            ), patch.object(
+                bootstrap_handoff_script,
+                "_read_json_dict",
+                side_effect=fake_read_json_dict,
+            ), patch.object(
+                sys,
+                "argv",
+                [
+                    "run_local_nankan_result_ready_bootstrap_handoff.py",
+                    "--wrapper-manifest-output",
+                    str(wrapper_manifest),
+                    "--handoff-manifest-output",
+                    str(handoff_manifest),
+                    "--run-bootstrap",
+                ],
+            ):
+                exit_code = bootstrap_handoff_script.main()
+
+            self.assertEqual(exit_code, 0)
+            manifest = json.loads(wrapper_manifest.read_text(encoding="utf-8"))
+            self.assertEqual(manifest["status"], "completed")
+            self.assertEqual(manifest["current_phase"], "evaluate_completed")
+            self.assertEqual(manifest["recommended_action"], "review_local_evaluation_pointer")
+            self.assertEqual(manifest["evaluation_pointer_output"], str(pointer_path))
+            self.assertEqual(manifest["evaluation_pointer_payload"]["status"], "completed")
 
     def test_bootstrap_handoff_normalizes_nested_workspace_paths(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:

@@ -413,6 +413,15 @@ def _sanitize_output_slug(value: str) -> str:
     return slug.strip("_") or "model"
 
 
+def _shorten_output_slug(slug: str, *, max_length: int = 96) -> str:
+    normalized = _sanitize_output_slug(slug)
+    if len(normalized) <= max_length:
+        return normalized
+    digest = hashlib.sha256(normalized.encode("utf-8")).hexdigest()[:16]
+    head_length = max(max_length - len(digest) - 1, 16)
+    return f"{normalized[:head_length].rstrip('_')}_{digest}"
+
+
 def _derive_date_window_slug(start_date: str | None, end_date: str | None) -> str:
     if not start_date and not end_date:
         return ""
@@ -440,7 +449,7 @@ def _derive_evaluation_output_slug(config_path: str, model_path: Path, *, prefer
             text = text[: -len("_model")]
         if text.startswith("model_"):
             text = text[len("model_") :]
-        slug = _sanitize_output_slug(text)
+        slug = _shorten_output_slug(text)
         if slug:
             return slug
     return "model"
@@ -1040,12 +1049,16 @@ def main() -> int:
                             wf_valid_source = wf_pred_source["pred"].loc[wf_valid.index].copy()
                             wf_test_source = wf_pred_source["pred"].loc[wf_test.index].copy()
                             log_progress(f"Walk-forward single split using score_source={wf_score_source}")
+                            wf_policy_constraints = PolicyConstraints.from_config(
+                                evaluation_cfg,
+                                frame=wf_valid_source,
+                            )
                             best_params, best_valid_metrics = optimize_roi_strategy(
                                 train_df=wf_train_source,
                                 valid_df=wf_valid_source,
                                 label_col=label_col,
                                 odds_col=odds_col,
-                                constraints=policy_constraints,
+                                constraints=wf_policy_constraints,
                                 mode=args.wf_mode,
                                 search_config=policy_search_cfg,
                                 progress_interval_sec=float(args.progress_interval_sec),
@@ -1106,12 +1119,16 @@ def main() -> int:
                                         f"Nested WF fold {fold_index}/{len(nested_slices)}: optimizing on inner valid "
                                         f"with score_source={fold_score_source}..."
                                     )
+                                    fold_policy_constraints = PolicyConstraints.from_config(
+                                        evaluation_cfg,
+                                        frame=fold_valid_source,
+                                    )
                                     best_params, best_valid_metrics = optimize_roi_strategy(
                                         train_df=fold_train_source,
                                         valid_df=fold_valid_source,
                                         label_col=label_col,
                                         odds_col=odds_col,
-                                        constraints=policy_constraints,
+                                        constraints=fold_policy_constraints,
                                         mode=args.wf_mode,
                                         search_config=policy_search_cfg,
                                         progress_interval_sec=float(args.progress_interval_sec),

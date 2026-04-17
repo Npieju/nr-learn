@@ -276,6 +276,91 @@ class LocalNankanStatusBoardTest(unittest.TestCase):
             self.assertEqual(payload["readiness_surfaces"]["readiness_probe"]["pending_result_races"], 24)
             self.assertEqual(payload["readiness_surfaces"]["readiness_probe"]["race_card_rows"], 562)
 
+    def test_status_board_uses_bootstrap_evaluation_pointer_when_completed(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            tmp_path = Path(tmp_dir)
+            coverage_path = tmp_path / "coverage.json"
+            backfill_path = tmp_path / "backfill.json"
+            archive_path = tmp_path / "archive.json"
+            capture_path = tmp_path / "capture_loop.json"
+            probe_path = tmp_path / "probe.json"
+            pre_race_handoff_path = tmp_path / "pre_race_handoff.json"
+            bootstrap_handoff_path = tmp_path / "bootstrap_handoff.json"
+            watcher_path = tmp_path / "watcher.json"
+            output_path = tmp_path / "status_board.json"
+
+            coverage_path.write_text(
+                json.dumps(
+                    {
+                        "readiness": {"benchmark_rerun_ready": True},
+                        "progress": {"current_stage": "ready_for_benchmark", "completed_targets": ["race_card", "race_result", "pedigree"]},
+                        "target_states": {},
+                        "external_outputs": {},
+                    }
+                ),
+                encoding="utf-8",
+            )
+            backfill_path.write_text(json.dumps({"status": "completed", "remaining_window_count": 0}), encoding="utf-8")
+            archive_path.write_text(json.dumps({"status": "completed", "archive_reports": []}), encoding="utf-8")
+            capture_path.write_text(json.dumps({}), encoding="utf-8")
+            probe_path.write_text(json.dumps({"status": "ready", "result_ready_races": 3, "pending_result_races": 0}), encoding="utf-8")
+            pre_race_handoff_path.write_text(json.dumps({"status": "completed", "current_phase": "benchmark_handoff_completed"}), encoding="utf-8")
+            bootstrap_handoff_path.write_text(
+                json.dumps(
+                    {
+                        "status": "completed",
+                        "current_phase": "evaluate_completed",
+                        "recommended_action": "review_local_evaluation_pointer",
+                        "evaluation_pointer_output": str(tmp_path / "evaluation_pointer.json"),
+                        "evaluation_pointer_payload": {
+                            "status": "completed",
+                            "current_phase": "evaluate_completed",
+                            "recommended_action": "review_local_evaluation_pointer",
+                        },
+                    }
+                ),
+                encoding="utf-8",
+            )
+            watcher_path.write_text(json.dumps({"status": "completed", "attempts": 1, "timed_out": False}), encoding="utf-8")
+
+            with patch.object(status_board_script, "artifact_ensure_output_file_path"), patch.object(
+                status_board_script, "_build_live_collect_progress", return_value={}
+            ), patch.object(
+                sys,
+                "argv",
+                [
+                    "run_local_nankan_status_board.py",
+                    "--coverage-snapshot",
+                    str(coverage_path),
+                    "--backfill-aggregate",
+                    str(backfill_path),
+                    "--archive-run",
+                    str(archive_path),
+                    "--capture-loop-manifest",
+                    str(capture_path),
+                    "--readiness-probe-summary",
+                    str(probe_path),
+                    "--pre-race-handoff-manifest",
+                    str(pre_race_handoff_path),
+                    "--bootstrap-handoff-manifest",
+                    str(bootstrap_handoff_path),
+                    "--readiness-watcher-manifest",
+                    str(watcher_path),
+                    "--output",
+                    str(output_path),
+                ],
+            ):
+                exit_code = status_board_script.main()
+
+            self.assertEqual(exit_code, 0)
+            payload = json.loads(output_path.read_text(encoding="utf-8"))
+            self.assertEqual(payload["status"], "completed")
+            self.assertEqual(payload["current_phase"], "evaluate_completed")
+            self.assertEqual(payload["recommended_action"], "review_local_evaluation_pointer")
+            self.assertEqual(payload["readiness_surfaces"]["bootstrap_handoff"]["evaluation_pointer_payload"]["status"], "completed")
+            self.assertEqual(payload["readiness_surfaces"]["bootstrap_handoff"]["evaluation_pointer_output"], str(tmp_path / "evaluation_pointer.json"))
+            self.assertIn("bootstrap_eval_pointer_status=completed", payload["highlights"])
+
     def test_status_board_surfaces_followup_entrypoint_for_self_describing_capture_loop(self) -> None:
         readiness_surfaces = status_board_script._build_readiness_surfaces(
             capture_loop_manifest_path="artifacts/reports/local_nankan_pre_race_capture_loop_issue122_cycle.json",
