@@ -535,6 +535,13 @@
       flex-wrap: wrap;
       gap: 8px;
     }
+    .market-actions {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+    }
       .harville-anchor-card {
         margin: 8px 0 10px;
         padding: 8px 10px;
@@ -601,6 +608,15 @@
     .ghost-button:hover {
       border-color: rgba(70, 98, 118, 0.28);
       background: rgba(255, 255, 255, 0.96);
+    }
+    .ghost-button:disabled {
+      cursor: wait;
+      opacity: 0.7;
+    }
+    .market-status {
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.5;
     }
     .market-meta {
       margin: 0 0 10px;
@@ -816,7 +832,10 @@
           </div>
           <div class="market-toolbar">
             <div class="market-tabs" id="harville-market-tabs"></div>
-            <span class="mono">build snapshot</span>
+            <div class="market-actions">
+              <button class="ghost-button" id="harville-refresh-button" type="button" data-refresh-harville="current">最新オッズで再計算</button>
+              <span class="market-status mono" id="harville-refresh-status">build snapshot</span>
+            </div>
           </div>
           <div class="harville-anchor-card">
             <div class="harville-anchor-header">
@@ -1050,6 +1069,73 @@
 
     function buildRaceUrl(race) {
       return `https://race.netkeiba.com/race/shutuba.html?race_id=${encodeURIComponent(race.raceId)}&rf=race_list`;
+    }
+
+    async function fetchRaceAnalyzePayload(raceId, { forceRefresh = false } = {}) {
+      const cacheKey = `${raceId}:${forceRefresh ? "refresh" : "cached"}`;
+      if (!forceRefresh && oddsAnalyzeCache.has(cacheKey)) {
+        return oddsAnalyzeCache.get(cacheKey);
+      }
+      if (oddsAnalyzePending.has(cacheKey)) {
+        return oddsAnalyzePending.get(cacheKey);
+      }
+      const request = fetch(`${ODDS_API_BASE_URL}/v1/analyze`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          race_url: buildRaceUrl({ raceId }),
+          excluded_horses: [],
+          force_refresh: Boolean(forceRefresh),
+        }),
+      }).then(async (response) => {
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}`);
+        }
+        const payload = await response.json();
+        if (!payload || typeof payload !== "object") {
+          throw new Error("invalid odds payload");
+        }
+        oddsAnalyzeCache.set(cacheKey, payload);
+        return payload;
+      }).finally(() => {
+        oddsAnalyzePending.delete(cacheKey);
+      });
+      oddsAnalyzePending.set(cacheKey, request);
+      return request;
+    }
+
+    function buildLiveHarvillePayload(race, analyzeData) {
+      const comparisons = buildHarvilleComparisons(race, analyzeData);
+      const marketOptions = availableHarvilleMarkets(comparisons.rowsByMarket).map((item) => ({
+        key: item.key,
+        label: item.label,
+        rows: Array.isArray(comparisons.rowsByMarket?.[item.key]) ? comparisons.rowsByMarket[item.key].length : 0,
+      }));
+      const raceMeta = analyzeData && typeof analyzeData.race === "object" ? analyzeData.race : {};
+      return {
+        available: marketOptions.length > 0,
+        message: "最新オッズを再取得し、model score 正規化勝率と単勝市場の暗黙確率をブレンドして Harville 理論オッズを再計算しました。",
+        meta: {
+          oddsUpdatedAt: raceMeta.odds_updated_at || null,
+          analyzedAt: raceMeta.analyzed_at || null,
+          horseCount: comparisons.masterCount,
+          positiveRows: Array.isArray(comparisons.screenerRows) ? comparisons.screenerRows.length : 0,
+          probabilitySource: "blend:model35_market65",
+          snapshotSource: "live-refresh",
+        },
+        marketOptions,
+        summaryRows: Array.isArray(comparisons.screenerRows) ? comparisons.screenerRows.slice(0, 16) : [],
+        rowsByMarket: comparisons.rowsByMarket || {},
+      };
+    }
+
+    function activeHarvillePayload(race) {
+      if (!race) {
+        return null;
+      }
+      return race.liveHarville || race.harville || null;
     }
 
     function buildRaceHorseMaster(race, analyzeData) {
@@ -1501,6 +1587,7 @@
     function renderHarvilleLoading(message) {
       document.getElementById("harville-meta").textContent = message;
       document.getElementById("harville-market-tabs").innerHTML = "";
+      document.getElementById("harville-refresh-status").textContent = state.activeOddsRaceId ? "updating live odds..." : "build snapshot";
       document.getElementById("harville-anchor-meta").textContent = "未指定で全表示。最大2頭まで指定できます。";
       document.getElementById("harville-anchor-selects").innerHTML = "";
       document.getElementById("harville-summary-wrap").innerHTML = '<div class="market-empty">building snapshot...</div>';
@@ -1509,13 +1596,19 @@
     function renderHarvilleError(error) {
       const message = `odds api unavailable: ${error}`;
       document.getElementById("harville-meta").textContent = message;
+      document.getElementById("harville-refresh-status").textContent = "live refresh failed";
       document.getElementById("harville-anchor-meta").textContent = "軸馬フィルタは snapshot 読み込み後に使えます。";
       document.getElementById("harville-anchor-selects").innerHTML = "";
       document.getElementById("harville-summary-wrap").innerHTML = `<div class="market-empty">${escapeHtml(message)}</div>`;
     }
 
     function renderHarvilleSnapshot(race) {
-      const harville = race?.harville;
+      const button = document.getElementById("harville-refresh-button");
+      if (button instanceof HTMLButtonElement) {
+        button.disabled = !race || state.activeOddsRaceId === race.raceId;
+        button.textContent = state.activeOddsRaceId === race?.raceId ? "再取得中..." : "最新オッズで再計算";
+      }
+      const harville = activeHarvillePayload(race);
       if (!harville || !harville.available) {
         renderHarvilleError(harville?.message || "snapshot unavailable");
         return;
@@ -1541,6 +1634,9 @@
         harville?.meta?.horseCount ? `horses ${harville.meta.horseCount}` : null,
         harville?.meta?.positiveRows !== undefined ? `positive rows ${harville.meta.positiveRows}` : null,
       ].filter(Boolean).join(" / ");
+      document.getElementById("harville-refresh-status").textContent = harville?.meta?.snapshotSource === "live-refresh"
+        ? "live refreshed"
+        : "build snapshot";
       document.getElementById("harville-market-tabs").innerHTML = availableTabs.length
         ? availableTabs.map((item) => `<button class="tab ${activeMarket === item.key ? "active" : ""}" type="button" data-harville-market="${item.key}">${escapeHtml(item.label)}</button>`).join("")
         : "";
@@ -1550,6 +1646,24 @@
       document.getElementById("harville-summary-wrap").innerHTML = activeMarket === "overview"
         ? harvilleSummaryTableHtml(selectedAnchors.length ? exhaustiveOverviewRows : filteredSummaryRows, selectedAnchors, selectedAnchors.length > 0)
         : harvilleDetailTableHtml(activeMarket, filteredMarketRows, selectedAnchors);
+    }
+
+    async function refreshHarvilleOdds(race) {
+      if (!race?.raceId) {
+        return;
+      }
+      state.activeOddsRaceId = race.raceId;
+      renderHarvilleLoading("latest odds refresh running...");
+      try {
+        const analyzeData = await fetchRaceAnalyzePayload(race.raceId, { forceRefresh: true });
+        race.liveHarville = buildLiveHarvillePayload(race, analyzeData);
+        renderHarvilleSnapshot(race);
+      } catch (error) {
+        renderHarvilleError(error instanceof Error ? error.message : String(error));
+      } finally {
+        state.activeOddsRaceId = null;
+        renderHarvilleSnapshot(currentRace());
+      }
     }
 
     function scoreStrengthMap(rows, key) {
@@ -2021,6 +2135,10 @@
         if (harvilleMarket) {
           state.harvilleMarket = harvilleMarket;
           renderHarvilleSnapshot(currentRace());
+          return;
+        }
+        if (target.getAttribute("data-refresh-harville") === "current") {
+          refreshHarvilleOdds(currentRace());
           return;
         }
         const racePanel = target.getAttribute("data-race-panel");
