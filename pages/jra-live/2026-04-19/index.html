@@ -1114,9 +1114,12 @@
         rows: Array.isArray(comparisons.rowsByMarket?.[item.key]) ? comparisons.rowsByMarket[item.key].length : 0,
       }));
       const raceMeta = analyzeData && typeof analyzeData.race === "object" ? analyzeData.race : {};
+      const available = marketOptions.length > 0;
       return {
-        available: marketOptions.length > 0,
-        message: "最新オッズを再取得し、model score 正規化勝率と単勝市場の暗黙確率をブレンドして Harville 理論オッズを再計算しました。",
+        available,
+        message: available
+          ? "最新オッズを再取得し、model score 正規化勝率と単勝市場の暗黙確率をブレンドして Harville 理論オッズを再計算しました。"
+          : "latest odds were fetched, but no Harville comparisons could be rebuilt. build snapshot is still available.",
         meta: {
           oddsUpdatedAt: raceMeta.odds_updated_at || null,
           analyzedAt: raceMeta.analyzed_at || null,
@@ -1154,8 +1157,8 @@
       const seen = new Set();
       const analyzeEntries = Array.isArray(analyzeData?.entries) ? analyzeData.entries : [];
       for (const row of analyzeEntries) {
-        const horseNo = normalizeHorseNo(row?.["馬番"]);
-        const horseName = normalizeHorseName(row?.["馬名"]);
+        const horseNo = normalizeHorseNo(row?.["馬番"] || row?.col_2 || row?.col_1);
+        const horseName = normalizeHorseName(row?.["馬名"] || row?.col_4);
         if (!horseNo || seen.has(horseNo)) {
           continue;
         }
@@ -1166,7 +1169,8 @@
         return master.sort((left, right) => horsePairSort(left.horse_no, right.horse_no));
       }
       for (const row of race.rowsData || []) {
-        const horseNo = normalizeHorseNo(row?.gate_no);
+        const horseIdSuffix = String(row?.horse_id || "").replace(/\D/g, "").slice(-2);
+        const horseNo = normalizeHorseNo(row?.horse_no || row?.gate_no || row?.horseNumber || horseIdSuffix);
         const horseName = normalizeHorseName(row?.horse_name);
         if (!horseNo || seen.has(horseNo)) {
           continue;
@@ -1674,8 +1678,13 @@
       renderHarvilleLoading("latest odds refresh running...");
       try {
         const analyzeData = await fetchRaceAnalyzePayload(race.raceId, { forceRefresh: true });
-        race.liveHarville = buildLiveHarvillePayload(race, analyzeData);
-        race.liveHarvilleStatus = { state: "live", message: null };
+        const liveHarville = buildLiveHarvillePayload(race, analyzeData);
+        if (liveHarville.available) {
+          race.liveHarville = liveHarville;
+          race.liveHarvilleStatus = { state: "live", message: null };
+        } else {
+          race.liveHarvilleStatus = { state: "error", message: liveHarville.message };
+        }
       } catch (error) {
         race.liveHarvilleStatus = { state: "error", message: normalizeOddsRefreshError(error) };
       } finally {
