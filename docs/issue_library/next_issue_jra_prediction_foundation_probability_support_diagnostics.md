@@ -161,6 +161,37 @@ updated meaning:
 2. 同 geometry では baseline `ev_threshold_1_0_bets=5009` に対し rejected candidate は `1` であり、support collapse は geometry mismatch だけでは説明できない
 3. 一方で candidate 側には `feature_count=123` と probability-path 差分が同時に入っているため、next issue では baseline `classification` surface の support diagnostics を先に固定し、その後に broader composition へ進むかを判定する
 
+aligned sidecar control read:
+
+- source:
+  - [../../artifacts/reports/evaluation_summary_catboost_value_stack_lgbm_roi_high_coverage_tune_roi012_liquidity_regime_hybrid_ee346cbcc6343bc3_wf_off_nested.json](../../artifacts/reports/evaluation_summary_catboost_value_stack_lgbm_roi_high_coverage_tune_roi012_liquidity_regime_hybrid_ee346cbcc6343bc3_wf_off_nested.json)
+- command context:
+  - `current_recommended_serving_alpha_sidecar_race_norm_2025_latest`
+  - `artifact_suffix=r20260419_jra_prediction_support_sidecar_v1`
+  - `model_artifact_suffix=__NO_MODEL_ARTIFACT_SUFFIX__`
+  - `wf_mode=off`
+- `auc=0.8403593818`
+- `logloss=0.2034040069`
+- `top1_roi=0.8050414365`
+- `ev_threshold_1_0_bets=5014`
+- `market_prob_corr=0.9869499698`
+- run geometry:
+  - `loaded_rows=1730857`
+  - `data_load_strategy=full_training_table`
+  - `wf_mode=off`
+  - `feature_count=123`
+  - `stability_assessment=representative`
+
+revised structural meaning:
+
+1. `123 features + alpha component` を持つ sidecar control でも support は collapse しない
+2. 同じ `full_training_table + wf_off` geometry で
+   - baseline は `ev_threshold_1_0_bets=5009`
+   - sidecar は `ev_threshold_1_0_bets=5014`
+   - rejected candidate は `ev_threshold_1_0_bets=1`
+3. したがって current root read は feature-count widening 自体ではなく、`market_aware_alpha_branch` の probability path 側にあるとみなすのが最も自然である
+4. この issue の next task は prediction foundation diagnostics を閉じつつ、broader composition branch へ戻る条件を明文化することになる
+
 September difficult-window support read:
 
 - baseline smoke summary:
