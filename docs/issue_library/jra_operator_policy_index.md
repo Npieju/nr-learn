@@ -44,6 +44,7 @@ local snapshot trail が必要なときだけ下の category に降りる。
 
 ## Policy / Runtime References
 
+- [next_issue_jra_market_deviation_policy_reintegration.md](next_issue_jra_market_deviation_policy_reintegration.md)
 - [next_issue_tighter_policy_frontier.md](next_issue_tighter_policy_frontier.md)
 - [next_issue_tighter_policy_reentry_after_runtime.md](next_issue_tighter_policy_reentry_after_runtime.md)
 - [next_issue_tighter_policy_seasonal_regime_narrowing.md](next_issue_tighter_policy_seasonal_regime_narrowing.md)

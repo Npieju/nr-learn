@@ -67,6 +67,7 @@
 
 1. [public_benchmark_snapshot.md](public_benchmark_snapshot.md)
 2. [public_benchmark_operational_reading_guide.md](public_benchmark_operational_reading_guide.md)
+3. 時点付きの説明資料が必要なら [public_model_report_20260418.md](public_model_report_20260418.md)
 
 ## Source-Of-Truth Rules
 

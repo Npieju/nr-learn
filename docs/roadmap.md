@@ -861,7 +861,7 @@
 
 さらに `current_best_eval_2025_latest` の latest formal refresh も、reuse-compare 前提の wrapper / revision gate / promotion gate まで end-to-end で整合した。latest mainline の formal pass は current baseline と evaluation reference の両側で再現可能になっている。
 
-以後の active priority は、public / internal docs の定期点検と future option の切り分けに絞る。
+以後の active priority は、public / internal docs の定期点検に加えて、JRA mainline を prediction foundation / market deviation / execution policy に分離して compare surface を固定することに絞る。
 
 ### P1. docs の定期点検
 
@@ -879,6 +879,99 @@
 
 - docs の current reading が少ない往復で保守できること。
 
+### P2. JRA track split の baseline freeze
+
+目的:
+
+- current JRA mainline を compare surface として凍結し、prediction foundation / market deviation / execution policy を別 track で扱える状態へ戻す。
+
+やること:
+
+1. snapshot tag 候補 `strategy-baseline-20260418-pre-track-split` の anchor commit を基準に baseline freeze の commit batch を固める。
+1. baseline freeze tag `strategy-baseline-20260418-pre-track-split` は `2245ed32d1b25a5a38c46501585273c81cdcf4ab` に固定済みとする。
+2. [issue_library/next_issue_model_architecture_rebuild_track_split.md](issue_library/next_issue_model_architecture_rebuild_track_split.md) を親 draft として、cross-track compare の禁止境界を維持する。
+3. `market_deviation` は [issue_library/next_issue_jra_market_deviation_formal_candidate.md](issue_library/next_issue_jra_market_deviation_formal_candidate.md) を first formal candidate read として保持し、mainline benchmark judgement へ直接混ぜない。
+4. LightGBM alpha challenger compare `r20260418_jra_lightgbm_alpha_challenger_v1` まで完了し、current read は `CatBoost incumbent / LightGBM contrast challenger` として保持する。
+
+完了条件:
+
+- baseline freeze の tag / artifact pointer が確定していること。
+- JRA の next compare が policy tuning ではなく track 固有 issue として読めること。
+
+### P3. JRA market integration redesign roadmap
+
+目的:
+
+- 「市場をちゃんと取り入れる」設計見直しを、連想的な tweak 列ではなく段階ロードマップで進める。
+
+operating rules:
+
+1. JRA 本線の新 experiment は、必ずこの roadmap のどれか 1 stage に紐づける。
+2. 各 run 後は `advance / hold / reject` のいずれかで stage 判定を閉じる。
+3. stage をまたぐ論点を 1 issue に混ぜない。
+4. policy-only tuning は Stage 3 以前に戻らない限り主線へ戻さない。
+
+stage plan:
+
+1. Stage 0: compare surface freeze
+	- baseline tag / artifact pointer / track split rule を固定する
+	- status: 完了
+
+2. Stage 1: market signal diagnosis
+	- objective: current `market_deviation` family がどの trade-off front を持つかを測る
+	- success: base / corr-side / coverage-side の contrast を artifact で説明できる
+	- stop: 単純 merge でも front improvement が出ない
+	- status: 完了
+	- current read:
+	  - base challenger `r20260418_jra_lightgbm_alpha_challenger_v1`: `alpha_pred_corr=0.1831187046`, `positive_signal_rate=0.0064266667`
+	  - corr-side variant `r20260418_jra_lightgbm_alpha_leaf40_v1`: `0.2079891249`, `0.0061666667`
+	  - coverage-side variant `r20260418_jra_lightgbm_alpha_clip6_v1`: `0.1844760397`, `0.0069466667`
+	  - merge candidate `r20260418_jra_lightgbm_alpha_leaf40_clip6_v1`: `0.1740577483`, `0.0062400000` で reject
+
+3. Stage 2: market representation redesign
+	- objective: 現 family の probe では埋まらない gap を、target / architecture / market feature routing の再設計で扱う
+	- candidate themes:
+	  - target redesign: `market_deviation` 単独ではなく market residual / pairwise / race-normalized target の再定義
+	  - architecture redesign: classification と market branch の late fusion ではなく explicit market-aware branch を持つ構成
+	  - feature routing redesign: 市場由来 signal を model input 側で独立管理する構成
+	- success: 次の primary issue を 1 本に絞り、現 probe 群では埋まらない残差を明文化できる
+	- stop: 1 issue に target / architecture / policy を同時に混ぜないと書けない
+	- status: 完了
+	- primary issue:
+	  - [issue_library/next_issue_jra_market_deviation_target_redefinition.md](issue_library/next_issue_jra_market_deviation_target_redefinition.md)
+	- result:
+	  - diagnostic artifact `market_deviation_target_diagnostic_model_lightgbm_alpha_cpu_diag.json` で current target の clip hit を確認した
+	  - race-normalized residual candidate `r20260418_jra_lightgbm_alpha_race_norm_v1` は `alpha_pred_corr=0.2232080870`, `positive_signal_rate=0.2132800000` を確認した
+	  - decision: `advance`
+
+4. Stage 3: formal candidate rebuild
+	- objective: Stage 2 で選んだ設計 1 本を full artifact で formal compare する
+	- entry condition: Stage 2 の primary issue が 1 本に固定されている
+	- status: 完了
+	- current read:
+	  - current best candidate は `r20260418_jra_lightgbm_alpha_race_norm_v1`
+	  - formal candidate reference は [issue_library/next_issue_jra_market_deviation_formal_candidate.md](issue_library/next_issue_jra_market_deviation_formal_candidate.md) を正本にする
+	  - decision: `advance`
+
+5. Stage 4: execution policy reintegration
+	- objective: Stage 3 で signal source が固定できた後にだけ policy track へ戻す
+	- entry condition: market-side candidate が `keep as candidate` 以上で維持できる
+	- status: current
+	- primary issue:
+	  - [issue_library/next_issue_jra_market_deviation_policy_reintegration.md](issue_library/next_issue_jra_market_deviation_policy_reintegration.md)
+	- current read:
+	  - bounded sidecar config と profile は追加済み
+	  - representative compare では sidecar `auc=0.8384159536`, `logloss=0.2037916115` と baseline `auc=0.8383868804`, `logloss=0.2039192355` はほぼ同等で、`top1_roi` は `0.7973504431 < 0.7989290990` だった
+	  - September difficult window の fresh actual-date read では baseline reference `32 bets / total net -27.3 / pure bankroll 0.2959` に対して sidecar `35 bets / -4.7458333333 / 0.4352668690` を確認した
+	  - `alpha_weight: 0.05 -> 0.02` の bounded follow-up も実施したが、`policy_bets=35`, `total_policy_net=-14.6`, `pure_bankroll=0.3314214738` で exposure は減らず、actual-date read は悪化したため reject した
+	  - current bounded issue の decision は `hold` であり、serving default は変更しない
+
+current next action:
+
+1. Stage 4 bounded reintegration issue は current read を `hold` のまま凍結し、serving default を変更しない
+2. 次の JRA architecture issue は [issue_library/next_issue_jra_market_deviation_market_aware_probability_path.md](issue_library/next_issue_jra_market_deviation_market_aware_probability_path.md) に固定する
+3. late-fusion sidecar の blind parameter probe は追加せず、market-aware probability path を 1 measurable hypothesis として先に切る
+
 ## 7. 次の候補
 
 ### N1. 地方競馬データ拡張の feasibility 深掘り
@@ -893,6 +986,50 @@
 ### N2. docs の定期点検
 
 - public / internal docs の重複表現が増えすぎていないかを定期的に点検する。
+
+### N3. JRA market deviation challenger compare
+
+- first formal candidate read `r20260418_jra_catboost_alpha_baseline_refresh_v1` は `keep as candidate` 判定まで整理済みである。
+- LightGBM challenger `r20260418_jra_lightgbm_alpha_challenger_v1` も完了し、`alpha_pred_corr` は改善した一方で positive signal coverage が大きく低下したため、current read は incumbent replacement ではなく contrast challenger である。
+- 次は current compare rule のまま、`higher corr / lower coverage` の trade-off をどう切るかを別 challenger issue か promotion boundary memo へ落とす。
+
+### N4. JRA LightGBM coverage recovery
+
+- next measurable hypothesis は [issue_library/next_issue_jra_market_deviation_lightgbm_coverage_recovery.md](issue_library/next_issue_jra_market_deviation_lightgbm_coverage_recovery.md) に固定した。
+- first candidate は [issue_library/../configs/model_lightgbm_alpha_cpu_diag_leaf40.yaml](../configs/model_lightgbm_alpha_cpu_diag_leaf40.yaml) で、`min_data_in_leaf: 80 -> 40` だけを変える。
+- 目的は LightGBM alpha の higher corr を大きく壊さずに positive signal coverage を回復できるかを narrow に判定することである。
+- `r20260418_jra_lightgbm_alpha_leaf40_v1` の結果、`alpha_pred_corr=0.2079891249` へ改善した一方で `positive_signal_rate=0.0061666667` と coverage recovery は起きなかったため、この single-lever hypothesis は reject とする。
+
+### N5. JRA LightGBM target-clip compression
+
+- next measurable hypothesis は [issue_library/next_issue_jra_market_deviation_lightgbm_target_clip_compression.md](issue_library/next_issue_jra_market_deviation_lightgbm_target_clip_compression.md) に固定する。
+- first candidate は [issue_library/../configs/model_lightgbm_alpha_cpu_diag_clip6.yaml](../configs/model_lightgbm_alpha_cpu_diag_clip6.yaml) で、`target_clip: 8.0 -> 6.0` だけを変える。
+- 目的は negative target tail を圧縮して `positive_signal_rate` を戻せるかを narrow に判定することである。
+- `r20260418_jra_lightgbm_alpha_clip6_v1` の結果、`alpha_pred_corr=0.1844760397` を維持したまま `positive_signal_rate=0.0069466667` へ小幅改善したため、この hypothesis は `keep as candidate` とする。
+- ただし CatBoost incumbent の coverage には依然遠く、clip6 は current LightGBM line の coverage-side contrast variant として扱う。
+
+### N6. JRA LightGBM trade-off merge
+
+- next measurable hypothesis は [issue_library/next_issue_jra_market_deviation_lightgbm_tradeoff_merge.md](issue_library/next_issue_jra_market_deviation_lightgbm_tradeoff_merge.md) に固定する。
+- first candidate は [issue_library/../configs/model_lightgbm_alpha_cpu_diag_leaf40_clip6.yaml](../configs/model_lightgbm_alpha_cpu_diag_leaf40_clip6.yaml) で、`min_data_in_leaf: 40` と `target_clip: 6.0` を同時に入れる。
+- 目的は leaf40 の corr-side gain と clip6 の coverage-side gain を同時に取り込めるかを narrow に判定することである。
+- `r20260418_jra_lightgbm_alpha_leaf40_clip6_v1` の結果、`alpha_pred_corr=0.1740577483`, `positive_signal_rate=0.0062400000` で base challenger と clip6 の両方を下回ったため、この merge hypothesis は reject とする。
+- current read は Stage 1 完了であり、次は parameter probe の継ぎ足しではなく Stage 2 の market representation redesign issue を 1 本に固定する。
+
+### N7. JRA market deviation target redesign
+
+- Stage 2 の primary issue は [issue_library/next_issue_jra_market_deviation_target_redefinition.md](issue_library/next_issue_jra_market_deviation_target_redefinition.md) に固定する。
+- 次の root-cause 仮説は parameter tuning ではなく、current `market_deviation` target shape が coverage collapse を作っていないかの検証である。
+- ここでは race-normalized residual target 1 種だけを first candidate とし、target / architecture / policy を同時に混ぜない。
+- diagnostic artifact `market_deviation_target_diagnostic_model_lightgbm_alpha_cpu_diag.json` では `lower_clip_rate=0.03702`, `upper_clip_rate=0.06808` を確認した。
+- `r20260418_jra_lightgbm_alpha_race_norm_v1` の結果、`alpha_pred_corr=0.2232080870`, `positive_signal_rate=0.2132800000`, `ev_threshold_1_0_roi=1.1144751854` を確認した。
+- current decision は `advance` とし、Stage 2 は完了とする。
+
+### N8. JRA market deviation policy reintegration
+
+- Stage 4 の primary issue は [issue_library/next_issue_jra_market_deviation_policy_reintegration.md](issue_library/next_issue_jra_market_deviation_policy_reintegration.md) に固定する。
+- next measurable hypothesis は race-normalized residual alpha を bounded sidecar score source として reintegrate したときに、baseline probability path を壊さずに actual-date / representative compare を改善できるかである。
+- ここでは baseline win model の置換や broad policy rewrite は扱わず、alpha sidecar compare 1 本だけを first candidate にする。
 
 ## 8. 当面やらないこと
 

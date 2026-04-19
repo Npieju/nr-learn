@@ -14,6 +14,14 @@ current priority を追うときは、まず [../github_issue_queue_current.md](
 ## Entry Points
 
 - JRA pruning reference: [jra_pruning_index.md](jra_pruning_index.md)
+- JRA architecture rebuild reference: [next_issue_model_architecture_rebuild_track_split.md](next_issue_model_architecture_rebuild_track_split.md)
+- JRA market deviation candidate reference: [next_issue_jra_market_deviation_formal_candidate.md](next_issue_jra_market_deviation_formal_candidate.md)
+- JRA market-aware probability path reference: [next_issue_jra_market_deviation_market_aware_probability_path.md](next_issue_jra_market_deviation_market_aware_probability_path.md)
+- JRA market deviation coverage recovery reference: [next_issue_jra_market_deviation_lightgbm_coverage_recovery.md](next_issue_jra_market_deviation_lightgbm_coverage_recovery.md)
+- JRA market deviation target-clip reference: [next_issue_jra_market_deviation_lightgbm_target_clip_compression.md](next_issue_jra_market_deviation_lightgbm_target_clip_compression.md)
+- JRA market deviation trade-off merge reference: [next_issue_jra_market_deviation_lightgbm_tradeoff_merge.md](next_issue_jra_market_deviation_lightgbm_tradeoff_merge.md)
+- JRA market deviation target redesign reference: [next_issue_jra_market_deviation_target_redefinition.md](next_issue_jra_market_deviation_target_redefinition.md)
+- JRA market deviation policy reintegration reference: [next_issue_jra_market_deviation_policy_reintegration.md](next_issue_jra_market_deviation_policy_reintegration.md)
 - JRA operator/policy reference: [jra_operator_policy_index.md](jra_operator_policy_index.md)
 - NAR reference: [nar_issue_index.md](nar_issue_index.md)
 - ops/runtime reference: [ops_runtime_index.md](ops_runtime_index.md)

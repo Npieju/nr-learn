@@ -17,6 +17,9 @@
 
 ## 2. 基本原則
 
+- 新しい experiment を始める前に、必ず current roadmap 上で `objective / non-goals / success metrics / validation plan / stop condition` を先に固定する。
+- 連想的に次の probe を足さない。前の run の結果は、同じ stage の roadmap を更新するか、次 stage へ進むか、reject して打ち切るかの 3 択で処理する。
+- JRA 本線の architecture-level な論点では、単発 issue を増やす前に stage roadmap を source-of-truth に反映する。
 - 100〜200 レース程度の短窓結果は、方向確認には使っても昇格根拠には使わない。
 - 改善判断は、一定区切りごとの full train / evaluate / promotion gate を通した結果で行う。
 - 実験の速さと、採用判断の厳しさは分けて運用する。
@@ -75,6 +78,24 @@ latest 2025 の actual-date compare を再開するときは、まず `serving_v
 - コミットや比較メモも、その revision 名を軸に揃える。
 
 この運用にすると、後から見返したときに「どの変更が正式に評価済みか」が分かりやすい。
+
+## 4.1 planning gate
+
+full train / evaluate に進む前に、次の 5 点を current source-of-truth へ明示する。
+
+1. objective
+2. non-goals
+3. success metrics
+4. validation plan
+5. stop condition
+
+JRA 本線で root-cause が architecture / market integration にある場合は、さらに次も先に固定する。
+
+1. いまどの stage にいるか
+2. 次の issue がその stage の exit criteria にどう対応するか
+3. run 後に `advance / hold / reject` のどれで閉じるか
+
+この gate を通さずに ad-hoc probe を継ぎ足さない。
 
 ## 5. 標準フロー
 
