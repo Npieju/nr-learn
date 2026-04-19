@@ -134,6 +134,33 @@ meaning:
    - candidate は `full_training_table + wf_off + 123 features`
 4. したがって current bottleneck は「candidate が弱い」で閉じず、baseline `classification` probability surface を固定 geometry で formalize し直す必要がある
 
+aligned baseline control read:
+
+- source:
+  - [../../artifacts/reports/evaluation_summary_catboost_value_stack_lgbm_roi_high_coverage_tune_roi012_liquidity_regime_hybrid_af0b3a870abf79f4_wf_off_nested.json](../../artifacts/reports/evaluation_summary_catboost_value_stack_lgbm_roi_high_coverage_tune_roi012_liquidity_regime_hybrid_af0b3a870abf79f4_wf_off_nested.json)
+- command context:
+  - `current_recommended_serving_2025_latest`
+  - `model_artifact_suffix=r20260325_current_recommended_serving_2025_latest_benchmark_refresh`
+  - `artifact_suffix=r20260419_jra_prediction_support_baseline_v1`
+  - `wf_mode=off`
+- `auc=0.8403234192`
+- `logloss=0.2035570661`
+- `top1_roi=0.8056284530`
+- `ev_threshold_1_0_bets=5009`
+- `market_prob_corr=0.9858431204`
+- run geometry:
+  - `loaded_rows=1730857`
+  - `data_load_strategy=full_training_table`
+  - `wf_mode=off`
+  - `feature_count=103`
+  - `stability_assessment=representative`
+
+updated meaning:
+
+1. like-for-like に近い `full_training_table + wf_off` control でも baseline は `representative` を維持した
+2. 同 geometry では baseline `ev_threshold_1_0_bets=5009` に対し rejected candidate は `1` であり、support collapse は geometry mismatch だけでは説明できない
+3. 一方で candidate 側には `feature_count=123` と probability-path 差分が同時に入っているため、next issue では baseline `classification` surface の support diagnostics を先に固定し、その後に broader composition へ進むかを判定する
+
 September difficult-window support read:
 
 - baseline smoke summary:
