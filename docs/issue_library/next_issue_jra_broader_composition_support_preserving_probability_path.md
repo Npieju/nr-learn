@@ -148,6 +148,45 @@ entry meaning:
 2. 次 candidate は baseline support を carrier として維持する constraint を持つべきである
 3. next issue の役割は candidate を量産することではなく、support-preserving compare surface を 1 本作ることである
 
+## First Candidate Read
+
+2026-04-19 に `support_preserving_residual_path` の first candidate を実装した。
+
+implementation surface:
+
+- probability path:
+  - [../../src/racing_ml/evaluation/scoring.py](../../src/racing_ml/evaluation/scoring.py)
+- model config:
+  - [../../configs/model_catboost_value_stack_lgbm_roi_high_coverage_tune_roi012_liquidity_regime_hybrid_june_strict_serving_support_preserving_prob_race_norm.yaml](../../configs/model_catboost_value_stack_lgbm_roi_high_coverage_tune_roi012_liquidity_regime_hybrid_june_strict_serving_support_preserving_prob_race_norm.yaml)
+- profile:
+  - [../../src/racing_ml/common/model_profiles.py](../../src/racing_ml/common/model_profiles.py)
+
+implementation rule:
+
+1. baseline `win_logit` を final carrier として維持する
+2. market は `market_logit - win_logit` の bounded residual を `tanh` で圧縮して注入する
+3. alpha は従来どおり bounded residual の additive signal として残す
+4. legacy の post-sigmoid market blend はこの mode では無効化する
+
+representative evaluate read:
+
+- source:
+  - [../../artifacts/reports/evaluation_summary_catboost_value_stack_lgbm_roi_high_coverage_tune_roi012_liquidity_regime_hybrid_da9a84b67bd0d1c4_wf_off_nested.json](../../artifacts/reports/evaluation_summary_catboost_value_stack_lgbm_roi_high_coverage_tune_roi012_liquidity_regime_hybrid_da9a84b67bd0d1c4_wf_off_nested.json)
+- profile:
+  - `current_recommended_serving_support_preserving_prob_race_norm_2025_latest`
+- `auc=0.8402890052`
+- `logloss=0.2034577245`
+- `ev_threshold_1_0_bets=5128`
+- `ev_threshold_1_2_bets=3092`
+- `stability_assessment=representative`
+
+first read meaning:
+
+1. representative support は preserved とみなしてよい
+2. baseline / sidecar に近い compare surface は確保できた
+3. first candidate は `market_aware_alpha_branch` のような catastrophic support collapse を再発させていない
+4. next judgment には September difficult window compare がまだ必要である
+
 ## Success Metrics
 
 - next candidate が `baseline support carrier` constraint を満たす

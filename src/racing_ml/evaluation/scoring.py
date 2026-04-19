@@ -59,6 +59,17 @@ def compose_value_blend_probabilities(
             alpha_branch = alpha_branch + float(params.get("alpha_weight", 0.0)) * alpha_signal
         combined_logit = ((1.0 - market_weight) * win_logit) + (market_weight * alpha_branch)
 
+    elif probability_path_mode == "support_preserving_residual_path":
+        if market_prob is not None:
+            market_logit = _logit(np.asarray(market_prob, dtype=float).reshape(-1))
+            market_residual_scale = max(float(params.get("market_residual_scale", 0.75)), 1e-6)
+            market_signal = np.tanh((market_logit - win_logit) / market_residual_scale)
+            if bool(params.get("market_residual_positive_only", False)):
+                market_signal = np.maximum(market_signal, 0.0)
+            combined_logit = combined_logit + float(params.get("market_residual_weight", 0.0)) * market_signal
+        if alpha_signal is not None:
+            combined_logit = combined_logit + float(params.get("alpha_weight", 0.0)) * alpha_signal
+
     elif alpha_signal is not None:
         combined_logit = combined_logit + float(params.get("alpha_weight", 0.0)) * alpha_signal
 
@@ -78,7 +89,7 @@ def compose_value_blend_probabilities(
 
     blended_prob = _sigmoid(combined_logit)
 
-    if market_prob is not None and probability_path_mode != "market_aware_alpha_branch":
+    if market_prob is not None and probability_path_mode not in {"market_aware_alpha_branch", "support_preserving_residual_path"}:
         blended_prob = blend_prob(
             pd.Series(blended_prob),
             pd.Series(np.asarray(market_prob, dtype=float).reshape(-1)),
