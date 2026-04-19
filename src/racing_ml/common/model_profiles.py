@@ -68,6 +68,12 @@ MODEL_RUN_PROFILES: dict[str, ModelRunProfile] = {
         data_config="configs/data.yaml",
         feature_config="configs/features_catboost_rich_high_coverage_diag.yaml",
     ),
+    "current_recommended_serving_market_aware_prob_race_norm": ModelRunProfile(
+        description="Architecture candidate that routes race-normalized alpha through a market-aware probability path instead of the legacy late-fusion sidecar path.",
+        model_config="configs/model_catboost_value_stack_lgbm_roi_high_coverage_tune_roi012_liquidity_regime_hybrid_june_strict_serving_market_aware_prob_race_norm.yaml",
+        data_config="configs/data.yaml",
+        feature_config="configs/features_catboost_rich_high_coverage_diag.yaml",
+    ),
     "current_long_horizon_serving": ModelRunProfile(
         description="Long-horizon operational serving alias that keeps baseline behavior outside September and applies the validated September Kelly-only guard.",
         model_config="configs/model_catboost_value_stack_lgbm_roi_high_coverage_tune_roi012_liquidity_regime_hybrid_june_strict_serving_sep_selected_rows_kelly_only_candidate.yaml",

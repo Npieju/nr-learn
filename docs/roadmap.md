@@ -83,6 +83,8 @@
 
 現時点の operational baseline は `current_recommended_serving_2025_latest` とする。
 
+また、`current_recommended_serving_market_aware_prob_race_norm_2025_latest` による first market-aware probability-path candidate の representative / actual-date read も完了した。representative evaluate は `auc=0.8410248775`, `top1_roi=0.7893301105` だったが、`ev_threshold_1_0_bets=1` で stability guardrail は `probe_only` だった。さらに `2025-09-06/07/13/14/20/21/27/28` の fresh actual-date compare では baseline `34 bets / total net -13.6`、bounded sidecar `35 bets / total net -9.9` に対し candidate は `0 bets / total net 0.0` となり、compare surface 自体を失った。したがってこの first candidate は `reject` とし、JRA next action は Stage 4 bounded reintegration 再開ではなく次の architecture child issue 再定義へ戻す。
+
 一方、`current_tighter_policy_search_candidate_2025_latest` は latest 2025 regime の formal-support 改善を確認した analysis-first candidate として保持する。actual-date の fresh compare では、2025-09 の difficult window で baseline `32 bets / total net -27.3 / pure bankroll 0.2959` に対して `9 bets / -4.3 / 0.8395` と強い損失圧縮を示した一方、2025-12 tail では baseline `45 bets / +21.8 / 1.6712` に対して `9 bets / +21.4 / 1.6032` と profit window の top line では届かなかった。したがって現時点では serving default へは昇格させず、September difficult regime 向けの analysis-first defensive candidate として扱う。
 
 また、`r20260327_recent_2020_component_retrain` は recent-heavy learning window の真の再学習比較として formal に通過したが、weighted nested-WF ROI と bets total は直近の pseudo-retrain run を下回った。したがってこちらも、現時点では baseline 置換ではなく analysis-first candidate として扱う。
@@ -214,6 +216,15 @@
 - そこで wrapper に `--skip-train`、`--train-artifact-suffix`、`--evaluate-model-artifact-suffix` を通し、missing runtime config を復元し、`run_wf_feasibility_diag.py` を profile 解決対応に揃えた。
 - その結果、`r20260405_2025latest_refresh_reuse_runtimecfg_wfprofilefix` は `pass / promote` で整合し、`AUC=0.8364`、`logloss=0.2048`、`top1_roi=0.7994`、`nested WF weighted test ROI=0.9157`、`formal_benchmark_weighted_roi=0.8372`、`formal_benchmark_feasible_fold_count=5/5`、`formal_benchmark_bets_total=2364` を確認した。
 - この run は baseline 置換の根拠ではなく、latest 2025 の evaluation mainline reference が formal artifact まで再現可能であることを示す evidence として扱う。
+
+### 4.18 JRA market-aware probability-path first candidate の reject
+
+- [../artifacts/reports/evaluation_summary_catboost_value_stack_lgbm_roi_high_coverage_tune_roi012_liquidity_regime_hybrid_19cd9b89087d0447_wf_off_nested.json](../artifacts/reports/evaluation_summary_catboost_value_stack_lgbm_roi_high_coverage_tune_roi012_liquidity_regime_hybrid_19cd9b89087d0447_wf_off_nested.json) により、`current_recommended_serving_market_aware_prob_race_norm_2025_latest` の representative evaluate は `auc=0.8410248775`, `logloss=0.2026480271`, `top1_roi=0.7893301105` を返した。
+- ただし `ev_threshold_1_0_bets=1` で stability guardrail は `probe_only` となり、representative support quality は mainline promotion judgment を支えなかった。
+- さらに [../artifacts/reports/serving_smoke_compare_sep25_market_aware_prob_v1_base_vs_cand.json](../artifacts/reports/serving_smoke_compare_sep25_market_aware_prob_v1_base_vs_cand.json) と [../artifacts/reports/serving_smoke_compare_sep25_market_aware_prob_v1_sidecar_vs_cand.json](../artifacts/reports/serving_smoke_compare_sep25_market_aware_prob_v1_sidecar_vs_cand.json) により、`2025-09-06/07/13/14/20/21/27/28` の actual-date compare では candidate が `8/8` 日すべて `policy_bets=0` になったことを確認した。
+- 集計では baseline が `34 bets / total net -13.6`、bounded sidecar が `35 bets / total net -9.9` に対して、market-aware probability-path candidate は `0 bets / total net 0.0` だった。
+- `differing_score_source_dates=[]`, `differing_policy_dates=[]` のため、問題は family 切替ではなく same compare surface 上で support が zero へ痩せたことにある。
+- したがって first market-aware probability-path candidate は `reject` とし、次の JRA action は Stage 4 bounded reintegration 再開ではなく、prediction foundation か broader architecture branch の次 child issue を 1 本だけ再定義することに固定する。
 
 ## 5. 完了済みマイルストーン
 

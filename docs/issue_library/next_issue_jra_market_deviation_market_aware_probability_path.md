@@ -103,6 +103,68 @@ guardrail:
   - [next_issue_jra_market_deviation_policy_reintegration.md](next_issue_jra_market_deviation_policy_reintegration.md)
 - current score composition implementation:
   - [../../src/racing_ml/evaluation/scoring.py](../../src/racing_ml/evaluation/scoring.py)
+- first candidate config:
+  - [../../configs/model_catboost_value_stack_lgbm_roi_high_coverage_tune_roi012_liquidity_regime_hybrid_june_strict_serving_market_aware_prob_race_norm.yaml](../../configs/model_catboost_value_stack_lgbm_roi_high_coverage_tune_roi012_liquidity_regime_hybrid_june_strict_serving_market_aware_prob_race_norm.yaml)
+- candidate profile:
+  - `current_recommended_serving_market_aware_prob_race_norm`
+
+## First Empirical Read
+
+2026-04-19 の first empirical read は次で閉じる。
+
+implementation surface:
+
+- scoring mode:
+  - `probability_path_mode: market_aware_alpha_branch`
+- candidate config:
+  - [../../configs/model_catboost_value_stack_lgbm_roi_high_coverage_tune_roi012_liquidity_regime_hybrid_june_strict_serving_market_aware_prob_race_norm.yaml](../../configs/model_catboost_value_stack_lgbm_roi_high_coverage_tune_roi012_liquidity_regime_hybrid_june_strict_serving_market_aware_prob_race_norm.yaml)
+- representative summary:
+  - [../../artifacts/reports/evaluation_summary_catboost_value_stack_lgbm_roi_high_coverage_tune_roi012_liquidity_regime_hybrid_19cd9b89087d0447_wf_off_nested.json](../../artifacts/reports/evaluation_summary_catboost_value_stack_lgbm_roi_high_coverage_tune_roi012_liquidity_regime_hybrid_19cd9b89087d0447_wf_off_nested.json)
+- September actual-date baseline compare:
+  - [../../artifacts/reports/serving_smoke_compare_sep25_market_aware_prob_v1_base_vs_cand.json](../../artifacts/reports/serving_smoke_compare_sep25_market_aware_prob_v1_base_vs_cand.json)
+- September actual-date sidecar compare:
+  - [../../artifacts/reports/serving_smoke_compare_sep25_market_aware_prob_v1_sidecar_vs_cand.json](../../artifacts/reports/serving_smoke_compare_sep25_market_aware_prob_v1_sidecar_vs_cand.json)
+
+representative evaluate read:
+
+- `auc=0.8410248775`
+- `logloss=0.2026480271`
+- `top1_roi=0.7893301105`
+- `ev_top1_roi=0.8434737569`
+- `ev_threshold_1_0_bets=1`
+- stability guardrail は `probe_only`
+
+meaning:
+
+- top-line classification read は致命的には壊れていない
+- ただし EV support が極端に細く、representative read だけで probability-path replacement を主張できない
+
+September difficult window read:
+
+- baseline `current_recommended_serving_2025_latest`:
+  - `34 bets / total net -13.6`
+- bounded sidecar `current_recommended_serving_alpha_sidecar_race_norm_2025_latest`:
+  - `35 bets / total net -9.9`
+- market-aware probability path candidate `current_recommended_serving_market_aware_prob_race_norm_2025_latest`:
+  - `0 bets / total net 0.0`
+
+additional structural read:
+
+- `differing_score_source_dates=[]`
+- `differing_policy_dates=[]`
+- つまり visible な差分は score-source family や policy family の切替ではなく、same surface 上で support が zero まで痩せたことにある
+
+## Decision
+
+current decision は `reject` で閉じる。
+
+理由は次のとおりである。
+
+1. representative read は `probe_only` で、support quality が promotion judgment を支えない
+2. actual-date compare では candidate が 8/8 日すべて `policy_bets=0` となり、baseline や sidecar と比較できる exposure surface を失った
+3. この issue の hypothesis は「late-fusion sidecar より良い compare surface を作れるか」だったが、first candidate は compare surface 自体を細らせた
+
+したがって current candidate は、late-fusion sidecar の structural replacement としては採用しない。
 
 ## Success Metrics
 
@@ -135,3 +197,4 @@ guardrail:
 
 - この issue が終わるまで、Stage 4 bounded reintegration issue に新しい single-lever probe は追加しない
 - execution policy track に戻るのは、この issue が `advance` で閉じた後だけにする
+- current close は `reject` なので、next action は Stage 4 bounded reintegration 再開ではなく、prediction foundation か broader architecture branch の次 child issue を再定義することに固定する

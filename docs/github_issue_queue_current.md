@@ -12,8 +12,8 @@
 2. NAR は readiness track として分離して扱う。
 3. current queue では open issue だけを追い、completed issue の説明は繰り返さない。
 4. JRA 本線を再開するときは、`roadmap.md` の stage roadmap を先に更新し、ad-hoc probe を継ぎ足さない。
-5. JRA 本線の current stage は Stage 4 であり、bounded policy reintegration issue を 1 本に固定する。
-6. Stage 4 first pass は `hold` とし、次の JRA mainline work は [issue_library/next_issue_jra_market_deviation_market_aware_probability_path.md](issue_library/next_issue_jra_market_deviation_market_aware_probability_path.md) を architecture branch の正本にする。
+5. JRA 本線の current read は、Stage 4 bounded reintegration を `hold` で止めたうえで architecture branch を優先する。
+6. market-aware probability-path first candidate は `reject` で閉じ、次の JRA mainline work は次 child issue を再定義することに固定する。
 
 ## Open Issues
 
@@ -190,7 +190,7 @@
 5. `#122` の future-only readiness track は live capture / result arrival 用の operator path として独立に保守する。
 6. `#124` の human review decision を待つ。
 7. JRA 本線を再開する場合だけ、review 結果の後に `roadmap.md` の current stage を確認し、その stage に対応する次の 1 measurable hypothesis を選ぶ。
-8. current JRA next issue は [issue_library/next_issue_jra_market_deviation_policy_reintegration.md](issue_library/next_issue_jra_market_deviation_policy_reintegration.md) を正本にし、race-normalized residual alpha の bounded sidecar reintegration 以外の policy rewrite は後回しにする。
+8. current JRA next action は [issue_library/next_issue_jra_market_deviation_market_aware_probability_path.md](issue_library/next_issue_jra_market_deviation_market_aware_probability_path.md) の `reject` read を起点に、次の architecture child issue を 1 本だけ再定義することである。policy reintegration の再開はその後に判断する。
 
 ## Reading Order
 

@@ -40,13 +40,26 @@ def compose_value_blend_probabilities(
 ) -> np.ndarray:
     params = params or {}
     win_prob = np.clip(np.asarray(win_prob, dtype=float).reshape(-1), 1e-6, 1.0 - 1e-6)
-    combined_logit = _logit(win_prob)
+    probability_path_mode = str(params.get("probability_path_mode", "legacy_blend")).strip().lower() or "legacy_blend"
+    win_logit = _logit(win_prob)
+    combined_logit = win_logit
 
+    alpha_signal: np.ndarray | None = None
     if alpha_raw is not None:
         alpha_scale = max(float(params.get("alpha_scale", 2.0)), 1e-6)
         alpha_signal = np.tanh(np.asarray(alpha_raw, dtype=float).reshape(-1) / alpha_scale)
         if bool(params.get("alpha_positive_only", False)):
             alpha_signal = np.maximum(alpha_signal, 0.0)
+
+    if probability_path_mode == "market_aware_alpha_branch" and market_prob is not None:
+        market_logit = _logit(np.asarray(market_prob, dtype=float).reshape(-1))
+        market_weight = float(params.get("market_blend_weight", 1.0))
+        alpha_branch = market_logit
+        if alpha_signal is not None:
+            alpha_branch = alpha_branch + float(params.get("alpha_weight", 0.0)) * alpha_signal
+        combined_logit = ((1.0 - market_weight) * win_logit) + (market_weight * alpha_branch)
+
+    elif alpha_signal is not None:
         combined_logit = combined_logit + float(params.get("alpha_weight", 0.0)) * alpha_signal
 
     if roi_raw is not None:
@@ -65,7 +78,7 @@ def compose_value_blend_probabilities(
 
     blended_prob = _sigmoid(combined_logit)
 
-    if market_prob is not None:
+    if market_prob is not None and probability_path_mode != "market_aware_alpha_branch":
         blended_prob = blend_prob(
             pd.Series(blended_prob),
             pd.Series(np.asarray(market_prob, dtype=float).reshape(-1)),
