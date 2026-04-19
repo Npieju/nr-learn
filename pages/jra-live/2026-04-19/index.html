@@ -1138,6 +1138,17 @@
       return race.liveHarville || race.harville || null;
     }
 
+    function normalizeOddsRefreshError(error) {
+      const message = error instanceof Error ? error.message : String(error || "unknown error");
+      if (/Failed to fetch|Load failed|NetworkError/i.test(message)) {
+        return "browser blocked direct odds refresh (likely CORS). build snapshot is still available.";
+      }
+      if (/HTTP\s+4\d\d/i.test(message)) {
+        return `odds api rejected refresh request: ${message}`;
+      }
+      return `odds api unavailable: ${message}`;
+    }
+
     function buildRaceHorseMaster(race, analyzeData) {
       const master = [];
       const seen = new Set();
@@ -1604,6 +1615,7 @@
 
     function renderHarvilleSnapshot(race) {
       const button = document.getElementById("harville-refresh-button");
+      const refreshError = race?.liveHarvilleStatus?.state === "error" ? race.liveHarvilleStatus.message : null;
       if (button instanceof HTMLButtonElement) {
         button.disabled = !race || state.activeOddsRaceId === race.raceId;
         button.textContent = state.activeOddsRaceId === race?.raceId ? "再取得中..." : "最新オッズで再計算";
@@ -1627,16 +1639,21 @@
       state.harvilleMarket = activeMarket;
       const selectedAnchors = state.harvilleAnchors.slice(0, 2);
       renderHarvilleAnchorControls(race, selectedAnchors, activeMarket);
-      document.getElementById("harville-note").textContent = harville.message || "model score を race 内で正規化した勝率から Harville 理論オッズを計算し、市場オッズがどれだけ上振れているかを見ます。";
+      document.getElementById("harville-note").textContent = refreshError
+        ? `${harville.message || "model score を race 内で正規化した勝率から Harville 理論オッズを計算し、市場オッズがどれだけ上振れているかを見ます。"} Live refresh note: ${refreshError}`
+        : (harville.message || "model score を race 内で正規化した勝率から Harville 理論オッズを計算し、市場オッズがどれだけ上振れているかを見ます。");
       document.getElementById("harville-meta").textContent = [
         harville?.meta?.oddsUpdatedAt ? `odds ${harville.meta.oddsUpdatedAt}` : null,
         harville?.meta?.analyzedAt ? `analyzed ${harville.meta.analyzedAt}` : null,
         harville?.meta?.horseCount ? `horses ${harville.meta.horseCount}` : null,
         harville?.meta?.positiveRows !== undefined ? `positive rows ${harville.meta.positiveRows}` : null,
+        refreshError ? `live refresh ${refreshError}` : null,
       ].filter(Boolean).join(" / ");
-      document.getElementById("harville-refresh-status").textContent = harville?.meta?.snapshotSource === "live-refresh"
-        ? "live refreshed"
-        : "build snapshot";
+      document.getElementById("harville-refresh-status").textContent = state.activeOddsRaceId === race?.raceId
+        ? "updating live odds..."
+        : (refreshError
+          ? "live refresh blocked"
+          : (harville?.meta?.snapshotSource === "live-refresh" ? "live refreshed" : "build snapshot"));
       document.getElementById("harville-market-tabs").innerHTML = availableTabs.length
         ? availableTabs.map((item) => `<button class="tab ${activeMarket === item.key ? "active" : ""}" type="button" data-harville-market="${item.key}">${escapeHtml(item.label)}</button>`).join("")
         : "";
@@ -1653,13 +1670,14 @@
         return;
       }
       state.activeOddsRaceId = race.raceId;
+      race.liveHarvilleStatus = { state: "loading", message: null };
       renderHarvilleLoading("latest odds refresh running...");
       try {
         const analyzeData = await fetchRaceAnalyzePayload(race.raceId, { forceRefresh: true });
         race.liveHarville = buildLiveHarvillePayload(race, analyzeData);
-        renderHarvilleSnapshot(race);
+        race.liveHarvilleStatus = { state: "live", message: null };
       } catch (error) {
-        renderHarvilleError(error instanceof Error ? error.message : String(error));
+        race.liveHarvilleStatus = { state: "error", message: normalizeOddsRefreshError(error) };
       } finally {
         state.activeOddsRaceId = null;
         renderHarvilleSnapshot(currentRace());
