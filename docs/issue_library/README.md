@@ -17,6 +17,7 @@ current priority を追うときは、まず [../github_issue_queue_current.md](
 - JRA architecture rebuild reference: [next_issue_model_architecture_rebuild_track_split.md](next_issue_model_architecture_rebuild_track_split.md)
 - JRA prediction foundation support diagnostics reference: [next_issue_jra_prediction_foundation_probability_support_diagnostics.md](next_issue_jra_prediction_foundation_probability_support_diagnostics.md)
 - JRA broader composition support-preserving probability path reference: [next_issue_jra_broader_composition_support_preserving_probability_path.md](next_issue_jra_broader_composition_support_preserving_probability_path.md)
+- JRA broader composition bounded residual calibration reference: [next_issue_jra_broader_composition_bounded_residual_calibration.md](next_issue_jra_broader_composition_bounded_residual_calibration.md)
 - JRA market deviation candidate reference: [next_issue_jra_market_deviation_formal_candidate.md](next_issue_jra_market_deviation_formal_candidate.md)
 - JRA market-aware probability path reference: [next_issue_jra_market_deviation_market_aware_probability_path.md](next_issue_jra_market_deviation_market_aware_probability_path.md)
 - JRA market deviation coverage recovery reference: [next_issue_jra_market_deviation_lightgbm_coverage_recovery.md](next_issue_jra_market_deviation_lightgbm_coverage_recovery.md)

@@ -268,7 +268,8 @@ next action boundary:
 
 1. この issue は `support-preserving compare surface を 1 本作る` 目的としては完了した
 2. sidecar を置換する broader composition follow-up を進める場合は、別 issue として bounded residual calibration / composition follow-up を切る
-3. 現時点では human review 前に serving default や baseline reference を更新しない
+3. local draft reference は [next_issue_jra_broader_composition_bounded_residual_calibration.md](next_issue_jra_broader_composition_bounded_residual_calibration.md) とする
+4. 現時点では human review 前に serving default や baseline reference を更新しない
 
 ## Follow-Up Boundary
 
