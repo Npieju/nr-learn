@@ -13,7 +13,7 @@
 3. current queue では open issue だけを追い、completed issue の説明は繰り返さない。
 4. JRA 本線を再開するときは、`roadmap.md` の stage roadmap を先に更新し、ad-hoc probe を継ぎ足さない。
 5. JRA 本線の current read は、Stage 4 bounded reintegration を `hold` で止めたうえで architecture branch を優先する。
-6. market-aware probability-path first candidate は `reject`、prediction foundation support diagnostics も `reject` で閉じ、broader composition の first `support_preserving_residual_path` candidate は `hold` と読む。support-preserving compare surface は成立したが、sidecar を置換する winner read にはまだ届いていないため、JRA architecture の次手は human review 後に別 issue として切る。
+6. market-aware probability-path first candidate は `reject`、prediction foundation support diagnostics も `reject` で閉じ、broader composition の first `support_preserving_residual_path` candidate は `hold` だった。その後の bounded residual calibration follow-up も `reject` で、representative / September actual-date ともに first candidate から有意改善を作れなかった。JRA architecture の次手は、support-preserving residual family をこれ以上 ad-hoc に掘らず、human review 後に別 issue として切る。
 
 ## Open Issues
 

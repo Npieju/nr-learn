@@ -133,6 +133,30 @@ class ComposeValueBlendProbabilitiesTest(unittest.TestCase):
 
         self.assertFalse(np.allclose(actual, legacy))
 
+    def test_support_preserving_residual_path_positive_only_clips_negative_market_residual(self) -> None:
+        win_prob = np.array([0.65, 0.35], dtype=float)
+        market_prob = np.array([0.40, 0.60], dtype=float)
+
+        actual = compose_value_blend_probabilities(
+            win_prob=win_prob,
+            params={
+                "probability_path_mode": "support_preserving_residual_path",
+                "market_residual_weight": 0.05,
+                "market_residual_scale": 0.75,
+                "market_residual_positive_only": True,
+            },
+            market_prob=market_prob,
+        )
+
+        win_logit = np.log(win_prob / (1.0 - win_prob))
+        market_logit = np.log(market_prob / (1.0 - market_prob))
+        market_signal = np.tanh((market_logit - win_logit) / 0.75)
+        market_signal = np.maximum(market_signal, 0.0)
+        expected_logit = win_logit + (0.05 * market_signal)
+        expected = 1.0 / (1.0 + np.exp(-expected_logit))
+
+        np.testing.assert_allclose(actual, expected, rtol=1e-8, atol=1e-8)
+
 
 if __name__ == "__main__":
     unittest.main()

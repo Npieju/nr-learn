@@ -80,6 +80,12 @@ MODEL_RUN_PROFILES: dict[str, ModelRunProfile] = {
         data_config="configs/data.yaml",
         feature_config="configs/features_catboost_rich_high_coverage_diag.yaml",
     ),
+    "current_recommended_serving_support_preserving_prob_race_norm_positive_only": ModelRunProfile(
+        description="Bounded residual calibration follow-up that keeps the support-preserving path but limits market residual injection to positive-only lower-weight signals.",
+        model_config="configs/model_catboost_value_stack_lgbm_roi_high_coverage_tune_roi012_liquidity_regime_hybrid_june_strict_serving_support_preserving_prob_race_norm_positive_only.yaml",
+        data_config="configs/data.yaml",
+        feature_config="configs/features_catboost_rich_high_coverage_diag.yaml",
+    ),
     "current_long_horizon_serving": ModelRunProfile(
         description="Long-horizon operational serving alias that keeps baseline behavior outside September and applies the validated September Kelly-only guard.",
         model_config="configs/model_catboost_value_stack_lgbm_roi_high_coverage_tune_roi012_liquidity_regime_hybrid_june_strict_serving_sep_selected_rows_kelly_only_candidate.yaml",

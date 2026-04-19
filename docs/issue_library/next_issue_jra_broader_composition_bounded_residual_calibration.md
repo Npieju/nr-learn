@@ -144,3 +144,68 @@ entry meaning:
 - human review 前に current queue の正本へ昇格しない
 - first candidate issue の `hold` judgment を書き換えない
 - next code change はこの issue が正本化された後に 1 candidate だけ実装する
+
+## First Execution Read
+
+2026-04-19 に proposed candidate `support_preserving_residual_path_positive_only_market_gate` を 1 本だけ実装した。
+
+implementation surface:
+
+- config:
+  - [../../configs/model_catboost_value_stack_lgbm_roi_high_coverage_tune_roi012_liquidity_regime_hybrid_june_strict_serving_support_preserving_prob_race_norm_positive_only.yaml](../../configs/model_catboost_value_stack_lgbm_roi_high_coverage_tune_roi012_liquidity_regime_hybrid_june_strict_serving_support_preserving_prob_race_norm_positive_only.yaml)
+- profile:
+  - [../../src/racing_ml/common/model_profiles.py](../../src/racing_ml/common/model_profiles.py)
+
+parameter delta from first candidate:
+
+- `market_residual_positive_only: true`
+- `market_residual_weight: 0.05`
+- other path / alpha / policy surfaces unchanged
+
+representative evaluate read:
+
+- source:
+  - [../../artifacts/reports/evaluation_summary_catboost_value_stack_lgbm_roi_high_coverage_tune_roi012_liquidity_regime_hybrid_04dd633acf0ad297_wf_off_nested.json](../../artifacts/reports/evaluation_summary_catboost_value_stack_lgbm_roi_high_coverage_tune_roi012_liquidity_regime_hybrid_04dd633acf0ad297_wf_off_nested.json)
+- `auc=0.8402890052`
+- `logloss=0.2034577245`
+- `ev_threshold_1_0_bets=5128`
+- `stability_assessment=representative`
+
+September difficult-window read:
+
+- source:
+  - [../../artifacts/reports/serving_smoke_current_recommended_serving_support_preserving_prob_race_norm_positive_only_2025_latest_sep25_support_preserving_prob_positive_only_v1.json](../../artifacts/reports/serving_smoke_current_recommended_serving_support_preserving_prob_race_norm_positive_only_2025_latest_sep25_support_preserving_prob_positive_only_v1.json)
+- `policy_bets=37`
+- `policy_selected_rows=37`
+- `total_policy_net=-11.9`
+- `mean_policy_roi=0.7027777778`
+
+compare reads:
+
+- baseline compare:
+  - [../../artifacts/reports/serving_smoke_compare_sep25_support_preserving_prob_positive_only_v1_base_vs_cand.json](../../artifacts/reports/serving_smoke_compare_sep25_support_preserving_prob_positive_only_v1_base_vs_cand.json)
+- sidecar compare:
+  - [../../artifacts/reports/serving_smoke_compare_sep25_support_preserving_prob_positive_only_v1_sidecar_vs_cand.json](../../artifacts/reports/serving_smoke_compare_sep25_support_preserving_prob_positive_only_v1_sidecar_vs_cand.json)
+
+first execution meaning:
+
+1. representative support は preserved のままだった
+2. September difficult window でも `8/8 zero-bet` は再発しなかった
+3. ただし aggregate read は first candidate と実質同一で、sidecar との差も縮まらなかった
+4. `positive_only + lower_weight` だけでは measurable improvement が出ない
+
+## Decision
+
+- current decision: `reject`
+
+reason:
+
+1. representative / actual-date ともに first candidate 比で有意な改善がなかった
+2. sidecar reference との gap も縮まず、bounded residual calibration の 1 軸としては headroom が薄い
+3. current family をこれ以上 ad-hoc に掘るより、human review で broader composition branch 継続可否を判断する方が自然である
+
+exit meaning:
+
+1. support-preserving residual family の existence proof は first candidate で足りている
+2. positive-only calibration follow-up は winner search としては前進を作れなかった
+3. next action は queue の current read どおり human review / next issue recut を優先する
