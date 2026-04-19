@@ -250,23 +250,23 @@ current bottleneck は Stage 4 の parameter surface ではなく、現 mainline
 2. `alpha_weight` のような scalar 調整では final bet exposure を制御できない
 3. market signal が probability layer ではなく後段 composition layer に留まるため、mainline replacement の判断面を作りにくい
 
-したがって next branch は Stage 4 の別レバー探索ではなく、market-aware probability path を 1 issue として切り出す architecture / score-composition branch に戻す。
+したがって market-aware probability path first candidate を 1 本打った結果、next branch はさらに前段へ戻す。current next branch は Stage 4 の別レバー探索でも追加 probability-path candidate でもなく、prediction foundation 上で probability support cliff を formalize する child issue とする。
 
 ## Locked Next Child Issue
 
 current next child issue は次で固定する。
 
-- [next_issue_jra_market_deviation_market_aware_probability_path.md](next_issue_jra_market_deviation_market_aware_probability_path.md)
+- [next_issue_jra_prediction_foundation_probability_support_diagnostics.md](next_issue_jra_prediction_foundation_probability_support_diagnostics.md)
 
 この issue の role は次である。
 
-1. race-normalized residual alpha を post-hoc sidecar ではなく probability path 側へ戻す最小構造を定義する
-2. policy family や serving default を動かさず、probability layer の改善有無だけを判定する
-3. bounded Stage 4 compare をこれ以上継ぎ足さず、late-fusion の構造限界を直接検証する
+1. baseline `classification` surface の probability support / calibration / ranking diagnostics を formalize する
+2. market-aware reject が prediction foundation 側の bottleneck かどうかを fixed compare surface で判定する
+3. 次の architecture child issue を prediction foundation continuation か broader composition redesign のどちらか 1 本に固定する
 
 resume rule:
 
-- execution policy track へ戻るのは、この child issue が `advance` で閉じた後だけにする
+- execution policy track へ戻るのは、この child issue が prediction foundation 側の bottleneck を否定した後だけにする
 - それまでは Stage 4 bounded reintegration issue に新しい parameter probe を追加しない
 
 ## First Child Issue Candidates
