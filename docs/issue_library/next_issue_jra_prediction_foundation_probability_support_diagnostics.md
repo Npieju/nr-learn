@@ -91,6 +91,79 @@ guardrail:
 - sidecar vs rejected candidate actual-date compare:
   - [../../artifacts/reports/serving_smoke_compare_sep25_market_aware_prob_v1_sidecar_vs_cand.json](../../artifacts/reports/serving_smoke_compare_sep25_market_aware_prob_v1_sidecar_vs_cand.json)
 
+## First Empirical Read
+
+2026-04-19 時点の first empirical read は次で固定する。
+
+representative baseline read:
+
+- source:
+  - [../../artifacts/reports/evaluation_summary_catboost_value_stack_lgbm_roi_high_coverage_tune_roi012_liquidity_regime_hybrid_model_r20260325_current_recommended_serving_2025_latest_benchmark_refresh.json](../../artifacts/reports/evaluation_summary_catboost_value_stack_lgbm_roi_high_coverage_tune_roi012_liquidity_regime_hybrid_model_r20260325_current_recommended_serving_2025_latest_benchmark_refresh.json)
+- `auc=0.8400959298`
+- `logloss=0.2038718179`
+- `top1_roi=0.8070328660`
+- `ev_threshold_1_0_bets=4872`
+- `market_prob_corr=0.9867135690`
+- run geometry:
+  - `loaded_rows=300000`
+  - `data_load_strategy=tail_training_table`
+  - `wf_mode=fast`
+  - `feature_count=103`
+
+representative rejected-candidate read:
+
+- source:
+  - [../../artifacts/reports/evaluation_summary_catboost_value_stack_lgbm_roi_high_coverage_tune_roi012_liquidity_regime_hybrid_19cd9b89087d0447_wf_off_nested.json](../../artifacts/reports/evaluation_summary_catboost_value_stack_lgbm_roi_high_coverage_tune_roi012_liquidity_regime_hybrid_19cd9b89087d0447_wf_off_nested.json)
+- `auc=0.8410248775`
+- `logloss=0.2026480271`
+- `top1_roi=0.7893301105`
+- `ev_threshold_1_0_bets=1`
+- `market_prob_corr=0.9999304630`
+- run geometry:
+  - `loaded_rows=1730857`
+  - `data_load_strategy=full_training_table`
+  - `wf_mode=off`
+  - `feature_count=123`
+
+meaning:
+
+1. top-line `auc` / `logloss` だけを見ると rejected candidate は catastrophic ではない
+2. しかし EV support は baseline `4872 bets` に対して candidate `1 bet` まで崩れている
+3. さらにこの compare 自体が like-for-like ではない
+   - baseline は `tail_training_table + wf_fast + 103 features`
+   - candidate は `full_training_table + wf_off + 123 features`
+4. したがって current bottleneck は「candidate が弱い」で閉じず、baseline `classification` probability surface を固定 geometry で formalize し直す必要がある
+
+September difficult-window support read:
+
+- baseline smoke summary:
+  - [../../artifacts/reports/serving_smoke_current_recommended_serving_2025_latest_sep25_market_aware_prob_v1_base.json](../../artifacts/reports/serving_smoke_current_recommended_serving_2025_latest_sep25_market_aware_prob_v1_base.json)
+- sidecar smoke summary:
+  - [../../artifacts/reports/serving_smoke_current_recommended_serving_alpha_sidecar_race_norm_2025_latest_sep25_market_aware_prob_v1_sidecar.json](../../artifacts/reports/serving_smoke_current_recommended_serving_alpha_sidecar_race_norm_2025_latest_sep25_market_aware_prob_v1_sidecar.json)
+- rejected candidate compare:
+  - [../../artifacts/reports/serving_smoke_compare_sep25_market_aware_prob_v1_base_vs_cand.json](../../artifacts/reports/serving_smoke_compare_sep25_market_aware_prob_v1_base_vs_cand.json)
+
+aggregated support read:
+
+- baseline:
+  - `34 bets / 34 selected rows / total net -13.6`
+- bounded sidecar:
+  - `35 bets / 35 selected rows / total net -9.9`
+- rejected candidate:
+  - `0 bets / 0 selected rows / total net 0.0`
+
+date-local read:
+
+- baseline は 8/8 日で selection を維持した
+- bounded sidecar も 8/8 日で selection を維持した
+- rejected candidate は 8/8 日すべて `policy_bets=0`
+
+structural read:
+
+- `differing_score_source_dates=[]`
+- `differing_policy_dates=[]`
+- つまり actual-date support collapse は visible な policy/surface switch ではなく、same visible surface 上で probability support が閾値を跨げなくなった結果として読むべきである
+
 ## Success Metrics
 
 - prediction foundation diagnostics の primary read が 1 issue として固定される
