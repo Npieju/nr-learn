@@ -199,6 +199,49 @@ def _safe_regression_corr(y_true: np.ndarray, y_pred: np.ndarray) -> float | Non
     return float(np.corrcoef(y_true[finite_mask], y_pred[finite_mask])[0, 1])
 
 
+def _compute_market_deviation_metrics(
+    frame: pd.DataFrame,
+    scores: np.ndarray,
+    *,
+    label_col: str,
+) -> dict[str, float | None | str]:
+    required_columns = {"race_id", "odds", label_col}
+    missing_columns = [column for column in required_columns if column not in frame.columns]
+    if missing_columns:
+        return {
+            "alpha_target_mean": None,
+            "alpha_target_std": None,
+            "pred_mean": None,
+            "pred_std": None,
+            "alpha_pred_corr": None,
+            "positive_signal_rate": None,
+            "market_deviation_metrics_skipped_reason": f"missing_columns:{','.join(sorted(missing_columns))}",
+        }
+
+    odds = pd.to_numeric(frame["odds"], errors="coerce").clip(lower=1.01)
+    implied = 1.0 / odds.replace(0, np.nan)
+    denom = implied.groupby(frame["race_id"]).transform("sum")
+    market_prob = (implied / denom.replace(0, np.nan)).clip(lower=1e-4, upper=1.0 - 1e-4)
+    labels = pd.to_numeric(frame[label_col], errors="coerce").fillna(0.0).clip(0.0, 1.0)
+    observed_prob = labels.clip(lower=1e-4, upper=1.0 - 1e-4)
+    observed_logit = np.log(observed_prob / (1.0 - observed_prob))
+    market_logit = np.log(market_prob / (1.0 - market_prob))
+    alpha_target = (observed_logit - market_logit).replace([np.inf, -np.inf], np.nan)
+    pred = pd.Series(np.asarray(scores, dtype=float).reshape(-1), index=frame.index)
+
+    finite_target = alpha_target.to_numpy(dtype=float)
+    finite_pred = pred.to_numpy(dtype=float)
+    return {
+        "alpha_target_mean": float(np.nanmean(finite_target)) if np.isfinite(finite_target).any() else None,
+        "alpha_target_std": float(np.nanstd(finite_target)) if np.isfinite(finite_target).any() else None,
+        "pred_mean": float(np.nanmean(finite_pred)) if np.isfinite(finite_pred).any() else None,
+        "pred_std": float(np.nanstd(finite_pred)) if np.isfinite(finite_pred).any() else None,
+        "alpha_pred_corr": _safe_regression_corr(finite_target, finite_pred),
+        "positive_signal_rate": float(np.nanmean(finite_pred > 0.0)) if np.isfinite(finite_pred).any() else None,
+        "market_deviation_metrics_skipped_reason": None,
+    }
+
+
 def _date_window_payload(frame: pd.DataFrame) -> dict[str, str | int | None]:
     if "date" not in frame.columns:
         return {
@@ -242,6 +285,7 @@ def _record_single_wf_summary(
     best_params: dict[str, float | str],
     best_valid_metrics: dict[str, float | int | None],
     wf_test_metrics: dict[str, float | int | None],
+    wf_family_diagnostics: dict[str, object] | None = None,
     score_source: str = "default",
 ) -> None:
     strategy_kind = str(best_params.get("strategy_kind", "kelly"))
@@ -277,6 +321,8 @@ def _record_single_wf_summary(
     summary["wf_policy_params"] = policy_params
     selection_reason = best_params.get("selection_reason")
     summary["wf_selection_reason"] = str(selection_reason) if selection_reason is not None else None
+    if wf_family_diagnostics is not None:
+        summary["wf_family_diagnostics"] = wf_family_diagnostics
 
     if summary["wf_strategy_kind"] == "kelly":
         summary["wf_best_min_edge"] = float(best_params.get("min_edge", 0.03))
@@ -324,6 +370,7 @@ def _fold_row(
     best_valid_metrics: dict[str, float | int | None],
     fold_test_metrics: dict[str, float | int | None],
     fold_index: int,
+    family_diagnostics: dict[str, object] | None = None,
     score_source: str = "default",
     train_window: dict[str, str | int | None] | None = None,
     valid_window: dict[str, str | int | None] | None = None,
@@ -335,7 +382,7 @@ def _fold_row(
         **_prefix_window_payload("test", test_window),
     }
     if strategy_kind == "kelly":
-        return {
+        row = {
             "fold": int(fold_index),
             "strategy_kind": strategy_kind,
             "score_source": str(score_source),
@@ -359,8 +406,11 @@ def _fold_row(
             "max_fraction": float(best_params.get("max_fraction", 0.05)),
             **window_fields,
         }
+        if family_diagnostics is not None:
+            row["family_diagnostics"] = family_diagnostics
+        return row
     if strategy_kind == "portfolio":
-        return {
+        row = {
             "fold": int(fold_index),
             "strategy_kind": strategy_kind,
             "score_source": str(score_source),
@@ -383,7 +433,10 @@ def _fold_row(
             "min_expected_value": float(best_params.get("min_expected_value", 1.0)),
             **window_fields,
         }
-    return {
+        if family_diagnostics is not None:
+            row["family_diagnostics"] = family_diagnostics
+        return row
+    row = {
         "fold": int(fold_index),
         "strategy_kind": strategy_kind,
         "score_source": str(score_source),
@@ -404,6 +457,9 @@ def _fold_row(
         "odds_max": None,
         **window_fields,
     }
+    if family_diagnostics is not None:
+        row["family_diagnostics"] = family_diagnostics
+    return row
 
 
 def _sanitize_output_slug(value: str) -> str:
@@ -471,6 +527,8 @@ def _build_evaluation_output_manifest(
     versioned_manifest_path: Path,
     summary_sha256: str,
     by_date_sha256: str | None,
+    latest_wf_progress_path: Path | None,
+    versioned_wf_progress_path: Path | None,
 ) -> dict[str, Any]:
     run_context = summary.get("run_context") if isinstance(summary.get("run_context"), dict) else {}
     by_date_present = latest_by_date_path is not None and not by_date.empty
@@ -516,15 +574,70 @@ def _build_evaluation_output_manifest(
             "latest_summary": artifact_display_path(latest_summary_path, workspace_root=ROOT),
             "latest_by_date": artifact_display_path(latest_by_date_path, workspace_root=ROOT) if latest_by_date_path is not None else None,
             "latest_manifest": artifact_display_path(latest_manifest_path, workspace_root=ROOT),
+            "latest_wf_progress": artifact_display_path(latest_wf_progress_path, workspace_root=ROOT) if latest_wf_progress_path is not None else None,
             "versioned_summary": artifact_display_path(versioned_summary_path, workspace_root=ROOT),
             "versioned_by_date": artifact_display_path(versioned_by_date_path, workspace_root=ROOT) if versioned_by_date_path is not None else None,
             "versioned_manifest": artifact_display_path(versioned_manifest_path, workspace_root=ROOT),
+            "versioned_wf_progress": artifact_display_path(versioned_wf_progress_path, workspace_root=ROOT) if versioned_wf_progress_path is not None else None,
         },
         "checksums": {
             "summary_sha256": summary_sha256,
             "by_date_sha256": by_date_sha256,
         },
     }
+
+
+def _build_wf_progress_payload(
+    *,
+    summary: dict[str, Any],
+    output_slug: str,
+    total_folds: int,
+    completed_folds: int,
+    status: str,
+    current_fold: int | None = None,
+    current_fold_state: str | None = None,
+    current_score_source: str | None = None,
+    current_train_window: dict[str, str | int | None] | None = None,
+    current_valid_window: dict[str, str | int | None] | None = None,
+    current_test_window: dict[str, str | int | None] | None = None,
+    latest_completed_fold: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    run_context = summary.get("run_context") if isinstance(summary.get("run_context"), dict) else {}
+    payload: dict[str, Any] = {
+        "updated_at": utc_now_iso(),
+        "status": status,
+        "output_slug": output_slug,
+        "profile": run_context.get("profile"),
+        "config": run_context.get("config"),
+        "data_config": run_context.get("data_config"),
+        "feature_config": run_context.get("feature_config"),
+        "artifact_suffix": run_context.get("artifact_suffix"),
+        "wf_mode": run_context.get("wf_mode"),
+        "wf_scheme": run_context.get("wf_scheme"),
+        "target_folds": int(total_folds),
+        "completed_folds": int(completed_folds),
+        "current_fold": int(current_fold) if current_fold is not None else None,
+        "current_fold_state": current_fold_state,
+        "current_score_source": current_score_source,
+        "current_train_window": current_train_window,
+        "current_valid_window": current_valid_window,
+        "current_test_window": current_test_window,
+        "latest_completed_fold": latest_completed_fold,
+    }
+    if status == "completed":
+        payload["wf_nested_test_roi_weighted"] = summary.get("wf_nested_test_roi_weighted")
+        payload["wf_nested_test_bets_total"] = summary.get("wf_nested_test_bets_total")
+    return payload
+
+
+def _write_wf_progress_outputs(
+    *,
+    latest_path: Path,
+    versioned_path: Path,
+    payload: dict[str, Any],
+) -> None:
+    write_json(latest_path, payload)
+    write_json(versioned_path, payload)
 
 
 def main() -> int:
@@ -793,6 +906,14 @@ def main() -> int:
                 summary["time_deviation_rmse"] = _safe_regression_rmse(raw_target, raw_prediction)
                 summary["time_deviation_mae"] = _safe_regression_mae(raw_target, raw_prediction)
                 summary["time_deviation_pred_corr"] = _safe_regression_corr(raw_target, raw_prediction)
+        elif task == "market_deviation":
+            summary.update(
+                _compute_market_deviation_metrics(
+                    frame,
+                    outputs.score,
+                    label_col=label_col,
+                )
+            )
 
         summary["run_context"] = {
             "profile": resolved_profile,
@@ -841,6 +962,21 @@ def main() -> int:
             "start": args.start_date,
             "end": args.end_date,
         }
+        report_dir = ROOT / "artifacts/reports"
+        report_dir.mkdir(parents=True, exist_ok=True)
+        output_slug = _derive_evaluation_output_slug(
+            model_config_path,
+            output_artifacts.model_path,
+            prefer_config=bool(isinstance(score_regime_overrides_cfg, list) and score_regime_overrides_cfg),
+        )
+        date_window_slug = _derive_date_window_slug(args.start_date, args.end_date)
+        wf_slug = _derive_wf_slug(args.wf_mode, args.wf_scheme)
+        wf_progress_enabled = args.wf_mode != "off" and args.wf_scheme == "nested"
+        latest_wf_progress_path = report_dir / "evaluation_wf_progress.json"
+        versioned_wf_progress_path = report_dir / f"evaluation_wf_progress_{output_slug}{date_window_slug}{wf_slug}.json"
+        if wf_progress_enabled:
+            artifact_ensure_output_file_path(latest_wf_progress_path, label="latest wf progress output", workspace_root=ROOT)
+            artifact_ensure_output_file_path(versioned_wf_progress_path, label="versioned wf progress output", workspace_root=ROOT)
         post_inference_progress.update(
             message=(
                 f"summary payload ready auc={summary.get('auc')} "
@@ -1053,7 +1189,7 @@ def main() -> int:
                                 evaluation_cfg,
                                 frame=wf_valid_source,
                             )
-                            best_params, best_valid_metrics = optimize_roi_strategy(
+                            best_params, best_valid_metrics, wf_family_diagnostics = optimize_roi_strategy(
                                 train_df=wf_train_source,
                                 valid_df=wf_valid_source,
                                 label_col=label_col,
@@ -1081,6 +1217,7 @@ def main() -> int:
                                 best_params,
                                 best_valid_metrics,
                                 wf_test_metrics,
+                                wf_family_diagnostics=wf_family_diagnostics,
                                 score_source=wf_score_source,
                             )
                         else:
@@ -1103,6 +1240,20 @@ def main() -> int:
                                 fold_progress = ProgressBar(total=len(nested_slices), prefix="[evaluate wf]", logger=log_progress, min_interval_sec=0.0)
                                 fold_progress.start(message="nested folds started")
                                 log_progress(f"Nested WF started: folds={len(nested_slices)}")
+                                if wf_progress_enabled:
+                                    _write_wf_progress_outputs(
+                                        latest_path=latest_wf_progress_path,
+                                        versioned_path=versioned_wf_progress_path,
+                                        payload=_build_wf_progress_payload(
+                                            summary=summary,
+                                            output_slug=output_slug,
+                                            total_folds=len(nested_slices),
+                                            completed_folds=0,
+                                            status="running",
+                                            current_fold=None,
+                                            current_fold_state="starting",
+                                        ),
+                                    )
                                 for fold_index, (fold_train, fold_valid, fold_test) in enumerate(nested_slices, start=1):
                                     fold_train_window = _date_window_payload(fold_train)
                                     fold_valid_window = _date_window_payload(fold_valid)
@@ -1119,11 +1270,30 @@ def main() -> int:
                                         f"Nested WF fold {fold_index}/{len(nested_slices)}: optimizing on inner valid "
                                         f"with score_source={fold_score_source}..."
                                     )
+                                    if wf_progress_enabled:
+                                        _write_wf_progress_outputs(
+                                            latest_path=latest_wf_progress_path,
+                                            versioned_path=versioned_wf_progress_path,
+                                            payload=_build_wf_progress_payload(
+                                                summary=summary,
+                                                output_slug=output_slug,
+                                                total_folds=len(nested_slices),
+                                                completed_folds=len(fold_rows),
+                                                status="running",
+                                                current_fold=fold_index,
+                                                current_fold_state="optimizing",
+                                                current_score_source=fold_score_source,
+                                                current_train_window=fold_train_window,
+                                                current_valid_window=fold_valid_window,
+                                                current_test_window=fold_test_window,
+                                                latest_completed_fold=fold_rows[-1] if fold_rows else None,
+                                            ),
+                                        )
                                     fold_policy_constraints = PolicyConstraints.from_config(
                                         evaluation_cfg,
                                         frame=fold_valid_source,
                                     )
-                                    best_params, best_valid_metrics = optimize_roi_strategy(
+                                    best_params, best_valid_metrics, fold_family_diagnostics = optimize_roi_strategy(
                                         train_df=fold_train_source,
                                         valid_df=fold_valid_source,
                                         label_col=label_col,
@@ -1153,6 +1323,7 @@ def main() -> int:
                                             best_valid_metrics,
                                             fold_test_metrics,
                                             fold_index,
+                                            family_diagnostics=fold_family_diagnostics,
                                             score_source=fold_score_source,
                                             train_window=fold_train_window,
                                             valid_window=fold_valid_window,
@@ -1160,6 +1331,25 @@ def main() -> int:
                                         )
                                     )
                                     fold_progress.update(message=f"fold {fold_index} complete")
+                                    if wf_progress_enabled:
+                                        _write_wf_progress_outputs(
+                                            latest_path=latest_wf_progress_path,
+                                            versioned_path=versioned_wf_progress_path,
+                                            payload=_build_wf_progress_payload(
+                                                summary=summary,
+                                                output_slug=output_slug,
+                                                total_folds=len(nested_slices),
+                                                completed_folds=len(fold_rows),
+                                                status="running",
+                                                current_fold=fold_index,
+                                                current_fold_state="completed",
+                                                current_score_source=fold_score_source,
+                                                current_train_window=fold_train_window,
+                                                current_valid_window=fold_valid_window,
+                                                current_test_window=fold_test_window,
+                                                latest_completed_fold=fold_rows[-1],
+                                            ),
+                                        )
 
                                 fold_progress.complete(message="nested folds finished")
                                 summary["wf_nested_folds"] = fold_rows
@@ -1181,9 +1371,37 @@ def main() -> int:
                                 summary["wf_nested_test_bets_mean"] = float(np.mean(test_bets_values)) if test_bets_values else None
                                 summary["wf_nested_completed"] = True
                                 log_progress("Nested WF finished.")
+                                if wf_progress_enabled:
+                                    _write_wf_progress_outputs(
+                                        latest_path=latest_wf_progress_path,
+                                        versioned_path=versioned_wf_progress_path,
+                                        payload=_build_wf_progress_payload(
+                                            summary=summary,
+                                            output_slug=output_slug,
+                                            total_folds=len(nested_slices),
+                                            completed_folds=len(fold_rows),
+                                            status="completed",
+                                            current_fold=None,
+                                            current_fold_state="completed",
+                                            latest_completed_fold=fold_rows[-1] if fold_rows else None,
+                                        ),
+                                    )
                             else:
                                 summary["wf_nested_completed"] = False
                                 summary["wf_nested_reason"] = "insufficient_data_for_nested_folds"
+                                if wf_progress_enabled:
+                                    _write_wf_progress_outputs(
+                                        latest_path=latest_wf_progress_path,
+                                        versioned_path=versioned_wf_progress_path,
+                                        payload=_build_wf_progress_payload(
+                                            summary=summary,
+                                            output_slug=output_slug,
+                                            total_folds=0,
+                                            completed_folds=0,
+                                            status="skipped",
+                                            current_fold_state="insufficient_data_for_nested_folds",
+                                        ),
+                                    )
             else:
                 if not probabilistic_flow:
                     summary["calibration_skipped_reason"] = "non_probability_task_or_score"
@@ -1217,6 +1435,14 @@ def main() -> int:
                     date_summary["ev_threshold_1_0_bets"] = 0
                     date_summary["ev_threshold_1_2_roi"] = None
                     date_summary["ev_threshold_1_2_bets"] = 0
+                if task == "market_deviation":
+                    date_summary.update(
+                        _compute_market_deviation_metrics(
+                            date_df,
+                            date_df["score"].to_numpy(dtype=float),
+                            label_col=label_col,
+                        )
+                    )
                 by_date_rows.append({"date": str(date_value), **date_summary})
                 by_date_progress.update(message=f"date={date_value}")
             by_date_progress.complete(message="daily aggregation finished")
@@ -1231,15 +1457,6 @@ def main() -> int:
                 f"Stability guardrail={summary['stability_assessment']}: {warning_preview}"
             )
 
-        report_dir = ROOT / "artifacts/reports"
-        report_dir.mkdir(parents=True, exist_ok=True)
-        output_slug = _derive_evaluation_output_slug(
-            model_config_path,
-            output_artifacts.model_path,
-            prefer_config=bool(isinstance(score_regime_overrides_cfg, list) and score_regime_overrides_cfg),
-        )
-        date_window_slug = _derive_date_window_slug(args.start_date, args.end_date)
-        wf_slug = _derive_wf_slug(args.wf_mode, args.wf_scheme)
         summary_path = report_dir / "evaluation_summary.json"
         by_date_path = report_dir / "evaluation_by_date.csv"
         manifest_path = report_dir / "evaluation_manifest.json"
@@ -1261,9 +1478,11 @@ def main() -> int:
             "latest_summary": artifact_display_path(summary_path, workspace_root=ROOT),
             "latest_by_date": artifact_display_path(latest_by_date_output_path, workspace_root=ROOT) if latest_by_date_output_path is not None else None,
             "latest_manifest": artifact_display_path(manifest_path, workspace_root=ROOT),
+            "latest_wf_progress": artifact_display_path(latest_wf_progress_path, workspace_root=ROOT) if wf_progress_enabled else None,
             "versioned_summary": artifact_display_path(versioned_summary_path, workspace_root=ROOT),
             "versioned_by_date": artifact_display_path(versioned_by_date_output_path, workspace_root=ROOT) if versioned_by_date_output_path is not None else None,
             "versioned_manifest": artifact_display_path(versioned_manifest_path, workspace_root=ROOT),
+            "versioned_wf_progress": artifact_display_path(versioned_wf_progress_path, workspace_root=ROOT) if wf_progress_enabled else None,
         }
 
         summary_text = json.dumps(summary, ensure_ascii=False, indent=2)
@@ -1281,6 +1500,8 @@ def main() -> int:
             versioned_manifest_path=versioned_manifest_path,
             summary_sha256=summary_sha256,
             by_date_sha256=by_date_sha256,
+            latest_wf_progress_path=latest_wf_progress_path if wf_progress_enabled else None,
+            versioned_wf_progress_path=versioned_wf_progress_path if wf_progress_enabled else None,
         )
 
         with Heartbeat("[evaluate]", "writing evaluation outputs", logger=log_progress):

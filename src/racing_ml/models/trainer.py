@@ -31,6 +31,7 @@ class TrainResult:
 
 REGRESSION_TASKS = {"roi_regression", "market_deviation", "time_regression", "time_deviation"}
 TIME_REGRESSION_TASKS = {"time_regression", "time_deviation"}
+TARGET_META_PARAM_KEYS = {"objective", "device_type", "odds_clip", "market_prob_floor", "target_clip", "target_mode"}
 
 
 def _is_gpu_requested(model_name: str, params: dict[str, Any]) -> bool:
@@ -51,7 +52,7 @@ def _validate_lightgbm_gpu_runtime(params: dict[str, Any], task: str) -> None:
     test_params = {
         key: value
         for key, value in params.items()
-        if key not in {"objective", "odds_clip", "market_prob_floor", "target_clip"}
+        if key not in TARGET_META_PARAM_KEYS
     }
     test_params["n_estimators"] = min(int(test_params.get("n_estimators", 10)), 10)
     test_params.setdefault("num_leaves", 8)
@@ -106,7 +107,7 @@ def _normalize_catboost_params(params: dict[str, Any], task: str) -> dict[str, A
     clean_params = {
         key: value
         for key, value in params.items()
-        if key not in {"objective", "device_type", "odds_clip", "market_prob_floor", "target_clip"}
+        if key not in TARGET_META_PARAM_KEYS
     }
 
     if "n_estimators" in clean_params and "iterations" not in clean_params:
@@ -177,7 +178,7 @@ def _build_model(model_name: str, params: dict[str, Any], task: str) -> object:
             clean_params = {
                 key: value
                 for key, value in params.items()
-                if key not in {"objective", "odds_clip", "market_prob_floor", "target_clip"}
+                if key not in TARGET_META_PARAM_KEYS
             }
             if task == "ranking":
                 return LGBMRanker(**clean_params)
@@ -343,6 +344,7 @@ def _compute_market_deviation_target(
     odds_clip: float = 30.0,
     market_prob_floor: float = 1e-4,
     target_clip: float = 8.0,
+    target_mode: str = "logit_residual",
 ) -> np.ndarray:
     if "odds" not in frame.columns:
         raise ValueError("market_deviation task requires 'odds' column")
@@ -366,7 +368,17 @@ def _compute_market_deviation_target(
     target = (observed_logit - market_logit).astype(float)
     target = target.clip(lower=-float(target_clip), upper=float(target_clip))
     target = target.replace([np.inf, -np.inf], np.nan).fillna(0.0)
-    return target.to_numpy(dtype=float)
+
+    normalized_target_mode = str(target_mode).strip().lower() or "logit_residual"
+    if normalized_target_mode == "logit_residual":
+        return target.to_numpy(dtype=float)
+    if normalized_target_mode == "race_normalized_residual":
+        race_mean = target.groupby(frame["race_id"]).transform("mean")
+        race_std = target.groupby(frame["race_id"]).transform("std").replace(0.0, np.nan)
+        normalized_target = ((target - race_mean) / race_std).replace([np.inf, -np.inf], np.nan).fillna(0.0)
+        return normalized_target.to_numpy(dtype=float)
+
+    raise ValueError(f"Unsupported market_deviation target_mode: {target_mode}")
 
 
 def _compute_time_regression_target(frame: pd.DataFrame) -> np.ndarray:
@@ -552,6 +564,7 @@ def train_and_evaluate(
             odds_clip=float(model_params.get("odds_clip", 30.0)),
             market_prob_floor=float(model_params.get("market_prob_floor", 1e-4)),
             target_clip=float(model_params.get("target_clip", 8.0)),
+            target_mode=str(model_params.get("target_mode", "logit_residual")),
         )
         y_valid = _compute_market_deviation_target(
             valid,
@@ -559,6 +572,7 @@ def train_and_evaluate(
             odds_clip=float(model_params.get("odds_clip", 30.0)),
             market_prob_floor=float(model_params.get("market_prob_floor", 1e-4)),
             target_clip=float(model_params.get("target_clip", 8.0)),
+            target_mode=str(model_params.get("target_mode", "logit_residual")),
         )
     elif task == "time_regression":
         y_train = _compute_time_regression_target(train)

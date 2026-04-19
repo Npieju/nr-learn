@@ -23,6 +23,51 @@ from racing_ml.evaluation.policy import (
 Logger = Callable[[str], None] | None
 
 
+def _family_metric_key_map(strategy_kind: str) -> dict[str, str]:
+    normalized = str(strategy_kind).strip().lower()
+    if normalized == "kelly":
+        return {
+            "roi": "kelly_roi",
+            "bets": "kelly_bets",
+            "hit_rate": "kelly_hit_rate",
+            "final_bankroll": "kelly_final_bankroll",
+            "max_drawdown": "kelly_max_drawdown",
+        }
+    if normalized == "portfolio":
+        return {
+            "roi": "portfolio_roi",
+            "bets": "portfolio_bets",
+            "hit_rate": "portfolio_hit_rate",
+            "final_bankroll": "portfolio_final_bankroll",
+            "max_drawdown": "portfolio_max_drawdown",
+            "avg_synthetic_odds": "portfolio_avg_synthetic_odds",
+        }
+    return {}
+
+
+def _build_family_diagnostic_entry(
+    strategy_kind: str,
+    score: float,
+    params: dict[str, float | str],
+    metrics: dict[str, float | int | None],
+) -> dict[str, Any]:
+    metric_keys = _family_metric_key_map(strategy_kind)
+    entry: dict[str, Any] = {
+        "strategy_kind": str(strategy_kind),
+        "selection_score": float(score),
+        "params": dict(params),
+    }
+    if not metric_keys:
+        entry["metrics"] = dict(metrics)
+        return entry
+
+    metric_payload: dict[str, float | int | None] = {}
+    for output_key, metric_key in metric_keys.items():
+        metric_payload[output_key] = metrics.get(metric_key)
+    entry["metrics"] = metric_payload
+    return entry
+
+
 def _resolve_search_candidate_values(
     search_config: dict[str, Any] | None,
     *,
@@ -260,7 +305,7 @@ def optimize_roi_strategy(
     search_config: dict[str, Any] | None = None,
     progress_interval_sec: float = 5.0,
     logger: Logger = None,
-) -> tuple[dict[str, float | str], dict[str, float | int | None]]:
+) -> tuple[dict[str, float | str], dict[str, float | int | None], dict[str, Any]]:
     search_config = _resolve_regime_search_config(search_config, frame=valid_df)
     train_scores = train_df["score"].to_numpy()
     train_labels = train_df[label_col].astype(int).to_numpy()
@@ -419,6 +464,7 @@ def optimize_roi_strategy(
     fallback_params: dict[str, float | str] = dict(best_params)
     fallback_score = float("-inf")
     fallback_metrics: dict[str, float | int | None] = {}
+    family_best: dict[str, dict[str, Any]] = {}
 
     n_races = int(valid_df["race_id"].nunique())
     total_trials = (
@@ -497,6 +543,24 @@ def optimize_roi_strategy(
             max_drawdown=float(max_drawdown) if max_drawdown is not None else None,
             final_bankroll=float(final_bankroll) if final_bankroll is not None else None,
         )
+        strategy_kind = str(params.get("strategy_kind") or "unknown")
+        family_entry = family_best.get(strategy_kind)
+        if selection_score is not None:
+            if family_entry is None or float(family_entry.get("selection_score", float("-inf"))) < float(selection_score):
+                family_best[strategy_kind] = _build_family_diagnostic_entry(
+                    strategy_kind,
+                    float(selection_score),
+                    params,
+                    metrics,
+                )
+        elif family_entry is None and base_score > float("-inf"):
+            family_best[strategy_kind] = _build_family_diagnostic_entry(
+                strategy_kind,
+                float(base_score),
+                params,
+                metrics,
+            )
+
         if selection_score is not None and selection_score > best_score:
             best_score = float(selection_score)
             best_params = dict(params)
@@ -586,4 +650,9 @@ def optimize_roi_strategy(
         f"best_strategy={best_params.get('strategy_kind', 'unknown')}, best_score={best_score:.4f}",
     )
 
-    return best_params, best_metrics
+    diagnostics: dict[str, Any] = {
+        "winner_strategy_kind": str(best_params.get("strategy_kind", "unknown")),
+        "winner_selection_score": float(best_score),
+        "family_best": family_best,
+    }
+    return best_params, best_metrics, diagnostics

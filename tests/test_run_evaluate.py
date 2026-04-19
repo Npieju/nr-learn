@@ -227,5 +227,108 @@ class RunEvaluateOutputSlugTest(unittest.TestCase):
         self.assertRegex(slug, r"^[a-z0-9_]+$")
 
 
+class RunEvaluateWfProgressPayloadTest(unittest.TestCase):
+    def test_build_wf_progress_payload_tracks_fold_state(self) -> None:
+        summary = {
+            "run_context": {
+                "profile": "test_profile",
+                "config": "configs/model.yaml",
+                "data_config": "configs/data.yaml",
+                "feature_config": "configs/features.yaml",
+                "artifact_suffix": "r_test",
+                "wf_mode": "full",
+                "wf_scheme": "nested",
+            },
+            "wf_nested_test_roi_weighted": 1.25,
+            "wf_nested_test_bets_total": 321,
+        }
+
+        payload = evaluate_script._build_wf_progress_payload(
+            summary=summary,
+            output_slug="example_slug",
+            total_folds=5,
+            completed_folds=2,
+            status="running",
+            current_fold=3,
+            current_fold_state="optimizing",
+            current_score_source="default",
+            current_train_window={"start_date": "2024-01-01", "end_date": "2024-06-30"},
+            current_valid_window={"start_date": "2024-07-01", "end_date": "2024-08-31"},
+            current_test_window={"start_date": "2024-09-01", "end_date": "2024-10-31"},
+            latest_completed_fold={"fold": 2, "test_roi": 1.1},
+        )
+
+        self.assertEqual(payload["status"], "running")
+        self.assertEqual(payload["output_slug"], "example_slug")
+        self.assertEqual(payload["target_folds"], 5)
+        self.assertEqual(payload["completed_folds"], 2)
+        self.assertEqual(payload["current_fold"], 3)
+        self.assertEqual(payload["current_fold_state"], "optimizing")
+        self.assertEqual(payload["current_score_source"], "default")
+        self.assertEqual(payload["latest_completed_fold"], {"fold": 2, "test_roi": 1.1})
+        self.assertIn("updated_at", payload)
+
+    def test_build_wf_progress_payload_adds_final_metrics_on_completion(self) -> None:
+        summary = {
+            "run_context": {"wf_mode": "full", "wf_scheme": "nested"},
+            "wf_nested_test_roi_weighted": 1.75,
+            "wf_nested_test_bets_total": 544,
+        }
+
+        payload = evaluate_script._build_wf_progress_payload(
+            summary=summary,
+            output_slug="example_slug",
+            total_folds=5,
+            completed_folds=5,
+            status="completed",
+        )
+
+        self.assertEqual(payload["status"], "completed")
+        self.assertEqual(payload["wf_nested_test_roi_weighted"], 1.75)
+        self.assertEqual(payload["wf_nested_test_bets_total"], 544)
+
+
+class RunEvaluateMarketDeviationMetricsTest(unittest.TestCase):
+    def test_compute_market_deviation_metrics_returns_signal_summary(self) -> None:
+        frame = pd.DataFrame(
+            [
+                {"race_id": "r1", "odds": 2.0, "is_win": 1},
+                {"race_id": "r1", "odds": 4.0, "is_win": 0},
+                {"race_id": "r2", "odds": 3.0, "is_win": 0},
+                {"race_id": "r2", "odds": 1.5, "is_win": 1},
+            ]
+        )
+
+        metrics = evaluate_script._compute_market_deviation_metrics(
+            frame,
+            np.array([0.8, -0.2, -0.1, 0.4]),
+            label_col="is_win",
+        )
+
+        self.assertIsNone(metrics["market_deviation_metrics_skipped_reason"])
+        self.assertGreater(metrics["alpha_target_std"], 0.0)
+        self.assertGreater(metrics["pred_std"], 0.0)
+        self.assertGreater(metrics["positive_signal_rate"], 0.0)
+        self.assertLessEqual(metrics["positive_signal_rate"], 1.0)
+        self.assertIsInstance(metrics["alpha_pred_corr"], float)
+
+    def test_compute_market_deviation_metrics_reports_missing_columns(self) -> None:
+        frame = pd.DataFrame(
+            [
+                {"race_id": "r1", "is_win": 1},
+                {"race_id": "r1", "is_win": 0},
+            ]
+        )
+
+        metrics = evaluate_script._compute_market_deviation_metrics(
+            frame,
+            np.array([0.1, -0.1]),
+            label_col="is_win",
+        )
+
+        self.assertEqual(metrics["market_deviation_metrics_skipped_reason"], "missing_columns:odds")
+        self.assertIsNone(metrics["alpha_pred_corr"])
+
+
 if __name__ == "__main__":
     unittest.main()
