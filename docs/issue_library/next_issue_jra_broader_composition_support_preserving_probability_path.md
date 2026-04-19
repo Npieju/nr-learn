@@ -187,6 +187,47 @@ first read meaning:
 3. first candidate は `market_aware_alpha_branch` のような catastrophic support collapse を再発させていない
 4. next judgment には September difficult window compare がまだ必要である
 
+## September Difficult Window Read
+
+2025-09 difficult window の actual-date compare を `2025-09-06/07/13/14/20/21/27/28` の 8 日で実施した。
+
+candidate summary:
+
+- source:
+  - [../../artifacts/reports/serving_smoke_current_recommended_serving_support_preserving_prob_race_norm_2025_latest_sep25_support_preserving_prob_v1.json](../../artifacts/reports/serving_smoke_current_recommended_serving_support_preserving_prob_race_norm_2025_latest_sep25_support_preserving_prob_v1.json)
+- `shared_ok_dates=8/8`
+- `policy_bets=37`
+- `policy_selected_rows=37`
+- `total_policy_net=-11.9`
+- `mean_policy_roi=0.7027777778`
+
+baseline compare:
+
+- source:
+  - [../../artifacts/reports/serving_smoke_compare_sep25_support_preserving_prob_v1_base_vs_cand.json](../../artifacts/reports/serving_smoke_compare_sep25_support_preserving_prob_v1_base_vs_cand.json)
+- baseline `34 bets / total net -13.6 / mean_policy_roi 0.85`
+- candidate `37 bets / total net -11.9 / mean_policy_roi 0.7027777778`
+- meaning:
+  - `8/8 zero-bet` は再発していない
+  - total net は baseline より改善している
+  - ただし bet 数はやや増え、mean ROI は baseline を下回る
+
+sidecar compare:
+
+- source:
+  - [../../artifacts/reports/serving_smoke_compare_sep25_support_preserving_prob_v1_sidecar_vs_cand.json](../../artifacts/reports/serving_smoke_compare_sep25_support_preserving_prob_v1_sidecar_vs_cand.json)
+- sidecar `35 bets / total net -9.9 / mean_policy_roi 0.9152777778`
+- candidate `37 bets / total net -11.9 / mean_policy_roi 0.7027777778`
+- meaning:
+  - support-preserving candidate は sidecar と同等以上の exposure を確保した
+  - ただし current read では sidecar を超える architecture winner とは言いにくい
+
+September read meaning:
+
+1. `support_preserving_residual_path` は issue の hard constraint を満たし、actual-date compare surface を成立させた
+2. broader composition branch でも support-preserving candidate は作れる
+3. first candidate は rejected branch の代替としては成立するが、sidecar を置き換える winner read までは届いていない
+
 ## Success Metrics
 
 - next candidate が `baseline support carrier` constraint を満たす
@@ -212,6 +253,22 @@ first read meaning:
 - `advance`: support-preserving candidate が representative / actual-date の両面で compare surface を成立させる
 - `hold`: support は守れるが architecture winner を主張するには弱い
 - `reject`: broader composition branch でも support-preserving compare surface を作れず、signal-return path 自体の前提を見直すべきと判定する
+
+## Decision
+
+- current decision: `hold`
+
+reason:
+
+1. representative read は `stability_assessment=representative`, `ev_threshold_1_0_bets=5128` で support-preserving constraint を通過した
+2. September difficult window でも `policy_bets=37` を維持し、rejected candidate の `8/8 zero-bet` を解消した
+3. 一方で actual-date net / mean ROI では sidecar reference を上回る根拠がまだ弱く、first candidate を architecture winner として進めるには不足がある
+
+next action boundary:
+
+1. この issue は `support-preserving compare surface を 1 本作る` 目的としては完了した
+2. sidecar を置換する broader composition follow-up を進める場合は、別 issue として bounded residual calibration / composition follow-up を切る
+3. 現時点では human review 前に serving default や baseline reference を更新しない
 
 ## Follow-Up Boundary
 
