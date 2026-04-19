@@ -249,6 +249,22 @@ structural read:
 - `hold`: signal はあるが prediction foundation と broader composition のどちらが主因かまだ弱い
 - `reject`: probability support cliff は prediction foundation issue ではなく、broader architecture branch へ戻すべきと判断される
 
+## Decision
+
+current decision は `reject` で閉じる。
+
+理由は次のとおりである。
+
+1. aligned baseline control により、geometry mismatch 単独では support collapse を説明できないことが確認された
+2. aligned sidecar control により、`123 features + alpha component` 単独でも support collapse を説明できないことが確認された
+3. 残る主要差分は `market_aware_alpha_branch` の composition path であり、prediction foundation continuation より broader composition branch に戻る方が自然である
+
+したがってこの issue は prediction foundation continuation を `advance` するための issue ではなく、「prediction foundation ではない」と formalize する diagnostics issue として閉じる。
+
+next child issue は次で固定する。
+
+- [next_issue_jra_broader_composition_support_preserving_probability_path.md](next_issue_jra_broader_composition_support_preserving_probability_path.md)
+
 ## Follow-Up Boundary
 
 - この issue が閉じるまで、新しい probability-path candidate や policy probe は追加しない

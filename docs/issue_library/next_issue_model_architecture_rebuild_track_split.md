@@ -250,23 +250,23 @@ current bottleneck は Stage 4 の parameter surface ではなく、現 mainline
 2. `alpha_weight` のような scalar 調整では final bet exposure を制御できない
 3. market signal が probability layer ではなく後段 composition layer に留まるため、mainline replacement の判断面を作りにくい
 
-したがって market-aware probability path first candidate を 1 本打った結果、next branch はさらに前段へ戻す。current next branch は Stage 4 の別レバー探索でも追加 probability-path candidate でもなく、prediction foundation 上で probability support cliff を formalize する child issue とする。
+したがって market-aware probability path first candidate を 1 本打った結果、next branch はさらに前段へ戻した。その prediction foundation diagnostics も、geometry mismatch と feature widening を主因から外し、current bottleneck が broader composition path にあることを示した。current next branch は Stage 4 の別レバー探索でも prediction foundation continuation でもなく、support-preserving な broader composition redesign を 1 本だけ切る child issue とする。
 
 ## Locked Next Child Issue
 
 current next child issue は次で固定する。
 
-- [next_issue_jra_prediction_foundation_probability_support_diagnostics.md](next_issue_jra_prediction_foundation_probability_support_diagnostics.md)
+- [next_issue_jra_broader_composition_support_preserving_probability_path.md](next_issue_jra_broader_composition_support_preserving_probability_path.md)
 
 この issue の role は次である。
 
-1. baseline `classification` surface の probability support / calibration / ranking diagnostics を formalize する
-2. market-aware reject が prediction foundation 側の bottleneck かどうかを fixed compare surface で判定する
-3. 次の architecture child issue を prediction foundation continuation か broader composition redesign のどちらか 1 本に固定する
+1. baseline support を carrier として残す probability composition constraint を fixed compare surface にする
+2. `market_aware_alpha_branch` reject の後に残る composition design space を 1 measurable hypothesis に縮める
+3. broader composition branch を policy sweep へ落とさず architecture compare として閉じる
 
 resume rule:
 
-- execution policy track へ戻るのは、この child issue が prediction foundation 側の bottleneck を否定した後だけにする
+- execution policy track へ戻るのは、この child issue が support-preserving broader composition compare を閉じた後だけにする
 - それまでは Stage 4 bounded reintegration issue に新しい parameter probe を追加しない
 
 ## First Child Issue Candidates
