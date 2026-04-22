@@ -258,16 +258,573 @@ current corrective read:
   - `top1_roi=0.8005172090`
   - `ev_threshold_1_0_roi=0.1727832934`
   - `wf_nested_test_roi_weighted=0.8160725261`
-  - `wf_nested_test_bets_total=3254`
-  - `wf_nested_actual_folds=5`
-  - `no_bet folds=2` (`fold 2`, `fold 5`)
+
+## ROI Weight Zero Diagnostic
+
+baseline control 側の geometry 差分を切り分けた後、`#103` 本線では stack composition の 1 hypothesis だけを追加で切った。目的は `roi_weight=0.12` の ROI signal injection 自体が formal degradation の主要因かを、component retrain なしで直接検証することだけである。
+
+diagnostic config / artifacts:
+
+- config:
+  - [configs/model_catboost_value_stack_lgbm_roi_high_coverage_tune_roi012_local_nankan_value_blend_bootstrap_roiweight0_diag.yaml](/workspaces/nr-learn/configs/model_catboost_value_stack_lgbm_roi_high_coverage_tune_roi012_local_nankan_value_blend_bootstrap_roiweight0_diag.yaml)
+- stack train metrics:
+  - [train_metrics_catboost_value_stack_lgbm_roi_high_coverage_tune_roi012_local_nankan_value_blend_bootstrap_roiweight0_diag.json](/workspaces/nr-learn/artifacts/reports/train_metrics_catboost_value_stack_lgbm_roi_high_coverage_tune_roi012_local_nankan_value_blend_bootstrap_roiweight0_diag.json)
+- evaluation summary:
+  - [evaluation_summary_catboost_value_stack_lgbm_roi_high_coverage_tune_roi012_local_nankan_value_blen_d2e1336206bff09d_wf_full_nested.json](/workspaces/nr-learn/artifacts/reports/evaluation_summary_catboost_value_stack_lgbm_roi_high_coverage_tune_roi012_local_nankan_value_blen_d2e1336206bff09d_wf_full_nested.json)
+- evaluation manifest:
+  - [evaluation_manifest_catboost_value_stack_lgbm_roi_high_coverage_tune_roi012_local_nankan_value_blen_d2e1336206bff09d_wf_full_nested.json](/workspaces/nr-learn/artifacts/reports/evaluation_manifest_catboost_value_stack_lgbm_roi_high_coverage_tune_roi012_local_nankan_value_blen_d2e1336206bff09d_wf_full_nested.json)
+- wf progress:
+  - [evaluation_wf_progress_catboost_value_stack_lgbm_roi_high_coverage_tune_roi012_local_nankan_value_blen_d2e1336206bff09d_wf_full_nested.json](/workspaces/nr-learn/artifacts/reports/evaluation_wf_progress_catboost_value_stack_lgbm_roi_high_coverage_tune_roi012_local_nankan_value_blen_d2e1336206bff09d_wf_full_nested.json)
+
+diagnostic setup:
+
+- revision: `r20260419_local_nankan_value_blend_bootstrap_roiweight0_diag_v1`
+- component runtime configs は `r20260416_local_nankan_value_blend_bootstrap_pre_race_ready_formal_v1` の win / ROI artifact を再利用
+- stack だけ `roi_weight: 0.0` に変更
+- evaluate-only で `wf_mode=full`, `wf_scheme=nested`, `max_rows=200000` を実行
+
+diagnostic read:
+
+- `auc=0.7374694358`
+- `logloss=0.3906664924`
+- `top1_roi=0.7957765745`
+- `ev_threshold_1_0_roi=0.1519409038`
+- `wf_nested_test_roi_weighted=0.6581096849`
+- `wf_nested_test_bets_total=3428`
+- nested 5 folds は completed、fold 4 だけ `no_bet`
 
 meaning:
 
-- support corrective によって first hold の `wf_feasible_fold_count=0` は崩せたため、`min_bets` block が policy/support surface に強く依存していたことは確認できた
-- ただし bounded formal read でも `wf_nested_test_roi_weighted=0.8161 < 1.0` で、`#101` baseline `3.9661` と first `#103` run `0.6579` の間にとどまる
-- `top1_roi` も first `#103` run の `0.7956` から微増に留まり、2/5 fold が `no_bet` のままなので Stage 1 candidate としてはなお promote しない
-- next cut は support-only corrective の継続ではなく、fold 2/5 の no-bet を減らしつつ ROI を上げる新しい measurable hypothesis に切り替えるべきである
+- first formal `r20260416_local_nankan_value_blend_bootstrap_pre_race_ready_formal_v1` の `wf_nested_test_roi_weighted=0.6579177603` に対して実質不変であり、simple な `roi_weight` 除去だけでは主要 residual は解けなかった
+- component quality と stack quality を切り分ける狙い自体は満たしたが、仮説の結果は negative read である
+- 次の measurable hypothesis は `roi_weight` 単独 sweep を広げるのではなく、stack composition の別軸か train-time artifact 差へ 1 本に絞る
+
+## Market Blend 0.1 Diagnostic
+
+`roi_weight=0.0` が不変だった後、次の 1 hypothesis は artifact-level market anchoring そのものだった。目的は stack manifest 上の `market_blend_weight=0.97` が formal degradation の主要因かを、component retrain なしで直接切ることだけである。
+
+diagnostic config / artifacts:
+
+- config:
+  - [configs/model_catboost_value_stack_lgbm_roi_high_coverage_tune_roi012_local_nankan_value_blend_bootstrap_marketblend010_diag.yaml](/workspaces/nr-learn/configs/model_catboost_value_stack_lgbm_roi_high_coverage_tune_roi012_local_nankan_value_blend_bootstrap_marketblend010_diag.yaml)
+- stack train metrics:
+  - [train_metrics_catboost_value_stack_lgbm_roi_high_coverage_tune_roi012_local_nankan_value_blend_bootstrap_marketblend010_diag.json](/workspaces/nr-learn/artifacts/reports/train_metrics_catboost_value_stack_lgbm_roi_high_coverage_tune_roi012_local_nankan_value_blend_bootstrap_marketblend010_diag.json)
+- evaluation summary:
+  - [evaluation_summary_catboost_value_stack_lgbm_roi_high_coverage_tune_roi012_local_nankan_value_blen_e97daaf7c33f5a4c_wf_full_nested.json](/workspaces/nr-learn/artifacts/reports/evaluation_summary_catboost_value_stack_lgbm_roi_high_coverage_tune_roi012_local_nankan_value_blen_e97daaf7c33f5a4c_wf_full_nested.json)
+- evaluation manifest:
+  - [evaluation_manifest_catboost_value_stack_lgbm_roi_high_coverage_tune_roi012_local_nankan_value_blen_e97daaf7c33f5a4c_wf_full_nested.json](/workspaces/nr-learn/artifacts/reports/evaluation_manifest_catboost_value_stack_lgbm_roi_high_coverage_tune_roi012_local_nankan_value_blen_e97daaf7c33f5a4c_wf_full_nested.json)
+- revision manifest:
+  - [revision_gate_r20260419_local_nankan_value_blend_bootstrap_marketblend010_diag_v1.json](/workspaces/nr-learn/artifacts/reports/revision_gate_r20260419_local_nankan_value_blend_bootstrap_marketblend010_diag_v1.json)
+
+diagnostic setup:
+
+- revision: `r20260419_local_nankan_value_blend_bootstrap_marketblend010_diag_v1`
+- component runtime configs は `r20260416_local_nankan_value_blend_bootstrap_pre_race_ready_formal_v1` の win / ROI artifact を再利用
+- stack だけ `market_blend_weight: 0.1` に変更し、`roi_weight: 0.12` は維持
+- evaluate-only で `wf_mode=full`, `wf_scheme=nested`, `max_rows=200000` を実行
+
+diagnostic read:
+
+- `auc=0.8521846114`
+- `logloss=0.2227738866`
+- `top1_roi=0.7930065546`
+- `ev_threshold_1_0_bets=189`
+- `wf_nested_test_bets_total=0`
+- `wf_nested_test_roi_weighted=null`
+- nested 5 folds は completed、winner は `['no_bet', 'no_bet', 'no_bet', 'no_bet', 'no_bet']`
+- revision gate は `evaluation_nested_all_no_bet_short_circuit` で `decision=hold`
+
+meaning:
+
+- post-inference ranking quality 自体は first formal や `roiweight0` diagnostic より大きく改善したが、それだけでは nested WF の support / feasibility を 1 fold も回復できなかった
+- このため residual は simple な market anchoring の過多ではなく、train-time artifact 差、probability-market coupling、または current policy surface と score shape の structural mismatch に残っているとみなすべきである
+- 次の measurable hypothesis は stack weight の追加 sweep ではなく、上の residual のどれか 1 本へさらに狭めて切る
+
+## WF Blend Low Diagnostic
+
+artifact-level `market_blend_weight=0.1` でも all-no-bet が続いたため、次の 1 hypothesis は nested WF 自身の market re-blend grid だった。目的は evaluate-time `blend_weights=[0.2, 0.4]` が support recovery を阻害しているのかを、同じ built artifact のまま直接切ることだけである。
+
+diagnostic config / artifacts:
+
+- config:
+  - [configs/model_catboost_value_stack_lgbm_roi_high_coverage_tune_roi012_local_nankan_value_blend_bootstrap_marketblend010_wfblendlow_diag.yaml](/workspaces/nr-learn/configs/model_catboost_value_stack_lgbm_roi_high_coverage_tune_roi012_local_nankan_value_blend_bootstrap_marketblend010_wfblendlow_diag.yaml)
+- evaluation summary:
+  - [evaluation_summary_catboost_value_stack_lgbm_roi_high_coverage_tune_roi012_local_nankan_value_blen_dc52be1d94b9621e_wf_full_nested.json](/workspaces/nr-learn/artifacts/reports/evaluation_summary_catboost_value_stack_lgbm_roi_high_coverage_tune_roi012_local_nankan_value_blen_dc52be1d94b9621e_wf_full_nested.json)
+- evaluation manifest:
+  - [evaluation_manifest_catboost_value_stack_lgbm_roi_high_coverage_tune_roi012_local_nankan_value_blen_dc52be1d94b9621e_wf_full_nested.json](/workspaces/nr-learn/artifacts/reports/evaluation_manifest_catboost_value_stack_lgbm_roi_high_coverage_tune_roi012_local_nankan_value_blen_dc52be1d94b9621e_wf_full_nested.json)
+- revision manifest:
+  - [revision_gate_r20260419_local_nankan_value_blend_bootstrap_marketblend010_wfblendlow_diag_v1.json](/workspaces/nr-learn/artifacts/reports/revision_gate_r20260419_local_nankan_value_blend_bootstrap_marketblend010_wfblendlow_diag_v1.json)
+
+diagnostic setup:
+
+- revision: `r20260419_local_nankan_value_blend_bootstrap_marketblend010_wfblendlow_diag_v1`
+- built artifact は `marketblend010` diagnostic の stack bundle をそのまま再利用
+- stack params は固定し、evaluation `policy_search.full.blend_weights` だけを `[0.0, 0.1, 0.2]` に変更
+- evaluate-only で `wf_mode=full`, `wf_scheme=nested`, `max_rows=200000` を実行
+
+diagnostic read:
+
+- `auc=0.8521846114`
+- `logloss=0.2227738866`
+- `top1_roi=0.7930065546`
+- `ev_threshold_1_0_bets=189`
+- `wf_nested_test_bets_total=0`
+- `wf_nested_test_roi_weighted=null`
+- nested 5 folds は completed、winner は再び `['no_bet', 'no_bet', 'no_bet', 'no_bet', 'no_bet']`
+- all folds の chosen `blend_weight` は `0.0` に落ちても、selection reason は全 fold `no_feasible_candidate`
+- revision gate は `evaluation_nested_all_no_bet_short_circuit` で `decision=hold`
+
+meaning:
+
+- evaluate-time WF blend grid を 0.0 側へ広げても support / feasibility は 1 fold も回復しなかった
+- このため current residual は「nested WF が market_prob と再 blend しすぎている」ことでは説明できず、train-time artifact 差か score shape / coupling の別の structural mismatch に残っている
+- 次の measurable hypothesis は artifact weight や WF blend grid の単純 sweep をやめ、train-time artifact 差か probability-market coupling の別形へ 1 本に狭めるべきである
+
+## Market Blend 0.1 Plus Support Corrective Diagnostic
+
+WF blend low でも all-no-bet が続いたため、次の 1 hypothesis は「rank recovery 済み artifact に support-corrective surface を載せれば feasible fold が戻るか」だった。目的は policy strictness 自体が残差なのかを、same artifact / same components のまま直接切ることだけである。
+
+diagnostic config / artifacts:
+
+- config:
+  - [configs/model_catboost_value_stack_lgbm_roi_high_coverage_tune_roi012_local_nankan_value_blend_bootstrap_marketblend010_supportcorrective_diag.yaml](/workspaces/nr-learn/configs/model_catboost_value_stack_lgbm_roi_high_coverage_tune_roi012_local_nankan_value_blend_bootstrap_marketblend010_supportcorrective_diag.yaml)
+- evaluation summary:
+  - [evaluation_summary_catboost_value_stack_lgbm_roi_high_coverage_tune_roi012_local_nankan_value_blen_5c8c85c698afa2ba_wf_full_nested.json](/workspaces/nr-learn/artifacts/reports/evaluation_summary_catboost_value_stack_lgbm_roi_high_coverage_tune_roi012_local_nankan_value_blen_5c8c85c698afa2ba_wf_full_nested.json)
+- evaluation manifest:
+  - [evaluation_manifest_catboost_value_stack_lgbm_roi_high_coverage_tune_roi012_local_nankan_value_blen_5c8c85c698afa2ba_wf_full_nested.json](/workspaces/nr-learn/artifacts/reports/evaluation_manifest_catboost_value_stack_lgbm_roi_high_coverage_tune_roi012_local_nankan_value_blen_5c8c85c698afa2ba_wf_full_nested.json)
+- revision manifest:
+  - [revision_gate_r20260419_local_nankan_value_blend_bootstrap_marketblend010_supportcorrective_diag_v1.json](/workspaces/nr-learn/artifacts/reports/revision_gate_r20260419_local_nankan_value_blend_bootstrap_marketblend010_supportcorrective_diag_v1.json)
+
+diagnostic setup:
+
+- revision: `r20260419_local_nankan_value_blend_bootstrap_marketblend010_supportcorrective_diag_v1`
+- built artifact は `marketblend010` diagnostic の stack bundle をそのまま再利用
+- stack params は固定し、policy surface だけ support-corrective candidate に変更
+- `min_bet_ratio=0.03`, `min_bets_abs=90`
+- `blend_weight=0.8`, `min_prob=0.03`, `odds_max=25.0`, `top_k=1`, `min_expected_value=0.95`
+- evaluate-only で `wf_mode=full`, `wf_scheme=nested`, `max_rows=200000` を実行
+
+diagnostic read:
+
+- `auc=0.8521846114`
+- `logloss=0.2227738866`
+- `top1_roi=0.7930065546`
+- `ev_threshold_1_0_bets=189`
+- `wf_nested_test_bets_total=0`
+- `wf_nested_test_roi_weighted=null`
+- nested 5 folds は completed、winner は再び `['no_bet', 'no_bet', 'no_bet', 'no_bet', 'no_bet']`
+- fold family diagnostics 上の best portfolio valid bets は `24/5/4/2/57` で、`min_bets_abs=90` を 1 fold も満たせなかった
+- revision gate は `evaluation_nested_all_no_bet_short_circuit` で `decision=hold`
+
+meaning:
+
+- marketblend010 で rank を回復させても、support-corrective surface は nested WF feasible fold を 1 つも作れなかった
+- したがって current residual は simple な support strictness ではなく、train-time artifact 差か score shape / probability-market coupling の別の structural mismatch に残っている
+- 次の measurable hypothesis は policy-only corrective を続けるのではなく、train-time artifact 差か coupling 形状差へ 1 本に絞るべきである
+
+## Support-Preserving Residual Path Diagnostic
+
+marketblend010 + support-corrective でも all-no-bet が続いたため、次の 1 hypothesis は probability-market coupling の形状自体だった。目的は direct な final market blend をやめ、market residual だけを注入する `support_preserving_residual_path` が support recovery を戻せるかを、component retrain なしで直接切ることだけである。
+
+diagnostic config / artifacts:
+
+- config:
+  - [configs/model_catboost_value_stack_lgbm_roi_high_coverage_tune_roi012_local_nankan_value_blend_bootstrap_supportpreserve_diag.yaml](/workspaces/nr-learn/configs/model_catboost_value_stack_lgbm_roi_high_coverage_tune_roi012_local_nankan_value_blend_bootstrap_supportpreserve_diag.yaml)
+- stack train metrics:
+  - [train_metrics_catboost_value_stack_lgbm_roi_high_coverage_tune_roi012_local_nankan_value_blend_bootstrap_supportpreserve_diag.json](/workspaces/nr-learn/artifacts/reports/train_metrics_catboost_value_stack_lgbm_roi_high_coverage_tune_roi012_local_nankan_value_blend_bootstrap_supportpreserve_diag.json)
+- model manifest:
+  - [catboost_value_stack_lgbm_roi_high_coverage_tune_roi012_local_nankan_value_blend_bootstrap_supportpreserve_diag_model.manifest.json](/workspaces/nr-learn/artifacts/models/catboost_value_stack_lgbm_roi_high_coverage_tune_roi012_local_nankan_value_blend_bootstrap_supportpreserve_diag_model.manifest.json)
+- evaluation summary:
+  - [evaluation_summary_catboost_value_stack_lgbm_roi_high_coverage_tune_roi012_local_nankan_value_blen_359b5539f96738e9_wf_full_nested.json](/workspaces/nr-learn/artifacts/reports/evaluation_summary_catboost_value_stack_lgbm_roi_high_coverage_tune_roi012_local_nankan_value_blen_359b5539f96738e9_wf_full_nested.json)
+- evaluation manifest:
+  - [evaluation_manifest_catboost_value_stack_lgbm_roi_high_coverage_tune_roi012_local_nankan_value_blen_359b5539f96738e9_wf_full_nested.json](/workspaces/nr-learn/artifacts/reports/evaluation_manifest_catboost_value_stack_lgbm_roi_high_coverage_tune_roi012_local_nankan_value_blen_359b5539f96738e9_wf_full_nested.json)
+- wf feasibility summary:
+  - [wf_feasibility_diag_catboost_value_stack_lgbm_roi_high_coverage_tune_roi012_local_nankan_value_blend_bootstrap_supportpreserve_diag_wf_full_nested.json](/workspaces/nr-learn/artifacts/reports/wf_feasibility_diag_catboost_value_stack_lgbm_roi_high_coverage_tune_roi012_local_nankan_value_blend_bootstrap_supportpreserve_diag_wf_full_nested.json)
+- promotion gate:
+  - [promotion_gate_r20260419_local_nankan_value_blend_bootstrap_supportpreserve_diag_v1.json](/workspaces/nr-learn/artifacts/reports/promotion_gate_r20260419_local_nankan_value_blend_bootstrap_supportpreserve_diag_v1.json)
+- revision manifest:
+  - [revision_gate_r20260419_local_nankan_value_blend_bootstrap_supportpreserve_diag_v1.json](/workspaces/nr-learn/artifacts/reports/revision_gate_r20260419_local_nankan_value_blend_bootstrap_supportpreserve_diag_v1.json)
+
+diagnostic setup:
+
+- revision: `r20260419_local_nankan_value_blend_bootstrap_supportpreserve_diag_v1`
+- component runtime configs は `r20260416_local_nankan_value_blend_bootstrap_pre_race_ready_formal_v1` の win / ROI artifact を再利用
+- stack を rebuild し、`probability_path_mode: support_preserving_residual_path` に変更
+- `market_residual_weight: 0.08`, `market_residual_scale: 0.75`, `market_blend_weight: 0.1`, `roi_weight: 0.12` を使用
+- evaluate-only で `wf_mode=full`, `wf_scheme=nested`, `max_rows=200000` を実行
+
+diagnostic read:
+
+- `auc=0.6867873251`
+- `logloss=0.6647491770`
+- `top1_roi=0.8046622970`
+- `ev_threshold_1_0_roi=0.1544464075`
+- `ev_threshold_1_0_bets=3396`
+- `wf_nested_test_roi_weighted=0.7245602799`
+- `wf_nested_test_bets_total=6482`
+- nested 5 folds は completed、winner は `['kelly', 'kelly', 'portfolio', 'portfolio', 'portfolio']`
+- fold test ROI は `0.7380 / 0.3355 / 0.8234 / 0.8197 / 0.6227`
+
+meaning:
+
+- current branch で初めて nested all-no-bet を解消し、support-preserving path によって feasibility 自体は回復した
+- 一方で post-inference quality は大きく悪化しており、weighted ROI も `0.7245602799` に留まるため、`#101` baseline `3.9660920371` との parity には遠い
+- initial sidecar completion は後続 run が `evaluation_manifest.json` alias を上書きした後に promotion gate を読んだため、`wf_summary_matches_evaluation_config=false` の stale tuple mismatch block を返した。matching versioned manifest を使って promotion gate を再実行すると `status=pass`, `decision=promote`, `wf_feasible_fold_count=1`, `formal_benchmark_weighted_roi=0.8920618287`, `formal_benchmark_bets_total=3817` で整合した
+- ただしこの `promote` は artifact-level gate が `min_feasible_folds=1` だけを要求し、formal weighted ROI threshold を持っていないためである。issue-level read としてはなお `0.7245602799` が baseline parity に遠く、この shape だけで `#103` を閉じられるわけではない
+- したがって「support 不足は legacy coupling 形状にも起因する」という読みは得られたが、この shape だけで benchmark-parity 候補にはならない
+- 次の measurable hypothesis は support-preserving artifact を固定し、policy surface を 1 本だけ再探索して recovered support をより高い weighted ROI へ変換できるかを見ることに絞る
+
+## Support-Preserving Policy-Tight Diagnostic
+
+support-preserving path で feasibility が戻った後、次の 1 hypothesis は selection surface の tightening だった。目的は recovered support が「過剰に広い policy surface」で薄まっているだけなら、same artifact 上で tighter な portfolio surface に絞ることで weighted ROI を押し上げられるかを見ることだけである。
+
+diagnostic config / artifacts:
+
+- config:
+  - [configs/model_catboost_value_stack_lgbm_roi_high_coverage_tune_roi012_local_nankan_value_blend_bootstrap_supportpreserve_policytight_diag.yaml](/workspaces/nr-learn/configs/model_catboost_value_stack_lgbm_roi_high_coverage_tune_roi012_local_nankan_value_blend_bootstrap_supportpreserve_policytight_diag.yaml)
+- evaluation summary:
+  - [evaluation_summary_catboost_value_stack_lgbm_roi_high_coverage_tune_roi012_local_nankan_value_blen_e5d8a0ce938f4d36_wf_full_nested.json](/workspaces/nr-learn/artifacts/reports/evaluation_summary_catboost_value_stack_lgbm_roi_high_coverage_tune_roi012_local_nankan_value_blen_e5d8a0ce938f4d36_wf_full_nested.json)
+- evaluation manifest:
+  - [evaluation_manifest_catboost_value_stack_lgbm_roi_high_coverage_tune_roi012_local_nankan_value_blen_e5d8a0ce938f4d36_wf_full_nested.json](/workspaces/nr-learn/artifacts/reports/evaluation_manifest_catboost_value_stack_lgbm_roi_high_coverage_tune_roi012_local_nankan_value_blen_e5d8a0ce938f4d36_wf_full_nested.json)
+
+diagnostic setup:
+
+- revision: `r20260419_local_nankan_value_blend_bootstrap_supportpreserve_policytight_diag_v1`
+- built artifact は `supportpreserve_diag` stack bundle をそのまま再利用
+- stack params は固定し、evaluation `policy_search.full` だけを tightened surface に変更
+- `min_probabilities=[0.05]`, `odds_maxs=[25.0]`, `min_expected_values=[1.05]`
+- `blend_weights=[0.2, 0.4]`, `min_edges=[0.01, 0.03, 0.05]` は維持
+- evaluate-only で `wf_mode=full`, `wf_scheme=nested`, `max_rows=200000` を実行
+
+diagnostic read:
+
+- `auc=0.6867873251`
+- `logloss=0.6647491770`
+- `top1_roi=0.8046622970`
+- `ev_threshold_1_0_roi=0.1544464075`
+- `wf_nested_test_roi_weighted=0.7740222115`
+- `wf_nested_test_bets_total=6213`
+- nested 5 folds は completed、winner は `['portfolio', 'portfolio', 'portfolio', 'portfolio', 'portfolio']`
+- fold test ROI は `0.8144 / 1.1538 / 0.9542 / 0.8350 / 0.6227`
+
+meaning:
+
+- support-preserving の first feasible read (`0.7245602799`) から weighted ROI は小幅改善し、late folds を含めて all-portfolio に収束した
+- 一方で fold 1/3/4/5 は依然として 1.0 を下回り、`#101` baseline `3.9660920371` と比べると parity gap はなお大きい
+- したがって recovered support を tighter policy で少し改善できることは確認できたが、残差はまだ policy tightening 1 本では埋まらない
+- 次の measurable hypothesis も support-preserving artifact を固定しつつ、portfolio family の selective surface の別 residual 1 本だけを切るべきである
+
+## Support-Preserving Odds-Tight Diagnostic
+
+support-preserving artifact を固定した次の 1 hypothesis では、late folds の large-bet / low-ROI 残差を「高オッズ露出の多さ」とみなし、`odds_max` だけを `25.0 -> 15.0` へ絞った。目的は policytight candidate のまま high-odds side を cut すれば、support を大きく落とさず weighted ROI をもう一段引き上げられるかを確認することだけである。
+
+diagnostic config / artifacts:
+
+- config:
+  - [configs/model_catboost_value_stack_lgbm_roi_high_coverage_tune_roi012_local_nankan_value_blend_bootstrap_supportpreserve_oddstight_diag.yaml](/workspaces/nr-learn/configs/model_catboost_value_stack_lgbm_roi_high_coverage_tune_roi012_local_nankan_value_blend_bootstrap_supportpreserve_oddstight_diag.yaml)
+- evaluation summary:
+  - [evaluation_summary_catboost_value_stack_lgbm_roi_high_coverage_tune_roi012_local_nankan_value_blen_394a8a16e7e757d0_wf_full_nested.json](/workspaces/nr-learn/artifacts/reports/evaluation_summary_catboost_value_stack_lgbm_roi_high_coverage_tune_roi012_local_nankan_value_blen_394a8a16e7e757d0_wf_full_nested.json)
+- evaluation manifest:
+  - [evaluation_manifest_catboost_value_stack_lgbm_roi_high_coverage_tune_roi012_local_nankan_value_blen_394a8a16e7e757d0_wf_full_nested.json](/workspaces/nr-learn/artifacts/reports/evaluation_manifest_catboost_value_stack_lgbm_roi_high_coverage_tune_roi012_local_nankan_value_blen_394a8a16e7e757d0_wf_full_nested.json)
+- revision manifest:
+  - [revision_gate_r20260419_local_nankan_value_blend_bootstrap_supportpreserve_oddstight_diag_v1.json](/workspaces/nr-learn/artifacts/reports/revision_gate_r20260419_local_nankan_value_blend_bootstrap_supportpreserve_oddstight_diag_v1.json)
+- wf feasibility summary:
+  - [wf_feasibility_diag_catboost_value_stack_lgbm_roi_high_coverage_tune_roi012_local_nankan_value_blend_bootstrap_supportpreserve_oddstight_diag_wf_full_nested.json](/workspaces/nr-learn/artifacts/reports/wf_feasibility_diag_catboost_value_stack_lgbm_roi_high_coverage_tune_roi012_local_nankan_value_blend_bootstrap_supportpreserve_oddstight_diag_wf_full_nested.json)
+- promotion gate:
+  - [promotion_gate_r20260419_local_nankan_value_blend_bootstrap_supportpreserve_oddstight_diag_v1.json](/workspaces/nr-learn/artifacts/reports/promotion_gate_r20260419_local_nankan_value_blend_bootstrap_supportpreserve_oddstight_diag_v1.json)
+- nested WF progress:
+  - [evaluation_wf_progress.json](/workspaces/nr-learn/artifacts/reports/evaluation_wf_progress.json)
+
+diagnostic setup:
+
+- revision: `r20260419_local_nankan_value_blend_bootstrap_supportpreserve_oddstight_diag_v1`
+- built artifact は `supportpreserve_diag` stack bundle をそのまま再利用
+- stack params は固定し、evaluation `policy_search.full.odds_maxs` と serving `odds_max` だけを `15.0` に変更
+- `min_prob=0.05`, `min_expected_value=1.05`, `blend_weights=[0.2, 0.4]`, `min_edges=[0.01, 0.03, 0.05]` は維持
+- evaluate-only で `wf_mode=full`, `wf_scheme=nested`, `max_rows=200000` を実行
+
+diagnostic read:
+
+- post-inference は不変
+  - `auc=0.6867873251`
+  - `logloss=0.6647491770`
+  - `top1_roi=0.8046622970`
+- nested WF:
+  - `wf_nested_test_roi_weighted=0.7670015985`
+  - `wf_nested_test_bets_total=4412`
+  - winners は `['portfolio', 'kelly', 'portfolio', 'kelly', 'portfolio']`
+  - fold test ROI は `0.5205 / 0.8113 / 0.8451 / 0.7911 / 0.7721` で、fold 1 と fold 4 が特に悪化した
+  - fold 4 は `test_final_bankroll=0.2449234672`, `test_max_drawdown=0.8067115091` まで崩れた
+
+meaning:
+
+- policytight candidate (`0.7740222115`) から weighted ROI はむしろ悪化し、all-portfolio の安定も失った
+- 特に fold 1 `test_roi=0.5205` と fold 4 `kelly` 化は、`odds_max=15.0` が selective tightening ではなく family destabilization を起こしたことを示す
+- sidecar 完了後の formal read では、WF feasibility summary は `wf_feasible_fold_count=0`, `dominant_failure_reason=min_bets`, `binding_min_bets_source_counts={'ratio': 5}`, `wf_max_infeasible_bets_observed=0` を返した。5 folds x 12 candidates の全 60 candidate が `min_bets` で落ちており、`odds_max=15.0` に絞った surface は support を 1 fold も回復できていない
+- promotion gate も config tuple 一致のまま `status=block`, `decision=hold`, blocking reason `Walk-forward feasible fold count is below threshold: 0 < 3` で閉じたため、ここでの悪化は stale sidecar や path mismatch ではなく oddstight candidate 固有の結果として確定した
+- したがって support-preserving artifact の current local optimum は high-odds tighten 側ではなく `odds_max=25.0` 近傍に残ると読むべきで、この residual は reject で閉じる
+- 次の measurable hypothesis は `odds_max` の追加 tighten ではなく、別の policy/surface residual 1 本に絞るべきである
+
+## Support-Preserving Min-Prob Relax Diagnostic
+
+`odds_max=15` tighten が negative read だった後、次の 1 hypothesis は `policytight` surface のうち `min_prob` だけを `0.05 -> 0.03` へ戻すことだった。目的は `odds_max=25.0`, `min_expected_value=1.05` を維持したまま lower-probability tail を少しだけ reopen すれば、support-preserving artifact の recovered support を ROI 悪化なしに増やせるかを見ることだけである。
+
+diagnostic config / artifacts:
+
+- config:
+  - [configs/model_catboost_value_stack_lgbm_roi_high_coverage_tune_roi012_local_nankan_value_blend_bootstrap_supportpreserve_minproblow_diag.yaml](/workspaces/nr-learn/configs/model_catboost_value_stack_lgbm_roi_high_coverage_tune_roi012_local_nankan_value_blend_bootstrap_supportpreserve_minproblow_diag.yaml)
+- evaluation summary:
+  - [evaluation_summary_catboost_value_stack_lgbm_roi_high_coverage_tune_roi012_local_nankan_value_blen_d3b241202a1bcb87_wf_full_nested.json](/workspaces/nr-learn/artifacts/reports/evaluation_summary_catboost_value_stack_lgbm_roi_high_coverage_tune_roi012_local_nankan_value_blen_d3b241202a1bcb87_wf_full_nested.json)
+- evaluation manifest:
+  - [evaluation_manifest_catboost_value_stack_lgbm_roi_high_coverage_tune_roi012_local_nankan_value_blen_d3b241202a1bcb87_wf_full_nested.json](/workspaces/nr-learn/artifacts/reports/evaluation_manifest_catboost_value_stack_lgbm_roi_high_coverage_tune_roi012_local_nankan_value_blen_d3b241202a1bcb87_wf_full_nested.json)
+- revision manifest:
+  - [revision_gate_r20260419_local_nankan_value_blend_bootstrap_supportpreserve_minproblow_diag_v1.json](/workspaces/nr-learn/artifacts/reports/revision_gate_r20260419_local_nankan_value_blend_bootstrap_supportpreserve_minproblow_diag_v1.json)
+
+diagnostic setup:
+
+- revision: `r20260419_local_nankan_value_blend_bootstrap_supportpreserve_minproblow_diag_v1`
+- built artifact は `supportpreserve_diag` stack bundle をそのまま再利用
+- `odds_max=25.0`, `min_expected_value=1.05`, `blend_weights=[0.2, 0.4]`, `min_edges=[0.01, 0.03, 0.05]` は維持
+- `policy_search.full.min_probabilities` と serving `min_prob` だけを `0.03` に変更
+- evaluate-only で `wf_mode=full`, `wf_scheme=nested`, `max_rows=200000` を実行
+
+diagnostic read:
+
+- post-inference は不変
+  - `auc=0.6867873251`
+  - `logloss=0.6647491770`
+  - `top1_roi=0.8046622970`
+- nested WF:
+  - `wf_nested_test_roi_weighted=0.7764314432`
+  - `wf_nested_test_bets_total=7213`
+  - winners は `['portfolio', 'portfolio', 'portfolio', 'portfolio', 'portfolio']`
+  - fold test ROI は `0.8792 / 0.9434 / 0.8198 / 0.8342 / 0.6227`
+  - fold winners の params は early folds で `blend_weight=0.4`, late folds で `blend_weight=0.2` へ分かれたが、全 fold とも `portfolio` family を維持した
+
+meaning:
+
+- `supportpreserve_policytight_diag` (`0.7740222115`) に対して weighted ROI は `0.7764314432` へ微増し、`odds_max=15` tighten よりは明確に良い
+- 一方で改善幅は `+0.0024092317` と小さく、fold 3-5 は依然として 1.0 未満が並び、`#101` baseline `3.9660920371` との parity gap は事実上不変である
+- したがって current read は「support-preserving path では `min_prob=0.03` が `0.05` よりわずかに良いが、主要 residual を解くほどではない」であり、`min_prob` をさらに broad に sweep する優先度は高くない
+
+formal sidecar read:
+
+- [wf_feasibility_diag_catboost_value_stack_lgbm_roi_high_coverage_tune_roi012_local_nankan_value_blend_bootstrap_supportpreserve_minproblow_diag_wf_full_nested.json](/workspaces/nr-learn/artifacts/reports/wf_feasibility_diag_catboost_value_stack_lgbm_roi_high_coverage_tune_roi012_local_nankan_value_blend_bootstrap_supportpreserve_minproblow_diag_wf_full_nested.json) では `wf_feasible_fold_count=0`, `dominant_failure_reason=min_bets`, `failure_reason_counts_total={'min_bets': 60}`, `binding_min_bets_source_counts={'ratio': 5}`, `wf_max_infeasible_bets_observed=1` を返した
+- 各 fold の `min_bets_required` は `456 / 463 / 478 / 485 / 490` で、closest infeasible はほぼ全 fold で `bets=0`、例外的に fold 2-3 の kelly fallback が `bets=1` を出しただけだった。つまり `min_prob` を `0.03` まで緩めても support surface は full-table history 上ほとんど開いていない
+- [promotion_gate_r20260419_local_nankan_value_blend_bootstrap_supportpreserve_minproblow_diag_v1.json](/workspaces/nr-learn/artifacts/reports/promotion_gate_r20260419_local_nankan_value_blend_bootstrap_supportpreserve_minproblow_diag_v1.json) は tuple-consistent に `status=block`, `decision=hold`, blocking reason `Walk-forward feasible fold count is below threshold: 0 < 1` を返した
+- よって final read は「`min_prob` relax は nested evaluation の weighted ROI をわずかに押し上げるが、formal support recovery には全くつながらない」である。次の measurable hypothesis は `min_prob` sweep 継続ではなく、support を直接増やせる別の single policy residual に切るべきである
+
+## Support-Preserving Min-EV Relax Diagnostic
+
+`min_prob` relax でも full-table support が 0 fold のままだったため、次の 1 hypothesis は `policytight` surface のうち `min_expected_value` だけを `1.05 -> 1.00` へ緩めることだった。目的は EV floor のみを下げれば portfolio family の candidate density が増え、support-preserving artifact の formal feasibility を回復できるかを見ることだけである。
+
+diagnostic config / artifacts:
+
+- config:
+  - [configs/model_catboost_value_stack_lgbm_roi_high_coverage_tune_roi012_local_nankan_value_blend_bootstrap_supportpreserve_evlow_diag.yaml](/workspaces/nr-learn/configs/model_catboost_value_stack_lgbm_roi_high_coverage_tune_roi012_local_nankan_value_blend_bootstrap_supportpreserve_evlow_diag.yaml)
+- evaluation summary:
+  - [evaluation_summary_catboost_value_stack_lgbm_roi_high_coverage_tune_roi012_local_nankan_value_blen_8fe1f14aefd07c20_wf_full_nested.json](/workspaces/nr-learn/artifacts/reports/evaluation_summary_catboost_value_stack_lgbm_roi_high_coverage_tune_roi012_local_nankan_value_blen_8fe1f14aefd07c20_wf_full_nested.json)
+- evaluation manifest:
+  - [evaluation_manifest_catboost_value_stack_lgbm_roi_high_coverage_tune_roi012_local_nankan_value_blen_8fe1f14aefd07c20_wf_full_nested.json](/workspaces/nr-learn/artifacts/reports/evaluation_manifest_catboost_value_stack_lgbm_roi_high_coverage_tune_roi012_local_nankan_value_blen_8fe1f14aefd07c20_wf_full_nested.json)
+- wf feasibility:
+  - [wf_feasibility_diag_catboost_value_stack_lgbm_roi_high_coverage_tune_roi012_local_nankan_value_blend_bootstrap_supportpreserve_evlow_diag_wf_full_nested.json](/workspaces/nr-learn/artifacts/reports/wf_feasibility_diag_catboost_value_stack_lgbm_roi_high_coverage_tune_roi012_local_nankan_value_blend_bootstrap_supportpreserve_evlow_diag_wf_full_nested.json)
+- promotion gate:
+  - [promotion_gate_r20260419_local_nankan_value_blend_bootstrap_supportpreserve_evlow_diag_v1.json](/workspaces/nr-learn/artifacts/reports/promotion_gate_r20260419_local_nankan_value_blend_bootstrap_supportpreserve_evlow_diag_v1.json)
+- revision manifest:
+  - [revision_gate_r20260419_local_nankan_value_blend_bootstrap_supportpreserve_evlow_diag_v1.json](/workspaces/nr-learn/artifacts/reports/revision_gate_r20260419_local_nankan_value_blend_bootstrap_supportpreserve_evlow_diag_v1.json)
+
+diagnostic setup:
+
+- revision: `r20260419_local_nankan_value_blend_bootstrap_supportpreserve_evlow_diag_v1`
+- built artifact は `supportpreserve_diag` stack bundle をそのまま再利用
+- `blend_weights=[0.2, 0.4]`, `min_edges=[0.01, 0.03, 0.05]`, `min_prob=0.05`, `odds_max=25.0` は維持
+- `policy_search.full.min_expected_values` と serving `min_expected_value` だけを `1.0` に変更
+- evaluate-only で `wf_mode=full`, `wf_scheme=nested`, `max_rows=200000` を実行
+
+diagnostic read:
+
+- post-inference は不変
+  - `auc=0.6867873251`
+  - `logloss=0.6647491770`
+  - `top1_roi=0.8046622970`
+- nested WF:
+  - `wf_nested_test_roi_weighted=0.7825910322`
+  - `wf_nested_test_bets_total=6646`
+  - `wf_nested_test_roi_mean=0.9008288830`
+  - winners は `['portfolio', 'portfolio', 'portfolio', 'portfolio', 'portfolio']`
+  - fold test ROI は `0.7993 / 1.3082 / 0.9535 / 0.8197 / 0.6234`
+- formal sidecar:
+  - `wf_feasible_fold_count=0`
+  - `dominant_failure_reason=min_bets`
+  - `failure_reason_counts_total={'min_bets': 60}`
+  - `binding_min_bets_source_counts={'ratio': 5}`
+  - `wf_max_infeasible_bets_observed=1`
+  - promotion gate は `status=block`, `decision=hold`, blocking reason `Walk-forward feasible fold count is below threshold: 0 < 1`
+
+meaning:
+
+- `min_expected_value` relax は nested evaluation では `policytight` (`0.7740222115`) と `minproblow` (`0.7764314432`) の両方を上回り、scalar threshold loosen の中では最良だった
+- それでも formal support は 1 fold も回復せず、closest / fallback candidate も最大 `bets=1` に留まった。つまり EV floor だけ下げても support geometry 自体はほぼ変わっていない
+- したがって current read は「support-preserving path の failure mode は single-threshold loosening では解けず、bet count を構造的に増やす別軸 residual が必要」である
+- 次の measurable hypothesis は `min_prob` や `min_expected_value` の追加 scalar sweep ではなく、`top_k` など portfolio density を直接変える single residual に切るべきである
+
+## Support-Preserving Top-K Expansion Diagnostic
+
+scalar threshold loosen が formal support を全く回復しなかったため、次の 1 hypothesis は `policytight` surface のうち `top_k` だけを `1 -> 2` へ増やすことだった。目的は portfolio family の bet density を直接増やせば、`min_bets` に支配された support failure を崩せるかを見ることだけである。
+
+diagnostic config / artifacts:
+
+- config:
+  - [configs/model_catboost_value_stack_lgbm_roi_high_coverage_tune_roi012_local_nankan_value_blend_bootstrap_supportpreserve_topk2_diag.yaml](/workspaces/nr-learn/configs/model_catboost_value_stack_lgbm_roi_high_coverage_tune_roi012_local_nankan_value_blend_bootstrap_supportpreserve_topk2_diag.yaml)
+- evaluation summary:
+  - [evaluation_summary_catboost_value_stack_lgbm_roi_high_coverage_tune_roi012_local_nankan_value_blen_9bdb31b7100187a0_wf_full_nested.json](/workspaces/nr-learn/artifacts/reports/evaluation_summary_catboost_value_stack_lgbm_roi_high_coverage_tune_roi012_local_nankan_value_blen_9bdb31b7100187a0_wf_full_nested.json)
+- evaluation manifest:
+  - [evaluation_manifest_catboost_value_stack_lgbm_roi_high_coverage_tune_roi012_local_nankan_value_blen_9bdb31b7100187a0_wf_full_nested.json](/workspaces/nr-learn/artifacts/reports/evaluation_manifest_catboost_value_stack_lgbm_roi_high_coverage_tune_roi012_local_nankan_value_blen_9bdb31b7100187a0_wf_full_nested.json)
+- wf feasibility:
+  - [wf_feasibility_diag_catboost_value_stack_lgbm_roi_high_coverage_tune_roi012_local_nankan_value_blend_bootstrap_supportpreserve_topk2_diag_wf_full_nested.json](/workspaces/nr-learn/artifacts/reports/wf_feasibility_diag_catboost_value_stack_lgbm_roi_high_coverage_tune_roi012_local_nankan_value_blend_bootstrap_supportpreserve_topk2_diag_wf_full_nested.json)
+- promotion gate:
+  - [promotion_gate_r20260419_local_nankan_value_blend_bootstrap_supportpreserve_topk2_diag_v1.json](/workspaces/nr-learn/artifacts/reports/promotion_gate_r20260419_local_nankan_value_blend_bootstrap_supportpreserve_topk2_diag_v1.json)
+- revision manifest:
+  - [revision_gate_r20260419_local_nankan_value_blend_bootstrap_supportpreserve_topk2_diag_v1.json](/workspaces/nr-learn/artifacts/reports/revision_gate_r20260419_local_nankan_value_blend_bootstrap_supportpreserve_topk2_diag_v1.json)
+
+diagnostic setup:
+
+- revision: `r20260419_local_nankan_value_blend_bootstrap_supportpreserve_topk2_diag_v1`
+- built artifact は `supportpreserve_diag` stack bundle をそのまま再利用
+- `blend_weights=[0.2, 0.4]`, `min_edges=[0.01, 0.03, 0.05]`, `min_prob=0.05`, `odds_max=25.0`, `min_expected_value=1.05` は維持
+- `policy_search.full.top_ks` と serving `top_k` だけを `2` に変更
+- evaluate-only で `wf_mode=full`, `wf_scheme=nested`, `max_rows=200000` を実行
+
+diagnostic read:
+
+- post-inference は不変
+  - `auc=0.6867873251`
+  - `logloss=0.6647491770`
+  - `top1_roi=0.8046622970`
+- nested WF:
+  - `wf_nested_test_roi_weighted=0.7665700950`
+  - `wf_nested_test_bets_total=6213`
+  - `wf_nested_test_roi_mean=0.8625876105`
+  - winners は `['portfolio', 'portfolio', 'portfolio', 'portfolio', 'portfolio']`
+  - fold test ROI は `0.8292 / 1.2403 / 0.7822 / 0.7647 / 0.6965`
+- formal sidecar:
+  - `wf_feasible_fold_count=0`
+  - `dominant_failure_reason=min_bets`
+  - `failure_reason_counts_total={'min_bets': 60}`
+  - `binding_min_bets_source_counts={'ratio': 5}`
+  - `wf_max_infeasible_bets_observed=1`
+  - promotion gate は `status=block`, `decision=hold`, blocking reason `Walk-forward feasible fold count is below threshold: 0 < 1`
+
+meaning:
+
+- `top_k=2` は bet density を直接増やす意図だったが、nested evaluation 自体が `policytight` と `evlow` の両方より悪化し、support も 1 fold も回復しなかった
+- closest infeasible / fallback も最大 `bets=1` に留まり、`top_k` expansion は candidate density を meaningful に増やしていない
+- したがって current read は「support-preserving path の failure mode は threshold loosen だけでなく `top_k` expansion でも解けない」である
+- 次の measurable hypothesis は `top_k` の追加 expansion ではなく、候補 universe 側を広げる `odds_max` relax など別軸 single residual に切るべきである
+
+## Support-Preserving Odds Relax Diagnostics
+
+`top_k` expansion も negative read だったため、次の hypothesis 群は candidate universe 側で `odds_max` を緩めることだった。狙いは low-probability / high-odds tail を少しだけ reopen すれば `min_bets` block が崩れるかを見ることである。
+
+### Odds-Max 40 Diagnostic
+
+- config:
+  - [configs/model_catboost_value_stack_lgbm_roi_high_coverage_tune_roi012_local_nankan_value_blend_bootstrap_supportpreserve_oddsrelax_diag.yaml](/workspaces/nr-learn/configs/model_catboost_value_stack_lgbm_roi_high_coverage_tune_roi012_local_nankan_value_blend_bootstrap_supportpreserve_oddsrelax_diag.yaml)
+- evaluation summary:
+  - [evaluation_summary_catboost_value_stack_lgbm_roi_high_coverage_tune_roi012_local_nankan_value_blen_b6fa31010aec680e_wf_full_nested.json](/workspaces/nr-learn/artifacts/reports/evaluation_summary_catboost_value_stack_lgbm_roi_high_coverage_tune_roi012_local_nankan_value_blen_b6fa31010aec680e_wf_full_nested.json)
+- wf feasibility:
+  - [wf_feasibility_diag_catboost_value_stack_lgbm_roi_high_coverage_tune_roi012_local_nankan_value_blend_bootstrap_supportpreserve_oddsrelax_diag_wf_full_nested.json](/workspaces/nr-learn/artifacts/reports/wf_feasibility_diag_catboost_value_stack_lgbm_roi_high_coverage_tune_roi012_local_nankan_value_blend_bootstrap_supportpreserve_oddsrelax_diag_wf_full_nested.json)
+- promotion gate:
+  - [promotion_gate_r20260419_local_nankan_value_blend_bootstrap_supportpreserve_oddsrelax_diag_v1.json](/workspaces/nr-learn/artifacts/reports/promotion_gate_r20260419_local_nankan_value_blend_bootstrap_supportpreserve_oddsrelax_diag_v1.json)
+
+read:
+
+- nested WF:
+  - `wf_nested_test_roi_weighted=0.7262348949`
+  - `wf_nested_test_bets_total=3907`
+  - winners は `['kelly', 'kelly', 'portfolio', 'portfolio', 'no_bet']`
+- fold 5 は `no_bet` へ崩れ、fold 2 `test_roi=0.3355`, fold 4 `test_roi=0.7163` も悪い
+- formal sidecar は `wf_feasible_fold_count=0`, `dominant_failure_reason=min_bets`, `status=block`, `decision=hold`
+
+meaning:
+
+- `odds_max=40.0` は universe expansion が過剰で、support を回復するどころか evaluation 自体を崩した
+- この cut は reject とみなしてよい
+
+### Odds-Max 30 Diagnostic
+
+- config:
+  - [configs/model_catboost_value_stack_lgbm_roi_high_coverage_tune_roi012_local_nankan_value_blend_bootstrap_supportpreserve_odds30_diag.yaml](/workspaces/nr-learn/configs/model_catboost_value_stack_lgbm_roi_high_coverage_tune_roi012_local_nankan_value_blend_bootstrap_supportpreserve_odds30_diag.yaml)
+- evaluation summary:
+  - [evaluation_summary_catboost_value_stack_lgbm_roi_high_coverage_tune_roi012_local_nankan_value_blen_85c7d5b733231feb_wf_full_nested.json](/workspaces/nr-learn/artifacts/reports/evaluation_summary_catboost_value_stack_lgbm_roi_high_coverage_tune_roi012_local_nankan_value_blen_85c7d5b733231feb_wf_full_nested.json)
+- wf feasibility:
+  - [wf_feasibility_diag_catboost_value_stack_lgbm_roi_high_coverage_tune_roi012_local_nankan_value_blend_bootstrap_supportpreserve_odds30_diag_wf_full_nested.json](/workspaces/nr-learn/artifacts/reports/wf_feasibility_diag_catboost_value_stack_lgbm_roi_high_coverage_tune_roi012_local_nankan_value_blend_bootstrap_supportpreserve_odds30_diag_wf_full_nested.json)
+- promotion gate:
+  - [promotion_gate_r20260419_local_nankan_value_blend_bootstrap_supportpreserve_odds30_diag_v1.json](/workspaces/nr-learn/artifacts/reports/promotion_gate_r20260419_local_nankan_value_blend_bootstrap_supportpreserve_odds30_diag_v1.json)
+
+read:
+
+- nested WF:
+  - `wf_nested_test_roi_weighted=0.8165625528`
+  - `wf_nested_test_bets_total=5923`
+  - `wf_nested_test_roi_mean=0.9709020893`
+  - winners は 5/5 `portfolio`
+  - fold test ROI は `1.0580 / 1.2604 / 1.0340 / 0.8177 / 0.6939`
+- formal sidecar:
+  - `wf_feasible_fold_count=0`
+  - `dominant_failure_reason=min_bets`
+  - `failure_reason_counts_total={'min_bets': 60}`
+  - `binding_min_bets_source_counts={'ratio': 5}`
+  - `wf_max_infeasible_bets_observed=1`
+  - promotion gate は `status=block`, `decision=hold`, blocking reason `Walk-forward feasible fold count is below threshold: 0 < 1`
+
+meaning:
+
+- `odds_max=30.0` はこの residual family で最良の evaluation read を返した。`policytight` `0.7740222115`, `minproblow` `0.7764314432`, `evlow` `0.7825910322`, `topk2` `0.7665700950`, `odds40` `0.7262348949` をすべて上回る
+- それでも formal support は 1 fold も回復していないため、current blocker は依然 `min_bets` にある
+- したがって current read は「support-preserving path の current evaluation local optimum は `odds_max=30.0` だが、formal support recovery には別の 1 変数がまだ必要」である
+- 次の measurable hypothesis は `odds_max=30.0` を起点に `min_expected_value` か `min_prob` を再緩和する single residual である
+
+### Odds-Max 30 + EV-Low Diagnostic
+
+- config:
+  - [configs/model_catboost_value_stack_lgbm_roi_high_coverage_tune_roi012_local_nankan_value_blend_bootstrap_supportpreserve_odds30_evlow_diag.yaml](/workspaces/nr-learn/configs/model_catboost_value_stack_lgbm_roi_high_coverage_tune_roi012_local_nankan_value_blend_bootstrap_supportpreserve_odds30_evlow_diag.yaml)
+- evaluation summary:
+  - [evaluation_summary_catboost_value_stack_lgbm_roi_high_coverage_tune_roi012_local_nankan_value_blen_e60f285b1d2a0e7f_wf_full_nested.json](/workspaces/nr-learn/artifacts/reports/evaluation_summary_catboost_value_stack_lgbm_roi_high_coverage_tune_roi012_local_nankan_value_blen_e60f285b1d2a0e7f_wf_full_nested.json)
+- wf feasibility:
+  - [wf_feasibility_diag_catboost_value_stack_lgbm_roi_high_coverage_tune_roi012_local_nankan_value_blend_bootstrap_supportpreserve_odds30_evlow_diag_wf_full_nested.json](/workspaces/nr-learn/artifacts/reports/wf_feasibility_diag_catboost_value_stack_lgbm_roi_high_coverage_tune_roi012_local_nankan_value_blend_bootstrap_supportpreserve_odds30_evlow_diag_wf_full_nested.json)
+- promotion gate:
+  - [promotion_gate_r20260421_local_nankan_value_blend_bootstrap_supportpreserve_odds30_evlow_diag_v1.json](/workspaces/nr-learn/artifacts/reports/promotion_gate_r20260421_local_nankan_value_blend_bootstrap_supportpreserve_odds30_evlow_diag_v1.json)
+- revision manifest:
+  - [revision_gate_r20260421_local_nankan_value_blend_bootstrap_supportpreserve_odds30_evlow_diag_v1.json](/workspaces/nr-learn/artifacts/reports/revision_gate_r20260421_local_nankan_value_blend_bootstrap_supportpreserve_odds30_evlow_diag_v1.json)
+
+read:
+
+- nested WF:
+  - `wf_nested_test_roi_weighted=0.8225407438`
+  - `wf_nested_test_bets_total=6138`
+  - `wf_nested_test_roi_mean=0.9688709062`
+  - winners は 5/5 `portfolio`
+- formal sidecar:
+  - `wf_feasible_fold_count=0`
+  - `wf_dominant_failure_reason=min_bets`
+  - `wf_binding_min_bets_source_counts={'ratio': 5}`
+  - `wf_max_infeasible_bets_observed=1`
+  - fold 4 fallback は portfolio `bets=1`
+  - fold 5 closest infeasible は `bets=0`
+  - promotion gate は `status=block`, `decision=hold`, blocking reason `Walk-forward feasible fold count is below threshold: 0 < 1`
+
+meaning:
+
+- `odds30_evlow` は `odds30` `0.8165625528` を上回り、この residual family の current best evaluation read を更新した
+- ただし formal support はなお 5 folds 全滅で、failure mode は依然として `min_bets` に固定されている
+- `policytight`, `minproblow`, `evlow`, `topk2`, `odds40`, `odds30`, `odds30_evlow` の 7 本はいずれも `wf_feasible_fold_count=0` で閉じており、評価だけが少しずつ動いても formal gate は一度も開いていない
+- したがって current read は「support-preserving path の local threshold / density / universe residual は exhausted であり、これ以上の近傍 sweep を続けても惰性になりやすい」である
+- 次 action は single residual を追加することではなく、`#103` を structural residual へ切り直すか human review へ上げることである。少なくとも `odds30` 近傍の ad-hoc sweep はここで停止する
+- その structural cut として [issue_library/next_issue_nar_value_blend_train_time_artifact_control.md](issue_library/next_issue_nar_value_blend_train_time_artifact_control.md) で定義した `supportpreserve_winonly_control` も formal 実行した。versioned summary は [../artifacts/reports/evaluation_summary_catboost_value_stack_lgbm_roi_high_coverage_tune_roi012_local_nankan_value_blen_e2ca5daeab6dd133_wf_full_nested.json](../artifacts/reports/evaluation_summary_catboost_value_stack_lgbm_roi_high_coverage_tune_roi012_local_nankan_value_blen_e2ca5daeab6dd133_wf_full_nested.json)、WF summary は [../artifacts/reports/wf_feasibility_diag_catboost_value_stack_lgbm_roi_high_coverage_tune_roi012_local_nankan_value_blend_bootstrap_supportpreserve_winonly_control_wf_full_nested.json](../artifacts/reports/wf_feasibility_diag_catboost_value_stack_lgbm_roi_high_coverage_tune_roi012_local_nankan_value_blend_bootstrap_supportpreserve_winonly_control_wf_full_nested.json)、promotion gate は [../artifacts/reports/promotion_gate_r20260421_local_nankan_value_blend_bootstrap_supportpreserve_winonly_control_v1.json](../artifacts/reports/promotion_gate_r20260421_local_nankan_value_blend_bootstrap_supportpreserve_winonly_control_v1.json)、revision manifest は [../artifacts/reports/revision_gate_r20260421_local_nankan_value_blend_bootstrap_supportpreserve_winonly_control_v1.json](../artifacts/reports/revision_gate_r20260421_local_nankan_value_blend_bootstrap_supportpreserve_winonly_control_v1.json) である
+- nested evaluation は `wf_nested_test_roi_weighted=0.7282222669`, `wf_nested_test_bets_total=5847`, winners `['kelly', 'kelly', 'portfolio', 'portfolio', 'portfolio']` を返し、support-preserving base `0.7245602799` はわずかに上回ったが、current best eval `odds30_evlow=0.8225407438` には届かなかった
+- formal sidecar は `status=pass`, `decision=promote`, `wf_feasible_fold_count=1`, `formal_benchmark_weighted_roi=0.8562282347`, `formal_benchmark_bets_total=3733` を返したが、feasible fold は fold 5 のみで、`supportpreserve_diag` corrected sidecar の `formal_benchmark_weighted_roi=0.8920618287` を下回った。failure mode も引き続き `wf_dominant_failure_reason=min_bets`, `wf_binding_min_bets_source_counts={'ratio': 5}` だった
+- したがって pure win-centric simplification だけでは current residual を縮められていない。train-time artifact family を 1 本切った価値はあったが、issue-level read としては `advance` ではなく `hold/reject` 寄りで閉じるべきで、次 action は別の structural residual を足す前に human review で `#103` の再定義境界を明文化することにある
 
 ## First Cut
 
@@ -355,6 +912,12 @@ rule:
 - current benchmark judgment は board の `await_result_arrival` ではなく `#101` pointer / summary / manifest を一次参照にする
 - wrapper / status board が `not_ready` のままでも、それは `#122` future-only operator path の read であり、historical trust-ready corpus の `#103` blocker ではない
 - child run は revision 固有 artifact を出し、baseline compare は必ず `#101` formal rerun reference に対して行う
+
+latest diagnostic update:
+
+- baseline model を使った evaluate-only compare `r20260419_baseline_default_surface_october_override_full_rows200k_v1_retry1` では、same runtime config / `max_rows=200000` のまま `wf_full_nested` を回すと `wf_nested_test_roi_weighted=3.9660920371`, `wf_nested_test_bets_total=778`, `wf_nested_completed=true` で `#101` formal baseline と一致した
+- このため `r20260418_baseline_default_surface_october_override_fast_rows200k_v1` の `3.0151249975` は baseline artifact 劣化ではなく、主に `fast 3-fold` と `full 5-fold nested` の geometry 差に由来していたとみなしてよい
+- current `#103` 読みでは、baseline control 側の追加 inference-time tweak を掘るより、`fast rows200k` を smoke/control 扱いに下げて、value-blend architecture bootstrap 本線の問いと切り分ける方を優先する
 
 future-only operator surfaces を見る必要があるときの canonical read は次である。
 

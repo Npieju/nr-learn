@@ -14,7 +14,9 @@ local draft/reference が必要なときだけ下の category を使う。
 
 - `#122`: [next_issue_local_nankan_future_only_pre_race_readiness.md](next_issue_local_nankan_future_only_pre_race_readiness.md)
 - `#123`: [next_issue_nar_jra_equivalent_trust_completion.md](next_issue_nar_jra_equivalent_trust_completion.md)
-- future option after `#103`: [next_issue_nar_class_rest_surface_replay.md](next_issue_nar_class_rest_surface_replay.md)
+- immediate future option after `#103`: [next_issue_nar_value_blend_support_preserving_residual_calibration.md](next_issue_nar_value_blend_support_preserving_residual_calibration.md)
+- executed train-time control reference after `#103`: [next_issue_nar_value_blend_train_time_artifact_control.md](next_issue_nar_value_blend_train_time_artifact_control.md)
+- later feature-family option after `#103`: [next_issue_nar_class_rest_surface_replay.md](next_issue_nar_class_rest_surface_replay.md)
 
 closed corrective や過去の readiness/source timing 系は tagged reference としてだけ扱う。
 

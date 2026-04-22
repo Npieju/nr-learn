@@ -928,6 +928,7 @@
       positiveEdgeOnly: false,
       focusedSort: { key: "recommendation_mark", dir: 1 },
       rawSort: { key: "pred_rank", dir: 1 },
+      harvilleSort: { key: "edge", dir: -1 },
     };
 
     function formatValue(key, value) {
@@ -1556,13 +1557,13 @@
         ;
     }
 
-    function harvilleSummaryTableHtml(rows, anchors, exhaustive = false) {
+    function harvilleSummaryTableHtml(rows, anchors, sortState, exhaustive = false) {
       if (!rows.length) {
         return exhaustive
           ? '<div class="market-empty">この軸馬条件に一致する組み合わせはありません。</div>'
           : '<div class="market-empty">Harville 理論値を上回る行がまだ見つかっていません。</div>';
       }
-      const visibleRows = exhaustive ? rows : rows.slice(0, 16);
+      const visibleRows = exhaustive ? sortHarvilleRows(rows, sortState, anchors) : sortHarvilleRows(rows, sortState, anchors).slice(0, 16);
       const body = visibleRows.map((row) => `
         <tr class="${harvilleEdgeClass(row.edge)}">
           <td>${escapeHtml(row.marketLabel || "-")}</td>
@@ -1573,17 +1574,25 @@
           <td class="${(numericValue(row.edge) ?? 0) >= 0 ? "edge-positive" : "edge-negative"}">${escapeHtml(formatEdgePercent(row.edge))}</td>
         </tr>
       `).join("");
-      return `<table class="compact-table"><thead><tr><th>券種</th><th>対象</th><th>実オッズ</th><th>Harville</th><th>EV倍率</th><th>上振れ</th></tr></thead><tbody>${body}</tbody></table>`;
+      return `<table class="compact-table"><thead><tr>${[
+        harvilleHeaderCell("券種", "marketLabel", sortState, "券種で並べ替え"),
+        harvilleHeaderCell("対象", "target", sortState, "組み合わせで並べ替え"),
+        harvilleHeaderCell("実オッズ", "market_odds", sortState, "市場オッズで並べ替え"),
+        harvilleHeaderCell("Harville", "harville_odds", sortState, "Harville 理論オッズで並べ替え"),
+        harvilleHeaderCell("EV倍率", "ev_ratio", sortState, "EV 倍率で並べ替え"),
+        harvilleHeaderCell("上振れ", "edge", sortState, "上振れ率で並べ替え"),
+      ].join("")}</tr></thead><tbody>${body}</tbody></table>`;
     }
 
-    function harvilleDetailTableHtml(marketKey, rows, anchors) {
+    function harvilleDetailTableHtml(marketKey, rows, anchors, sortState) {
       if (!rows.length) {
         return '<div class="market-empty">この券種のオッズはまだ取得できていません。</div>';
       }
-      const displayedLegCount = Math.max(...rows.slice(0, HARVILLE_DETAIL_ROW_LIMIT).map((row) => harvilleDisplayLegs(row, anchors).length), 0);
+      const visibleRows = limitedHarvilleRows(rows, sortState, anchors, HARVILLE_DETAIL_ROW_LIMIT);
+      const displayedLegCount = Math.max(...visibleRows.map((row) => harvilleDisplayLegs(row, anchors).length), 0);
       const columnLabels = getHarvilleColumnLabels(marketKey, displayedLegCount, anchors);
-      const head = `<tr>${columnLabels.map((item) => `<th>${escapeHtml(item.horse)}</th>`).join("")}${columnLabels.map((item) => `<th>${escapeHtml(item.odds)}</th>`).join("")}<th>実オッズ</th><th>Harville</th><th>EV倍率</th><th>上振れ</th></tr>`;
-      const body = rows.slice(0, HARVILLE_DETAIL_ROW_LIMIT).map((row) => {
+      const head = `<tr>${columnLabels.map((item, index) => harvilleHeaderCell(item.horse, `horse_${index}`, sortState, `${item.horse}で並べ替え`)).join("")}${columnLabels.map((item, index) => harvilleHeaderCell(item.odds, `win_odds_${index}`, sortState, `${item.odds}で並べ替え`)).join("")}${harvilleHeaderCell("実オッズ", "market_odds", sortState, "市場オッズで並べ替え")}${harvilleHeaderCell("Harville", "harville_odds", sortState, "Harville 理論オッズで並べ替え")}${harvilleHeaderCell("EV倍率", "ev_ratio", sortState, "EV 倍率で並べ替え")}${harvilleHeaderCell("上振れ", "edge", sortState, "上振れ率で並べ替え")}</tr>`;
+      const body = visibleRows.map((row) => {
         const displayLegs = harvilleDisplayLegs(row, anchors);
         const leadingCells = Array.from({ length: displayedLegCount }, (_, index) => {
           const leg = displayLegs[index];
@@ -1665,8 +1674,8 @@
       const exhaustiveOverviewRows = filteredHarvilleRows(flattenHarvilleRows(harville.rowsByMarket || {}), selectedAnchors);
       const filteredMarketRows = filteredHarvilleRows(harville.rowsByMarket?.[activeMarket] || [], selectedAnchors);
       document.getElementById("harville-summary-wrap").innerHTML = activeMarket === "overview"
-        ? harvilleSummaryTableHtml(selectedAnchors.length ? exhaustiveOverviewRows : filteredSummaryRows, selectedAnchors, selectedAnchors.length > 0)
-        : harvilleDetailTableHtml(activeMarket, filteredMarketRows, selectedAnchors);
+        ? harvilleSummaryTableHtml(selectedAnchors.length ? exhaustiveOverviewRows : filteredSummaryRows, selectedAnchors, state.harvilleSort, selectedAnchors.length > 0)
+        : harvilleDetailTableHtml(activeMarket, filteredMarketRows, selectedAnchors, state.harvilleSort);
     }
 
     async function refreshHarvilleOdds(race) {
@@ -1875,6 +1884,17 @@
       `).join("");
     }
 
+    function compareNullableValues(leftValue, rightValue, dir) {
+      if (leftValue === null || leftValue === undefined || leftValue === "") return 1;
+      if (rightValue === null || rightValue === undefined || rightValue === "") return -1;
+      const leftNumber = numericValue(leftValue);
+      const rightNumber = numericValue(rightValue);
+      if (leftNumber !== null && rightNumber !== null) {
+        return (leftNumber - rightNumber) * dir;
+      }
+      return String(leftValue).localeCompare(String(rightValue), "ja") * dir;
+    }
+
     function sortRows(rows, sortState) {
       const copied = [...rows];
       copied.sort((left, right) => {
@@ -1883,14 +1903,74 @@
         if (sortState.key === "recommendation_mark") {
           return ((markPriority[leftValue] ?? 9) - (markPriority[rightValue] ?? 9)) * sortState.dir;
         }
-        if (leftValue === null || leftValue === undefined || leftValue === "") return 1;
-        if (rightValue === null || rightValue === undefined || rightValue === "") return -1;
-        if (typeof leftValue === "number" && typeof rightValue === "number") {
-          return (leftValue - rightValue) * sortState.dir;
-        }
-        return String(leftValue).localeCompare(String(rightValue), "ja") * sortState.dir;
+        return compareNullableValues(leftValue, rightValue, sortState.dir);
       });
       return copied;
+    }
+
+    function getHarvilleSortValue(row, key, anchors) {
+      if (key === "target") {
+        return buildHarvilleTargetLabel(row, anchors);
+      }
+      if (key.startsWith("horse_")) {
+        const legIndex = Number(key.split("_")[1]);
+        const leg = harvilleDisplayLegs(row, anchors)[legIndex];
+        return leg?.horseNo || "";
+      }
+      if (key.startsWith("win_odds_")) {
+        const legIndex = Number(key.split("_")[2]);
+        const leg = harvilleDisplayLegs(row, anchors)[legIndex];
+        return numericValue(leg?.winOdds);
+      }
+      return row?.[key] ?? null;
+    }
+
+    function sortHarvilleRows(rows, sortState, anchors) {
+      const copied = [...rows];
+      copied.sort((left, right) => {
+        const leftValue = getHarvilleSortValue(left, sortState.key, anchors);
+        const rightValue = getHarvilleSortValue(right, sortState.key, anchors);
+        if (sortState.key.startsWith("horse_")) {
+          const byHorse = compareNullableValues(horseSortKey(leftValue), horseSortKey(rightValue), sortState.dir);
+          if (byHorse !== 0) {
+            return byHorse;
+          }
+        }
+        const byValue = compareNullableValues(leftValue, rightValue, sortState.dir);
+        if (byValue !== 0) {
+          return byValue;
+        }
+        return compareNullableValues(left.market_odds, right.market_odds, -1);
+      });
+      return copied;
+    }
+
+    function limitedHarvilleRows(rows, sortState, anchors, limit) {
+      const sortedRows = sortHarvilleRows(rows, sortState, anchors);
+      if (sortedRows.length <= limit) {
+        return sortedRows;
+      }
+      if (sortState.key !== "edge" || sortState.dir !== -1) {
+        return sortedRows.slice(0, limit);
+      }
+      const positiveRows = sortedRows.filter((row) => (numericValue(row.edge) ?? 0) >= 0);
+      const negativeRows = sortedRows.filter((row) => (numericValue(row.edge) ?? 0) < 0);
+      if (!positiveRows.length || !negativeRows.length) {
+        return sortedRows.slice(0, limit);
+      }
+      const negativeQuota = Math.min(Math.max(Math.floor(limit / 3), 1), negativeRows.length);
+      const positiveQuota = Math.min(limit - negativeQuota, positiveRows.length);
+      const picked = [...positiveRows.slice(0, positiveQuota), ...negativeRows.slice(0, negativeQuota)];
+      if (picked.length < limit) {
+        const remainder = sortedRows.filter((row) => !picked.includes(row));
+        picked.push(...remainder.slice(0, limit - picked.length));
+      }
+      return sortHarvilleRows(picked, sortState, anchors);
+    }
+
+    function harvilleHeaderCell(label, key, sortState, description = "") {
+      const arrow = sortState.key === key ? (sortState.dir === 1 ? " ↑" : " ↓") : "";
+      return `<th><button data-table="harville" data-column="${escapeHtml(key)}" title="${escapeHtml(description)}">${escapeHtml(label)}${arrow}</button></th>`;
     }
 
     function currentRace() {
@@ -2177,14 +2257,22 @@
         const column = target.getAttribute("data-column");
         const tableName = target.getAttribute("data-table");
         if (column && tableName) {
-          const sortState = tableName === "focused" ? state.focusedSort : state.rawSort;
+          const sortState = tableName === "focused"
+            ? state.focusedSort
+            : tableName === "raw"
+              ? state.rawSort
+              : state.harvilleSort;
           if (sortState.key === column) {
             sortState.dir = sortState.dir * -1;
           } else {
             sortState.key = column;
             sortState.dir = 1;
           }
-          renderRace();
+          if (tableName === "harville") {
+            renderHarvilleSnapshot(currentRace());
+          } else {
+            renderRace();
+          }
         }
       });
       document.getElementById("horse-filter").addEventListener("input", (event) => {

@@ -1,0 +1,67 @@
+task: "classification"
+label: "is_win"
+
+model:
+  name: "value_blend"
+  params:
+    alpha_weight: 0.0
+    alpha_scale: 1.5
+    roi_weight: 0.12
+    roi_scale: 3.0
+    market_blend_weight: 0.1
+    odds_column: "odds"
+    alpha_positive_only: false
+    roi_positive_only: false
+
+components:
+  win: "artifacts/runtime_configs/model_catboost_win_local_nankan_value_blend_bootstrap_r20260416_local_nankan_value_blend_bootstrap_pre_race_ready_formal_v1.yaml"
+  roi: "artifacts/runtime_configs/model_lightgbm_roi_local_nankan_value_blend_bootstrap_r20260416_local_nankan_value_blend_bootstrap_pre_race_ready_formal_v1.yaml"
+
+evaluation:
+  leakage_audit:
+    enabled: true
+  policy:
+    selection_mode: "gate_then_roi"
+    min_bet_ratio: 0.03
+    min_bets_abs: 90
+    max_drawdown: 0.45
+    min_final_bankroll: 0.85
+  policy_search:
+    fast:
+      blend_weights: [0.8]
+      min_edges: [0.0]
+      min_probabilities: [0.03]
+      fractional_kelly_values: [0.25]
+      max_fraction_values: [0.02]
+      odds_mins: [1.0]
+      odds_maxs: [25.0]
+      top_ks: [1]
+      min_expected_values: [0.95]
+    full:
+      blend_weights: [0.8]
+      min_edges: [0.0]
+      min_probabilities: [0.03]
+      fractional_kelly_values: [0.25]
+      max_fraction_values: [0.02]
+      odds_mins: [1.0]
+      odds_maxs: [25.0]
+      top_ks: [1]
+      min_expected_values: [0.95]
+
+serving:
+  policy:
+    name: "local_nankan_value_blend_bootstrap_marketblend010_support_corrective_runtime"
+    strategy_kind: "portfolio"
+    blend_weight: 0.8
+    min_prob: 0.03
+    odds_min: 1.0
+    odds_max: 25.0
+    top_k: 1
+    min_expected_value: 0.95
+
+output:
+  model_dir: "artifacts/models"
+  report_dir: "artifacts/reports"
+  model_file: "catboost_value_stack_lgbm_roi_high_coverage_tune_roi012_local_nankan_value_blend_bootstrap_marketblend010_diag_model.joblib"
+  report_file: "train_metrics_catboost_value_stack_lgbm_roi_high_coverage_tune_roi012_local_nankan_value_blend_bootstrap_marketblend010_diag.json"
+  manifest_file: "catboost_value_stack_lgbm_roi_high_coverage_tune_roi012_local_nankan_value_blend_bootstrap_marketblend010_diag_model.manifest.json"
