@@ -99,6 +99,31 @@ def compose_value_blend_probabilities(
     return np.clip(np.asarray(blended_prob, dtype=float), 1e-6, 1.0 - 1e-6)
 
 
+def _apply_race_closure_blend(
+    probabilities: np.ndarray,
+    race_ids: pd.Series | np.ndarray | None,
+    *,
+    weight: float,
+    min_multiplier: float,
+    max_multiplier: float,
+) -> np.ndarray:
+    if race_ids is None or weight <= 0.0:
+        return probabilities
+
+    work = pd.DataFrame(
+        {
+            "race_id": pd.Series(race_ids).to_numpy(copy=False),
+            "probability": np.asarray(probabilities, dtype=float).reshape(-1),
+        }
+    )
+    race_sum = work.groupby("race_id")["probability"].transform("sum")
+    normalized = work["probability"] / race_sum.replace(0, np.nan)
+    multiplier = (normalized / work["probability"].replace(0, np.nan)).clip(min_multiplier, max_multiplier)
+    adjusted = work["probability"] * multiplier.fillna(1.0)
+    blended = ((1.0 - weight) * work["probability"]) + (weight * adjusted)
+    return np.clip(blended.to_numpy(dtype=float), 1e-6, 1.0 - 1e-6)
+
+
 def _resolve_bundle_input(model_bundle: dict[str, Any], frame: pd.DataFrame) -> Any:
     feature_columns = [str(column) for column in model_bundle.get("feature_columns", []) if str(column).strip()]
     categorical_columns = [str(column) for column in model_bundle.get("categorical_columns", []) if str(column).strip()]
@@ -172,13 +197,20 @@ def _predict_value_blend_scores(
         )
         market_prob = compute_market_prob(market_frame, odds_col=odds_column).to_numpy(dtype=float)
 
-    return compose_value_blend_probabilities(
+    blended = compose_value_blend_probabilities(
         win_prob=win_prob,
         params=params,
         alpha_raw=alpha_raw,
         roi_raw=roi_raw,
         time_raw=time_raw,
         market_prob=market_prob,
+    )
+    return _apply_race_closure_blend(
+        blended,
+        race_ids,
+        weight=float(params.get("race_closure_blend_weight", 0.0)),
+        min_multiplier=float(params.get("race_closure_min_multiplier", 0.85)),
+        max_multiplier=float(params.get("race_closure_max_multiplier", 1.20)),
     )
 
 
