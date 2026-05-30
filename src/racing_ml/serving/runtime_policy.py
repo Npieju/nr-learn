@@ -38,6 +38,59 @@ def _split_reason_tokens(value: object) -> list[str]:
     return [token for token in str(value).split("|") if token]
 
 
+def _date_key_series(frame: pd.DataFrame) -> pd.Series:
+    if "date" in frame.columns:
+        date_values = pd.to_datetime(frame["date"], errors="coerce").dt.date.astype("string")
+        if date_values.notna().any():
+            return date_values.fillna("unknown")
+    return pd.Series("unknown", index=frame.index, dtype="string")
+
+
+def _rank_pct_high(values: pd.Series) -> pd.Series:
+    return pd.to_numeric(values, errors="coerce").rank(method="average", pct=True).fillna(0.0)
+
+
+def _rank_pct_low(values: pd.Series) -> pd.Series:
+    return 1.0 - _rank_pct_high(values)
+
+
+def _composite_budget_score(
+    frame: pd.DataFrame,
+    *,
+    odds_col: str,
+    score_col: str,
+    policy_config: dict[str, Any],
+) -> pd.Series:
+    weights = policy_config.get("composite_weights")
+    if not isinstance(weights, dict):
+        weights = {
+            "ev": 0.45,
+            "prob": 0.35,
+            "rank": 0.15,
+            "odds_penalty": 0.05,
+            "pop_penalty": 0.05,
+        }
+    ev_cap = float(policy_config.get("composite_ev_cap", 1.25))
+    policy_ev = pd.to_numeric(frame["policy_expected_value"], errors="coerce").clip(upper=ev_cap)
+    policy_prob = pd.to_numeric(frame["policy_prob"], errors="coerce")
+    model_score = pd.to_numeric(frame[score_col], errors="coerce")
+    pred_rank = (
+        pd.to_numeric(frame["pred_rank"], errors="coerce")
+        if "pred_rank" in frame.columns
+        else model_score.groupby(frame["race_id"], sort=False).rank(method="first", ascending=False)
+    )
+    odds = pd.to_numeric(frame[odds_col], errors="coerce")
+    popularity = pd.to_numeric(frame["popularity"], errors="coerce") if "popularity" in frame.columns else pd.Series(0.0, index=frame.index)
+
+    return (
+        float(weights.get("ev", 0.45)) * _rank_pct_high(policy_ev)
+        + float(weights.get("prob", 0.35)) * _rank_pct_high(policy_prob.fillna(model_score))
+        + float(weights.get("rank", 0.15)) * _rank_pct_low(pred_rank)
+        - float(weights.get("odds_penalty", 0.05)) * _rank_pct_high(odds)
+        - float(weights.get("pop_penalty", 0.05)) * _rank_pct_high(popularity)
+    )
+
+
 def summarize_policy_diagnostics(frame: pd.DataFrame) -> dict[str, Any]:
     selected_mask = frame["policy_selected"].fillna(False).astype(bool) if "policy_selected" in frame.columns else pd.Series(False, index=frame.index)
     diagnostics_available = any(
@@ -154,7 +207,10 @@ def _initialize_policy_columns(annotated: pd.DataFrame, *, policy_name: str, str
     annotated["policy_fractional_kelly"] = pd.NA
     annotated["policy_max_fraction"] = pd.NA
     annotated["policy_top_k"] = pd.NA
+    annotated["policy_budget_per_date"] = pd.NA
     annotated["policy_min_expected_value"] = pd.NA
+    annotated["policy_max_popularity"] = pd.NA
+    annotated["policy_composite_score"] = pd.NA
     annotated["policy_market_prob"] = pd.NA
     annotated["policy_prob"] = pd.NA
     annotated["policy_expected_value"] = pd.NA
@@ -352,6 +408,63 @@ def _annotate_single_runtime_policy(
 
             unselected_eligible = eligible.index.difference(picks.index)
             _append_reject_reason(reject_reasons, unselected_eligible, "ranked_below_top_k")
+    elif strategy_kind == "composite_budget":
+        budget_per_date = int(policy_config.get("budget_per_date", 3))
+        min_expected_value = float(policy_config.get("min_expected_value", 0.95))
+        max_popularity = policy_config.get("max_popularity", 6)
+        max_popularity_value = int(max_popularity) if max_popularity is not None else None
+        annotated["policy_budget_per_date"] = budget_per_date
+        annotated["policy_min_expected_value"] = min_expected_value
+        annotated["policy_max_popularity"] = max_popularity_value if max_popularity_value is not None else pd.NA
+
+        below_min_ev_mask = eligible_mask & (annotated["policy_expected_value"] < min_expected_value)
+        _append_reject_reason(reject_reasons, annotated.index[below_min_ev_mask], "expected_value_below_min_expected_value")
+        eligible_mask &= ~below_min_ev_mask
+
+        if max_popularity_value is not None:
+            if "popularity" not in annotated.columns:
+                _append_reject_reason(reject_reasons, annotated.index[eligible_mask], "missing_popularity")
+                eligible_mask &= False
+            else:
+                popularity = pd.to_numeric(annotated["popularity"], errors="coerce")
+                popularity_above_max_mask = eligible_mask & (popularity > max_popularity_value)
+                _append_reject_reason(reject_reasons, annotated.index[popularity_above_max_mask], "popularity_above_max")
+                eligible_mask &= ~popularity_above_max_mask
+
+        annotated["policy_composite_score"] = _composite_budget_score(
+            annotated,
+            odds_col=odds_col,
+            score_col=score_col,
+            policy_config=policy_config,
+        )
+
+        eligible_all = annotated.loc[eligible_mask].copy()
+        selected_indices: list[Any] = []
+        if not eligible_all.empty and budget_per_date > 0:
+            eligible_all["policy_date_key"] = _date_key_series(eligible_all)
+            for _, date_group in eligible_all.groupby("policy_date_key", sort=False):
+                picks = date_group.sort_values(
+                    ["policy_composite_score", "policy_expected_value", "policy_prob"],
+                    ascending=False,
+                ).head(budget_per_date)
+                selected_indices.extend(picks.index.tolist())
+
+        if selected_indices:
+            selected_index = pd.Index(selected_indices)
+            annotated.loc[selected_index, "policy_selected"] = True
+            annotated.loc[selected_index, "policy_selected_strategy_kind"] = strategy_kind
+            for _, date_group in annotated.loc[selected_index].assign(policy_date_key=_date_key_series(annotated.loc[selected_index])).groupby(
+                "policy_date_key",
+                sort=False,
+            ):
+                ranked = date_group.sort_values(["policy_composite_score", "policy_expected_value", "policy_prob"], ascending=False)
+                pick_weight = 1.0 / len(ranked)
+                for pick_rank, pick_index in enumerate(ranked.index, start=1):
+                    annotated.loc[pick_index, "policy_selection_rank"] = pick_rank
+                    annotated.loc[pick_index, "policy_weight"] = pick_weight
+
+        unselected_eligible = eligible_all.index.difference(pd.Index(selected_indices))
+        _append_reject_reason(reject_reasons, unselected_eligible, "ranked_below_date_budget")
 
     return _finalize_reject_reason_columns(annotated, reject_reasons)
 
@@ -404,7 +517,10 @@ def _annotate_staged_runtime_policy(
         "policy_fractional_kelly",
         "policy_max_fraction",
         "policy_top_k",
+        "policy_budget_per_date",
         "policy_min_expected_value",
+        "policy_max_popularity",
+        "policy_composite_score",
         "policy_market_prob",
         "policy_prob",
         "policy_expected_value",
