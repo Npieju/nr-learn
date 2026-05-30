@@ -98,6 +98,12 @@ MODEL_RUN_PROFILES: dict[str, ModelRunProfile] = {
         data_config="configs/data.yaml",
         feature_config="configs/features_catboost_rich_high_coverage_diag.yaml",
     ),
+    "current_recommended_serving_favonly_composite_budget": ModelRunProfile(
+        description="Favorite-only guarded isotonic calibration candidate with opt-in composite budget runtime policy for late-2025 validation.",
+        model_config="configs/model_catboost_value_stack_lgbm_roi_high_coverage_tune_roi012_liquidity_regime_hybrid_june_strict_serving_support_preserving_prob_favonly_composite_budget.yaml",
+        data_config="configs/data.yaml",
+        feature_config="configs/features_catboost_rich_high_coverage_diag.yaml",
+    ),
     "current_long_horizon_serving": ModelRunProfile(
         description="Long-horizon operational serving alias that keeps baseline behavior outside September and applies the validated September Kelly-only guard.",
         model_config="configs/model_catboost_value_stack_lgbm_roi_high_coverage_tune_roi012_liquidity_regime_hybrid_june_strict_serving_sep_selected_rows_kelly_only_candidate.yaml",

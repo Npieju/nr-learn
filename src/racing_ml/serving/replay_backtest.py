@@ -7,9 +7,10 @@ import pandas as pd
 
 from racing_ml.common.artifacts import write_json
 from racing_ml.evaluation.policy import run_policy_strategy, simulate_annotated_runtime_policy
-from racing_ml.evaluation.scoring import resolve_odds_column
+from racing_ml.evaluation.scoring import prepare_scored_frame, resolve_odds_column
 from racing_ml.pipeline.backtest_pipeline import _ev_top1_roi, _plot_backtest, _simple_win_roi, _topk_hit_rate
 from racing_ml.serving.runtime_policy import annotate_runtime_policy, resolve_runtime_policy
+from racing_ml.serving.score_calibration import apply_score_calibration
 
 
 def compute_prediction_backtest_metrics(
@@ -29,6 +30,18 @@ def compute_prediction_backtest_metrics(
         working["expected_value"] = working["score"] * working["odds"]
     working = working.dropna(subset=["pred_rank", "score"])
 
+    serving_cfg = model_config.get("serving", {})
+    score_calibration_summary = None
+    if isinstance(serving_cfg, dict) and "score_calibration_method" not in working.columns:
+        working, score_calibration_summary = apply_score_calibration(
+            working,
+            serving_cfg.get("score_calibration"),
+            workspace_root=workspace_root,
+            score_col="score",
+        )
+        odds_col_for_scoring = resolve_odds_column(working)
+        working = prepare_scored_frame(working, working["score"].to_numpy(), odds_col=odds_col_for_scoring, score_col="score")
+
     metrics: dict[str, Any] = {
         "prediction_file": str(prediction_path.relative_to(workspace_root)),
         "config_file": str(config_path.relative_to(workspace_root)),
@@ -44,6 +57,8 @@ def compute_prediction_backtest_metrics(
         score_source_counts = working["score_source"].fillna("default").astype(str).value_counts().to_dict()
         metrics["score_source_count"] = int(len(score_source_counts))
         metrics["score_sources"] = {str(key): int(value) for key, value in score_source_counts.items()}
+    if score_calibration_summary is not None:
+        metrics["score_calibration"] = score_calibration_summary
 
     odds_col = resolve_odds_column(working)
     policy_resolution = resolve_runtime_policy(model_config, frame=working)
@@ -59,7 +74,7 @@ def compute_prediction_backtest_metrics(
         score_col="score",
     )
     policy_strategy_kind = str(policy_config.get("strategy_kind", "")).strip().lower()
-    if policy_strategy_kind == "staged":
+    if policy_strategy_kind in {"staged", "composite_budget"}:
         policy_metrics = simulate_annotated_runtime_policy(policy_frame, odds_col)
     else:
         policy_metrics = run_policy_strategy(
@@ -82,19 +97,20 @@ def compute_prediction_backtest_metrics(
         metrics["policy_final_bankroll"] = policy_metrics.get("portfolio_final_bankroll")
         metrics["policy_max_drawdown"] = policy_metrics.get("portfolio_max_drawdown")
         metrics["policy_avg_synthetic_odds"] = policy_metrics.get("portfolio_avg_synthetic_odds")
-    elif policy_strategy_kind == "staged":
+    elif policy_strategy_kind in {"staged", "composite_budget"}:
         metrics["policy_roi"] = policy_metrics.get("policy_roi")
         metrics["policy_bets"] = int(policy_metrics.get("policy_bets") or 0)
         metrics["policy_hit_rate"] = policy_metrics.get("policy_hit_rate")
         metrics["policy_final_bankroll"] = policy_metrics.get("policy_final_bankroll")
         metrics["policy_max_drawdown"] = policy_metrics.get("policy_max_drawdown")
         metrics["policy_avg_synthetic_odds"] = policy_metrics.get("policy_avg_synthetic_odds")
-        selected_stage_values = policy_frame.loc[selected_mask, "policy_stage_name"].dropna().astype(str).tolist() if "policy_stage_name" in policy_frame.columns else []
-        metrics["policy_stage_names"] = sorted(set(selected_stage_values))
-        selected_stage_trace_values = policy_frame.loc[selected_mask, "policy_stage_trace"].dropna().astype(str).tolist() if "policy_stage_trace" in policy_frame.columns else []
-        metrics["policy_stage_traces"] = sorted(set(value for value in selected_stage_trace_values if value.strip()))
-        selected_stage_fallback_values = policy_frame.loc[selected_mask, "policy_stage_fallback_reasons"].dropna().astype(str).tolist() if "policy_stage_fallback_reasons" in policy_frame.columns else []
-        metrics["policy_stage_fallback_reasons"] = sorted(set(value for value in selected_stage_fallback_values if value.strip()))
+        if policy_strategy_kind == "staged":
+            selected_stage_values = policy_frame.loc[selected_mask, "policy_stage_name"].dropna().astype(str).tolist() if "policy_stage_name" in policy_frame.columns else []
+            metrics["policy_stage_names"] = sorted(set(selected_stage_values))
+            selected_stage_trace_values = policy_frame.loc[selected_mask, "policy_stage_trace"].dropna().astype(str).tolist() if "policy_stage_trace" in policy_frame.columns else []
+            metrics["policy_stage_traces"] = sorted(set(value for value in selected_stage_trace_values if value.strip()))
+            selected_stage_fallback_values = policy_frame.loc[selected_mask, "policy_stage_fallback_reasons"].dropna().astype(str).tolist() if "policy_stage_fallback_reasons" in policy_frame.columns else []
+            metrics["policy_stage_fallback_reasons"] = sorted(set(value for value in selected_stage_fallback_values if value.strip()))
     else:
         metrics["policy_roi"] = policy_metrics.get("kelly_roi")
         metrics["policy_bets"] = int(policy_metrics.get("kelly_bets") or 0)

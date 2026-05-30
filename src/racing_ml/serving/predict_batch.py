@@ -21,6 +21,7 @@ from racing_ml.evaluation.scoring import generate_prediction_outputs, predict_ta
 from racing_ml.features.builder import build_features
 from racing_ml.features.selection import prepare_model_input_frame, resolve_feature_selection, resolve_model_feature_selection
 from racing_ml.serving.runtime_policy import annotate_runtime_policy, resolve_runtime_policy, summarize_policy_diagnostics
+from racing_ml.serving.score_calibration import apply_score_calibration
 
 
 def log_progress(message: str) -> None:
@@ -241,6 +242,16 @@ def run_predict_from_frame(
                 pred_frame["pred_finish_time_sec"] = predict_target_values(model, model_input)
             elif model_task == "time_deviation":
                 pred_frame["pred_time_deviation"] = predict_target_values(model, model_input)
+    score_calibration_summary = None
+    serving_cfg = active_model_config.get("serving", {})
+    if isinstance(serving_cfg, dict):
+        pred_frame, score_calibration_summary = apply_score_calibration(
+            pred_frame,
+            serving_cfg.get("score_calibration"),
+            workspace_root=workspace_root,
+            score_col="score",
+        )
+
     odds_col = resolve_odds_column(pred_frame)
     pred_frame = prepare_scored_frame(pred_frame, pred_frame["score"].to_numpy(), odds_col=odds_col, score_col="score")
     pred_frame["score_source"] = score_source_name
@@ -275,6 +286,15 @@ def run_predict_from_frame(
         columns.append("popularity")
     columns += ["score_source", "score_source_model_config", "score", "pred_rank"]
     for extra_col in [
+        "score_calibration_method",
+        "score_calibration_train_rows",
+        "score_before_calibration",
+        "score_calibrated_raw",
+        "score_calibrated_before_race_closure",
+    ]:
+        if extra_col in pred_frame.columns:
+            columns.append(extra_col)
+    for extra_col in [
         "policy_name",
         "policy_strategy_kind",
         "policy_stage_name",
@@ -299,7 +319,10 @@ def run_predict_from_frame(
         "policy_fractional_kelly",
         "policy_max_fraction",
         "policy_top_k",
+        "policy_budget_per_date",
         "policy_min_expected_value",
+        "policy_max_popularity",
+        "policy_composite_score",
     ]:
         if extra_col in pred_frame.columns:
             columns.append(extra_col)
@@ -339,6 +362,7 @@ def run_predict_from_frame(
             "policy_strategy_kind": policy_strategy_kind,
             "policy_selected_rows": int(output["policy_selected"].fillna(False).sum()) if "policy_selected" in output.columns else 0,
             "policy_diagnostics": policy_diagnostics,
+            "score_calibration": score_calibration_summary,
             "records": int(len(output)),
             "num_races": int(output["race_id"].nunique()),
             "manifest_file": _display_path(manifest_path, workspace_root) if manifest_path.exists() else None,
