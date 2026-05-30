@@ -233,6 +233,7 @@ def _read_order() -> list[str]:
     return [
         "revision_gate",
         "train",
+        "score_calibration_materialize",
         "evaluate",
         "wf_feasibility",
         "promotion_gate",
@@ -833,6 +834,13 @@ def main() -> int:
     parser.add_argument("--evaluate-end-date", default=None)
     parser.add_argument("--evaluate-wf-mode", choices=["off", "fast", "full"], default="fast")
     parser.add_argument("--evaluate-wf-scheme", choices=["single", "nested"], default="nested")
+    parser.add_argument("--materialize-score-calibration", action="store_true")
+    parser.add_argument("--score-calibration-source-profile", choices=sorted(MODEL_RUN_PROFILES), default=None)
+    parser.add_argument("--score-calibration-dates", default=None)
+    parser.add_argument("--score-calibration-start-date", default=None)
+    parser.add_argument("--score-calibration-end-date", default=None)
+    parser.add_argument("--score-calibration-output-file-suffix", default="score_calibration_train_{artifact_suffix}")
+    parser.add_argument("--score-calibration-manifest-output", default=None)
     parser.add_argument("--wf-max-silent-seconds", type=float, default=None)
     parser.add_argument("--wf-max-fold-elapsed-seconds", type=float, default=None)
     parser.add_argument("--promotion-min-feasible-folds", type=int, default=1)
@@ -893,7 +901,12 @@ def main() -> int:
         wf_summary_output.parent.mkdir(parents=True, exist_ok=True)
         lock_path = _build_lock_path(manifest_output, revision_slug=revision_slug)
 
-        progress = ProgressBar(total=4, prefix="[revision-gate]", logger=log_progress, min_interval_sec=0.0)
+        progress = ProgressBar(
+            total=5 if args.materialize_score_calibration else 4,
+            prefix="[revision-gate]",
+            logger=log_progress,
+            min_interval_sec=0.0,
+        )
         effective_evaluate_model_artifact_suffix = args.evaluate_model_artifact_suffix
         if args.evaluate_no_model_artifact_suffix:
             effective_evaluate_model_artifact_suffix = NO_MODEL_ARTIFACT_SUFFIX
@@ -947,6 +960,42 @@ def main() -> int:
             evaluate_command.extend(["--start-date", str(args.evaluate_start_date)])
         if args.evaluate_end_date:
             evaluate_command.extend(["--end-date", str(args.evaluate_end_date)])
+
+        score_calibration_materialize_command: list[str] | None = None
+        score_calibration_manifest_output: Path | None = None
+        if args.materialize_score_calibration:
+            if not args.score_calibration_source_profile:
+                raise ValueError("--materialize-score-calibration requires --score-calibration-source-profile")
+            if not args.score_calibration_dates and not (args.score_calibration_start_date and args.score_calibration_end_date):
+                raise ValueError("--materialize-score-calibration requires --score-calibration-dates or start/end date")
+            score_calibration_manifest_output = (
+                _resolve_path(args.score_calibration_manifest_output)
+                if args.score_calibration_manifest_output
+                else report_dir / f"score_calibration_prediction_materialize_{revision_slug}.json"
+            )
+            artifact_ensure_output_file_path(score_calibration_manifest_output, label="score calibration materialize manifest", workspace_root=ROOT)
+            score_calibration_materialize_command = [
+                *_python_command("scripts/run_materialize_score_calibration_predictions.py"),
+                "--profile",
+                str(args.score_calibration_source_profile),
+                "--model-artifact-suffix",
+                train_artifact_suffix,
+                "--output-file-suffix",
+                str(args.score_calibration_output_file_suffix),
+                "--manifest-output",
+                artifact_display_path(score_calibration_manifest_output, workspace_root=ROOT),
+            ]
+            if args.score_calibration_dates:
+                score_calibration_materialize_command.extend(["--dates", str(args.score_calibration_dates)])
+            else:
+                score_calibration_materialize_command.extend(
+                    [
+                        "--start-date",
+                        str(args.score_calibration_start_date),
+                        "--end-date",
+                        str(args.score_calibration_end_date),
+                    ]
+                )
 
         wf_command = [
             *_python_command("scripts/run_wf_feasibility_diag.py"),
@@ -1012,28 +1061,47 @@ def main() -> int:
                     outputs={"artifact_suffix": train_artifact_suffix},
                     note="train output artifact files are derived from the revision artifact suffix",
                 ),
-                _planned_step(
-                    "evaluate",
-                    evaluate_command,
-                    outputs={
-                        "evaluation_manifest": "artifacts/reports/evaluation_manifest.json",
-                        "evaluation_summary": "artifacts/reports/evaluation_summary.json",
-                    },
-                ),
-                _planned_step(
-                    "wf_feasibility",
-                    wf_command,
-                    outputs={"wf_summary": artifact_display_path(wf_summary_output, workspace_root=ROOT)},
-                ),
-                _planned_step(
-                    "promotion_gate",
-                    promotion_command,
-                    outputs={"promotion_report": artifact_display_path(promotion_output, workspace_root=ROOT)},
-                ),
             ]
+            if score_calibration_materialize_command is not None:
+                executed_steps.append(
+                    _planned_step(
+                        "score_calibration_materialize",
+                        score_calibration_materialize_command,
+                        outputs={
+                            "manifest": artifact_display_path(score_calibration_manifest_output, workspace_root=ROOT)
+                            if score_calibration_manifest_output is not None
+                            else None
+                        },
+                        note="materializes revision-scoped calibration train predictions before evaluation",
+                    )
+                )
+            executed_steps.extend(
+                [
+                    _planned_step(
+                        "evaluate",
+                        evaluate_command,
+                        outputs={
+                            "evaluation_manifest": "artifacts/reports/evaluation_manifest.json",
+                            "evaluation_summary": "artifacts/reports/evaluation_summary.json",
+                        },
+                    ),
+                    _planned_step(
+                        "wf_feasibility",
+                        wf_command,
+                        outputs={"wf_summary": artifact_display_path(wf_summary_output, workspace_root=ROOT)},
+                    ),
+                    _planned_step(
+                        "promotion_gate",
+                        promotion_command,
+                        outputs={"promotion_report": artifact_display_path(promotion_output, workspace_root=ROOT)},
+                    ),
+                ]
+            )
             status = "planned"
             decision = "not_run"
             progress.update(message=f"planned train artifact_suffix={train_artifact_suffix}")
+            if score_calibration_materialize_command is not None:
+                progress.update(message="planned score calibration materialization")
             progress.update(message="planned evaluation")
             progress.update(message="planned wf feasibility")
 
@@ -1079,6 +1147,8 @@ def main() -> int:
             print(f"[revision-gate] dry-run manifest saved: {manifest_output}")
             print(f"[revision-gate] run log: {artifact_display_path(log_path, workspace_root=ROOT)}")
             print(f"[revision-gate] train command: {' '.join(train_command)}")
+            if score_calibration_materialize_command is not None:
+                print(f"[revision-gate] score calibration materialize command: {' '.join(score_calibration_materialize_command)}")
             print(f"[revision-gate] evaluate command: {' '.join(evaluate_command)}")
             print(f"[revision-gate] wf command: {' '.join(wf_command)}")
             print(f"[revision-gate] promotion command: {' '.join(promotion_command)}")
@@ -1227,6 +1297,60 @@ def main() -> int:
                 print("[revision-gate] decision: error")
                 return int(train_result.returncode) or 1
             progress.update(message=f"train completed artifact_suffix={train_artifact_suffix}")
+
+        if score_calibration_materialize_command is not None:
+            materialize_result = _run_command_result(score_calibration_materialize_command, label="score_calibration_materialize")
+            executed_steps.append({
+                "name": "score_calibration_materialize",
+                "command": score_calibration_materialize_command,
+                "status": "completed" if materialize_result.returncode == 0 else "failed",
+                "return_code": int(materialize_result.returncode),
+            })
+            if materialize_result.returncode != 0:
+                status = "failed"
+                decision = "error"
+                failure_details = _classify_step_failure(step_name="score_calibration_materialize", result=materialize_result)
+                manifest_payload = _build_manifest_payload(
+                    revision_slug=revision_slug,
+                    started_at=started_at,
+                    status=status,
+                    decision=decision,
+                    resolved_profile=resolved_profile,
+                    config_path=config_path,
+                    data_config_path=data_config_path,
+                    feature_config_path=feature_config_path,
+                    train_artifact_suffix=train_artifact_suffix,
+                    skip_train=bool(args.skip_train),
+                    train_max_train_rows=args.train_max_train_rows,
+                    train_max_valid_rows=args.train_max_valid_rows,
+                    evaluate_model_artifact_suffix=args.evaluate_model_artifact_suffix,
+                    evaluate_max_rows=args.evaluate_max_rows,
+                    evaluate_pre_feature_max_rows=args.evaluate_pre_feature_max_rows,
+                    evaluate_start_date=args.evaluate_start_date,
+                    evaluate_end_date=args.evaluate_end_date,
+                    evaluate_wf_mode=args.evaluate_wf_mode,
+                    evaluate_wf_scheme=args.evaluate_wf_scheme,
+                    wf_summary_output=wf_summary_output,
+                    promotion_min_feasible_folds=args.promotion_min_feasible_folds,
+                    promotion_min_formal_weighted_roi=args.promotion_min_formal_weighted_roi,
+                    promotion_output=promotion_output,
+                    manifest_output=manifest_output,
+                    executed_steps=executed_steps,
+                    promotion_report=None,
+                    challenger_equivalence=None,
+                    error_code=str(failure_details.get("error_code") or "score_calibration_materialize_failed"),
+                    error_message=str(failure_details.get("error_message") or "score calibration prediction materialization failed"),
+                    recommended_action=str(failure_details.get("recommended_action") or "inspect_revision_gate_failure"),
+                    current_phase=str(failure_details.get("current_phase") or "score_calibration_materialize"),
+                    highlights=_failure_highlights(failure_details),
+                )
+                manifest_payload["artifacts"]["run_log"] = artifact_display_path(log_path, workspace_root=ROOT)
+                _write_manifest(manifest_output, manifest_payload, label="writing failed revision manifest")
+                print(f"[revision-gate] manifest saved: {manifest_output}")
+                print(f"[revision-gate] run log: {artifact_display_path(log_path, workspace_root=ROOT)}")
+                print("[revision-gate] decision: error")
+                return int(materialize_result.returncode) or 1
+            progress.update(message="score calibration materialization completed")
 
         evaluate_result = _run_command_result(evaluate_command, label="evaluate")
         executed_steps.append({
