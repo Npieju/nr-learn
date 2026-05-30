@@ -33,6 +33,14 @@ def _format_config_string(value: str, context: dict[str, Any] | None) -> str:
     return value.format_map(_SafeFormatDict(context))
 
 
+def _format_context(calibration_config: dict[str, Any], format_context: dict[str, Any] | None) -> dict[str, Any]:
+    context = dict(format_context or {})
+    configured_artifact_suffix = calibration_config.get("artifact_suffix")
+    if configured_artifact_suffix is not None and str(configured_artifact_suffix).strip():
+        context["artifact_suffix"] = str(configured_artifact_suffix).strip()
+    return context
+
+
 def _read_prediction_files(paths: list[Path]) -> pd.DataFrame:
     frames = []
     for path in paths:
@@ -126,8 +134,9 @@ def apply_score_calibration(
     if not isinstance(calibration_config, dict) or not calibration_config.get("enabled", False):
         return frame, None
 
+    effective_format_context = _format_context(calibration_config, format_context)
     train_glob_template = str(calibration_config.get("train_glob", "")).strip()
-    train_glob = _format_config_string(train_glob_template, format_context).strip()
+    train_glob = _format_config_string(train_glob_template, effective_format_context).strip()
     if not train_glob:
         raise ValueError("serving.score_calibration.enabled requires train_glob")
     calibration_label_col = str(calibration_config.get("label_col", label_col)).strip() or label_col
@@ -183,6 +192,7 @@ def apply_score_calibration(
         "method": method,
         "train_glob": train_glob,
         "train_glob_template": train_glob_template,
+        "artifact_suffix": effective_format_context.get("artifact_suffix"),
         "train_files": [path.as_posix() for path in train_paths],
         "calibration_rows": int(valid.sum()),
         "label_col": calibration_label_col,

@@ -167,6 +167,37 @@ def _derive_live_paths(prediction_path: Path) -> dict[str, Path]:
     }
 
 
+def _live_odds_timestamp_for_prediction(path: Path | None) -> str | None:
+    if path is None:
+        return None
+    return _read_json_dict(path.with_suffix(".live.json")).get("odds_official_datetime_max")
+
+
+def _odds_provenance(
+    *,
+    odds_refresh_requested: bool,
+    refresh_live_crawl_requested: bool,
+    before_timestamp: str | None,
+    after_timestamp: str | None,
+) -> dict[str, Any]:
+    if odds_refresh_requested or refresh_live_crawl_requested:
+        source = "direct_refresh"
+    elif before_timestamp and after_timestamp and before_timestamp != after_timestamp:
+        source = "updated_during_handoff"
+    elif after_timestamp:
+        source = "reused_live_cache"
+    else:
+        source = "unknown"
+    return {
+        "source": source,
+        "odds_refresh_requested": bool(odds_refresh_requested),
+        "refresh_live_crawl_requested": bool(refresh_live_crawl_requested),
+        "pre_handoff_odds_official_datetime_max": before_timestamp,
+        "post_handoff_odds_official_datetime_max": after_timestamp,
+        "timestamp_changed": bool(before_timestamp and after_timestamp and before_timestamp != after_timestamp),
+    }
+
+
 def _build_handoff_command(args: argparse.Namespace) -> list[str]:
     command = [
         str(args.python_executable),
@@ -317,6 +348,17 @@ def main() -> int:
         progress.update(current=1, message=f"preexisting_pages_dirty={len(preexisting_pages_dirty)}")
 
         handoff_manifest: dict[str, Any] = _read_json_dict(handoff_manifest_path)
+        pre_handoff_prediction_path = _prediction_path_from_handoff_manifest(
+            manifest=handoff_manifest,
+            race_date=args.race_date,
+        )
+        pre_handoff_odds_timestamp = _live_odds_timestamp_for_prediction(pre_handoff_prediction_path)
+        run_payload["handoff"]["pre_handoff_prediction_file"] = (
+            artifact_display_path(pre_handoff_prediction_path, workspace_root=ROOT)
+            if pre_handoff_prediction_path is not None
+            else None
+        )
+        run_payload["handoff"]["pre_handoff_odds_official_datetime_max"] = pre_handoff_odds_timestamp
         prediction_path: Path | None = None
 
         if args.mode in {"full", "rerun_only"}:
@@ -358,6 +400,12 @@ def main() -> int:
                 run_payload["handoff"]["prediction_file"] = artifact_display_path(live_paths["prediction_file"], workspace_root=ROOT)
                 run_payload["handoff"]["report_file"] = artifact_display_path(live_paths["report_file"], workspace_root=ROOT)
                 run_payload["handoff"]["odds_official_datetime_max"] = live_summary_payload.get("odds_official_datetime_max")
+                run_payload["handoff"]["odds_provenance"] = _odds_provenance(
+                    odds_refresh_requested=bool(args.odds_refresh),
+                    refresh_live_crawl_requested=bool(args.refresh_live_crawl),
+                    before_timestamp=pre_handoff_odds_timestamp,
+                    after_timestamp=live_summary_payload.get("odds_official_datetime_max"),
+                )
                 run_payload["handoff"]["policy_selected_rows"] = _read_json_dict(live_paths["summary_file"]).get("policy_selected_rows")
                 run_payload["status"] = "completed"
                 run_payload["current_phase"] = "live_rerun_completed"
@@ -414,6 +462,12 @@ def main() -> int:
         run_payload["handoff"]["prediction_file"] = artifact_display_path(live_paths["prediction_file"], workspace_root=ROOT)
         run_payload["handoff"]["report_file"] = artifact_display_path(live_paths["report_file"], workspace_root=ROOT)
         run_payload["handoff"]["odds_official_datetime_max"] = live_summary_payload.get("odds_official_datetime_max")
+        run_payload["handoff"]["odds_provenance"] = _odds_provenance(
+            odds_refresh_requested=bool(args.odds_refresh),
+            refresh_live_crawl_requested=bool(args.refresh_live_crawl),
+            before_timestamp=pre_handoff_odds_timestamp,
+            after_timestamp=live_summary_payload.get("odds_official_datetime_max"),
+        )
         run_payload["handoff"]["policy_selected_rows"] = summary_payload.get("policy_selected_rows")
         run_payload["pages"]["page_url"] = _derive_pages_url(
             remote_url=_git_remote_url(args.git_remote),
@@ -456,6 +510,7 @@ def main() -> int:
         run_payload["highlights"] = [
             f"mode={args.mode}",
             f"odds_refresh={args.odds_refresh}",
+            f"odds_provenance={run_payload['handoff'].get('odds_provenance', {}).get('source')}",
             f"prediction_file={run_payload['handoff'].get('prediction_file')}",
             f"odds_official_datetime_max={run_payload['handoff'].get('odds_official_datetime_max')}",
             f"policy_selected_rows={run_payload['handoff'].get('policy_selected_rows')}",

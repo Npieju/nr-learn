@@ -59,7 +59,8 @@ serving:
   score_calibration:
     enabled: true
     method: "isotonic"
-    train_glob: "artifacts/predictions/predictions_*_aug25_support_preserving_calibration_train_r20260530_favonly_composite_budget_current_model.csv"
+    artifact_suffix: "r20260530_favonly_composite_budget_current_model"
+    train_glob: "artifacts/predictions/predictions_*_aug25_support_preserving_calibration_train_{artifact_suffix}.csv"
     label_col: "rank"
     top_popularity_max: 1
     non_top_max_lift: 0.0
