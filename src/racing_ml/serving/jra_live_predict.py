@@ -488,6 +488,8 @@ def build_live_prediction_report(
     runner_history_coverage: dict[str, Any] | None = None,
 ) -> str:
     policy_diagnostics = summarize_policy_diagnostics(predictions)
+    if "policy_selected" in predictions.columns:
+        policy_diagnostics["available"] = True
     history_coverage = runner_history_coverage if isinstance(runner_history_coverage, dict) else {"available": False, "runners": []}
 
     enriched = predictions.copy()
@@ -571,6 +573,11 @@ def build_live_prediction_report(
         lines.append("")
         primary_reason_counts = policy_diagnostics.get("primary_reject_reason_counts", {})
         if primary_reason_counts:
+            lines.append(
+                "- top reject reasons: "
+                + ", ".join(f"{reason}={count}" for reason, count in primary_reason_counts.items())
+            )
+            lines.append("")
             lines.append("### Overall Reject Reasons")
             lines.append("")
             for reason, count in primary_reason_counts.items():
@@ -612,7 +619,8 @@ def build_live_prediction_report(
         )
         top_score_row = race_frame.sort_values(["score", "expected_value"], ascending=False).iloc[0]
         top_raw_ev_row = race_frame.sort_values(["expected_value", "score"], ascending=False).iloc[0]
-        top_policy_ev_row = race_frame.sort_values(["policy_expected_value", "expected_value"], ascending=False).iloc[0]
+        policy_ev_sort_col = "policy_expected_value" if "policy_expected_value" in race_frame.columns else "expected_value"
+        top_policy_ev_row = race_frame.sort_values([policy_ev_sort_col, "expected_value"], ascending=False).iloc[0]
         race_policy_summary = next(
             (item for item in policy_diagnostics.get("race_diagnostics", []) if item.get("race_id") == str(race_id)),
             None,
@@ -651,7 +659,8 @@ def build_live_prediction_report(
         )
         top_score_row = race_frame.sort_values(["score", "expected_value"], ascending=False).iloc[0]
         top_raw_ev_row = race_frame.sort_values(["expected_value", "score"], ascending=False).iloc[0]
-        top_policy_ev_row = race_frame.sort_values(["policy_expected_value", "expected_value"], ascending=False).iloc[0]
+        policy_ev_sort_col = "policy_expected_value" if "policy_expected_value" in race_frame.columns else "expected_value"
+        top_policy_ev_row = race_frame.sort_values([policy_ev_sort_col, "expected_value"], ascending=False).iloc[0]
         largest_gap_row = race_frame.assign(abs_rank_gap=race_frame["rank_gap"].abs()).sort_values(
             ["abs_rank_gap", "expected_value"],
             ascending=False,
@@ -707,7 +716,7 @@ def build_live_prediction_report(
             lines.append(
                 "- 大穴寄りの妙味候補: "
                 + ", ".join(
-                    f"{row['horse_name']} (odds={_format_metric(row['odds'], 1)}, policy_EV={_format_metric(row['policy_expected_value'], 3)})"
+                    f"{row['horse_name']} (odds={_format_metric(row['odds'], 1)}, policy_EV={_format_metric(row.get('policy_expected_value'), 3)})"
                     for _, row in value_outliers.head(3).iterrows()
                 )
                 + "。"
@@ -840,6 +849,26 @@ def build_live_prediction_report(
                 )
             )
         lines.append("")
+
+        lines.append("### Divergence")
+        lines.append("")
+        lines.append("| horse_name | pred_rank | ev_rank | rank_gap | raw_ev | score |")
+        lines.append("| --- | --- | --- | --- | --- | --- |")
+        for _, row in race_frame.assign(abs_rank_gap=race_frame["rank_gap"].abs()).sort_values(
+            ["abs_rank_gap", "expected_value"],
+            ascending=False,
+        ).head(5).iterrows():
+            lines.append(
+                "| {horse_name} | {pred_rank} | {ev_rank} | {rank_gap} | {raw_ev} | {score} |".format(
+                    horse_name=str(row.get("horse_name", "")),
+                    pred_rank="" if pd.isna(row.get("pred_rank")) else int(row.get("pred_rank")),
+                    ev_rank="" if pd.isna(row.get("ev_rank")) else int(row.get("ev_rank")),
+                    rank_gap=_format_metric(row.get("rank_gap"), 0),
+                    raw_ev=_format_metric(row.get("expected_value"), 3),
+                    score=_format_metric(row.get("score"), 6),
+                )
+            )
+        lines.append("")
     return "\n".join(lines).rstrip() + "\n"
 
 
@@ -855,6 +884,7 @@ def run_jra_live_predict(
     headline_contains: str | None = None,
     limit: int | None = None,
     refresh: bool = False,
+    output_file_suffix: str | None = None,
 ) -> dict[str, Any]:
     workspace_root = Path.cwd()
     start_time = time.perf_counter()
@@ -985,13 +1015,17 @@ def run_jra_live_predict(
         )
     )
 
+    effective_output_file_suffix = str(output_file_suffix or "").strip()
+    if not effective_output_file_suffix:
+        effective_output_file_suffix = f"jra_live_smoke_limit{int(limit)}" if limit is not None else "jra_live"
+
     prediction_summary = run_predict_from_frame(
         model_config_path=resolved_model_config_path,
         feature_config_path=resolved_feature_config_path,
         frame=featured_frame,
         race_date=race_date,
         profile_name=profile_name,
-        output_file_suffix="jra_live",
+        output_file_suffix=effective_output_file_suffix,
     )
     prediction_path = workspace_root / str(prediction_summary["prediction_file"])
     predictions = pd.read_csv(prediction_path, low_memory=False)
@@ -1022,6 +1056,8 @@ def run_jra_live_predict(
         "record_count": int(len(predictions)),
         "selected_race_ids": selected_race_ids,
         "headline_filter": headline_contains,
+        "limit": int(limit) if limit is not None else None,
+        "output_file_suffix": effective_output_file_suffix,
         "odds_available_rows": int(odds_available_rows),
         "odds_missing_rows": int(len(live_racecard) - odds_available_rows),
         "odds_official_datetime_max": str(live_racecard["odds_official_datetime"].dropna().max()) if "odds_official_datetime" in live_racecard.columns and live_racecard["odds_official_datetime"].notna().any() else None,

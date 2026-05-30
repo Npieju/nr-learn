@@ -35,6 +35,7 @@ def main() -> int:
     parser.add_argument("--race-id", action="append", default=None)
     parser.add_argument("--headline-contains", default=None)
     parser.add_argument("--limit", type=int, default=None)
+    parser.add_argument("--output-file-suffix", default=None)
     parser.add_argument("--refresh", action="store_true")
     args = parser.parse_args()
     progress = ProgressBar(total=2, prefix="[jra-live cli]", logger=log_progress, min_interval_sec=0.0)
@@ -73,6 +74,7 @@ def main() -> int:
             race_ids=args.race_id,
             headline_contains=args.headline_contains,
             limit=args.limit,
+            output_file_suffix=args.output_file_suffix,
             refresh=args.refresh,
         )
         progress.complete(message="live prediction flow finished")

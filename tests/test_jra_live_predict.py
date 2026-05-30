@@ -121,7 +121,7 @@ class JraLivePredictTest(unittest.TestCase):
                     "prediction_file": "artifacts/predictions/predictions_20260405_jra_live.csv",
                     "summary_file": "artifacts/predictions/predictions_20260405_jra_live.summary.json",
                 },
-            ), patch(
+            ) as predict_mock, patch(
                 "racing_ml.serving.jra_live_predict.summarize_runner_history_coverage",
                 return_value=runner_history_coverage,
             ), patch(
@@ -164,8 +164,110 @@ class JraLivePredictTest(unittest.TestCase):
         self.assertEqual(len(written_json), 1)
         self.assertTrue(str(written_json[0][0]).endswith("predictions_20260405_jra_live.live.json"))
         self.assertEqual(written_json[0][1]["source_version"], get_source_version())
+        self.assertEqual(written_json[0][1]["output_file_suffix"], "jra_live")
+        self.assertEqual(predict_mock.call_args.kwargs["output_file_suffix"], "jra_live")
         self.assertEqual(len(written_text), 1)
         self.assertIn("# test report", written_text[0][1])
+
+    def test_limited_run_uses_smoke_output_suffix_by_default(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            root = Path(tmp_dir)
+            runtime_dir = root / "artifacts" / "tmp" / "jra_live" / "20260405"
+            racecard_dir = runtime_dir / "racecard"
+            pedigree_dir = runtime_dir / "pedigree"
+            prediction_dir = root / "artifacts" / "predictions"
+            racecard_dir.mkdir(parents=True, exist_ok=True)
+            pedigree_dir.mkdir(parents=True, exist_ok=True)
+            prediction_dir.mkdir(parents=True, exist_ok=True)
+            (racecard_dir / "live_racecard.csv").write_text(
+                "race_id,horse_id,horse_key,horse_name,gate_no,date\n"
+                "202604050811,h1,2019001,サンプルA,1,2026-04-05\n",
+                encoding="utf-8",
+            )
+            (pedigree_dir / "live_pedigree.csv").write_text(
+                "horse_key,owner_name,breeder_name,sire_name,dam_name\n"
+                "2019001,owner-a,breeder-a,sire-a,dam-a\n",
+                encoding="utf-8",
+            )
+            (prediction_dir / "predictions_20260405_jra_live_smoke_limit1.csv").write_text(
+                "race_id,horse_id,horse_name,pred_rank,score,odds,popularity,policy_selected\n"
+                "202604050811,h1,サンプルA,1,0.33,3.4,1,False\n",
+                encoding="utf-8",
+            )
+
+            written_json: list[tuple[Path, dict[str, object]]] = []
+            with patch.object(Path, "cwd", return_value=root), patch(
+                "racing_ml.serving.jra_live_predict.load_yaml",
+                side_effect=[
+                    {"crawl": {"user_agent": "test-agent"}},
+                    {"dataset": {"raw_dir": "data/raw"}},
+                    {},
+                ],
+            ), patch(
+                "racing_ml.serving.jra_live_predict.discover_netkeiba_race_ids_from_race_list",
+                return_value=(
+                    pd.DataFrame([
+                        {"date": "2026-04-05", "race_id": "202604050811", "race_no": 8, "headline": "8R テスト"}
+                    ]),
+                    {"source": "race_list", "records": 1},
+                ),
+            ), patch(
+                "racing_ml.serving.jra_live_predict.crawl_netkeiba_from_config",
+                return_value=None,
+            ), patch(
+                "racing_ml.serving.jra_live_predict._fetch_live_win_odds",
+                return_value=pd.DataFrame([
+                    {"race_id": "202604050811", "gate_no": 1, "odds": 3.4, "popularity": 1, "odds_official_datetime": "2026-04-05 13:55:00"}
+                ]),
+            ), patch(
+                "racing_ml.serving.jra_live_predict.load_training_table_for_feature_build",
+                return_value=SimpleNamespace(
+                    frame=pd.DataFrame([{"date": "2026-04-04", "race_id": "hist1", "horse_id": "hh1"}]),
+                    loaded_rows=1,
+                    pre_feature_rows=1,
+                    data_load_strategy="tail_cache",
+                    primary_source_rows_total=1000,
+                ),
+            ), patch(
+                "racing_ml.serving.jra_live_predict.build_features",
+                side_effect=lambda frame: frame,
+            ), patch(
+                "racing_ml.serving.jra_live_predict.run_predict_from_frame",
+                return_value={
+                    "prediction_file": "artifacts/predictions/predictions_20260405_jra_live_smoke_limit1.csv",
+                    "summary_file": "artifacts/predictions/predictions_20260405_jra_live_smoke_limit1.summary.json",
+                },
+            ) as predict_mock, patch(
+                "racing_ml.serving.jra_live_predict.summarize_runner_history_coverage",
+                return_value={"available": True},
+            ), patch(
+                "racing_ml.serving.jra_live_predict.summarize_live_prediction_tradeoff",
+                return_value={},
+            ), patch(
+                "racing_ml.serving.jra_live_predict.summarize_policy_diagnostics",
+                return_value={"available": True},
+            ), patch(
+                "racing_ml.serving.jra_live_predict.build_live_prediction_report",
+                return_value="# smoke\n",
+            ), patch(
+                "racing_ml.serving.jra_live_predict.write_text_file",
+                return_value=None,
+            ), patch(
+                "racing_ml.serving.jra_live_predict.write_json",
+                side_effect=lambda path, payload, **kwargs: written_json.append((path, payload)),
+            ):
+                summary = run_jra_live_predict(
+                    data_config_path="configs/data.yaml",
+                    model_config_path="configs/model.yaml",
+                    feature_config_path="configs/features.yaml",
+                    crawl_config_path="configs/crawl.yaml",
+                    race_date="2026-04-05",
+                    limit=1,
+                )
+
+        self.assertEqual(summary["output_file_suffix"], "jra_live_smoke_limit1")
+        self.assertTrue(str(written_json[0][0]).endswith("predictions_20260405_jra_live_smoke_limit1.live.json"))
+        self.assertEqual(predict_mock.call_args.kwargs["output_file_suffix"], "jra_live_smoke_limit1")
 
     def test_resolve_live_pre_feature_max_rows_reads_primary_tail_cache_manifest(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
