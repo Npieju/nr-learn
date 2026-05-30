@@ -21,6 +21,7 @@ from racing_ml.common.progress import Heartbeat, ProgressBar
 DEFAULT_BACKFILL_MANIFEST = "artifacts/reports/netkeiba_backfill_manifest_2026_ytd.json"
 DEFAULT_SNAPSHOT = "artifacts/reports/netkeiba_coverage_snapshot_2026_ytd.json"
 DEFAULT_HANDOFF = "artifacts/reports/netkeiba_2026_live_handoff_manifest.json"
+DEFAULT_LIVE_PUBLISH = "artifacts/reports/netkeiba_2026_live_publish_manifest.json"
 DEFAULT_BENCHMARK_GATE = "artifacts/reports/netkeiba_2026_benchmark_gate.json"
 DEFAULT_OUTPUT = "artifacts/reports/netkeiba_2026_status_board.json"
 DEFAULT_RACE_RESULT_PATH = "data/external/netkeiba/results/netkeiba_race_result_crawled.csv"
@@ -183,6 +184,7 @@ def main() -> int:
     parser.add_argument("--backfill-manifest", default=DEFAULT_BACKFILL_MANIFEST)
     parser.add_argument("--snapshot", default=DEFAULT_SNAPSHOT)
     parser.add_argument("--handoff-manifest", default=DEFAULT_HANDOFF)
+    parser.add_argument("--live-publish-manifest", default=DEFAULT_LIVE_PUBLISH)
     parser.add_argument("--benchmark-gate-manifest", default=DEFAULT_BENCHMARK_GATE)
     parser.add_argument("--race-result-path", default=DEFAULT_RACE_RESULT_PATH)
     parser.add_argument("--race-card-path", default=DEFAULT_RACE_CARD_PATH)
@@ -203,6 +205,7 @@ def main() -> int:
         backfill_payload = _read_json(_resolve_path(args.backfill_manifest))
         snapshot_payload = _read_json(_resolve_path(args.snapshot))
         handoff_payload = _read_json(_resolve_path(args.handoff_manifest))
+        live_publish_payload = _read_json(_resolve_path(args.live_publish_manifest))
         benchmark_gate_payload = _read_json(_resolve_path(args.benchmark_gate_manifest))
         race_result_target_payload = _read_json(_resolve_path(args.race_result_manifest))
         race_card_target_payload = _read_json(_resolve_path(args.race_card_manifest))
@@ -250,6 +253,14 @@ def main() -> int:
     prediction_file = handoff_payload.get("live_prediction_file")
     live_summary_payload = _read_json(_derive_live_artifact_path(prediction_file, ".summary.json")) if prediction_file else {}
     live_runtime_payload = _read_json(_derive_live_artifact_path(prediction_file, ".live.json")) if prediction_file else {}
+    publish_payload = _dict_payload(live_publish_payload)
+    publish_handoff = _dict_payload(publish_payload.get("handoff"))
+    publish_pages = _dict_payload(publish_payload.get("pages"))
+    publish_git = _dict_payload(publish_payload.get("git"))
+    if not prediction_file and publish_handoff.get("prediction_file"):
+        prediction_file = publish_handoff.get("prediction_file")
+        live_summary_payload = _read_json(_derive_live_artifact_path(prediction_file, ".summary.json")) if prediction_file else {}
+        live_runtime_payload = _read_json(_derive_live_artifact_path(prediction_file, ".live.json")) if prediction_file else {}
     benchmark_gate_status = str(benchmark_gate_payload.get("status") or "")
 
     payload = {
@@ -262,6 +273,7 @@ def main() -> int:
             "backfill_manifest": args.backfill_manifest,
             "snapshot": args.snapshot,
             "handoff_manifest": args.handoff_manifest,
+            "live_publish_manifest": args.live_publish_manifest,
             "benchmark_gate_manifest": args.benchmark_gate_manifest,
             "status_board": args.output,
         },
@@ -318,6 +330,20 @@ def main() -> int:
             "policy_selected_rows": live_summary_payload.get("policy_selected_rows"),
             "records": live_summary_payload.get("records") or live_runtime_payload.get("record_count"),
             "num_races": live_summary_payload.get("num_races") or live_runtime_payload.get("race_count"),
+            "odds_official_datetime_max": live_runtime_payload.get("odds_official_datetime_max"),
+        },
+        "publish": {
+            "status": publish_payload.get("status"),
+            "current_phase": publish_payload.get("current_phase"),
+            "recommended_action": publish_payload.get("recommended_action"),
+            "manifest": args.live_publish_manifest,
+            "mode": publish_payload.get("mode"),
+            "odds_refresh": publish_payload.get("odds_refresh"),
+            "page_url": publish_pages.get("page_url"),
+            "target_page": publish_pages.get("target_page"),
+            "data_file": publish_pages.get("data_file"),
+            "git_status": publish_git.get("status"),
+            "commit_sha": publish_git.get("commit_sha"),
         },
         "benchmark_gate": {
             "status": benchmark_gate_payload.get("status"),
@@ -345,6 +371,8 @@ def main() -> int:
             f"benchmark_gate_status={benchmark_gate_status or 'not_run'}",
             f"policy_selected_rows={live_summary_payload.get('policy_selected_rows')}",
             f"live_num_races={live_summary_payload.get('num_races') or live_runtime_payload.get('race_count')}",
+            f"publish_status={publish_payload.get('status')}",
+            f"publish_git_status={publish_git.get('status')}",
         ],
     }
 

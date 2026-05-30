@@ -839,6 +839,7 @@ def main() -> int:
     parser.add_argument("--score-calibration-dates", default=None)
     parser.add_argument("--score-calibration-start-date", default=None)
     parser.add_argument("--score-calibration-end-date", default=None)
+    parser.add_argument("--score-calibration-model-artifact-suffix", default=None)
     parser.add_argument("--score-calibration-output-file-suffix", default="score_calibration_train_{artifact_suffix}")
     parser.add_argument("--score-calibration-manifest-output", default=None)
     parser.add_argument("--wf-max-silent-seconds", type=float, default=None)
@@ -979,6 +980,8 @@ def main() -> int:
                 "--profile",
                 str(args.score_calibration_source_profile),
                 "--model-artifact-suffix",
+                str(args.score_calibration_model_artifact_suffix or train_artifact_suffix),
+                "--output-artifact-suffix",
                 train_artifact_suffix,
                 "--output-file-suffix",
                 str(args.score_calibration_output_file_suffix),

@@ -56,6 +56,7 @@ source version の正本は `src/racing_ml/version.py` です。docs tag や sna
 - 2026 YTD netkeiba backfill: [scripts/run_netkeiba_2026_ytd_backfill.py](scripts/run_netkeiba_2026_ytd_backfill.py)
 - 2026 YTD netkeiba coverage snapshot: [scripts/run_netkeiba_2026_ytd_snapshot.py](scripts/run_netkeiba_2026_ytd_snapshot.py)
 - 2026 YTD live handoff: [scripts/run_netkeiba_2026_live_handoff.py](scripts/run_netkeiba_2026_live_handoff.py)
+- 2026 YTD live rerun + Pages publish: [scripts/run_netkeiba_2026_live_publish.py](scripts/run_netkeiba_2026_live_publish.py)
 - 2026 YTD status board: [scripts/run_netkeiba_2026_status_board.py](scripts/run_netkeiba_2026_status_board.py)
 - 2026 post-race benchmark gate: [scripts/run_netkeiba_2026_benchmark_gate.py](scripts/run_netkeiba_2026_benchmark_gate.py)
 - バックテスト: [scripts/run_backtest.py](scripts/run_backtest.py)
@@ -90,6 +91,7 @@ source version の正本は `src/racing_ml/version.py` です。docs tag や sna
 /workspaces/nr-learn/.venv/bin/python scripts/run_netkeiba_2026_ytd_backfill.py --max-cycles 1
 /workspaces/nr-learn/.venv/bin/python scripts/run_netkeiba_2026_ytd_snapshot.py
 /workspaces/nr-learn/.venv/bin/python scripts/run_netkeiba_2026_live_handoff.py --race-date 2026-04-05 --headline-contains 大阪杯
+/workspaces/nr-learn/.venv/bin/python scripts/run_netkeiba_2026_live_publish.py --race-date 2026-04-05 --headline-contains 大阪杯 --mode full --odds-refresh
 /workspaces/nr-learn/.venv/bin/python scripts/run_netkeiba_2026_status_board.py
 /workspaces/nr-learn/.venv/bin/python scripts/run_netkeiba_2026_benchmark_gate.py --skip-train --skip-evaluate
 ```
@@ -101,6 +103,8 @@ source version の正本は `src/racing_ml/version.py` です。docs tag や sna
 `run_netkeiba_2026_ytd_snapshot.py` は、2026 YTD backfill の target manifest と lock file を見ながら coverage snapshot を別名出力する wrapper で、running 中でも current stage と readiness を読みやすくする。標準出力先は `artifacts/reports/netkeiba_coverage_snapshot_2026_ytd.json` で、成功時は status board も更新する。
 
 `run_netkeiba_2026_live_handoff.py` は、2026 YTD snapshot と外部結果 CSV の max date を見ながら、履歴が `race_date - history_lag_days` まで追いついた時点で `run_jra_live_predict.py` へ handoff する wrapper である。未達時も waiting manifest を残し、poll ごとに status board も更新する。既に同じ `race_date` の completed manifest と live 出力が揃っていれば、既定では rerun せず即終了する。強制 rerun したいときだけ `--force` を使う。
+
+`run_netkeiba_2026_live_publish.py` は、same-day 公開運用の入口である。`mode=full` では `run_netkeiba_2026_live_handoff.py` を呼んで live rerun を完了させ、その prediction artifact から `run_build_jra_live_pages.py` を実行する。`--odds-refresh` を付けると `--force --refresh-live-crawl` をまとめて有効化し、当日オッズ更新 rerun を前提にした publish 導線を 1 コマンドで回せる。`mode=publish_only` では既存 prediction から Pages だけを再生成し、`mode=rerun_only` では live rerun だけを実行する。必要なら `--git-commit --git-push` で `pages/` の commit / push まで進める。
 
 `run_netkeiba_2026_status_board.py` は、backfill / snapshot / live handoff の manifest を 1 つに集約し、same-day serving readiness の current phase と next action を 1 ファイルで読めるようにする。進行中 cycle では crawl target manifest を直接使って `active_cycle` と各 target の `processed_ids` / `rows_written` を出し、history frontier は外部 CSV から直接 max date を読むので、snapshot や handoff polling を待たずに board 側で途中経過を追える。さらに `race_result_gap_days` / `race_card_gap_days` / `limiting_history_target` と、completed 後の `policy_selected_rows` / `num_races` も出し、crawl lock も snapshot 由来の stale 値ではなく実 lock file 状態を直接読む。
 

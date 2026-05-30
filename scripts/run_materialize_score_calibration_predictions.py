@@ -20,6 +20,8 @@ from racing_ml.common.model_profiles import MODEL_RUN_PROFILES, format_model_run
 from racing_ml.common.progress import ProgressBar
 from racing_ml.serving.predict_batch import prepare_prediction_frame, run_predict_from_frame
 
+NO_MODEL_ARTIFACT_SUFFIX = "__NO_MODEL_ARTIFACT_SUFFIX__"
+
 
 def log_progress(message: str) -> None:
     now = time.strftime("%H:%M:%S")
@@ -77,9 +79,10 @@ def _manifest_payload(
         "model_config": model_config_path,
         "data_config": data_config_path,
         "feature_config": feature_config_path,
-        "model_artifact_suffix": args.model_artifact_suffix,
+        "model_artifact_suffix": None if args.model_artifact_suffix == NO_MODEL_ARTIFACT_SUFFIX else args.model_artifact_suffix,
         "output_file_suffix_template": args.output_file_suffix,
         "output_file_suffix": output_suffix,
+        "output_artifact_suffix": args.output_artifact_suffix or args.model_artifact_suffix,
         "dates": dates,
         "date_count": len(dates),
         "outputs": outputs,
@@ -95,6 +98,7 @@ def main() -> int:
     parser.add_argument("--data-config", default=None)
     parser.add_argument("--feature-config", default=None)
     parser.add_argument("--model-artifact-suffix", required=True)
+    parser.add_argument("--output-artifact-suffix", default=None)
     parser.add_argument("--output-file-suffix", required=True)
     parser.add_argument("--dates", default=None, help="Comma-separated YYYY-MM-DD dates.")
     parser.add_argument("--start-date", default=None)
@@ -119,7 +123,10 @@ def main() -> int:
         )
         _ensure_non_calibrating_source(model_config_path, allow_calibrating_profile=bool(args.allow_calibrating_profile))
         dates = _date_values(args)
-        output_suffix = _resolve_output_suffix(args.output_file_suffix, artifact_suffix=args.model_artifact_suffix)
+        output_suffix = _resolve_output_suffix(
+            args.output_file_suffix,
+            artifact_suffix=str(args.output_artifact_suffix or args.model_artifact_suffix),
+        )
         manifest_path = ensure_output_file_path(args.manifest_output, label="manifest output", workspace_root=ROOT)
 
         planned_outputs = [
@@ -163,7 +170,7 @@ def main() -> int:
                 frame=frame,
                 race_date=date,
                 profile_name=resolved_profile,
-                model_artifact_suffix=args.model_artifact_suffix,
+                model_artifact_suffix=None if args.model_artifact_suffix == NO_MODEL_ARTIFACT_SUFFIX else args.model_artifact_suffix,
                 output_file_suffix=output_suffix,
             )
             outputs.append({"date": date, **summary})
@@ -195,4 +202,3 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-
