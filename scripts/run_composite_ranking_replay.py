@@ -202,6 +202,7 @@ def main() -> None:
     summaries: list[dict[str, Any]] = []
     bucket_rows: list[dict[str, Any]] = []
     inputs: dict[str, list[str]] = {}
+    frames_by_label: dict[str, list[pd.DataFrame]] = {}
 
     for spec in args.prediction_glob:
         if "=" not in spec:
@@ -209,8 +210,11 @@ def main() -> None:
         label, pattern = spec.split("=", 1)
         label = label.strip()
         paths = _resolve_files(pattern.strip())
-        inputs[label] = [display_path(path, workspace_root=ROOT) for path in paths]
-        frame = _read_files(paths)
+        inputs.setdefault(label, []).extend(display_path(path, workspace_root=ROOT) for path in paths)
+        frames_by_label.setdefault(label, []).append(_read_files(paths))
+
+    for label, frames in frames_by_label.items():
+        frame = pd.concat(frames, ignore_index=True)
         baseline_selected = frame["policy_selected"].fillna(False).astype(bool)
         summaries.append(_summary(frame, baseline_selected, label=label, scenario="baseline_policy"))
         bucket_rows.extend(_bucket_rows(frame, baseline_selected, label=label, scenario="baseline_policy"))
