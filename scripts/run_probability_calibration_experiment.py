@@ -122,6 +122,33 @@ def _apply_exposure_guards(
     return np.clip(blended, 1e-6, 1.0 - 1e-6)
 
 
+def _apply_race_closure(
+    frame: pd.DataFrame,
+    score: np.ndarray,
+    *,
+    base_col: str,
+    mode: str,
+) -> np.ndarray:
+    if mode == "none":
+        return np.clip(np.asarray(score, dtype=float), 1e-6, 1.0 - 1e-6)
+    if "race_id" not in frame.columns:
+        raise ValueError("race closure requires race_id column")
+
+    working = frame[["race_id"]].copy()
+    working["score"] = np.clip(np.asarray(score, dtype=float), 1e-6, 1.0 - 1e-6)
+    if mode == "normalize_score_sum":
+        target_sum = pd.Series(1.0, index=working.index)
+    elif mode == "preserve_base_score_sum":
+        base = _numeric(frame, base_col).clip(1e-6, 1.0 - 1e-6)
+        target_sum = base.groupby(frame["race_id"], sort=False).transform("sum")
+    else:
+        raise ValueError(f"Unsupported race closure mode: {mode}")
+
+    current_sum = working.groupby("race_id", sort=False)["score"].transform("sum")
+    adjusted = working["score"] * (target_sum / current_sum.replace(0.0, np.nan))
+    return adjusted.fillna(working["score"]).clip(1e-6, 1.0 - 1e-6).to_numpy(dtype=float)
+
+
 def _bucket_summary(frame: pd.DataFrame, score_col: str) -> list[dict[str, Any]]:
     popularity = _numeric(frame, "popularity")
     buckets = {
@@ -179,6 +206,11 @@ def main() -> None:
     parser.add_argument("--top-popularity-max", type=int, default=3)
     parser.add_argument("--non-top-max-lift", type=float, default=0.0)
     parser.add_argument("--shrinkage", type=float, default=1.0)
+    parser.add_argument(
+        "--race-closure-mode",
+        choices=["none", "normalize_score_sum", "preserve_base_score_sum"],
+        default="none",
+    )
     parser.add_argument("--output-dir", default="artifacts/predictions/calibration_experiment")
     parser.add_argument("--artifact-suffix", default="prob_calibration_experiment")
     parser.add_argument("--output-report", default="artifacts/reports/probability_calibration_experiment.json")
@@ -220,6 +252,13 @@ def main() -> None:
             non_top_max_lift=args.non_top_max_lift,
             shrinkage=args.shrinkage,
         )
+        test["calibrated_score_before_race_closure"] = test["calibrated_score"]
+        test["calibrated_score"] = _apply_race_closure(
+            test,
+            test["calibrated_score"].to_numpy(dtype=float),
+            base_col=args.score_col,
+            mode=args.race_closure_mode,
+        )
         policy_name, policy_config = _extract_policy_config(test)
         replay = annotate_runtime_policy(
             test,
@@ -253,6 +292,7 @@ def main() -> None:
         "top_popularity_max": args.top_popularity_max,
         "non_top_max_lift": args.non_top_max_lift,
         "shrinkage": args.shrinkage,
+        "race_closure_mode": args.race_closure_mode,
         "policy_selected_rows": int(selected.sum()),
         "policy_selected_races": int(replay_all.loc[selected, "race_id"].nunique()) if selected.any() else 0,
         "selected_roi": None
