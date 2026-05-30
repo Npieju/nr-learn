@@ -224,6 +224,131 @@ class Netkeiba2026OpsTest(unittest.TestCase):
             self.assertEqual(payload["live_outputs"]["num_races"], 3)
             self.assertIn("status=handed_off", payload["highlights"])
 
+    def test_status_board_main_surfaces_pages_commit_provenance(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            tmp_path = Path(tmp_dir)
+            backfill_path = tmp_path / "backfill.json"
+            snapshot_path = tmp_path / "snapshot.json"
+            handoff_path = tmp_path / "handoff.json"
+            benchmark_path = tmp_path / "benchmark.json"
+            publish_path = tmp_path / "publish.json"
+            output_path = tmp_path / "status_board.json"
+
+            backfill_path.write_text(json.dumps({"status": "completed", "completed_cycles": 1}), encoding="utf-8")
+            snapshot_path.write_text(json.dumps({"readiness": {}, "progress": {}}), encoding="utf-8")
+            handoff_path.write_text(json.dumps({"status": "completed"}), encoding="utf-8")
+            benchmark_path.write_text(json.dumps({}), encoding="utf-8")
+            publish_path.write_text(
+                json.dumps(
+                    {
+                        "status": "completed",
+                        "current_phase": "pages_ready",
+                        "pages": {
+                            "target_page": "pages/jra-live/2026-04-05/index.html",
+                            "data_file": "pages/jra-live/2026-04-05/data.json",
+                        },
+                        "git": {
+                            "status": "skipped",
+                            "commit_sha": None,
+                        },
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            with patch.object(status_board_script, "ROOT", tmp_path), patch.object(
+                status_board_script, "artifact_ensure_output_file_path", return_value=None
+            ), patch.object(
+                status_board_script,
+                "_latest_git_commit_for_paths",
+                return_value="abcdef1234567890",
+            ) as git_log_mock, patch.object(
+                sys,
+                "argv",
+                [
+                    "run_netkeiba_2026_status_board.py",
+                    "--backfill-manifest",
+                    str(backfill_path),
+                    "--snapshot",
+                    str(snapshot_path),
+                    "--handoff-manifest",
+                    str(handoff_path),
+                    "--live-publish-manifest",
+                    str(publish_path),
+                    "--benchmark-gate-manifest",
+                    str(benchmark_path),
+                    "--output",
+                    str(output_path),
+                ],
+            ):
+                exit_code = status_board_script.main()
+
+            self.assertEqual(exit_code, 0)
+            payload = json.loads(output_path.read_text(encoding="utf-8"))
+            self.assertEqual(payload["publish"]["git_status"], "skipped")
+            self.assertIsNone(payload["publish"]["commit_sha"])
+            self.assertEqual(payload["publish"]["pages_commit_sha"], "abcdef1234567890")
+            self.assertEqual(payload["publish"]["pages_commit_short"], "abcdef1")
+            self.assertIn("publish_pages_commit=abcdef1", payload["highlights"])
+            git_log_mock.assert_called_once_with(
+                [
+                    "pages/jra-live/2026-04-05/index.html",
+                    "pages/jra-live/2026-04-05/data.json",
+                ]
+            )
+
+    def test_status_board_main_keeps_writing_when_pages_commit_missing(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            tmp_path = Path(tmp_dir)
+            backfill_path = tmp_path / "backfill.json"
+            snapshot_path = tmp_path / "snapshot.json"
+            handoff_path = tmp_path / "handoff.json"
+            benchmark_path = tmp_path / "benchmark.json"
+            publish_path = tmp_path / "publish.json"
+            output_path = tmp_path / "status_board.json"
+
+            backfill_path.write_text(json.dumps({"status": "completed", "completed_cycles": 1}), encoding="utf-8")
+            snapshot_path.write_text(json.dumps({"readiness": {}, "progress": {}}), encoding="utf-8")
+            handoff_path.write_text(json.dumps({"status": "completed"}), encoding="utf-8")
+            benchmark_path.write_text(json.dumps({}), encoding="utf-8")
+            publish_path.write_text(
+                json.dumps({"status": "completed", "current_phase": "pages_ready", "pages": {}, "git": {}}),
+                encoding="utf-8",
+            )
+
+            with patch.object(status_board_script, "ROOT", tmp_path), patch.object(
+                status_board_script, "artifact_ensure_output_file_path", return_value=None
+            ), patch.object(
+                status_board_script,
+                "_latest_git_commit_for_paths",
+                return_value=None,
+            ), patch.object(
+                sys,
+                "argv",
+                [
+                    "run_netkeiba_2026_status_board.py",
+                    "--backfill-manifest",
+                    str(backfill_path),
+                    "--snapshot",
+                    str(snapshot_path),
+                    "--handoff-manifest",
+                    str(handoff_path),
+                    "--live-publish-manifest",
+                    str(publish_path),
+                    "--benchmark-gate-manifest",
+                    str(benchmark_path),
+                    "--output",
+                    str(output_path),
+                ],
+            ):
+                exit_code = status_board_script.main()
+
+            self.assertEqual(exit_code, 0)
+            payload = json.loads(output_path.read_text(encoding="utf-8"))
+            self.assertIsNone(payload["publish"]["pages_commit_sha"])
+            self.assertIsNone(payload["publish"]["pages_commit_short"])
+            self.assertIn("publish_pages_commit=None", payload["highlights"])
+
     def test_status_board_main_prioritizes_completed_benchmark_gate_over_handoff(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
             tmp_path = Path(tmp_dir)

@@ -4,6 +4,7 @@ import argparse
 import json
 import os
 from pathlib import Path
+import subprocess
 import sys
 
 import pandas as pd
@@ -139,6 +140,33 @@ def _derive_live_artifact_path(prediction_file: str | None, suffix: str) -> Path
     return None
 
 
+def _display_path_to_repo_path(path_text: object) -> str | None:
+    if not path_text:
+        return None
+    path = _resolve_path(str(path_text))
+    try:
+        return str(path.relative_to(ROOT))
+    except ValueError:
+        return str(path)
+
+
+def _latest_git_commit_for_paths(paths: list[str | None]) -> str | None:
+    repo_paths = [path for path in paths if path]
+    if not repo_paths:
+        return None
+    result = subprocess.run(
+        ["git", "log", "-1", "--format=%H", "--", *repo_paths],
+        cwd=ROOT,
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    if result.returncode != 0:
+        return None
+    commit_sha = result.stdout.strip()
+    return commit_sha or None
+
+
 def _derive_status(
     *,
     backfill: dict[str, object],
@@ -257,6 +285,9 @@ def main() -> int:
     publish_handoff = _dict_payload(publish_payload.get("handoff"))
     publish_pages = _dict_payload(publish_payload.get("pages"))
     publish_git = _dict_payload(publish_payload.get("git"))
+    publish_page_repo_path = _display_path_to_repo_path(publish_pages.get("target_page"))
+    publish_data_repo_path = _display_path_to_repo_path(publish_pages.get("data_file"))
+    publish_pages_commit_sha = _latest_git_commit_for_paths([publish_page_repo_path, publish_data_repo_path])
     if not prediction_file and publish_handoff.get("prediction_file"):
         prediction_file = publish_handoff.get("prediction_file")
         live_summary_payload = _read_json(_derive_live_artifact_path(prediction_file, ".summary.json")) if prediction_file else {}
@@ -344,6 +375,8 @@ def main() -> int:
             "data_file": publish_pages.get("data_file"),
             "git_status": publish_git.get("status"),
             "commit_sha": publish_git.get("commit_sha"),
+            "pages_commit_sha": publish_pages_commit_sha,
+            "pages_commit_short": publish_pages_commit_sha[:7] if publish_pages_commit_sha else None,
         },
         "benchmark_gate": {
             "status": benchmark_gate_payload.get("status"),
@@ -373,6 +406,7 @@ def main() -> int:
             f"live_num_races={live_summary_payload.get('num_races') or live_runtime_payload.get('race_count')}",
             f"publish_status={publish_payload.get('status')}",
             f"publish_git_status={publish_git.get('status')}",
+            f"publish_pages_commit={publish_pages_commit_sha[:7] if publish_pages_commit_sha else None}",
         ],
     }
 
