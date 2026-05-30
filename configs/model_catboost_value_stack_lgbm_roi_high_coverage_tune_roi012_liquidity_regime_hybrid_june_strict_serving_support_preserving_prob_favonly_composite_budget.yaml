@@ -60,6 +60,7 @@ serving:
     enabled: true
     method: "isotonic"
     train_glob: "artifacts/predictions/predictions_202508*_aug25_support_preserving_calibration_train_issue134.csv"
+    label_col: "rank"
     top_popularity_max: 1
     non_top_max_lift: 0.0
     shrinkage: 0.5

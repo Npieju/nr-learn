@@ -22,6 +22,17 @@ def _resolve_glob(pattern: str, *, workspace_root: Path) -> list[Path]:
     return paths
 
 
+class _SafeFormatDict(dict[str, Any]):
+    def __missing__(self, key: str) -> str:
+        return "{" + key + "}"
+
+
+def _format_config_string(value: str, context: dict[str, Any] | None) -> str:
+    if not context:
+        return value
+    return value.format_map(_SafeFormatDict(context))
+
+
 def _read_prediction_files(paths: list[Path]) -> pd.DataFrame:
     frames = []
     for path in paths:
@@ -110,13 +121,16 @@ def apply_score_calibration(
     workspace_root: Path,
     score_col: str = "score",
     label_col: str = "rank",
+    format_context: dict[str, Any] | None = None,
 ) -> tuple[pd.DataFrame, dict[str, Any] | None]:
     if not isinstance(calibration_config, dict) or not calibration_config.get("enabled", False):
         return frame, None
 
-    train_glob = str(calibration_config.get("train_glob", "")).strip()
+    train_glob_template = str(calibration_config.get("train_glob", "")).strip()
+    train_glob = _format_config_string(train_glob_template, format_context).strip()
     if not train_glob:
         raise ValueError("serving.score_calibration.enabled requires train_glob")
+    calibration_label_col = str(calibration_config.get("label_col", label_col)).strip() or label_col
 
     method = str(calibration_config.get("method", "isotonic")).strip().lower()
     top_popularity_max_raw = calibration_config.get("top_popularity_max", 3)
@@ -130,14 +144,14 @@ def apply_score_calibration(
     train = _read_prediction_files(train_paths)
     if score_col not in train.columns:
         raise ValueError(f"score calibration train files missing score column: {score_col}")
-    if label_col not in train.columns:
-        raise ValueError(f"score calibration train files missing label column: {label_col}")
+    if calibration_label_col not in train.columns:
+        raise ValueError(f"score calibration train files missing label column: {calibration_label_col}")
 
     train_score = _numeric(train, score_col)
-    if label_col == "rank":
-        train_label = (_numeric(train, label_col) == 1).astype(int)
+    if calibration_label_col == "rank":
+        train_label = (_numeric(train, calibration_label_col) == 1).astype(int)
     else:
-        train_label = _numeric(train, label_col).astype(int)
+        train_label = _numeric(train, calibration_label_col).astype(int)
     valid = train_score.notna() & train_label.notna()
     if int(valid.sum()) < min_calibration_rows:
         raise ValueError(f"Not enough score calibration rows: {int(valid.sum())}")
@@ -168,12 +182,13 @@ def apply_score_calibration(
     summary = {
         "method": method,
         "train_glob": train_glob,
+        "train_glob_template": train_glob_template,
         "train_files": [path.as_posix() for path in train_paths],
         "calibration_rows": int(valid.sum()),
+        "label_col": calibration_label_col,
         "top_popularity_max": top_popularity_max,
         "non_top_max_lift": non_top_max_lift,
         "shrinkage": shrinkage,
         "race_closure_mode": race_closure_mode,
     }
     return result, summary
-

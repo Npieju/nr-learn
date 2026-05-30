@@ -38,6 +38,7 @@ def compute_prediction_backtest_metrics(
             serving_cfg.get("score_calibration"),
             workspace_root=workspace_root,
             score_col="score",
+            format_context={"artifact_suffix": ""},
         )
         odds_col_for_scoring = resolve_odds_column(working)
         working = prepare_scored_frame(working, working["score"].to_numpy(), odds_col=odds_col_for_scoring, score_col="score")

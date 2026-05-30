@@ -250,6 +250,7 @@ def run_predict_from_frame(
             serving_cfg.get("score_calibration"),
             workspace_root=workspace_root,
             score_col="score",
+            format_context={"artifact_suffix": str(model_artifact_suffix or "")},
         )
 
     odds_col = resolve_odds_column(pred_frame)

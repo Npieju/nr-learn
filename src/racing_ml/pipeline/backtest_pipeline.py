@@ -159,6 +159,7 @@ def run_backtest(config_path: str, predictions_file: str | None = None, profile_
                 serving_cfg.get("score_calibration"),
                 workspace_root=Path.cwd(),
                 score_col="score",
+                format_context={"artifact_suffix": ""},
             )
             odds_col_for_scoring = resolve_odds_column(frame)
             frame = prepare_scored_frame(frame, frame["score"].to_numpy(), odds_col=odds_col_for_scoring, score_col="score")

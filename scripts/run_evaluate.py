@@ -67,6 +67,7 @@ from racing_ml.evaluation.walk_forward import (
 from racing_ml.evaluation.stability import build_stability_guardrail
 from racing_ml.features.builder import build_features
 from racing_ml.features.selection import prepare_model_input_frame, resolve_feature_selection, resolve_model_feature_selection, summarize_feature_coverage
+from racing_ml.serving.score_calibration import apply_score_calibration
 
 
 def log_progress(message: str) -> None:
@@ -810,6 +811,19 @@ def main() -> int:
         with Heartbeat("[evaluate]", "running model inference", logger=log_progress):
             outputs = generate_prediction_outputs(model, x_eval, race_ids=frame["race_id"])
             pred = prepare_scored_frame(frame, outputs.score, odds_col=odds_col, score_col="score")
+        score_calibration_summary = None
+        serving_cfg = model_cfg.get("serving", {})
+        if isinstance(serving_cfg, dict):
+            pred, score_calibration_summary = apply_score_calibration(
+                pred,
+                serving_cfg.get("score_calibration"),
+                workspace_root=ROOT,
+                score_col="score",
+                label_col=label_col,
+                format_context={"artifact_suffix": str(args.artifact_suffix or "")},
+            )
+            if score_calibration_summary is not None:
+                pred = prepare_scored_frame(pred, pred["score"].to_numpy(), odds_col=odds_col, score_col="score")
         if odds_col is not None:
             pred = add_market_signals(pred, score_col="score", odds_col=odds_col)
         progress.update(message=f"inference complete rows={len(pred):,} races={pred['race_id'].nunique():,}")
@@ -874,7 +888,8 @@ def main() -> int:
                 )
         post_inference_progress.update(message=f"score sources ready count={len(prediction_sources):,}")
 
-        score_is_prob = bool(np.nanmin(outputs.score) >= 0.0 and np.nanmax(outputs.score) <= 1.0)
+        effective_scores = pred["score"].to_numpy(dtype=float)
+        score_is_prob = bool(np.nanmin(effective_scores) >= 0.0 and np.nanmax(effective_scores) <= 1.0)
         compute_prob_metrics = task in {"classification", "ranking", "multi_position"}
         probabilistic_flow = bool(compute_prob_metrics and score_is_prob)
 
@@ -887,12 +902,14 @@ def main() -> int:
             "pre_feature_rows": pre_feature_rows,
             "requested_max_rows": int(args.max_rows),
             "n_dates": int(pred["date"].nunique()) if "date" in pred.columns else None,
-            "auc": _safe_auc(y_eval, outputs.score) if compute_prob_metrics else None,
-            "logloss": float(log_loss(y_eval, np.clip(outputs.score, 1e-12, 1 - 1e-12), labels=[0, 1])) if (compute_prob_metrics and score_is_prob) else None,
+            "auc": _safe_auc(y_eval, effective_scores) if compute_prob_metrics else None,
+            "logloss": float(log_loss(y_eval, np.clip(effective_scores, 1e-12, 1 - 1e-12), labels=[0, 1])) if (compute_prob_metrics and score_is_prob) else None,
             "score_is_probability": score_is_prob,
             "task": task,
             "evaluation_flow": "probability_market" if probabilistic_flow else "roi_direct",
         }
+        if score_calibration_summary is not None:
+            summary["score_calibration"] = score_calibration_summary
 
         if task in {"time_regression", "time_deviation"}:
             raw_prediction = predict_target_values(model, x_eval)
@@ -943,6 +960,7 @@ def main() -> int:
             "artifact_suffix": args.artifact_suffix,
             "model_artifact_suffix": None if explicit_no_model_artifact_suffix else (resolved_model_artifact_suffix or args.artifact_suffix),
             "artifact_manifest": load_artifacts.manifest_path.as_posix() if (ROOT / load_artifacts.manifest_path).exists() else None,
+            "score_calibration_enabled": score_calibration_summary is not None,
         }
         summary["feature_coverage"] = feature_coverage
         summary["policy_constraints"] = policy_constraints.to_dict()
@@ -995,7 +1013,7 @@ def main() -> int:
 
         if odds_col is not None and probabilistic_flow:
             market_prob = compute_market_prob(pred, odds_col=odds_col).to_numpy(dtype=float)
-            model_prob = np.clip(np.asarray(outputs.score, dtype=float), 1e-6, 1 - 1e-6)
+            model_prob = np.clip(np.asarray(pred["score"], dtype=float), 1e-6, 1 - 1e-6)
             market_prob_clip = np.clip(market_prob, 1e-6, 1 - 1e-6)
             odds_values = pd.to_numeric(pred[odds_col], errors="coerce").to_numpy(dtype=float)
             edge = model_prob * odds_values - 1.0
