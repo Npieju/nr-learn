@@ -26,6 +26,21 @@ pages_script = _load_script_module("test_run_build_jra_live_pages", "scripts/pub
 
 
 class BuildJraLivePagesTest(unittest.TestCase):
+    def test_build_overview_picks_prefers_high_score_then_high_ev_longshot(self) -> None:
+        frame = pages_script.pd.DataFrame(
+            [
+                {"horse_id": 20260503020105, "horse_name": "セイウンハーデス", "score": 0.42, "odds": 3.4, "expected_value": 1.05},
+                {"horse_id": 20260503020108, "horse_name": "ライバル", "score": 0.31, "odds": 5.8, "expected_value": 0.96},
+                {"horse_id": 20260503020112, "horse_name": "オオアナ", "score": 0.11, "odds": 18.6, "expected_value": 1.42},
+            ]
+        )
+
+        picks = pages_script._build_overview_picks(frame)
+
+        self.assertEqual(picks["favorite"]["horseLabel"], "5 セイウンハーデス")
+        self.assertEqual(picks["contender"]["horseLabel"], "8 ライバル")
+        self.assertEqual(picks["longshot"]["horseLabel"], "12 オオアナ")
+
     def test_build_harville_rows_for_wide_keeps_odds_range(self) -> None:
         config = next(item for item in pages_script.HARVILLE_MARKET_OPTIONS if item["key"] == "wide")
         rows = pages_script._build_harville_rows_for_market(
@@ -95,6 +110,9 @@ class BuildJraLivePagesTest(unittest.TestCase):
         self.assertIn('>消し馬<', html)
         self.assertIn('class="harville-filter-chip-text"', html)
         self.assertIn('function harvilleOverviewTableHtml', html)
+        self.assertIn('>◎<', html)
+        self.assertIn('>◯<', html)
+        self.assertIn('>大穴<', html)
 
 
 if __name__ == "__main__":

@@ -49,6 +49,7 @@ HARVILLE_SUMMARY_LIMIT = 16
 HARVILLE_SUMMARY_PER_MARKET_LIMIT = 4
 HARVILLE_DETAIL_LIMIT = 120
 HARVILLE_SENTINEL_ODDS_THRESHOLD = 999000.0
+OVERVIEW_LONGSHOT_MIN_ODDS = 10.0
 ODDS_ANALYZE_API_URL = "https://nk-calculator-api.onrender.com/v1/analyze"
 
 
@@ -156,6 +157,69 @@ def _top_row(frame: pd.DataFrame, primary: str, secondary: str) -> pd.Series | N
     if ranked.empty:
         return None
     return ranked.iloc[0]
+
+
+def _resolve_overview_horse_no(row: pd.Series | None) -> str:
+    if row is None:
+        return ""
+    direct = _normalize_horse_no(row.get("gate_no") or row.get("horse_no") or row.get("horseNumber"))
+    if direct:
+        return direct
+    horse_id_suffix = "".join(ch for ch in str(row.get("horse_id") or "") if ch.isdigit())[-2:]
+    return _normalize_horse_no(horse_id_suffix)
+
+
+def _overview_pick_payload(row: pd.Series | None) -> dict[str, Any] | None:
+    if row is None:
+        return None
+    horse_no = _resolve_overview_horse_no(row)
+    horse_name = str(row.get("horse_name") or "").strip()
+    label = f"{horse_no} {horse_name}".strip() if horse_no or horse_name else None
+    if not label:
+        return None
+    return {
+        "horseLabel": label,
+        "horseNo": horse_no or None,
+        "horseName": horse_name or None,
+        "odds": _safe_float(row.get("odds")),
+        "expectedValue": _safe_float(row.get("expected_value")),
+        "score": _safe_float(row.get("score")),
+    }
+
+
+def _build_overview_picks(frame: pd.DataFrame) -> dict[str, Any]:
+    working = frame.copy()
+    for column in ["score", "expected_value", "odds"]:
+        if column in working.columns:
+            working[column] = pd.to_numeric(working[column], errors="coerce")
+
+    by_score = working.sort_values(["score", "expected_value"], ascending=False, na_position="last") if "score" in working.columns else working.iloc[0:0]
+    favorite_row = by_score.iloc[0] if not by_score.empty else None
+    contender_row = by_score.iloc[1] if len(by_score) > 1 else None
+
+    used_horse_nos = {
+        _resolve_overview_horse_no(item)
+        for item in [favorite_row, contender_row]
+        if item is not None
+    }
+    candidate_longshots = working
+    if "odds" in working.columns:
+        high_odds = working[working["odds"].fillna(-1) >= OVERVIEW_LONGSHOT_MIN_ODDS]
+        if not high_odds.empty:
+            candidate_longshots = high_odds
+    if used_horse_nos:
+        candidate_longshots = candidate_longshots[
+            ~candidate_longshots.apply(lambda row: _resolve_overview_horse_no(row) in used_horse_nos, axis=1)
+        ]
+    if "expected_value" in candidate_longshots.columns:
+        candidate_longshots = candidate_longshots.sort_values(["expected_value", "odds", "score"], ascending=False, na_position="last")
+    longshot_row = candidate_longshots.iloc[0] if not candidate_longshots.empty else None
+
+    return {
+        "favorite": _overview_pick_payload(favorite_row),
+        "contender": _overview_pick_payload(contender_row),
+        "longshot": _overview_pick_payload(longshot_row),
+    }
 
 
 def _race_headline(frame: pd.DataFrame, race_id: str) -> str:
@@ -771,6 +835,7 @@ def build_payload(
             "topPolicyEvHorse": str(top_policy_ev_row.get("horse_name")) if top_policy_ev_row is not None else None,
             "topPolicyEv": _safe_float(top_policy_ev_row.get("policy_expected_value")) if top_policy_ev_row is not None else None,
             "topReasons": top_reasons if isinstance(top_reasons, list) else [],
+            "overviewPicks": _build_overview_picks(race_frame),
         }
         race_rows = [{column: _coerce_cell(value) for column, value in row.items()} for row in race_frame.to_dict(orient="records")]
         races.append({**race_summary, "rowsData": race_rows, "harville": _coerce_cell(harville_payload)})
@@ -1859,6 +1924,7 @@ def render_live_page(*, page_title: str) -> str:
     ];
     const HARVILLE_FILTER_ODDS_THRESHOLD = 1000;
     const HARVILLE_DETAIL_ROW_LIMIT = 120;
+    const OVERVIEW_LONGSHOT_MIN_ODDS = 10;
     const oddsAnalyzeCache = new Map();
     const oddsAnalyzePending = new Map();
     const state = {
@@ -1932,6 +1998,77 @@ def render_live_page(*, page_title: str) -> str:
         return `${horseNo} ${horseName}`;
       }
       return horseName || horseNo || "-";
+    }
+
+    function buildOverviewPick(row) {
+      if (!row) {
+        return null;
+      }
+      const horseNo = resolveRaceRowHorseNo(row);
+      const horseName = normalizeHorseName(row?.horse_name);
+      const horseLabel = `${horseNo} ${horseName}`.trim() || horseName || horseNo;
+      if (!horseLabel) {
+        return null;
+      }
+      return {
+        horseLabel,
+        horseNo: horseNo || null,
+        horseName: horseName || null,
+        odds: numericValue(row?.odds),
+        expectedValue: numericValue(row?.expected_value),
+        score: numericValue(row?.score),
+      };
+    }
+
+    function buildOverviewPicks(rows) {
+      const working = Array.isArray(rows) ? [...rows] : [];
+      const byScore = [...working].sort((left, right) => {
+        const scoreDiff = (numericValue(right?.score) ?? -Infinity) - (numericValue(left?.score) ?? -Infinity);
+        if (scoreDiff !== 0) {
+          return scoreDiff;
+        }
+        return (numericValue(right?.expected_value) ?? -Infinity) - (numericValue(left?.expected_value) ?? -Infinity);
+      });
+      const favoriteRow = byScore[0] || null;
+      const contenderRow = byScore[1] || null;
+      const usedHorseNos = new Set([favoriteRow, contenderRow].map((row) => resolveRaceRowHorseNo(row)).filter(Boolean));
+      let longshotCandidates = working;
+      const highOddsCandidates = working.filter((row) => (numericValue(row?.odds) ?? -1) >= OVERVIEW_LONGSHOT_MIN_ODDS);
+      if (highOddsCandidates.length) {
+        longshotCandidates = highOddsCandidates;
+      }
+      longshotCandidates = longshotCandidates
+        .filter((row) => !usedHorseNos.has(resolveRaceRowHorseNo(row)))
+        .sort((left, right) => {
+          const evDiff = (numericValue(right?.expected_value) ?? -Infinity) - (numericValue(left?.expected_value) ?? -Infinity);
+          if (evDiff !== 0) {
+            return evDiff;
+          }
+          const oddsDiff = (numericValue(right?.odds) ?? -Infinity) - (numericValue(left?.odds) ?? -Infinity);
+          if (oddsDiff !== 0) {
+            return oddsDiff;
+          }
+          return (numericValue(right?.score) ?? -Infinity) - (numericValue(left?.score) ?? -Infinity);
+        });
+      return {
+        favorite: buildOverviewPick(favoriteRow),
+        contender: buildOverviewPick(contenderRow),
+        longshot: buildOverviewPick(longshotCandidates[0] || null),
+      };
+    }
+
+    function formatOverviewPick(pick) {
+      if (!pick?.horseLabel) {
+        return "-";
+      }
+      const meta = [];
+      if (numericValue(pick.odds) !== null) {
+        meta.push(`odds ${escapeHtml(formatValue("odds", pick.odds))}`);
+      }
+      if (numericValue(pick.expectedValue) !== null) {
+        meta.push(`EV ${escapeHtml(formatValue("expected_value", pick.expectedValue))}`);
+      }
+      return `${escapeHtml(pick.horseLabel)} <span class="mono">${meta.length ? meta.join(" / ") : "-"}</span>`;
     }
 
     function escapeHtml(value) {
@@ -2527,6 +2664,7 @@ def render_live_page(*, page_title: str) -> str:
       const topScoreRow = [...refreshed.rows].sort((left, right) => (numericValue(right.score) ?? -Infinity) - (numericValue(left.score) ?? -Infinity))[0] || null;
       const topRawEvRow = [...refreshed.rows].sort((left, right) => (numericValue(right.expected_value) ?? -Infinity) - (numericValue(left.expected_value) ?? -Infinity))[0] || null;
       const topPolicyEvRow = [...refreshed.rows].sort((left, right) => (numericValue(right.policy_expected_value) ?? -Infinity) - (numericValue(left.policy_expected_value) ?? -Infinity))[0] || null;
+      race.overviewPicks = buildOverviewPicks(refreshed.rows);
       race.topScoreHorse = topScoreRow?.horse_name || null;
       race.topScore = numericValue(topScoreRow?.score);
       race.topRawEvHorse = topRawEvRow?.horse_name || null;
@@ -2554,6 +2692,7 @@ def render_live_page(*, page_title: str) -> str:
         overviewRow.topPolicyEvHorse = race.topPolicyEvHorse;
         overviewRow.topPolicyEv = race.topPolicyEv;
         overviewRow.topReasons = race.topReasons;
+        overviewRow.overviewPicks = race.overviewPicks;
       }
       const venue = state.data.venues.find((item) => item.venueCode === race.venueCode);
       if (venue) {
@@ -3566,19 +3705,20 @@ def render_live_page(*, page_title: str) -> str:
       document.getElementById("overview-title").textContent = `${activeVenue?.venue || "-"} Overview`;
       const html = [`<table><thead><tr>
         <th>R</th>
-        <th>命中寄り</th>
-        <th>妙味寄り</th>
-        <th>policy</th>
+        <th>◎</th>
+        <th>◯</th>
+        <th>大穴</th>
         <th>阻害要因</th>
       </tr></thead><tbody>`];
       rows.forEach((row) => {
         const activeClass = row.raceId === state.selectedRaceId ? "active-overview" : "";
+        const overviewPicks = row.overviewPicks || {};
         html.push(`
           <tr class="${activeClass}" data-race-id="${row.raceId}">
             <td><button class="tab-link" data-race-id="${row.raceId}">${formatValue("raceNo", row.raceNo)}R</button></td>
-            <td>${row.topScoreHorse || "-"} <span class="mono">${formatValue("score", row.topScore)}</span></td>
-            <td>${row.topRawEvHorse || "-"} <span class="mono">${formatValue("expected_value", row.topRawEv)}</span></td>
-            <td>${row.topPolicyEvHorse || "-"} <span class="mono">${formatValue("selectedRows", row.selectedRows)} / ${formatValue("policy_expected_value", row.topPolicyEv)}</span></td>
+            <td>${formatOverviewPick(overviewPicks.favorite)}</td>
+            <td>${formatOverviewPick(overviewPicks.contender)}</td>
+            <td>${formatOverviewPick(overviewPicks.longshot)}</td>
             <td>${row.blocker || "-"}</td>
           </tr>
         `);

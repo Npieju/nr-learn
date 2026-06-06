@@ -1010,6 +1010,7 @@
     ];
     const HARVILLE_FILTER_ODDS_THRESHOLD = 1000;
     const HARVILLE_DETAIL_ROW_LIMIT = 120;
+    const OVERVIEW_LONGSHOT_MIN_ODDS = 10;
     const oddsAnalyzeCache = new Map();
     const oddsAnalyzePending = new Map();
     const state = {
@@ -1083,6 +1084,77 @@
         return `${horseNo} ${horseName}`;
       }
       return horseName || horseNo || "-";
+    }
+
+    function buildOverviewPick(row) {
+      if (!row) {
+        return null;
+      }
+      const horseNo = resolveRaceRowHorseNo(row);
+      const horseName = normalizeHorseName(row?.horse_name);
+      const horseLabel = `${horseNo} ${horseName}`.trim() || horseName || horseNo;
+      if (!horseLabel) {
+        return null;
+      }
+      return {
+        horseLabel,
+        horseNo: horseNo || null,
+        horseName: horseName || null,
+        odds: numericValue(row?.odds),
+        expectedValue: numericValue(row?.expected_value),
+        score: numericValue(row?.score),
+      };
+    }
+
+    function buildOverviewPicks(rows) {
+      const working = Array.isArray(rows) ? [...rows] : [];
+      const byScore = [...working].sort((left, right) => {
+        const scoreDiff = (numericValue(right?.score) ?? -Infinity) - (numericValue(left?.score) ?? -Infinity);
+        if (scoreDiff !== 0) {
+          return scoreDiff;
+        }
+        return (numericValue(right?.expected_value) ?? -Infinity) - (numericValue(left?.expected_value) ?? -Infinity);
+      });
+      const favoriteRow = byScore[0] || null;
+      const contenderRow = byScore[1] || null;
+      const usedHorseNos = new Set([favoriteRow, contenderRow].map((row) => resolveRaceRowHorseNo(row)).filter(Boolean));
+      let longshotCandidates = working;
+      const highOddsCandidates = working.filter((row) => (numericValue(row?.odds) ?? -1) >= OVERVIEW_LONGSHOT_MIN_ODDS);
+      if (highOddsCandidates.length) {
+        longshotCandidates = highOddsCandidates;
+      }
+      longshotCandidates = longshotCandidates
+        .filter((row) => !usedHorseNos.has(resolveRaceRowHorseNo(row)))
+        .sort((left, right) => {
+          const evDiff = (numericValue(right?.expected_value) ?? -Infinity) - (numericValue(left?.expected_value) ?? -Infinity);
+          if (evDiff !== 0) {
+            return evDiff;
+          }
+          const oddsDiff = (numericValue(right?.odds) ?? -Infinity) - (numericValue(left?.odds) ?? -Infinity);
+          if (oddsDiff !== 0) {
+            return oddsDiff;
+          }
+          return (numericValue(right?.score) ?? -Infinity) - (numericValue(left?.score) ?? -Infinity);
+        });
+      return {
+        favorite: buildOverviewPick(favoriteRow),
+        contender: buildOverviewPick(contenderRow),
+        longshot: buildOverviewPick(longshotCandidates[0] || null),
+      };
+    }
+
+    function formatOverviewPick(pick) {
+      if (!pick?.horseLabel) {
+        return "-";
+      }
+      const meta = [];
+      if (numericValue(pick.odds) !== null) {
+        meta.push(`odds ${escapeHtml(formatValue("odds", pick.odds))}`);
+      }
+      if (numericValue(pick.expectedValue) !== null) {
+        meta.push(`EV ${escapeHtml(formatValue("expected_value", pick.expectedValue))}`);
+      }
+      return `${escapeHtml(pick.horseLabel)} <span class="mono">${meta.length ? meta.join(" / ") : "-"}</span>`;
     }
 
     function escapeHtml(value) {
@@ -1678,6 +1750,7 @@
       const topScoreRow = [...refreshed.rows].sort((left, right) => (numericValue(right.score) ?? -Infinity) - (numericValue(left.score) ?? -Infinity))[0] || null;
       const topRawEvRow = [...refreshed.rows].sort((left, right) => (numericValue(right.expected_value) ?? -Infinity) - (numericValue(left.expected_value) ?? -Infinity))[0] || null;
       const topPolicyEvRow = [...refreshed.rows].sort((left, right) => (numericValue(right.policy_expected_value) ?? -Infinity) - (numericValue(left.policy_expected_value) ?? -Infinity))[0] || null;
+      race.overviewPicks = buildOverviewPicks(refreshed.rows);
       race.topScoreHorse = topScoreRow?.horse_name || null;
       race.topScore = numericValue(topScoreRow?.score);
       race.topRawEvHorse = topRawEvRow?.horse_name || null;
@@ -1705,6 +1778,7 @@
         overviewRow.topPolicyEvHorse = race.topPolicyEvHorse;
         overviewRow.topPolicyEv = race.topPolicyEv;
         overviewRow.topReasons = race.topReasons;
+        overviewRow.overviewPicks = race.overviewPicks;
       }
       const venue = state.data.venues.find((item) => item.venueCode === race.venueCode);
       if (venue) {
@@ -2717,19 +2791,20 @@
       document.getElementById("overview-title").textContent = `${activeVenue?.venue || "-"} Overview`;
       const html = [`<table><thead><tr>
         <th>R</th>
-        <th>命中寄り</th>
-        <th>妙味寄り</th>
-        <th>policy</th>
+        <th>◎</th>
+        <th>◯</th>
+        <th>大穴</th>
         <th>阻害要因</th>
       </tr></thead><tbody>`];
       rows.forEach((row) => {
         const activeClass = row.raceId === state.selectedRaceId ? "active-overview" : "";
+        const overviewPicks = row.overviewPicks || {};
         html.push(`
           <tr class="${activeClass}" data-race-id="${row.raceId}">
             <td><button class="tab-link" data-race-id="${row.raceId}">${formatValue("raceNo", row.raceNo)}R</button></td>
-            <td>${row.topScoreHorse || "-"} <span class="mono">${formatValue("score", row.topScore)}</span></td>
-            <td>${row.topRawEvHorse || "-"} <span class="mono">${formatValue("expected_value", row.topRawEv)}</span></td>
-            <td>${row.topPolicyEvHorse || "-"} <span class="mono">${formatValue("selectedRows", row.selectedRows)} / ${formatValue("policy_expected_value", row.topPolicyEv)}</span></td>
+            <td>${formatOverviewPick(overviewPicks.favorite)}</td>
+            <td>${formatOverviewPick(overviewPicks.contender)}</td>
+            <td>${formatOverviewPick(overviewPicks.longshot)}</td>
             <td>${row.blocker || "-"}</td>
           </tr>
         `);
