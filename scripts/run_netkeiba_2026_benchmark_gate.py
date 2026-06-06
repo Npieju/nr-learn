@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 from pathlib import Path
+import shlex
 import subprocess
 import sys
 import time
@@ -62,6 +63,7 @@ def main() -> int:
     parser.add_argument("--race-card-path", default=DEFAULT_RACE_CARD_PATH)
     parser.add_argument("--pedigree-path", default=DEFAULT_PEDIGREE_PATH)
     parser.add_argument("--status-board-command", default=DEFAULT_STATUS_BOARD_COMMAND)
+    parser.add_argument("--serving-compare-dashboard-summary", default=None)
     parser.add_argument("--skip-status-board", action="store_true")
     parser.add_argument("--skip-train", action="store_true")
     parser.add_argument("--skip-evaluate", action="store_true")
@@ -125,7 +127,13 @@ def main() -> int:
         progress.update(message=f"benchmark gate finished exit_code={int(result.returncode)}")
         exit_code = int(result.returncode)
         if not args.skip_status_board:
-            board_result = subprocess.run(args.status_board_command, cwd=ROOT, shell=True, check=False)
+            status_board_command = str(args.status_board_command)
+            if args.serving_compare_dashboard_summary:
+                status_board_command = (
+                    f"{status_board_command} --serving-compare-dashboard-summary "
+                    f"{shlex.quote(str(args.serving_compare_dashboard_summary))}"
+                )
+            board_result = subprocess.run(status_board_command, cwd=ROOT, shell=True, check=False)
             if board_result.returncode != 0:
                 print(
                     f"[netkeiba-2026-benchmark] status board update failed: exit_code={board_result.returncode}",

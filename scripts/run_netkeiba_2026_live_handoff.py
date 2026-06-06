@@ -170,8 +170,15 @@ def _write_readiness_manifest(
     write_json(wrapper_manifest_path, manifest)
 
 
-def _refresh_status_board(*, python_executable: str, status_board_script: str) -> int:
+def _refresh_status_board(
+    *,
+    python_executable: str,
+    status_board_script: str,
+    serving_compare_dashboard_summary: str | None = None,
+) -> int:
     command = [python_executable, str(_resolve_path(status_board_script))]
+    if serving_compare_dashboard_summary:
+        command.extend(["--serving-compare-dashboard-summary", serving_compare_dashboard_summary])
     print(f"[netkeiba-2026-live-handoff] refreshing status board: {shlex.join(command)}", flush=True)
     result = subprocess.run(command, cwd=ROOT, check=False)
     return int(result.returncode)
@@ -208,6 +215,7 @@ def main() -> int:
     parser.add_argument("--race-result-path", default=DEFAULT_RACE_RESULT_PATH)
     parser.add_argument("--race-card-path", default=DEFAULT_RACE_CARD_PATH)
     parser.add_argument("--status-board-script", default=DEFAULT_STATUS_BOARD_SCRIPT)
+    parser.add_argument("--serving-compare-dashboard-summary", default=None)
     parser.add_argument("--force", action="store_true")
     args = parser.parse_args()
 
@@ -244,6 +252,7 @@ def main() -> int:
             _refresh_status_board(
                 python_executable=str(args.python_executable),
                 status_board_script=args.status_board_script,
+                serving_compare_dashboard_summary=args.serving_compare_dashboard_summary,
             )
             return 0
 
@@ -298,6 +307,7 @@ def main() -> int:
             _refresh_status_board(
                 python_executable=str(args.python_executable),
                 status_board_script=args.status_board_script,
+                serving_compare_dashboard_summary=args.serving_compare_dashboard_summary,
             )
 
             if ready:
@@ -328,6 +338,7 @@ def main() -> int:
                 _refresh_status_board(
                     python_executable=str(args.python_executable),
                     status_board_script=args.status_board_script,
+                    serving_compare_dashboard_summary=args.serving_compare_dashboard_summary,
                 )
                 progress.complete(message=f"handoff completed output={wrapper_manifest_path}")
                 return 0 if live_exit == 0 else 1
@@ -359,6 +370,7 @@ def main() -> int:
                 _refresh_status_board(
                     python_executable=str(args.python_executable),
                     status_board_script=args.status_board_script,
+                    serving_compare_dashboard_summary=args.serving_compare_dashboard_summary,
                 )
                 progress.complete(message=f"not ready output={wrapper_manifest_path}")
                 return 2

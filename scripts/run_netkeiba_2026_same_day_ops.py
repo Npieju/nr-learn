@@ -49,8 +49,15 @@ def _read_json_dict(path: Path) -> dict[str, Any]:
     return payload if isinstance(payload, dict) else {}
 
 
-def _refresh_status_board(*, python_executable: str, status_board_script: str) -> int:
+def _refresh_status_board(
+    *,
+    python_executable: str,
+    status_board_script: str,
+    serving_compare_dashboard_summary: str | None = None,
+) -> int:
     command = [python_executable, str(_resolve_path(status_board_script))]
+    if serving_compare_dashboard_summary:
+        command.extend(["--serving-compare-dashboard-summary", serving_compare_dashboard_summary])
     print(f"[netkeiba-2026-same-day-ops] refreshing board: {' '.join(command)}", flush=True)
     result = subprocess.run(command, cwd=ROOT, check=False)
     return int(result.returncode)
@@ -113,6 +120,7 @@ def main() -> int:
     parser.add_argument("--rollover-script", default=DEFAULT_ROLLOVER_SCRIPT)
     parser.add_argument("--status-board", default=DEFAULT_STATUS_BOARD)
     parser.add_argument("--handoff-manifest", default=DEFAULT_HANDOFF_MANIFEST)
+    parser.add_argument("--serving-compare-dashboard-summary", default=None)
     parser.add_argument("--log-dir", default=DEFAULT_LOG_DIR)
     parser.add_argument("--output", default=DEFAULT_OUTPUT)
     parser.add_argument("--dry-run", action="store_true")
@@ -130,6 +138,7 @@ def main() -> int:
         board_exit = _refresh_status_board(
             python_executable=str(args.python_executable),
             status_board_script=args.status_board_script,
+            serving_compare_dashboard_summary=args.serving_compare_dashboard_summary,
         )
         board_payload = _read_json_dict(_resolve_path(args.status_board))
         handoff_payload = _read_json_dict(_resolve_path(args.handoff_manifest))
@@ -198,6 +207,11 @@ def main() -> int:
             ]
             if args.headline_contains:
                 handoff_command.extend(["--headline-contains", args.headline_contains])
+            if args.serving_compare_dashboard_summary:
+                handoff_command.extend([
+                    "--serving-compare-dashboard-summary",
+                    args.serving_compare_dashboard_summary,
+                ])
             actions["handoff"] = _launch_background(
                 handoff_command,
                 log_file=_timestamped_log(log_dir, "netkeiba_2026_live_handoff"),
@@ -221,6 +235,7 @@ def main() -> int:
         board_exit = _refresh_status_board(
             python_executable=str(args.python_executable),
             status_board_script=args.status_board_script,
+            serving_compare_dashboard_summary=args.serving_compare_dashboard_summary,
         )
         board_payload = _read_json_dict(_resolve_path(args.status_board))
         payload = {

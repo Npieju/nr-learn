@@ -24,6 +24,7 @@ DEFAULT_SNAPSHOT = "artifacts/reports/netkeiba_coverage_snapshot_2026_ytd.json"
 DEFAULT_HANDOFF = "artifacts/reports/netkeiba_2026_live_handoff_manifest.json"
 DEFAULT_LIVE_PUBLISH = "artifacts/reports/netkeiba_2026_live_publish_manifest.json"
 DEFAULT_BENCHMARK_GATE = "artifacts/reports/netkeiba_2026_benchmark_gate.json"
+DEFAULT_SERVING_COMPARE_DASHBOARD = "artifacts/reports/dashboard/serving_compare_dashboard_latest.json"
 DEFAULT_OUTPUT = "artifacts/reports/netkeiba_2026_status_board.json"
 DEFAULT_RACE_RESULT_PATH = "data/external/netkeiba/results/netkeiba_race_result_crawled.csv"
 DEFAULT_RACE_CARD_PATH = "data/external/netkeiba/racecard/netkeiba_racecard_crawled.csv"
@@ -214,6 +215,7 @@ def main() -> int:
     parser.add_argument("--handoff-manifest", default=DEFAULT_HANDOFF)
     parser.add_argument("--live-publish-manifest", default=DEFAULT_LIVE_PUBLISH)
     parser.add_argument("--benchmark-gate-manifest", default=DEFAULT_BENCHMARK_GATE)
+    parser.add_argument("--serving-compare-dashboard-summary", default=None)
     parser.add_argument("--race-result-path", default=DEFAULT_RACE_RESULT_PATH)
     parser.add_argument("--race-card-path", default=DEFAULT_RACE_CARD_PATH)
     parser.add_argument("--race-result-manifest", default=DEFAULT_RACE_RESULT_MANIFEST)
@@ -235,6 +237,7 @@ def main() -> int:
         handoff_payload = _read_json(_resolve_path(args.handoff_manifest))
         live_publish_payload = _read_json(_resolve_path(args.live_publish_manifest))
         benchmark_gate_payload = _read_json(_resolve_path(args.benchmark_gate_manifest))
+        serving_compare_payload = _read_json(_resolve_path(args.serving_compare_dashboard_summary)) if args.serving_compare_dashboard_summary else {}
         race_result_target_payload = _read_json(_resolve_path(args.race_result_manifest))
         race_card_target_payload = _read_json(_resolve_path(args.race_card_manifest))
         pedigree_target_payload = _read_json(_resolve_path(args.pedigree_manifest))
@@ -293,6 +296,10 @@ def main() -> int:
         live_summary_payload = _read_json(_derive_live_artifact_path(prediction_file, ".summary.json")) if prediction_file else {}
         live_runtime_payload = _read_json(_derive_live_artifact_path(prediction_file, ".live.json")) if prediction_file else {}
     benchmark_gate_status = str(benchmark_gate_payload.get("status") or "")
+    serving_compare_compare = _dict_payload(serving_compare_payload.get("compare"))
+    serving_compare_bankroll = _dict_payload(serving_compare_payload.get("bankroll"))
+    serving_compare_left = _dict_payload(serving_compare_payload.get("left"))
+    serving_compare_right = _dict_payload(serving_compare_payload.get("right"))
 
     payload = {
         "started_at": utc_now_iso(),
@@ -306,6 +313,7 @@ def main() -> int:
             "handoff_manifest": args.handoff_manifest,
             "live_publish_manifest": args.live_publish_manifest,
             "benchmark_gate_manifest": args.benchmark_gate_manifest,
+            "serving_compare_dashboard_summary": args.serving_compare_dashboard_summary,
             "status_board": args.output,
         },
         "backfill": {
@@ -388,6 +396,22 @@ def main() -> int:
             "evaluate_status": _dict_payload(benchmark_gate_payload.get("evaluate")).get("status"),
             "readiness": _dict_payload(benchmark_gate_payload.get("readiness")),
         },
+        "serving_compare": {
+            "summary_file": args.serving_compare_dashboard_summary,
+            "status": serving_compare_payload.get("status"),
+            "recommended_action": serving_compare_payload.get("recommended_action"),
+            "window_label": serving_compare_payload.get("window_label"),
+            "prediction_backend": serving_compare_payload.get("prediction_backend"),
+            "date_count": serving_compare_payload.get("date_count"),
+            "left_profile": serving_compare_left.get("profile"),
+            "right_profile": serving_compare_right.get("profile"),
+            "left_total_policy_bets": serving_compare_compare.get("left_total_policy_bets"),
+            "right_total_policy_bets": serving_compare_compare.get("right_total_policy_bets"),
+            "right_minus_left_total_policy_net": serving_compare_compare.get("right_minus_left_total_policy_net"),
+            "right_minus_left_pure_final_bankroll": serving_compare_bankroll.get("right_minus_left_pure_final_bankroll"),
+            "best_selected_label": _dict_payload(serving_compare_bankroll.get("best_result")).get("selected_label"),
+            "best_final_bankroll": _dict_payload(serving_compare_bankroll.get("best_result")).get("final_bankroll"),
+        },
         "highlights": [
             f"status={status}",
             f"current_phase={current_phase}",
@@ -407,6 +431,10 @@ def main() -> int:
             f"publish_status={publish_payload.get('status')}",
             f"publish_git_status={publish_git.get('status')}",
             f"publish_pages_commit={publish_pages_commit_sha[:7] if publish_pages_commit_sha else None}",
+            f"serving_compare_window={serving_compare_payload.get('window_label')}",
+            f"serving_compare_net_delta={serving_compare_compare.get('right_minus_left_total_policy_net')}",
+            f"serving_compare_bankroll_delta={serving_compare_bankroll.get('right_minus_left_pure_final_bankroll')}",
+            f"serving_compare_best={_dict_payload(serving_compare_bankroll.get('best_result')).get('selected_label')}",
         ],
     }
 

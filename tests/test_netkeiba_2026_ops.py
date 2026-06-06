@@ -67,6 +67,8 @@ class Netkeiba2026OpsTest(unittest.TestCase):
                     "run_netkeiba_2026_live_handoff.py",
                     "--race-date",
                     "2026-04-05",
+                    "--serving-compare-dashboard-summary",
+                    "artifacts/reports/dashboard/serving_compare_dashboard_probe.json",
                     "--wrapper-manifest-output",
                     str(manifest_path),
                 ],
@@ -74,7 +76,11 @@ class Netkeiba2026OpsTest(unittest.TestCase):
                 exit_code = handoff_script.main()
 
             self.assertEqual(exit_code, 0)
-            refresh_mock.assert_called_once()
+            refresh_mock.assert_called_once_with(
+                python_executable=sys.executable,
+                status_board_script=handoff_script.DEFAULT_STATUS_BOARD_SCRIPT,
+                serving_compare_dashboard_summary="artifacts/reports/dashboard/serving_compare_dashboard_probe.json",
+            )
 
     def test_completed_handoff_reusable_requires_matching_date_and_existing_outputs(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
@@ -296,6 +302,77 @@ class Netkeiba2026OpsTest(unittest.TestCase):
                     "pages/jra-live/2026-04-05/data.json",
                 ]
             )
+
+    def test_status_board_main_surfaces_serving_compare_dashboard_summary(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            tmp_path = Path(tmp_dir)
+            backfill_path = tmp_path / "backfill.json"
+            snapshot_path = tmp_path / "snapshot.json"
+            handoff_path = tmp_path / "handoff.json"
+            benchmark_path = tmp_path / "benchmark.json"
+            serving_compare_path = tmp_path / "serving_compare_dashboard.json"
+            output_path = tmp_path / "status_board.json"
+
+            backfill_path.write_text(json.dumps({"status": "completed", "completed_cycles": 1}), encoding="utf-8")
+            snapshot_path.write_text(json.dumps({"readiness": {}, "progress": {}}), encoding="utf-8")
+            handoff_path.write_text(json.dumps({"status": "completed"}), encoding="utf-8")
+            benchmark_path.write_text(json.dumps({}), encoding="utf-8")
+            serving_compare_path.write_text(
+                json.dumps(
+                    {
+                        "status": "completed",
+                        "recommended_action": "review_dashboard_summary",
+                        "window_label": "market_refresh_sep8_2025_result_snapshot_ops",
+                        "prediction_backend": "replay-existing",
+                        "date_count": 8,
+                        "left": {"profile": "current_recommended_serving_2025_latest"},
+                        "right": {"profile": "current_tighter_policy_search_candidate_2025_latest"},
+                        "compare": {
+                            "left_total_policy_bets": 49,
+                            "right_total_policy_bets": 16,
+                            "right_minus_left_total_policy_net": 33.0,
+                        },
+                        "bankroll": {
+                            "right_minus_left_pure_final_bankroll": 0.4922,
+                            "best_result": {
+                                "selected_label": "current_tighter_policy_search_candidate_2025_latest",
+                                "final_bankroll": 0.6366,
+                            },
+                        },
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            with patch.object(status_board_script, "ROOT", tmp_path), patch.object(
+                status_board_script, "artifact_ensure_output_file_path", return_value=None
+            ), patch.object(
+                sys,
+                "argv",
+                [
+                    "run_netkeiba_2026_status_board.py",
+                    "--backfill-manifest",
+                    str(backfill_path),
+                    "--snapshot",
+                    str(snapshot_path),
+                    "--handoff-manifest",
+                    str(handoff_path),
+                    "--benchmark-gate-manifest",
+                    str(benchmark_path),
+                    "--serving-compare-dashboard-summary",
+                    str(serving_compare_path),
+                    "--output",
+                    str(output_path),
+                ],
+            ):
+                exit_code = status_board_script.main()
+
+            self.assertEqual(exit_code, 0)
+            payload = json.loads(output_path.read_text(encoding="utf-8"))
+            self.assertEqual(payload["serving_compare"]["window_label"], "market_refresh_sep8_2025_result_snapshot_ops")
+            self.assertEqual(payload["serving_compare"]["right_minus_left_total_policy_net"], 33.0)
+            self.assertEqual(payload["serving_compare"]["best_selected_label"], "current_tighter_policy_search_candidate_2025_latest")
+            self.assertIn("serving_compare_net_delta=33.0", payload["highlights"])
 
     def test_status_board_main_keeps_writing_when_pages_commit_missing(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
@@ -834,13 +911,15 @@ class Netkeiba2026OpsTest(unittest.TestCase):
             benchmark_gate_script.subprocess,
             "run",
             return_value=subprocess.CompletedProcess(args=["board"], returncode=5),
-        ), patch.object(
+        ) as subprocess_run, patch.object(
             sys,
             "argv",
             [
                 "run_netkeiba_2026_benchmark_gate.py",
                 "--pre-feature-max-rows",
                 "12345",
+                "--serving-compare-dashboard-summary",
+                "artifacts/reports/dashboard/serving_compare_dashboard_probe.json",
                 "--skip-train",
                 "--skip-evaluate",
             ],
@@ -854,6 +933,9 @@ class Netkeiba2026OpsTest(unittest.TestCase):
         self.assertIn("12345", command)
         self.assertIn("--skip-train", command)
         self.assertIn("--skip-evaluate", command)
+        board_command = subprocess_run.call_args.args[0]
+        self.assertIn("--serving-compare-dashboard-summary", board_command)
+        self.assertIn("artifacts/reports/dashboard/serving_compare_dashboard_probe.json", board_command)
 
     def test_live_handoff_timeout_writes_timeout_manifest(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
@@ -1014,6 +1096,60 @@ class Netkeiba2026OpsTest(unittest.TestCase):
             self.assertIn("backfill=already_running", payload["highlights"])
             self.assertIn("handoff=would_start", payload["highlights"])
             self.assertIn("rollover=would_start", payload["highlights"])
+
+    def test_same_day_ops_forwards_serving_compare_summary_to_board_and_handoff(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            output_path = Path(tmp_dir) / "netkeiba_2026_same_day_ops_manifest.json"
+            board_payload_initial = {
+                "status": "waiting",
+                "current_phase": "await_history_ready",
+            }
+            board_payload_final = {
+                "status": "waiting",
+                "current_phase": "await_history_ready",
+            }
+            handoff_payload = {
+                "status": "waiting",
+                "race_date": "2026-04-05",
+            }
+
+            with patch.object(same_day_ops_script, "_refresh_status_board", return_value=0) as refresh_mock, patch.object(
+                same_day_ops_script,
+                "_read_json_dict",
+                side_effect=[board_payload_initial, handoff_payload, handoff_payload, board_payload_final],
+            ), patch.object(
+                same_day_ops_script,
+                "_find_running_processes",
+                side_effect=[[], [], []],
+            ), patch.object(
+                same_day_ops_script,
+                "_launch_background",
+                return_value={"status": "started", "pid": 4321},
+            ) as launch_mock, patch.object(
+                sys,
+                "argv",
+                [
+                    "run_netkeiba_2026_same_day_ops.py",
+                    "--race-date",
+                    "2026-04-05",
+                    "--serving-compare-dashboard-summary",
+                    "artifacts/reports/dashboard/serving_compare_dashboard_probe.json",
+                    "--output",
+                    str(output_path),
+                ],
+            ):
+                exit_code = same_day_ops_script.main()
+
+            self.assertEqual(exit_code, 0)
+            self.assertEqual(refresh_mock.call_count, 2)
+            for call in refresh_mock.call_args_list:
+                self.assertEqual(
+                    call.kwargs["serving_compare_dashboard_summary"],
+                    "artifacts/reports/dashboard/serving_compare_dashboard_probe.json",
+                )
+            handoff_command = launch_mock.call_args_list[1].args[0]
+            self.assertIn("--serving-compare-dashboard-summary", handoff_command)
+            self.assertIn("artifacts/reports/dashboard/serving_compare_dashboard_probe.json", handoff_command)
 
 
 if __name__ == "__main__":
