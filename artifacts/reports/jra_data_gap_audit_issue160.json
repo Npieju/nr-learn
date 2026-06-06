@@ -34,6 +34,21 @@
     "approved_fallback": "Use historical odds unchanged for common-policy architecture comparison and label the result proxy_market_roi.",
     "required_parallel_action": "Start durable JRA odds snapshot capture and estimate cutoff-to-final price movement prospectively."
   },
+  "external_history_assessment": {
+    "jra_van_timeseries_odds": {
+      "feeds": [
+        "0B41 win/place/bracket time-series odds",
+        "0B42 quinella time-series odds"
+      ],
+      "official_retention": "1 year",
+      "multi_year_reliability": "not guaranteed",
+      "adoption_decision": "optional side acquisition, not a prerequisite or primary training corpus"
+    },
+    "public_multi_year_dataset": {
+      "found": false,
+      "decision": "Do not plan the architecture around a public multi-year timestamped odds dataset."
+    }
+  },
   "high_value_feature_gaps": [
     {
       "priority": 1,
@@ -89,10 +104,10 @@
     }
   ],
   "next_actions": [
-    "Implement append-only JRA odds snapshots keyed by race, runner, official timestamp, fetch timestamp, and scheduled post time.",
+    "Implement append-only JRA odds snapshots keyed by race, runner, official timestamp, fetch timestamp, and scheduled post time as a prospective side dataset.",
     "Freeze the existing historical odds as a common proxy repricing dataset so architecture comparison can proceed now.",
     "Implement candidate B and C as separate experiment issues, with candidate A as the control.",
     "Report proxy_market_roi separately from asof_market_roi and require a conservative execution haircut for promotion decisions until timestamped coverage is representative.",
-    "After prospective snapshots accumulate, compare no adjustment, cutoff haircut, segmented haircut, and quantile price-movement models."
+    "After prospective or optional JRA-VAN snapshots accumulate, compare no adjustment, cutoff haircut, segmented haircut, and quantile price-movement models; do not require several years for the base predictive architecture."
   ]
 }

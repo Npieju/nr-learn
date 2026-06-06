@@ -29,6 +29,7 @@
   - top1 flat-bet ROI is diagnostic only; operational comparison joins the same historical odds proxy, or the same as-of snapshot when available, after market-free inference and optimizes EV/edge policy inside each fold
   - historical JRA odds lack observation timestamps but are approved as a common market proxy; architecture/policy comparisons proceed now with the metric labeled `proxy_market_roi`
   - `proxy_market_roi` is not treated as an unbiased executable ROI estimate; timestamped coverage later adds `asof_market_roi` and supports cutoff-to-final odds adjustment
+  - JRA-VAN Data Lab has time-series odds feeds, but the official retention is one year and older availability is not guaranteed; no multi-year timestamped-odds dependency is placed on the architecture
   - compare a CatBoost strength/softmax control, race-conditional tabular softmax, and a DeepSets race-context model before considering a higher-cost Set Transformer
   - data work proceeds in parallel: append-only timestamped snapshots support global/segmented haircut and quantile models for cutoff-to-final odds movement, but do not block the first architecture comparison
 

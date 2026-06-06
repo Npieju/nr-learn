@@ -109,6 +109,17 @@
     "join_rule": "For each simulated decision, use only the latest valid snapshot at or before bet_cutoff_at.",
     "current_limitation": "Historical JRA result/odds tables contain odds without an observation timestamp. They remain usable as a common final-price proxy for architecture and policy comparison, but their ROI must be labeled proxy_market_roi and discounted as an execution estimate.",
     "fallback_proxy_rule": "When no timestamped snapshot exists, use the historical odds unchanged for the primary common-policy comparison. Do not block model evaluation, but do not label the result as as-of or executable ROI.",
+    "historical_timeseries_availability": {
+      "decision": "Do not assume a multi-year timestamped JRA odds corpus is obtainable.",
+      "official_option": "JRA-VAN Data Lab provides time-series odds through JV-Data 0B41/0B42, but the current official specification lists a one-year retention period.",
+      "non_guaranteed_history": "TARGET documentation reports that older data was sometimes downloadable and explicitly says the actual range is not guaranteed. This is not an acceptable multi-year dataset dependency.",
+      "environment_constraints": [
+        "paid JRA-VAN Data Lab subscription",
+        "Windows and JV-Link integration",
+        "only the provider-retained range can be relied on"
+      ],
+      "architecture_consequence": "Build and select the predictive architecture using the existing multi-year pre-race/result corpus and historical final-odds proxy. Treat any acquired time-series odds as a later execution-calibration side dataset."
+    },
     "future_price_adjustment": {
       "target": "log(final_odds / cutoff_odds)",
       "inputs": [
@@ -167,6 +178,16 @@
       "title": "Ornstein-Uhlenbeck Process for Horse Race Betting: A Micro-Macro Analysis of Herding and Informed Bettors",
       "url": "https://arxiv.org/abs/2503.16470",
       "use": "JRA odds are dynamic parimutuel market observations, reinforcing cutoff-specific replay rather than static final-odds assumptions."
+    },
+    {
+      "title": "JRA-VAN JV-Data specification",
+      "url": "https://jra-van.jp/dlb/sdv/sdk/JV-Data4901.pdf",
+      "use": "Defines time-series odds feeds 0B41/0B42 and lists a one-year provision period."
+    },
+    {
+      "title": "TARGET frontier JV time-series odds manual",
+      "url": "https://targetfaq.jra-van.jp/faq/detail?category=47&id=667&site=SVKNEGBV",
+      "use": "Documents bulk download support but also states that older-than-official availability is not guaranteed."
     }
   ]
 }
