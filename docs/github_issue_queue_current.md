@@ -20,14 +20,26 @@
 ### `#156` JRA market-odds architecture isolation
 
 - role: current JRA architecture priority
-- status: open, audit complete and controlled challenger design pending
+- status: open, architecture boundary approved and market-free predictive challenger pending
 - source-of-truth: GitHub issue `#156`
 - baseline tag: `jra-market-aware-baseline-20260606`
 - current meaning:
   - persisted win CatBoost uses both `odds` and `popularity`; feature importance is approximately `70.9%` and `19.1%`, so direct market columns account for about 90% of the current win-model importance
   - ROI and alpha components also use `odds` in both feature input and target construction, while value composition and runtime policy inject market probability again
-  - next experiment must separate predictive probability from decision pricing instead of removing all market information indiscriminately
-  - first formal matrix is frozen baseline vs market-free predictive model with current policy blend vs market-free predictive model with odds used only for EV/edge/Kelly after inference
+  - architecture decision is to exclude market odds and market-derived popularity from predictive inputs and targets
+  - market odds remain in the post-inference pricing/execution layer for EV, edge, liquidity bounds, final selection, and stake sizing
+  - first formal challenger is a market-free fundamental win-probability model evaluated against the frozen baseline under the same dataset and temporal splits
+
+### `#158` JRA fundamental inference / odds repricing split
+
+- role: current JRA live-serving implementation priority
+- status: open
+- source-of-truth: GitHub issue `#158`
+- current meaning:
+  - expensive feature construction and fundamental probability inference should run once per race-card/model revision
+  - changing parimutuel odds must be handled by a lightweight repricing command that joins a fresh odds snapshot and recomputes only market probability, EV, edge, selection, and stake
+  - the fundamental artifact must remain unchanged when only odds change, while repriced artifacts record model provenance and odds snapshot provenance separately
+  - Pages publication should consume the latest repriced artifact without forcing model inference
 
 ### `#157` explicit JRA formal ROI promotion threshold
 
