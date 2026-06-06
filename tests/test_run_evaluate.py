@@ -19,6 +19,24 @@ class RunEvaluateProbabilitySemanticsTest(unittest.TestCase):
         self.assertTrue(evaluate_script._task_supports_probability_metrics("classification"))
         self.assertTrue(evaluate_script._task_supports_probability_metrics("multi_position"))
 
+    def test_calibrated_ranking_is_treated_as_probability_for_evaluation(self) -> None:
+        self.assertTrue(
+            evaluate_script._has_explicit_probability_semantics(
+                "ranking",
+                score_is_probability=True,
+                score_calibration_summary={"method": "isotonic"},
+            )
+        )
+
+    def test_uncalibrated_ranking_remains_score_only(self) -> None:
+        self.assertFalse(
+            evaluate_script._has_explicit_probability_semantics(
+                "ranking",
+                score_is_probability=True,
+                score_calibration_summary=None,
+            )
+        )
+
     def test_strength_summary_keeps_top1_roi_but_disables_ev_metrics(self) -> None:
         pred = pd.DataFrame(
             {

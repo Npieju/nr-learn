@@ -5,6 +5,7 @@ import sys
 import unittest
 
 import numpy as np
+import pandas as pd
 
 ROOT = Path(__file__).resolve().parents[1]
 SRC = ROOT / "src"
@@ -12,6 +13,37 @@ if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
 from racing_ml.evaluation.scoring import compose_value_blend_probabilities
+from racing_ml.evaluation.scoring import generate_prediction_outputs
+
+
+class _DummyRanker:
+    def __init__(self, predictions: list[float]) -> None:
+        self._predictions = np.asarray(predictions, dtype=float)
+
+    def predict(self, frame: pd.DataFrame) -> np.ndarray:
+        return self._predictions.copy()
+
+
+class RankingScoreSemanticsTest(unittest.TestCase):
+    def test_tabular_ranking_outputs_remain_raw_strength_scores(self) -> None:
+        frame = pd.DataFrame(
+            {
+                "race_id": ["r1", "r1", "r2", "r2"],
+                "feature_a": [1.0, 2.0, 3.0, 4.0],
+            }
+        )
+        model = {
+            "kind": "tabular_model",
+            "task": "ranking",
+            "feature_columns": [],
+            "categorical_columns": [],
+            "prep": None,
+            "model": _DummyRanker([2.0, 1.0, -1.0, -3.0]),
+        }
+
+        outputs = generate_prediction_outputs(model, frame, race_ids=frame["race_id"])
+
+        np.testing.assert_allclose(outputs.score, np.array([2.0, 1.0, -1.0, -3.0], dtype=float))
 
 
 class ComposeValueBlendProbabilitiesTest(unittest.TestCase):

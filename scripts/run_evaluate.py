@@ -79,6 +79,20 @@ def _task_supports_probability_metrics(task: str) -> bool:
     return str(task).strip().lower() in {"classification", "multi_position"}
 
 
+def _has_explicit_probability_semantics(
+    task: str,
+    *,
+    score_is_probability: bool,
+    score_calibration_summary: dict[str, Any] | None,
+) -> bool:
+    normalized_task = str(task).strip().lower()
+    if not score_is_probability:
+        return False
+    if _task_supports_probability_metrics(normalized_task):
+        return True
+    return normalized_task == "ranking" and score_calibration_summary is not None
+
+
 def _filter_frame_by_date_window(
     frame: pd.DataFrame,
     *,
@@ -810,7 +824,6 @@ def main() -> int:
         x_eval = prepare_model_input_frame(frame, feature_selection.feature_columns, feature_selection.categorical_columns)
         y_eval = frame[label_col].astype(int).to_numpy()
         odds_col = resolve_odds_column(frame)
-        include_ev_metrics = _task_supports_probability_metrics(task)
 
         with Heartbeat("[evaluate]", "running model inference", logger=log_progress):
             outputs = generate_prediction_outputs(model, x_eval, race_ids=frame["race_id"])
@@ -894,7 +907,12 @@ def main() -> int:
 
         effective_scores = pred["score"].to_numpy(dtype=float)
         score_is_prob = bool(np.nanmin(effective_scores) >= 0.0 and np.nanmax(effective_scores) <= 1.0)
-        compute_prob_metrics = _task_supports_probability_metrics(task)
+        compute_prob_metrics = _has_explicit_probability_semantics(
+            task,
+            score_is_probability=score_is_prob,
+            score_calibration_summary=score_calibration_summary,
+        )
+        include_ev_metrics = compute_prob_metrics
         probabilistic_flow = bool(compute_prob_metrics and score_is_prob)
 
         summary = {
@@ -909,6 +927,13 @@ def main() -> int:
             "auc": _safe_auc(y_eval, effective_scores) if compute_prob_metrics else None,
             "logloss": float(log_loss(y_eval, np.clip(effective_scores, 1e-12, 1 - 1e-12), labels=[0, 1])) if (compute_prob_metrics and score_is_prob) else None,
             "score_is_probability": score_is_prob,
+            "score_probability_semantics": (
+                "native_probability"
+                if (_task_supports_probability_metrics(task) and score_is_prob)
+                else "calibrated_ranking_probability"
+                if (str(task).strip().lower() == "ranking" and probabilistic_flow)
+                else "score_only"
+            ),
             "task": task,
             "evaluation_flow": "probability_market" if probabilistic_flow else "roi_direct",
         }

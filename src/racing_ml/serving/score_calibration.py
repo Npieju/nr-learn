@@ -101,6 +101,7 @@ def _apply_race_closure(
     *,
     base_col: str,
     mode: str,
+    softmax_temperature: float,
 ) -> np.ndarray:
     if mode == "none":
         return np.clip(np.asarray(score, dtype=float), 1e-6, 1.0 - 1e-6)
@@ -109,6 +110,16 @@ def _apply_race_closure(
 
     working = frame[["race_id"]].copy()
     working["score"] = np.clip(np.asarray(score, dtype=float), 1e-6, 1.0 - 1e-6)
+    if mode == "softmax":
+        temperature = float(softmax_temperature)
+        if not np.isfinite(temperature) or temperature <= 0.0:
+            raise ValueError("score calibration softmax temperature must be positive")
+        logits = np.log(working["score"].to_numpy(dtype=float)) / temperature
+        max_logit = pd.Series(logits, index=working.index).groupby(working["race_id"], sort=False).transform("max")
+        stabilized = np.exp(logits - max_logit.to_numpy(dtype=float))
+        denom = pd.Series(stabilized, index=working.index).groupby(working["race_id"], sort=False).transform("sum")
+        adjusted = stabilized / denom.replace(0.0, np.nan).to_numpy(dtype=float)
+        return pd.Series(adjusted, index=working.index).fillna(working["score"]).clip(1e-6, 1.0 - 1e-6).to_numpy(dtype=float)
     if mode == "normalize_score_sum":
         target_sum = pd.Series(1.0, index=working.index)
     elif mode == "preserve_base_score_sum":
@@ -147,6 +158,7 @@ def apply_score_calibration(
     non_top_max_lift = float(calibration_config.get("non_top_max_lift", 0.0))
     shrinkage = float(calibration_config.get("shrinkage", 1.0))
     race_closure_mode = str(calibration_config.get("race_closure_mode", "none")).strip().lower() or "none"
+    race_softmax_temperature = float(calibration_config.get("race_softmax_temperature", 1.0))
     min_calibration_rows = int(calibration_config.get("min_calibration_rows", 100))
 
     train_paths = _resolve_glob(train_glob, workspace_root=workspace_root)
@@ -186,6 +198,7 @@ def apply_score_calibration(
         result["score_calibrated_before_race_closure"].to_numpy(dtype=float),
         base_col="score_before_calibration",
         mode=race_closure_mode,
+        softmax_temperature=race_softmax_temperature,
     )
 
     summary = {
@@ -200,5 +213,6 @@ def apply_score_calibration(
         "non_top_max_lift": non_top_max_lift,
         "shrinkage": shrinkage,
         "race_closure_mode": race_closure_mode,
+        "race_softmax_temperature": race_softmax_temperature,
     }
     return result, summary
