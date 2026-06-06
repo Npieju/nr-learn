@@ -26,6 +26,27 @@ pages_script = _load_script_module("test_run_build_jra_live_pages", "scripts/pub
 
 
 class BuildJraLivePagesTest(unittest.TestCase):
+    def test_build_harville_rows_for_wide_keeps_odds_range(self) -> None:
+        config = next(item for item in pages_script.HARVILLE_MARKET_OPTIONS if item["key"] == "wide")
+        rows = pages_script._build_harville_rows_for_market(
+            config=config,
+            actual_rows=[{"組み合わせ": "1-2", "オッズ": "10.5-12.8"}],
+            horse_name_map={"1": "A", "2": "B", "3": "C"},
+            horse_numbers=["1", "2", "3"],
+            win_odds_map={"1": 2.4, "2": 3.1, "3": 6.8},
+            win_probability_map={"1": 0.42, "2": 0.33, "3": 0.25},
+        )
+
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["market_odds"], 10.5)
+        self.assertEqual(rows[0]["market_odds_max"], 12.8)
+
+    def test_parse_odds_value_ignores_dot_placeholders_in_ranges(self) -> None:
+        self.assertIsNone(pages_script._parse_odds_value("."))
+        self.assertIsNone(pages_script._parse_odds_value(".-."))
+        self.assertEqual(pages_script._parse_odds_value("12.4-."), 12.4)
+        self.assertEqual(pages_script._parse_odds_value(".-18.6"), 18.6)
+
     def test_render_root_page_applies_prefix_without_duplicate_segment(self) -> None:
         manifests = [
             {
@@ -71,6 +92,7 @@ class BuildJraLivePagesTest(unittest.TestCase):
         self.assertIn('data-refresh-focused="current"', html)
         self.assertIn('id="harville-ignore-long-odds"', html)
         self.assertIn('id="harville-exclude-filters"', html)
+        self.assertIn('>消し馬<', html)
 
 
 if __name__ == "__main__":

@@ -188,7 +188,12 @@ def _parse_odds_value(value: Any) -> float | None:
   if not text:
     return None
   if "-" in text:
-    parts = [float(part.strip()) for part in text.split("-") if part.strip()]
+    parts = [
+      parsed
+      for part in text.split("-")
+      for parsed in [_safe_float(part.strip())]
+      if parsed is not None
+    ]
     if not parts:
       return None
     return sum(parts) / len(parts)
@@ -196,6 +201,28 @@ def _parse_odds_value(value: Any) -> float | None:
     return float(text)
   except ValueError:
     return None
+
+
+def _parse_odds_bounds(value: Any) -> tuple[float, float] | None:
+  if value is None:
+    return None
+  text = str(value).replace(",", "").strip()
+  if not text:
+    return None
+  if "-" in text:
+    parts = [
+      parsed
+      for part in text.split("-")
+      for parsed in [_safe_float(part.strip())]
+      if parsed is not None and parsed > 0
+    ]
+    if not parts:
+      return None
+    return (min(parts), max(parts))
+  parsed = _safe_float(text)
+  if parsed is None or parsed <= 0:
+    return None
+  return (parsed, parsed)
 
 
 def _normalize_horse_no(value: Any) -> str:
@@ -448,8 +475,11 @@ def _build_harville_rows_for_market(
       continue
     seen.add(dedupe_key)
 
-    actual_odds = _parse_odds_value(row.get("オッズ"))
-    if actual_odds is None or actual_odds <= 0 or actual_odds >= HARVILLE_SENTINEL_ODDS_THRESHOLD:
+    odds_bounds = _parse_odds_bounds(row.get("オッズ"))
+    if odds_bounds is None:
+      continue
+    actual_odds, actual_odds_max = odds_bounds
+    if actual_odds <= 0 or actual_odds >= HARVILLE_SENTINEL_ODDS_THRESHOLD:
       continue
     if config["key"] == "wide":
       harville_probability = _harville_wide_probability(win_probability_map, combo, horse_numbers)
@@ -465,6 +495,7 @@ def _build_harville_rows_for_market(
       "marketKey": config["key"],
       "marketLabel": config["label"],
       "market_odds": actual_odds,
+      "market_odds_max": actual_odds_max,
       "harville_odds": harville_odds,
       "spread": spread,
       "edge": spread - 100 if spread is not None else None,
@@ -1430,12 +1461,12 @@ def render_live_page(*, page_title: str) -> str:
         display: inline-flex;
         align-items: center;
         gap: 6px;
-        padding: 6px 10px;
+        padding: 4px 8px;
         border-radius: 999px;
         border: 1px solid var(--line);
         background: rgba(250, 253, 255, 0.88);
         color: var(--ink);
-        font-size: 12px;
+        font-size: 11px;
       }
       .harville-filter-chip input {
         margin: 0;
@@ -1713,7 +1744,7 @@ def render_live_page(*, page_title: str) -> str:
             <div class="harville-anchor-selects" id="harville-anchor-selects"></div>
             <div class="harville-filter-stack">
               <div class="harville-filter-block">
-                <p class="harville-filter-title">対象外</p>
+                <p class="harville-filter-title">消し馬</p>
                 <div class="harville-filter-options" id="harville-exclude-filters"></div>
               </div>
             </div>
@@ -1850,6 +1881,15 @@ def render_live_page(*, page_title: str) -> str:
       return String(Number(number.toPrecision(3)));
     }
 
+    function formatFocusedHorseLabel(row) {
+      const horseNo = resolveRaceRowHorseNo(row);
+      const horseName = String(row?.horse_name ?? "").trim();
+      if (horseNo && horseName) {
+        return `${horseNo} ${horseName}`;
+      }
+      return horseName || horseNo || "-";
+    }
+
     function escapeHtml(value) {
       return String(value ?? "")
         .replace(/&/g, "&amp;")
@@ -1887,6 +1927,36 @@ def render_live_page(*, page_title: str) -> str:
       }
       const number = Number(text);
       return Number.isFinite(number) ? number : null;
+    }
+
+    function parseOddsBounds(value) {
+      if (value === null || value === undefined || value === "") {
+        return null;
+      }
+      if (typeof value === "number") {
+        return Number.isFinite(value) && value > 0 ? { lower: value, upper: value } : null;
+      }
+      const text = String(value).replaceAll(",", "").trim();
+      if (!text) {
+        return null;
+      }
+      if (text.includes("-")) {
+        const parts = text.split("-").map((item) => Number(item.trim())).filter((item) => Number.isFinite(item) && item > 0);
+        if (!parts.length) {
+          return null;
+        }
+        return { lower: Math.min(...parts), upper: Math.max(...parts) };
+      }
+      const number = Number(text);
+      return Number.isFinite(number) && number > 0 ? { lower: number, upper: number } : null;
+    }
+
+    function formatOddsNumber(value) {
+      const number = numericValue(value);
+      if (number === null) {
+        return "-";
+      }
+      return number >= 100 ? number.toFixed(1) : number.toFixed(2);
     }
 
     function normalizeHorseNo(value) {
@@ -1934,7 +2004,19 @@ def render_live_page(*, page_title: str) -> str:
       if (number === null) {
         return "-";
       }
-      return `${number >= 100 ? number.toFixed(1) : number.toFixed(2)}倍`;
+      return `${formatOddsNumber(number)}倍`;
+    }
+
+    function formatMarketOddsText(row) {
+      const lower = numericValue(row?.market_odds);
+      const upper = numericValue(row?.market_odds_max);
+      if (lower === null) {
+        return "-";
+      }
+      if (upper !== null && upper > lower) {
+        return `${formatOddsNumber(lower)}-${formatOddsNumber(upper)}倍`;
+      }
+      return formatOddsText(lower);
     }
 
     function formatEdgePercent(value) {
@@ -2525,10 +2607,11 @@ def render_live_page(*, page_title: str) -> str:
           continue;
         }
         seen.add(dedupeKey);
-        const actualOdds = parseOddsValue(row?.["オッズ"]);
-        if (actualOdds === null || actualOdds <= 0) {
+        const actualOddsBounds = parseOddsBounds(row?.["オッズ"]);
+        if (actualOddsBounds === null) {
           continue;
         }
+        const actualOdds = actualOddsBounds.lower;
         let harvilleProbability = null;
         if (config.key === "wide") {
           harvilleProbability = getHarvilleWideProbability(winProbabilityMap, combo, horseNumbers);
@@ -2546,6 +2629,7 @@ def render_live_page(*, page_title: str) -> str:
           marketKey: config.key,
           marketLabel: config.label,
           market_odds: actualOdds,
+          market_odds_max: actualOddsBounds.upper,
           harville_odds: harvilleOdds,
           spread,
           edge: spread === null ? null : spread - 100,
@@ -2764,7 +2848,7 @@ def render_live_page(*, page_title: str) -> str:
       const maxAnchors = 2;
       const labels = getHarvilleAnchorLabels(marketKey);
       const anchorMeta = marketKey === "win_compare"
-        ? (excludedHorses.length ? `対象外: ${excludedHorses.join(" / ")} / 軸馬フィルタは multi-market タブで使えます。` : "単勝比較タブでは対象外フィルタだけ有効です。")
+        ? (excludedHorses.length ? `消し馬: ${excludedHorses.join(" / ")} / 軸馬フィルタは multi-market タブで使えます。` : "単勝比較タブでは消し馬フィルタだけ有効です。")
         : (selectedAnchors.length
           ? `${selectedAnchors.join(" / ")} を表示中。未指定に戻すと全表示です。`
           : `未指定で全表示。最大${maxAnchors}頭まで指定できます。`);
@@ -2781,8 +2865,7 @@ def render_live_page(*, page_title: str) -> str:
           ...options.map((item) => {
             const disabled = otherSelected.has(item.horseNo) ? ' disabled' : '';
             const selected = item.horseNo === selectedValue ? ' selected' : '';
-            const label = `${item.horseNo} ${item.horseName}`.trim();
-            return `<option value="${escapeHtml(item.horseNo)}"${selected}${disabled}>${escapeHtml(label)}</option>`;
+            return `<option value="${escapeHtml(item.horseNo)}"${selected}${disabled}>${escapeHtml(item.horseNo)}</option>`;
           }),
         ].join("");
         return `<div class="harville-anchor-select"><label for="harville-anchor-select-${index + 1}">${escapeHtml(labels[index] || `軸馬${index + 1}`)}</label><select id="harville-anchor-select-${index + 1}" data-harville-anchor-select="${index}">${optionHtml}</select></div>`;
@@ -2791,9 +2874,9 @@ def render_live_page(*, page_title: str) -> str:
       document.getElementById("harville-exclude-filters").innerHTML = excludeOptions.length
         ? excludeOptions.map((item) => {
           const checked = excludedHorses.includes(item.horseNo) ? " checked" : "";
-          return `<label class="harville-filter-chip"><input type="checkbox" data-harville-exclude="${escapeHtml(item.horseNo)}"${checked}>${escapeHtml(`${item.horseNo} ${item.horseName}`.trim())}</label>`;
+          return `<label class="harville-filter-chip" title="${escapeHtml(item.horseName || item.horseNo)}"><input type="checkbox" data-harville-exclude="${escapeHtml(item.horseNo)}"${checked}>${escapeHtml(item.horseNo)}</label>`;
         }).join("")
-        : '<span class="market-empty">対象外フィルタを作るための馬番がまだありません。</span>';
+        : '<span class="market-empty">消し馬フィルタを作るための馬番がまだありません。</span>';
       const longOddsToggle = document.getElementById("harville-ignore-long-odds");
       if (longOddsToggle instanceof HTMLInputElement) {
         longOddsToggle.checked = Boolean(state.harvilleIgnoreLongOdds);
@@ -2811,7 +2894,7 @@ def render_live_page(*, page_title: str) -> str:
         <tr class="${harvilleEdgeClass(row.edge)}">
           <td>${escapeHtml(row.marketLabel || "-")}</td>
           <td>${escapeHtml(buildHarvilleTargetLabel(row, anchors))}</td>
-          <td>${escapeHtml(formatOddsText(row.market_odds))}</td>
+          <td>${escapeHtml(formatMarketOddsText(row))}</td>
           <td>${escapeHtml(formatOddsText(row.harville_odds))}</td>
           <td>${escapeHtml((numericValue(row.ev_ratio) ?? 0).toFixed(3))}</td>
           <td class="${(numericValue(row.edge) ?? 0) >= 0 ? "edge-positive" : "edge-negative"}">${escapeHtml(formatEdgePercent(row.edge))}</td>
@@ -2846,7 +2929,7 @@ def render_live_page(*, page_title: str) -> str:
           const leg = displayLegs[index];
           return `<td>${escapeHtml(formatOddsText(leg?.winOdds))}</td>`;
         }).join("");
-        return `<tr class="${harvilleEdgeClass(row.edge)}">${leadingCells}${oddsCells}<td>${escapeHtml(formatOddsText(row.market_odds))}</td><td>${escapeHtml(formatOddsText(row.harville_odds))}</td><td>${escapeHtml((numericValue(row.ev_ratio) ?? 0).toFixed(3))}</td><td class="${(numericValue(row.edge) ?? 0) >= 0 ? "edge-positive" : "edge-negative"}">${escapeHtml(formatEdgePercent(row.edge))}</td></tr>`;
+        return `<tr class="${harvilleEdgeClass(row.edge)}">${leadingCells}${oddsCells}<td>${escapeHtml(formatMarketOddsText(row))}</td><td>${escapeHtml(formatOddsText(row.harville_odds))}</td><td>${escapeHtml((numericValue(row.ev_ratio) ?? 0).toFixed(3))}</td><td class="${(numericValue(row.edge) ?? 0) >= 0 ? "edge-positive" : "edge-negative"}">${escapeHtml(formatEdgePercent(row.edge))}</td></tr>`;
       }).join("");
       return `<table class="compact-table"><thead>${head}</thead><tbody>${body}</tbody></table>`;
     }
@@ -3433,6 +3516,9 @@ def render_live_page(*, page_title: str) -> str:
 
     function cellHtml(column, row, tableName) {
       const value = row[column.key];
+      if (tableName === "focused" && column.key === "horse_name") {
+        return `<span class="cell-text">${escapeHtml(formatFocusedHorseLabel(row))}</span>`;
+      }
       const formatted = tableName === "focused"
         ? formatFocusedValue(column.key, value)
         : formatValue(column.key, value);
