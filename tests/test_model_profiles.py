@@ -6,6 +6,19 @@ from racing_ml.common.model_profiles import resolve_model_run_profile
 
 
 class ModelProfilesTest(unittest.TestCase):
+    def test_jra_fundamental_strength_profile_resolves_to_market_free_configs(self) -> None:
+        profile_name, model_config, data_config, feature_config = resolve_model_run_profile(
+            "jra_fundamental_strength_no_market_2025_latest",
+            default_model_config="configs/model.yaml",
+            default_data_config="configs/data.yaml",
+            default_feature_config="configs/features.yaml",
+        )
+
+        self.assertEqual(profile_name, "jra_fundamental_strength_no_market_2025_latest")
+        self.assertEqual(model_config, "configs/model_catboost_fundamental_strength_no_market.yaml")
+        self.assertEqual(data_config, "configs/data_2025_latest.yaml")
+        self.assertEqual(feature_config, "configs/features_jra_fundamental_no_market.yaml")
+
     def test_local_nankan_baseline_pre_race_ready_profile_resolves_to_dedicated_dataset(self) -> None:
         profile_name, model_config, data_config, feature_config = resolve_model_run_profile(
             "local_nankan_baseline_pre_race_ready",

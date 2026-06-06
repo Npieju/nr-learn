@@ -75,6 +75,10 @@ def log_progress(message: str) -> None:
     print(f"[evaluate {now}] {message}", flush=True)
 
 
+def _task_supports_probability_metrics(task: str) -> bool:
+    return str(task).strip().lower() in {"classification", "multi_position"}
+
+
 def _filter_frame_by_date_window(
     frame: pd.DataFrame,
     *,
@@ -154,9 +158,9 @@ def _base_summary(
     if not include_ev_metrics:
         policy_summary["ev_top1_roi"] = None
         policy_summary["ev_threshold_1_0_roi"] = None
-        policy_summary["ev_threshold_1_0_bets"] = 0
+        policy_summary["ev_threshold_1_0_bets"] = None
         policy_summary["ev_threshold_1_2_roi"] = None
-        policy_summary["ev_threshold_1_2_bets"] = 0
+        policy_summary["ev_threshold_1_2_bets"] = None
     return {
         "n_rows": int(len(pred)),
         "n_races": int(pred["race_id"].nunique()),
@@ -806,7 +810,7 @@ def main() -> int:
         x_eval = prepare_model_input_frame(frame, feature_selection.feature_columns, feature_selection.categorical_columns)
         y_eval = frame[label_col].astype(int).to_numpy()
         odds_col = resolve_odds_column(frame)
-        include_ev_metrics = task not in {"time_regression", "time_deviation"}
+        include_ev_metrics = _task_supports_probability_metrics(task)
 
         with Heartbeat("[evaluate]", "running model inference", logger=log_progress):
             outputs = generate_prediction_outputs(model, x_eval, race_ids=frame["race_id"])
@@ -890,7 +894,7 @@ def main() -> int:
 
         effective_scores = pred["score"].to_numpy(dtype=float)
         score_is_prob = bool(np.nanmin(effective_scores) >= 0.0 and np.nanmax(effective_scores) <= 1.0)
-        compute_prob_metrics = task in {"classification", "ranking", "multi_position"}
+        compute_prob_metrics = _task_supports_probability_metrics(task)
         probabilistic_flow = bool(compute_prob_metrics and score_is_prob)
 
         summary = {
@@ -1450,9 +1454,9 @@ def main() -> int:
                 if not include_ev_metrics:
                     date_summary["ev_top1_roi"] = None
                     date_summary["ev_threshold_1_0_roi"] = None
-                    date_summary["ev_threshold_1_0_bets"] = 0
+                    date_summary["ev_threshold_1_0_bets"] = None
                     date_summary["ev_threshold_1_2_roi"] = None
-                    date_summary["ev_threshold_1_2_bets"] = 0
+                    date_summary["ev_threshold_1_2_bets"] = None
                 if task == "market_deviation":
                     date_summary.update(
                         _compute_market_deviation_metrics(

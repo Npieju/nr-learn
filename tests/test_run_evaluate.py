@@ -13,6 +13,39 @@ import pandas as pd
 import scripts.run_evaluate as evaluate_script
 
 
+class RunEvaluateProbabilitySemanticsTest(unittest.TestCase):
+    def test_ranking_is_not_implicitly_treated_as_probability(self) -> None:
+        self.assertFalse(evaluate_script._task_supports_probability_metrics("ranking"))
+        self.assertTrue(evaluate_script._task_supports_probability_metrics("classification"))
+        self.assertTrue(evaluate_script._task_supports_probability_metrics("multi_position"))
+
+    def test_strength_summary_keeps_top1_roi_but_disables_ev_metrics(self) -> None:
+        pred = pd.DataFrame(
+            {
+                "race_id": ["r1", "r1"],
+                "rank": [1, 2],
+                "odds": [2.0, 4.0],
+                "score": [0.8, 0.4],
+                "pred_rank": [1, 2],
+                "expected_value": [1.6, 1.6],
+                "ev_rank": [1, 2],
+            }
+        )
+
+        summary = evaluate_script._base_summary(
+            pred,
+            odds_col="odds",
+            include_ev_metrics=False,
+        )
+
+        self.assertEqual(summary["top1_roi"], 2.0)
+        self.assertIsNone(summary["ev_top1_roi"])
+        self.assertIsNone(summary["ev_threshold_1_0_roi"])
+        self.assertIsNone(summary["ev_threshold_1_0_bets"])
+        self.assertIsNone(summary["ev_threshold_1_2_roi"])
+        self.assertIsNone(summary["ev_threshold_1_2_bets"])
+
+
 def _minimal_frame() -> pd.DataFrame:
     return pd.DataFrame(
         [

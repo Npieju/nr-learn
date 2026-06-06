@@ -85,6 +85,29 @@ class FeatureSelectionAllSafeModeTest(unittest.TestCase):
             ["age", "horse_last_3_avg_time_margin_sec"],
         )
 
+    def test_all_safe_mode_can_exclude_direct_market_columns(self) -> None:
+        frame = pd.DataFrame(
+            {
+                "age": [3, 4],
+                "odds": [2.5, 4.2],
+                "単勝": [2.5, 4.2],
+                "popularity": [1, 2],
+                "人気": [1, 2],
+                "is_win": [1, 0],
+            }
+        )
+        feature_config = {
+            "features": {"base": []},
+            "selection": {
+                "mode": "all_safe",
+                "exclude_columns": ["odds", "単勝", "popularity", "人気"],
+            },
+        }
+
+        selection = resolve_feature_selection(frame, feature_config, label_column="is_win")
+
+        self.assertEqual(selection.feature_columns, ["age"])
+
 
 if __name__ == "__main__":
     unittest.main()

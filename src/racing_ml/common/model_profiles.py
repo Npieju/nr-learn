@@ -50,6 +50,12 @@ MODEL_RUN_PROFILES: dict[str, ModelRunProfile] = {
         data_config="configs/data_2025_latest.yaml",
         feature_config="configs/features_catboost_rich_high_coverage_diag.yaml",
     ),
+    "jra_fundamental_strength_no_market": ModelRunProfile(
+        description="Market-free JRA race-group ranking candidate that emits fundamental strength rather than probability.",
+        model_config="configs/model_catboost_fundamental_strength_no_market.yaml",
+        data_config="configs/data.yaml",
+        feature_config="configs/features_jra_fundamental_no_market.yaml",
+    ),
     "current_recommended_serving": ModelRunProfile(
         description="Simplified serving default that matches mainline behavior across validated actual-date checks.",
         model_config="configs/model_catboost_value_stack_lgbm_roi_high_coverage_tune_roi012_liquidity_regime_hybrid_june_strict_serving.yaml",
