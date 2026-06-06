@@ -17,6 +17,20 @@
 
 ## Open Issues
 
+### `#160` JRA architecture comparison under leak-safe odds repricing
+
+- role: current JRA architecture research and comparison umbrella
+- status: open, research/data-gap audit completed; child experiments pending
+- source-of-truth: GitHub issue `#160`
+- current artifacts:
+  - [../artifacts/reports/jra_architecture_research_issue160.json](../artifacts/reports/jra_architecture_research_issue160.json)
+  - [../artifacts/reports/jra_data_gap_audit_issue160.json](../artifacts/reports/jra_data_gap_audit_issue160.json)
+- current meaning:
+  - top1 flat-bet ROI is diagnostic only; operational comparison must join the same pre-bet odds snapshot after market-free inference and optimize EV/edge policy inside each fold
+  - historical JRA odds currently lack observation timestamps, so they cannot establish pre-bet availability for formal policy ROI
+  - compare a CatBoost strength/softmax control, race-conditional tabular softmax, and a DeepSets race-context model before considering a higher-cost Set Transformer
+  - first data priority is append-only timestamped JRA odds snapshots with explicit bet cutoff and scheduled post provenance
+
 ### `#156` JRA market-odds architecture isolation
 
 - role: JRA market-free input/target boundary

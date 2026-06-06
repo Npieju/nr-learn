@@ -1,0 +1,95 @@
+{
+  "issue": 160,
+  "status": "gaps_identified",
+  "current_data": {
+    "historical_primary": {
+      "date_range": "1986 through 2021-07",
+      "contains": [
+        "race conditions",
+        "runner identity",
+        "jockey and trainer",
+        "weight and body weight",
+        "finish result",
+        "final-like odds and popularity",
+        "sectional/result fields"
+      ],
+      "odds_timestamp_available": false
+    },
+    "netkeiba_append": {
+      "history_frontier": "2026-05-24",
+      "race_result_and_race_card_gap_days": 0,
+      "pedigree_tail_coverage": "complete in the current 2026 coverage snapshot",
+      "odds_timestamp_available_in_historical_result_rows": false
+    },
+    "live_jra": {
+      "odds_official_datetime_available": true,
+      "current_behavior": "latest live odds can be refreshed and published",
+      "missing_for_research": "durable repeated snapshots per race and explicit scheduled post/bet cutoff provenance"
+    }
+  },
+  "blocking_gap": {
+    "name": "historical_pre_bet_odds_snapshots",
+    "impact": "Without timestamped pre-bet snapshots, formal EV-policy ROI can accidentally use prices unavailable at the simulated decision time.",
+    "required_action": "Start durable JRA odds snapshot capture now and investigate a licensed historical source with observation timestamps."
+  },
+  "high_value_feature_gaps": [
+    {
+      "priority": 1,
+      "data": "pre-race workout and training signals",
+      "examples": [
+        "workout times and splits",
+        "training course and load",
+        "stable comments encoded only when timestamped pre-race"
+      ],
+      "reason": "Captures current condition not fully represented by historical race performance."
+    },
+    {
+      "priority": 2,
+      "data": "pre-race body-weight announcement history with timestamps",
+      "examples": [
+        "announced body weight",
+        "change from previous race",
+        "announcement time"
+      ],
+      "reason": "Current body condition is useful but must be available before the selected betting cutoff."
+    },
+    {
+      "priority": 3,
+      "data": "richer pace and trip history",
+      "examples": [
+        "sectional position/time profiles",
+        "pace pressure",
+        "track-position bias",
+        "trouble or wide-trip annotations"
+      ],
+      "reason": "Current aggregate recent-rank features discard interaction between running style and expected field composition."
+    },
+    {
+      "priority": 4,
+      "data": "weather and going snapshots before post time",
+      "examples": [
+        "rainfall",
+        "wind",
+        "track condition changes",
+        "rail configuration"
+      ],
+      "reason": "Race-card values may not represent the information state at an earlier betting cutoff."
+    },
+    {
+      "priority": 5,
+      "data": "scratch and equipment-change events",
+      "examples": [
+        "scratches",
+        "blinkers/equipment",
+        "jockey substitutions"
+      ],
+      "reason": "They alter both field interactions and market prices and need event timestamps."
+    }
+  ],
+  "next_actions": [
+    "Implement append-only JRA odds snapshots keyed by race, runner, official timestamp, fetch timestamp, and scheduled post time.",
+    "Freeze one common as-of repricing dataset before comparing architectures.",
+    "Implement candidate B and C as separate experiment issues, with candidate A as the control.",
+    "Do not run a formal ROI promotion gate until the historical or prospectively captured odds snapshot contract is satisfied."
+  ]
+}

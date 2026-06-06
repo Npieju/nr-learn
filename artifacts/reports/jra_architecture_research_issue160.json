@@ -1,0 +1,146 @@
+{
+  "issue": 160,
+  "status": "research_complete_candidate_matrix_pending_implementation",
+  "decision": {
+    "operational_objective": "Optimize leak-safe forward wagering performance after joining a pre-bet market snapshot; top1 flat betting is diagnostic only.",
+    "predictive_boundary": "Base predictive models must not consume odds, implied probability, popularity, or targets derived from them.",
+    "market_boundary": "Odds are required in the post-inference repricing and execution layer for market probability, expected value, edge, selection, liquidity limits, and stake sizing.",
+    "recommended_first_architecture": "A market-free tabular horse encoder with race-context set aggregation and a masked race softmax winner head.",
+    "sota_reading": "No standardized public horse-racing benchmark was found that justifies adopting one horse-racing architecture as established SOTA. Use established set/listwise components and compare them against strong tabular baselines under one forward protocol."
+  },
+  "candidate_matrix": [
+    {
+      "id": "A",
+      "name": "catboost_strength_temperature_softmax",
+      "role": "low-complexity control",
+      "model": "Market-free CatBoost race-group ranker; fit out-of-fold temperature or monotone mapping on strength, then apply race softmax.",
+      "advantages": [
+        "Reuses the current feature pipeline",
+        "Separates ranking capacity from probability closure",
+        "Cheap enough for broad walk-forward comparison"
+      ],
+      "risks": [
+        "Post-hoc closure cannot create missing race interactions",
+        "Calibration may drift by field size and race regime"
+      ]
+    },
+    {
+      "id": "B",
+      "name": "catboost_race_conditional_multinomial",
+      "role": "strong tabular baseline",
+      "model": "Shared horse utility model trained with race-group conditional softmax cross-entropy so exactly one winner probability mass is allocated per race.",
+      "advantages": [
+        "Objective matches the mutually exclusive winner outcome",
+        "Produces a closed race probability vector directly",
+        "Keeps CatBoost handling of heterogeneous tabular and categorical data"
+      ],
+      "risks": [
+        "Requires a custom grouped objective or exported utility-training path",
+        "Horse utilities see race context only through engineered aggregate features"
+      ]
+    },
+    {
+      "id": "C",
+      "name": "tabular_encoder_deepsets_softmax",
+      "role": "recommended first neural challenger",
+      "model": "Encode each runner's pre-race tabular features, aggregate the runner set with permutation-invariant pooling, concatenate race context back to each runner, and train a masked race softmax winner head.",
+      "advantages": [
+        "Models variable field sizes and race-relative context",
+        "Permutation equivariance matches the runner-set structure",
+        "Lower complexity than full self-attention"
+      ],
+      "risks": [
+        "Categorical encoding and missingness handling need careful parity with CatBoost",
+        "More sensitive to temporal drift and training protocol"
+      ]
+    },
+    {
+      "id": "D",
+      "name": "tabular_encoder_set_transformer_softmax",
+      "role": "higher-capacity challenger",
+      "model": "Use runner embeddings with self-attention or induced set attention, followed by a masked race softmax winner head.",
+      "advantages": [
+        "Can represent pairwise and higher-order runner interactions",
+        "Naturally handles a race as an unordered set"
+      ],
+      "risks": [
+        "Higher variance and compute cost",
+        "Must beat DeepSets and CatBoost controls to justify complexity",
+        "Published set-model SOTA claims are not horse-racing-specific"
+      ]
+    }
+  ],
+  "evaluation_contract": {
+    "predictive_metrics": [
+      "race winner negative log likelihood",
+      "race Brier score",
+      "top-k hit rate",
+      "race probability sum contract",
+      "calibration by field size, race class, surface, and odds band"
+    ],
+    "policy_metrics": [
+      "forward ROI",
+      "maximum drawdown",
+      "final bankroll",
+      "bet count and race coverage",
+      "odds and liquidity bands",
+      "feasible nested walk-forward folds"
+    ],
+    "policy_rule": "For every candidate, join the same as-of odds snapshot after inference; compute normalized market probability, model expected return, model-minus-market edge, selection, and uncertainty-aware fractional stake.",
+    "selection_tuning": "Tune EV, edge, odds, and stake parameters only inside each training/validation fold. Never tune them on the held-out replay window.",
+    "top1_flat_bet_status": "diagnostic_not_operational"
+  },
+  "odds_provenance_contract": {
+    "required_fields": [
+      "race_id",
+      "gate_no",
+      "odds",
+      "odds_official_datetime",
+      "snapshot_fetched_at",
+      "scheduled_post_at",
+      "bet_cutoff_at",
+      "source_url"
+    ],
+    "valid_snapshot_rule": "odds_official_datetime <= bet_cutoff_at < scheduled_post_at",
+    "join_rule": "For each simulated decision, use only the latest valid snapshot at or before bet_cutoff_at.",
+    "current_limitation": "Historical JRA result/odds tables contain odds without an observation timestamp, so they cannot prove pre-bet availability and are not sufficient for formal live-policy ROI.",
+    "recommended_cutoffs": [
+      "T-10 minutes",
+      "T-5 minutes",
+      "T-2 minutes"
+    ],
+    "reason_for_multiple_cutoffs": "Parimutuel prices move before close; sensitivity across cutoffs is part of operational validity."
+  },
+  "research_sources": [
+    {
+      "title": "Deep Sets",
+      "url": "https://papers.neurips.cc/paper/6931-deep-sets",
+      "use": "Permutation-invariant/equivariant modeling foundation for variable runner sets."
+    },
+    {
+      "title": "Set Transformer: A Framework for Attention-based Permutation-Invariant Neural Networks",
+      "url": "https://proceedings.mlr.press/v97/lee19d.html",
+      "use": "Attention-based interaction modeling for set-structured race fields."
+    },
+    {
+      "title": "Learning to Rank under Multinomial Logit Choice",
+      "url": "https://jmlr.org/beta/papers/v24/20-981.html",
+      "use": "Supports treating a list as a joint single-choice problem rather than independent binary choices."
+    },
+    {
+      "title": "Kelly Betting on Horse Races with Uncertainty in Probability Estimates",
+      "url": "https://pubsonline.informs.org/doi/10.1287/deca.2017.0359",
+      "use": "Probability estimation uncertainty should reduce or robustify Kelly-style exposure."
+    },
+    {
+      "title": "Optimal sports betting strategies in practice: an experimental review",
+      "url": "https://arxiv.org/abs/2107.08827",
+      "use": "Unified evaluation of sports-betting allocation methods, including horse racing."
+    },
+    {
+      "title": "Ornstein-Uhlenbeck Process for Horse Race Betting: A Micro-Macro Analysis of Herding and Informed Bettors",
+      "url": "https://arxiv.org/abs/2503.16470",
+      "use": "JRA odds are dynamic parimutuel market observations, reinforcing cutoff-specific replay rather than static final-odds assumptions."
+    }
+  ]
+}
