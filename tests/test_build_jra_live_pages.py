@@ -93,6 +93,8 @@ class BuildJraLivePagesTest(unittest.TestCase):
         self.assertIn('id="harville-ignore-long-odds"', html)
         self.assertIn('id="harville-exclude-filters"', html)
         self.assertIn('>消し馬<', html)
+        self.assertIn('class="harville-filter-chip-text"', html)
+        self.assertIn('function harvilleOverviewTableHtml', html)
 
 
 if __name__ == "__main__":

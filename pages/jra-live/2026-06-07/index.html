@@ -604,23 +604,67 @@
         text-transform: uppercase;
       }
       .harville-filter-options {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 8px;
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(28px, max-content));
+        gap: 6px;
+        align-items: start;
+        justify-content: start;
       }
       .harville-filter-chip {
         display: inline-flex;
+        flex-direction: column;
         align-items: center;
-        gap: 6px;
-        padding: 4px 8px;
-        border-radius: 999px;
+        justify-content: start;
+        gap: 4px;
+        min-width: 28px;
+        padding: 4px 3px;
+        border-radius: 12px;
         border: 1px solid var(--line);
         background: rgba(250, 253, 255, 0.88);
         color: var(--ink);
         font-size: 11px;
+        line-height: 1;
+      }
+      .harville-filter-chip-text {
+        font-variant-numeric: tabular-nums;
+        font-weight: 700;
       }
       .harville-filter-chip input {
         margin: 0;
+      }
+      .harville-overview-table {
+        min-width: 920px;
+      }
+      .harville-overview-table th,
+      .harville-overview-table td {
+        text-align: center;
+        white-space: nowrap;
+      }
+      .harville-overview-table th:first-child,
+      .harville-overview-table td:first-child {
+        text-align: left;
+        position: sticky;
+        left: 0;
+        z-index: 1;
+        background: #f8fbfd;
+      }
+      .harville-overview-table thead th:first-child {
+        z-index: 3;
+        background: #eef4f8;
+      }
+      .harville-overview-market {
+        min-width: 92px;
+      }
+      .harville-overview-subhead {
+        font-size: 10px;
+        color: var(--muted);
+      }
+      .harville-overview-cell-positive {
+        color: #0a6c4a;
+        font-weight: 700;
+      }
+      .harville-overview-cell-muted {
+        color: var(--muted);
       }
       }
       .harville-anchor-select label {
@@ -1168,6 +1212,20 @@
         return `${formatOddsNumber(lower)}-${formatOddsNumber(upper)}倍`;
       }
       return formatOddsText(lower);
+    }
+
+    function harmonicMean(values) {
+      const numeric = (Array.isArray(values) ? values : [])
+        .map((item) => numericValue(item))
+        .filter((item) => item !== null && item > 0);
+      if (!numeric.length) {
+        return null;
+      }
+      const denominator = numeric.reduce((total, item) => total + (1 / item), 0);
+      if (!(denominator > 0)) {
+        return null;
+      }
+      return numeric.length / denominator;
     }
 
     function formatEdgePercent(value) {
@@ -2025,7 +2083,7 @@
       document.getElementById("harville-exclude-filters").innerHTML = excludeOptions.length
         ? excludeOptions.map((item) => {
           const checked = excludedHorses.includes(item.horseNo) ? " checked" : "";
-          return `<label class="harville-filter-chip" title="${escapeHtml(item.horseName || item.horseNo)}"><input type="checkbox" data-harville-exclude="${escapeHtml(item.horseNo)}"${checked}>${escapeHtml(item.horseNo)}</label>`;
+          return `<label class="harville-filter-chip" title="${escapeHtml(item.horseName || item.horseNo)}"><span class="harville-filter-chip-text">${escapeHtml(item.horseNo)}</span><input type="checkbox" data-harville-exclude="${escapeHtml(item.horseNo)}"${checked}></label>`;
         }).join("")
         : '<span class="market-empty">消し馬フィルタを作るための馬番がまだありません。</span>';
       const longOddsToggle = document.getElementById("harville-ignore-long-odds");
@@ -2059,6 +2117,77 @@
         harvilleHeaderCell("EV倍率", "ev_ratio", sortState, "EV 倍率で並べ替え"),
         harvilleHeaderCell("上振れ", "edge", sortState, "上振れ率で並べ替え"),
       ].join("")}</tr></thead><tbody>${body}</tbody></table>`;
+    }
+
+    function collectHarvilleHorseOptions(race, rowsByMarket) {
+      const seen = new Set();
+      const fromRaceRows = (Array.isArray(race?.rowsData) ? race.rowsData : [])
+        .map((row) => ({
+          horseNo: resolveRaceRowHorseNo(row),
+          horseName: normalizeHorseName(row?.horse_name),
+        }));
+      const fromHarvilleRows = flattenHarvilleRows(rowsByMarket || {}).flatMap((row) => [
+        { horseNo: normalizeHorseNo(row?.horse_no_a), horseName: normalizeHorseName(row?.horse_name_a) },
+        { horseNo: normalizeHorseNo(row?.horse_no_b), horseName: normalizeHorseName(row?.horse_name_b) },
+        { horseNo: normalizeHorseNo(row?.horse_no_c), horseName: normalizeHorseName(row?.horse_name_c) },
+      ]);
+      return [...fromRaceRows, ...fromHarvilleRows]
+        .filter((item) => item.horseNo && !seen.has(item.horseNo) && seen.add(item.horseNo))
+        .sort((left, right) => horsePairSort(left.horseNo, right.horseNo));
+    }
+
+    function buildHarvilleOverviewRows(race, rowsByMarket) {
+      const horses = collectHarvilleHorseOptions(race, rowsByMarket);
+      const markets = availableHarvilleMarkets(rowsByMarket || {});
+      return horses.map((horse) => {
+        const metrics = {};
+        let bestEdge = null;
+        markets.forEach((market) => {
+          const marketRows = Array.isArray(rowsByMarket?.[market.key]) ? rowsByMarket[market.key] : [];
+          const involvingHorse = marketRows.filter((row) => harvilleRowHorseNumbers(row).includes(horse.horseNo));
+          const actualHm = harmonicMean(involvingHorse.map((row) => row?.market_odds));
+          const harvilleHm = harmonicMean(involvingHorse.map((row) => row?.harville_odds));
+          const edgeRatio = actualHm !== null && harvilleHm !== null && harvilleHm > 0 ? actualHm / harvilleHm : null;
+          metrics[market.key] = {
+            actual: actualHm,
+            harville: harvilleHm,
+            edgeRatio,
+          };
+          if (edgeRatio !== null && (bestEdge === null || edgeRatio > bestEdge)) {
+            bestEdge = edgeRatio;
+          }
+        });
+        return {
+          horseNo: horse.horseNo,
+          horseName: horse.horseName,
+          label: `${horse.horseNo} ${horse.horseName}`.trim(),
+          metrics,
+          bestEdge,
+        };
+      });
+    }
+
+    function harvilleOverviewTableHtml(race, rowsByMarket) {
+      const markets = availableHarvilleMarkets(rowsByMarket || {});
+      const rows = buildHarvilleOverviewRows(race, rowsByMarket);
+      if (!markets.length || !rows.length) {
+        return '<div class="market-empty">overview 用の Harville データがまだありません。</div>';
+      }
+      const headTop = `<tr><th rowspan="2">馬</th>${markets.map((market) => `<th class="harville-overview-market" colspan="2">${escapeHtml(market.label)}</th>`).join("")}</tr>`;
+      const headBottom = `<tr>${markets.map(() => '<th class="harville-overview-subhead">実</th><th class="harville-overview-subhead">Harville</th>').join("")}</tr>`;
+      const body = rows.map((row) => {
+        const metricCells = markets.map((market) => {
+          const metric = row.metrics?.[market.key] || {};
+          const actual = metric.actual;
+          const harville = metric.harville;
+          const positiveClass = actual !== null && harville !== null && actual > harville ? ' harville-overview-cell-positive' : '';
+          const actualCell = `<td class="${actual === null ? 'harville-overview-cell-muted' : positiveClass.trim()}">${escapeHtml(formatOddsText(actual))}</td>`;
+          const harvilleCell = `<td class="${harville === null ? 'harville-overview-cell-muted' : ''}">${escapeHtml(formatOddsText(harville))}</td>`;
+          return `${actualCell}${harvilleCell}`;
+        }).join("");
+        return `<tr><td>${escapeHtml(row.label || row.horseNo)}</td>${metricCells}</tr>`;
+      }).join("");
+      return `<table class="compact-table harville-overview-table"><thead>${headTop}${headBottom}</thead><tbody>${body}</tbody></table>`;
     }
 
     function harvilleDetailTableHtml(marketKey, rows, anchors, sortState) {
@@ -2185,8 +2314,8 @@
       const selectedAnchors = state.harvilleAnchors.slice(0, 2);
       renderHarvilleAnchorControls(race, selectedAnchors, activeMarket);
       document.getElementById("harville-note").textContent = refreshError
-        ? `${activeMarket === "win_compare" ? "モデル score をそのまま単勝と比較し、倍率と上振れを確認します。" : (harville.message || "model score を race 内で正規化した勝率から Harville 理論オッズを計算し、市場オッズがどれだけ上振れているかを見ます。")} Live refresh note: ${refreshError}`
-        : (activeMarket === "win_compare" ? "モデル score をそのまま単勝と比較し、倍率と上振れを確認します。" : (harville.message || "model score を race 内で正規化した勝率から Harville 理論オッズを計算し、市場オッズがどれだけ上振れているかを見ます。"));
+        ? `${activeMarket === "overview" ? "各馬が絡む馬券について、券種ごとに実オッズと Harville の harmonic mean を並べます。" : (activeMarket === "win_compare" ? "モデル score をそのまま単勝と比較し、倍率と上振れを確認します。" : (harville.message || "model score を race 内で正規化した勝率から Harville 理論オッズを計算し、市場オッズがどれだけ上振れているかを見ます。"))} Live refresh note: ${refreshError}`
+        : (activeMarket === "overview" ? "各馬が絡む馬券について、券種ごとに実オッズと Harville の harmonic mean を並べます。" : (activeMarket === "win_compare" ? "モデル score をそのまま単勝と比較し、倍率と上振れを確認します。" : (harville.message || "model score を race 内で正規化した勝率から Harville 理論オッズを計算し、市場オッズがどれだけ上振れているかを見ます。")));
       document.getElementById("harville-meta").textContent = [
         harville?.meta?.oddsUpdatedAt ? `odds ${harville.meta.oddsUpdatedAt}` : null,
         harville?.meta?.analyzedAt ? `analyzed ${harville.meta.analyzedAt}` : null,
@@ -2207,8 +2336,14 @@
       const exhaustiveOverviewRows = filteredHarvilleRows(flattenHarvilleRows(harville.rowsByMarket || {}), selectedAnchors, state.harvilleExcludedHorses, ignoreLongOdds);
       const filteredMarketRows = filteredHarvilleRows(harville.rowsByMarket?.[activeMarket] || [], selectedAnchors, state.harvilleExcludedHorses, ignoreLongOdds);
       const filteredWinCompareRows = filteredHarvilleRows(harville.winCompareRows || [], [], state.harvilleExcludedHorses, ignoreLongOdds);
+      const filteredOverviewRowsByMarket = Object.fromEntries(
+        availableHarvilleMarkets(harville.rowsByMarket || {}).map((market) => [
+          market.key,
+          filteredHarvilleRows(harville.rowsByMarket?.[market.key] || [], selectedAnchors, state.harvilleExcludedHorses, ignoreLongOdds),
+        ])
+      );
       document.getElementById("harville-summary-wrap").innerHTML = activeMarket === "overview"
-        ? harvilleSummaryTableHtml(selectedAnchors.length || state.harvilleExcludedHorses.length ? exhaustiveOverviewRows : filteredSummaryRows, selectedAnchors, state.harvilleSort, selectedAnchors.length > 0 || state.harvilleExcludedHorses.length > 0)
+        ? harvilleOverviewTableHtml(race, filteredOverviewRowsByMarket)
         : (activeMarket === "win_compare"
           ? winCompareTableHtml(filteredWinCompareRows, state.harvilleSort)
           : harvilleDetailTableHtml(activeMarket, filteredMarketRows, selectedAnchors, state.harvilleSort));
