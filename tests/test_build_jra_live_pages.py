@@ -27,23 +27,40 @@ pages_script = _load_script_module("test_run_build_jra_live_pages", "scripts/pub
 
 class BuildJraLivePagesTest(unittest.TestCase):
     def test_render_root_page_applies_prefix_without_duplicate_segment(self) -> None:
-        manifests = [{
-            "target_date": "2026-06-07",
-            "title": "JRA Live Predictions 2026-06-07",
-            "source_version": "0.3.0",
-            "race_count": 24,
-            "row_count": 357,
-            "policy_selected_rows": 0,
-            "odds_official_datetime_max": "2026-06-06 17:15:53",
-            "relative_path": "2026-06-07/",
-        }]
+        manifests = [
+            {
+                "target_date": "2026-06-07",
+                "title": "JRA Live Predictions 2026-06-07",
+                "source_version": "0.3.0",
+                "race_count": 24,
+                "row_count": 357,
+                "policy_selected_rows": 0,
+                "odds_official_datetime_max": "2026-06-06 17:15:53",
+                "relative_path": "2026-06-07/",
+            },
+            {
+                "target_date": "2026-05-31",
+                "title": "JRA Live Predictions 2026-05-31",
+                "source_version": "0.2.9",
+                "race_count": 24,
+                "row_count": 341,
+                "policy_selected_rows": 1,
+                "odds_official_datetime_max": "2026-05-30 17:09:00",
+                "relative_path": "jra-live/2026-05-31/",
+            },
+        ]
 
         root_html = pages_script.render_root_page(manifests=manifests, href_prefix="jra-live")
         self.assertIn('href="jra-live/2026-06-07/"', root_html)
+        self.assertIn('href="jra-live/2026-05-31/"', root_html)
         self.assertNotIn('href="jra-live/jra-live/2026-06-07/"', root_html)
+        self.assertNotIn('href="jra-live/jra-live/2026-05-31/"', root_html)
+        self.assertEqual(root_html.count('class="card"'), 2)
 
         jra_live_html = pages_script.render_root_page(manifests=manifests)
         self.assertIn('href="2026-06-07/"', jra_live_html)
+        self.assertIn('href="2026-05-31/"', jra_live_html)
+        self.assertNotIn('href="jra-live/2026-05-31/"', jra_live_html)
 
     def test_render_live_page_has_parent_navigation_and_focused_refresh_control(self) -> None:
         html = pages_script.render_live_page(page_title="JRA Live Predictions 2026-06-07")
@@ -52,6 +69,8 @@ class BuildJraLivePagesTest(unittest.TestCase):
         self.assertIn('id="focused-refresh-button"', html)
         self.assertIn('id="focused-refresh-status"', html)
         self.assertIn('data-refresh-focused="current"', html)
+        self.assertIn('id="harville-ignore-long-odds"', html)
+        self.assertIn('id="harville-exclude-filters"', html)
 
 
 if __name__ == "__main__":
