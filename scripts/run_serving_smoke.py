@@ -26,6 +26,7 @@ from racing_ml.common.progress import Heartbeat, ProgressBar
 from racing_ml.common.regime import resolve_regime_name
 from racing_ml.pipeline.backtest_pipeline import run_backtest
 from racing_ml.serving.predict_batch import prepare_prediction_frame, run_predict_from_frame
+from racing_ml.serving.prediction_market_refresh import refresh_prediction_market_data
 from racing_ml.serving.replay_backtest import write_prediction_backtest_artifacts
 from racing_ml.serving.runtime_policy import resolve_runtime_policy
 
@@ -587,6 +588,27 @@ def _single_date_frame(date_value: str) -> pd.DataFrame:
     return pd.DataFrame({"date": [pd.Timestamp(date_value)]})
 
 
+def _prepare_replay_existing_frame(
+    prediction_csv: Path,
+    *,
+    market_file: Path | None,
+    market_join_keys: list[str] | None,
+    market_columns: list[str] | None,
+) -> tuple[pd.DataFrame, dict[str, Any] | None]:
+    frame = pd.read_csv(prediction_csv)
+    if market_file is None:
+        return frame, None
+
+    market_frame = pd.read_csv(market_file)
+    refreshed, refresh_summary = refresh_prediction_market_data(
+        frame,
+        market_frame,
+        join_keys=market_join_keys,
+        market_columns=market_columns,
+    )
+    return refreshed, refresh_summary
+
+
 def _resolve_expected_score_source(model_config: dict[str, Any], date_value: str) -> str:
     serving_cfg = model_config.get("serving", {}) if isinstance(model_config.get("serving", {}), dict) else {}
     evaluation_cfg = model_config.get("evaluation", {}) if isinstance(model_config.get("evaluation", {}), dict) else {}
@@ -696,6 +718,9 @@ def main() -> int:
     parser.add_argument("--artifact-suffix", default=None)
     parser.add_argument("--model-artifact-suffix", default=None)
     parser.add_argument("--output-file", default=None)
+    parser.add_argument("--market-file", default=None)
+    parser.add_argument("--market-join-keys", default=None)
+    parser.add_argument("--market-columns", default=None)
     parser.add_argument("--no-archive-artifacts", action="store_true")
     parser.add_argument("--print-traceback", action="store_true")
     args = parser.parse_args()
@@ -709,9 +734,14 @@ def main() -> int:
     artifact_suffix = str(args.artifact_suffix or default_artifact_suffix).strip() or args.profile
     model_artifact_suffix = str(args.model_artifact_suffix or "").strip() or None
     output_file = _resolve_path(args.output_file) if args.output_file else ROOT / "artifacts" / "reports" / f"serving_smoke_{args.profile}.json"
+    market_file = _resolve_path(args.market_file) if args.market_file else None
+    market_join_keys = [token.strip() for token in str(args.market_join_keys or "").split(",") if token.strip()] or None
+    market_columns = [token.strip() for token in str(args.market_columns or "").split(",") if token.strip()] or None
     lock_acquired = False
 
     try:
+        if market_file is not None and args.prediction_backend != "replay-existing":
+            raise ValueError("--market-file is supported only with --prediction-backend replay-existing")
         artifact_ensure_output_file_path(output_file, label="output file", workspace_root=ROOT)
         progress = ProgressBar(total=4, prefix="[serving-smoke]", logger=log_progress, min_interval_sec=0.0)
         progress.start(
@@ -788,7 +818,12 @@ def main() -> int:
                 else:
                     if not prediction_csv.exists():
                         raise FileNotFoundError(f"Canonical prediction artifact not found for replay: {prediction_csv}")
-                    frame = pd.read_csv(prediction_csv)
+                    frame, market_refresh_summary = _prepare_replay_existing_frame(
+                        prediction_csv,
+                        market_file=market_file,
+                        market_join_keys=market_join_keys,
+                        market_columns=market_columns,
+                    )
                     write_prediction_backtest_artifacts(
                         frame,
                         model_config=model_config,
@@ -800,6 +835,11 @@ def main() -> int:
                     )
                     backtest_json = replay_backtest_json
                     backtest_png = replay_backtest_png
+                    if market_refresh_summary is not None:
+                        case_result["market_refresh"] = {
+                            "market_file": artifact_display_path(market_file, workspace_root=ROOT),
+                            **market_refresh_summary,
+                        }
 
                 prediction_summary = _prediction_summary(prediction_csv)
                 backtest_summary = _backtest_summary(backtest_json)

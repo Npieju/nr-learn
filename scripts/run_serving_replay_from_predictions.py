@@ -21,6 +21,7 @@ from racing_ml.common.artifacts import ensure_output_file_path as artifact_ensur
 from racing_ml.common.artifacts import write_json
 from racing_ml.common.config import load_yaml
 from racing_ml.common.progress import Heartbeat, ProgressBar
+from racing_ml.serving.prediction_market_refresh import refresh_prediction_market_data
 from racing_ml.serving.replay_backtest import write_prediction_backtest_artifacts
 
 
@@ -58,6 +59,27 @@ def _relative(path: Path) -> str:
     return str(path.relative_to(ROOT))
 
 
+def _prepare_replay_frame(
+    prediction_path: Path,
+    *,
+    market_path: Path | None = None,
+    join_keys: list[str] | None = None,
+    market_columns: list[str] | None = None,
+) -> tuple[pd.DataFrame, dict[str, Any] | None]:
+    frame = pd.read_csv(prediction_path)
+    if market_path is None:
+        return frame, None
+
+    market_frame = pd.read_csv(market_path)
+    refreshed, refresh_summary = refresh_prediction_market_data(
+        frame,
+        market_frame,
+        join_keys=join_keys,
+        market_columns=market_columns,
+    )
+    return refreshed, refresh_summary
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--config", required=True)
@@ -65,22 +87,34 @@ def main() -> int:
     parser.add_argument("--artifact-suffix", required=True)
     parser.add_argument("--profile", default=None)
     parser.add_argument("--output-file", default=None)
+    parser.add_argument("--market-file", default=None)
+    parser.add_argument("--market-join-keys", default=None)
+    parser.add_argument("--market-columns", default=None)
     args = parser.parse_args()
 
     try:
         config_path = _normalize_path(args.config)
         prediction_paths = [_normalize_path(path) for path in args.prediction_files]
+        market_path = _normalize_path(args.market_file) if args.market_file else None
+        market_join_keys = [token.strip() for token in str(args.market_join_keys or "").split(",") if token.strip()] or None
+        market_columns = [token.strip() for token in str(args.market_columns or "").split(",") if token.strip()] or None
         output_file = _normalize_path(args.output_file) if args.output_file else ROOT / "artifacts" / "reports" / f"serving_smoke_{args.artifact_suffix}.json"
         artifact_ensure_output_file_path(output_file, label="output file", workspace_root=ROOT)
         report_dir = ROOT / "artifacts" / "reports"
         report_dir.mkdir(parents=True, exist_ok=True)
         progress = ProgressBar(total=max(len(prediction_paths) + 2, 3), prefix="[serving-replay]", logger=log_progress, min_interval_sec=0.0)
         model_config = load_yaml(config_path)
-        progress.start(message=f"config loaded files={len(prediction_paths)}")
+        progress.start(message=f"config loaded files={len(prediction_paths)} market_refresh={'on' if market_path else 'off'}")
 
         cases: list[dict[str, Any]] = []
         for prediction_path in prediction_paths:
-            frame = pd.read_csv(prediction_path)
+            with Heartbeat("[serving-replay]", f"loading {prediction_path.name}", logger=log_progress):
+                frame, refresh_summary = _prepare_replay_frame(
+                    prediction_path,
+                    market_path=market_path,
+                    join_keys=market_join_keys,
+                    market_columns=market_columns,
+                )
             stem = prediction_path.stem.replace("predictions_", "")
             archived_backtest_json = report_dir / f"backtest_{stem}_{args.artifact_suffix}.json"
             archived_backtest_png = report_dir / f"backtest_{stem}_{args.artifact_suffix}.png"
@@ -110,6 +144,11 @@ def main() -> int:
                     "backtest_png": _relative(archived_backtest_png),
                 },
             }
+            if refresh_summary is not None:
+                case["market_refresh"] = {
+                    "market_file": _relative(market_path) if market_path is not None else None,
+                    **refresh_summary,
+                }
             cases.append(case)
             progress.update(message=f"processed {prediction_path.name}")
 
@@ -117,6 +156,7 @@ def main() -> int:
             "profile": args.profile or args.artifact_suffix,
             "config_file": _relative(config_path),
             "artifact_suffix": args.artifact_suffix,
+            "market_file": _relative(market_path) if market_path is not None else None,
             "cases": cases,
         }
         with Heartbeat("[serving-replay]", "writing replay summary", logger=log_progress):

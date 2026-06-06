@@ -70,6 +70,9 @@ def _smoke_command(
     artifact_suffix: str,
     model_artifact_suffix: str | None,
     output_file: Path,
+    market_file: Path | None,
+    market_join_keys: list[str] | None,
+    market_columns: list[str] | None,
 ) -> list[str]:
     command = [
         sys.executable,
@@ -85,6 +88,12 @@ def _smoke_command(
     ]
     if model_artifact_suffix:
         command.extend(["--model-artifact-suffix", model_artifact_suffix])
+    if market_file is not None:
+        command.extend(["--market-file", artifact_display_path(market_file, workspace_root=ROOT)])
+    if market_join_keys:
+        command.extend(["--market-join-keys", ",".join(market_join_keys)])
+    if market_columns:
+        command.extend(["--market-columns", ",".join(market_columns)])
     for date_value in dates:
         command.extend(["--date", date_value])
     return command
@@ -379,6 +388,9 @@ def main() -> int:
     parser.add_argument("--date", action="append", default=None)
     parser.add_argument("--window-label", default=None)
     parser.add_argument("--prediction-backend", choices=["fresh", "replay-existing"], default="replay-existing")
+    parser.add_argument("--market-file", default=None)
+    parser.add_argument("--market-join-keys", default=None)
+    parser.add_argument("--market-columns", default=None)
     parser.add_argument("--left-artifact-suffix", default=None)
     parser.add_argument("--right-artifact-suffix", default=None)
     parser.add_argument("--left-model-artifact-suffix", default=None)
@@ -416,6 +428,9 @@ def main() -> int:
         right_suffix = str(args.right_artifact_suffix or _artifact_suffix(args.right_profile, window_label)).strip()
         if not left_suffix or not right_suffix:
             raise ValueError("artifact suffix must not be empty")
+        market_file = _resolve_path(args.market_file) if args.market_file else None
+        market_join_keys = [token.strip() for token in str(args.market_join_keys or "").split(",") if token.strip()] or None
+        market_columns = [token.strip() for token in str(args.market_columns or "").split(",") if token.strip()] or None
 
         report_dir = ROOT / "artifacts" / "reports"
         left_summary_output = _resolve_path(args.left_summary_output) if args.left_summary_output else report_dir / f"serving_smoke_{left_suffix}.json"
@@ -467,6 +482,9 @@ def main() -> int:
             artifact_suffix=left_suffix,
             model_artifact_suffix=str(args.left_model_artifact_suffix or "").strip() or None,
             output_file=left_summary_output,
+            market_file=market_file,
+            market_join_keys=market_join_keys,
+            market_columns=market_columns,
         )
         right_smoke_command = _smoke_command(
             profile_name=args.right_profile,
@@ -475,6 +493,9 @@ def main() -> int:
             artifact_suffix=right_suffix,
             model_artifact_suffix=str(args.right_model_artifact_suffix or "").strip() or None,
             output_file=right_summary_output,
+            market_file=market_file,
+            market_join_keys=market_join_keys,
+            market_columns=market_columns,
         )
         compare_command = _compare_command(
             left_summary=left_summary_output,
