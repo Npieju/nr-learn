@@ -108,6 +108,8 @@ class BuildJraLivePagesTest(unittest.TestCase):
         self.assertIn('id="harville-ignore-long-odds"', html)
         self.assertIn('id="harville-exclude-filters"', html)
         self.assertIn('>消し馬<', html)
+        self.assertIn('.harville-anchor-select {', html)
+        self.assertIn('min-width: 0;\n      }\n      .harville-filter-stack {', html)
         self.assertIn('class="harville-filter-grid"', html)
         self.assertNotIn('grid-auto-flow: column;', html)
         self.assertIn('grid-template-columns: repeat(${excludeOptions.length}, minmax(28px, max-content));', html)

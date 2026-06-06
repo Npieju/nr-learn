@@ -1500,6 +1500,7 @@ def render_live_page(*, page_title: str) -> str:
         flex-direction: column;
         gap: 4px;
         min-width: 0;
+      }
       .harville-filter-stack {
         display: grid;
         gap: 10px;
