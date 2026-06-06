@@ -1526,8 +1526,6 @@ def render_live_page(*, page_title: str) -> str:
       .harville-filter-grid {
         display: grid;
         grid-template-rows: repeat(2, auto);
-        grid-auto-flow: column;
-        grid-auto-columns: 28px;
         gap: 6px;
         align-items: center;
         justify-content: start;
@@ -3077,7 +3075,7 @@ def render_live_page(*, page_title: str) -> str:
       }).join("");
       const excludeOptions = getHarvilleExcludeOptions(race);
       document.getElementById("harville-exclude-filters").innerHTML = excludeOptions.length
-        ? `<div class="harville-filter-grid">${excludeOptions.map((item) => `<span class="harville-filter-chip" title="${escapeHtml(item.horseName || item.horseNo)}"><span class="harville-filter-chip-text">${escapeHtml(item.horseNo)}</span></span>`).join("")}${excludeOptions.map((item) => {
+        ? `<div class="harville-filter-grid" style="grid-template-columns: repeat(${excludeOptions.length}, minmax(28px, max-content));">${excludeOptions.map((item) => `<span class="harville-filter-chip" title="${escapeHtml(item.horseName || item.horseNo)}"><span class="harville-filter-chip-text">${escapeHtml(item.horseNo)}</span></span>`).join("")}${excludeOptions.map((item) => {
           const checked = excludedHorses.includes(item.horseNo) ? " checked" : "";
           return `<label class="harville-filter-checkbox" title="${escapeHtml(item.horseName || item.horseNo)}"><input aria-label="${escapeHtml(item.horseNo)} ${escapeHtml(item.horseName || '')}" type="checkbox" data-harville-exclude="${escapeHtml(item.horseNo)}"${checked}></label>`;
         }).join("")}</div>`

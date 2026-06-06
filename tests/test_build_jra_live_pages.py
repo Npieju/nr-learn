@@ -109,6 +109,8 @@ class BuildJraLivePagesTest(unittest.TestCase):
         self.assertIn('id="harville-exclude-filters"', html)
         self.assertIn('>消し馬<', html)
         self.assertIn('class="harville-filter-grid"', html)
+        self.assertNotIn('grid-auto-flow: column;', html)
+        self.assertIn('grid-template-columns: repeat(${excludeOptions.length}, minmax(28px, max-content));', html)
         self.assertIn('function harvilleOverviewTableHtml', html)
         self.assertIn('>◎<', html)
         self.assertIn('>◯<', html)
