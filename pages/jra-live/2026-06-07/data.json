@@ -3,7 +3,7 @@
     "sourceVersion": "0.3.0",
     "title": "JRA Live Predictions 2026-06-07",
     "targetDate": "2026-06-07",
-    "generatedAt": "2026-06-06T09:03:49+0000",
+    "generatedAt": "2026-06-06T09:53:48+0000",
     "predictionFile": "artifacts/predictions/predictions_20260607_jra_live.csv",
     "summaryFile": "artifacts/predictions/predictions_20260607_jra_live.summary.json",
     "liveSummaryFile": "artifacts/predictions/predictions_20260607_jra_live.live.json",
@@ -2309,8 +2309,8 @@
         "available": false,
         "message": "model score 正規化勝率と単勝市場の暗黙確率をブレンドして Harville 理論オッズを計算し、build 時点の市場オッズ snapshot と比較します。",
         "meta": {
-          "oddsUpdatedAt": "2026-06-06 17:15:29",
-          "analyzedAt": "2026-06-06T09:00:42.578493+00:00",
+          "oddsUpdatedAt": "2026-06-06 18:15:29",
+          "analyzedAt": "2026-06-06T09:50:52.788605+00:00",
           "horseCount": 16,
           "positiveRows": 0,
           "probabilitySource": "blend:model35_market65"
@@ -3116,8 +3116,8 @@
         "available": false,
         "message": "model score 正規化勝率と単勝市場の暗黙確率をブレンドして Harville 理論オッズを計算し、build 時点の市場オッズ snapshot と比較します。",
         "meta": {
-          "oddsUpdatedAt": "2026-06-06 17:15:30",
-          "analyzedAt": "2026-06-06T09:00:49.981935+00:00",
+          "oddsUpdatedAt": "2026-06-06 18:15:30",
+          "analyzedAt": "2026-06-06T09:51:01.509681+00:00",
           "horseCount": 16,
           "positiveRows": 0,
           "probabilitySource": "blend:model35_market65"
@@ -3923,8 +3923,8 @@
         "available": false,
         "message": "model score 正規化勝率と単勝市場の暗黙確率をブレンドして Harville 理論オッズを計算し、build 時点の市場オッズ snapshot と比較します。",
         "meta": {
-          "oddsUpdatedAt": "2026-06-06 17:15:31",
-          "analyzedAt": "2026-06-06T09:00:59.103993+00:00",
+          "oddsUpdatedAt": "2026-06-06 18:15:31",
+          "analyzedAt": "2026-06-06T09:51:10.009717+00:00",
           "horseCount": 16,
           "positiveRows": 0,
           "probabilitySource": "blend:model35_market65"
@@ -4824,8 +4824,8 @@
         "available": false,
         "message": "model score 正規化勝率と単勝市場の暗黙確率をブレンドして Harville 理論オッズを計算し、build 時点の市場オッズ snapshot と比較します。",
         "meta": {
-          "oddsUpdatedAt": "2026-06-06 17:15:33",
-          "analyzedAt": "2026-06-06T09:01:08.180789+00:00",
+          "oddsUpdatedAt": "2026-06-06 18:15:33",
+          "analyzedAt": "2026-06-06T09:51:18.519104+00:00",
           "horseCount": 18,
           "positiveRows": 0,
           "probabilitySource": "blend:model35_market65"
@@ -5349,8 +5349,8 @@
         "available": false,
         "message": "model score 正規化勝率と単勝市場の暗黙確率をブレンドして Harville 理論オッズを計算し、build 時点の市場オッズ snapshot と比較します。",
         "meta": {
-          "oddsUpdatedAt": "2026-06-06 17:15:33",
-          "analyzedAt": "2026-06-06T09:01:16.295456+00:00",
+          "oddsUpdatedAt": "2026-06-06 18:15:33",
+          "analyzedAt": "2026-06-06T09:51:26.499940+00:00",
           "horseCount": 10,
           "positiveRows": 0,
           "probabilitySource": "blend:model35_market65"
@@ -6156,8 +6156,8 @@
         "available": false,
         "message": "model score 正規化勝率と単勝市場の暗黙確率をブレンドして Harville 理論オッズを計算し、build 時点の市場オッズ snapshot と比較します。",
         "meta": {
-          "oddsUpdatedAt": "2026-06-06 17:15:34",
-          "analyzedAt": "2026-06-06T09:01:24.680682+00:00",
+          "oddsUpdatedAt": "2026-06-06 18:15:34",
+          "analyzedAt": "2026-06-06T09:51:35.607171+00:00",
           "horseCount": 16,
           "positiveRows": 0,
           "probabilitySource": "blend:model35_market65"
@@ -6963,8 +6963,8 @@
         "available": false,
         "message": "model score 正規化勝率と単勝市場の暗黙確率をブレンドして Harville 理論オッズを計算し、build 時点の市場オッズ snapshot と比較します。",
         "meta": {
-          "oddsUpdatedAt": "2026-06-06 17:15:35",
-          "analyzedAt": "2026-06-06T09:01:32.601597+00:00",
+          "oddsUpdatedAt": "2026-06-06 18:15:35",
+          "analyzedAt": "2026-06-06T09:51:43.522859+00:00",
           "horseCount": 16,
           "positiveRows": 0,
           "probabilitySource": "blend:model35_market65"
@@ -7817,8 +7817,8 @@
         "available": false,
         "message": "model score 正規化勝率と単勝市場の暗黙確率をブレンドして Harville 理論オッズを計算し、build 時点の市場オッズ snapshot と比較します。",
         "meta": {
-          "oddsUpdatedAt": "2026-06-06 17:15:37",
-          "analyzedAt": "2026-06-06T09:01:41.780243+00:00",
+          "oddsUpdatedAt": "2026-06-06 18:15:37",
+          "analyzedAt": "2026-06-06T09:51:51.108749+00:00",
           "horseCount": 17,
           "positiveRows": 0,
           "probabilitySource": "blend:model35_market65"
@@ -8248,8 +8248,8 @@
         "available": false,
         "message": "model score 正規化勝率と単勝市場の暗黙確率をブレンドして Harville 理論オッズを計算し、build 時点の市場オッズ snapshot と比較します。",
         "meta": {
-          "oddsUpdatedAt": "2026-06-06 17:15:38",
-          "analyzedAt": "2026-06-06T09:01:50.095659+00:00",
+          "oddsUpdatedAt": "2026-06-06 18:15:38",
+          "analyzedAt": "2026-06-06T09:51:57.316642+00:00",
           "horseCount": 8,
           "positiveRows": 0,
           "probabilitySource": "blend:model35_market65"
@@ -9055,8 +9055,8 @@
         "available": false,
         "message": "model score 正規化勝率と単勝市場の暗黙確率をブレンドして Harville 理論オッズを計算し、build 時点の市場オッズ snapshot と比較します。",
         "meta": {
-          "oddsUpdatedAt": "2026-06-06 17:15:39",
-          "analyzedAt": "2026-06-06T09:01:58.689076+00:00",
+          "oddsUpdatedAt": "2026-06-06 18:15:39",
+          "analyzedAt": "2026-06-06T09:52:03.111654+00:00",
           "horseCount": 16,
           "positiveRows": 0,
           "probabilitySource": "blend:model35_market65"
@@ -9910,7 +9910,7 @@
         "message": "model score 正規化勝率と単勝市場の暗黙確率をブレンドして Harville 理論オッズを計算し、build 時点の市場オッズ snapshot と比較します。",
         "meta": {
           "oddsUpdatedAt": "2026-06-06 16:35:09",
-          "analyzedAt": "2026-06-06T09:02:03.574622+00:00",
+          "analyzedAt": "2026-06-06T09:52:07.893166+00:00",
           "horseCount": 17,
           "positiveRows": 16,
           "probabilitySource": "blend:model35_market65"
@@ -20732,8 +20732,8 @@
         "available": false,
         "message": "model score 正規化勝率と単勝市場の暗黙確率をブレンドして Harville 理論オッズを計算し、build 時点の市場オッズ snapshot と比較します。",
         "meta": {
-          "oddsUpdatedAt": "2026-06-06 17:15:41",
-          "analyzedAt": "2026-06-06T09:02:12.792199+00:00",
+          "oddsUpdatedAt": "2026-06-06 18:15:41",
+          "analyzedAt": "2026-06-06T09:52:15.705289+00:00",
           "horseCount": 16,
           "positiveRows": 0,
           "probabilitySource": "blend:model35_market65"
@@ -21445,8 +21445,8 @@
         "available": false,
         "message": "model score 正規化勝率と単勝市場の暗黙確率をブレンドして Harville 理論オッズを計算し、build 時点の市場オッズ snapshot と比較します。",
         "meta": {
-          "oddsUpdatedAt": "2026-06-06 17:15:42",
-          "analyzedAt": "2026-06-06T09:02:19.791778+00:00",
+          "oddsUpdatedAt": "2026-06-06 18:15:42",
+          "analyzedAt": "2026-06-06T09:52:22.914723+00:00",
           "horseCount": 14,
           "positiveRows": 0,
           "probabilitySource": "blend:model35_market65"
@@ -22205,8 +22205,8 @@
         "available": false,
         "message": "model score 正規化勝率と単勝市場の暗黙確率をブレンドして Harville 理論オッズを計算し、build 時点の市場オッズ snapshot と比較します。",
         "meta": {
-          "oddsUpdatedAt": "2026-06-06 17:15:43",
-          "analyzedAt": "2026-06-06T09:02:28.795291+00:00",
+          "oddsUpdatedAt": "2026-06-06 18:15:43",
+          "analyzedAt": "2026-06-06T09:52:30.511887+00:00",
           "horseCount": 15,
           "positiveRows": 0,
           "probabilitySource": "blend:model35_market65"
@@ -23012,8 +23012,8 @@
         "available": false,
         "message": "model score 正規化勝率と単勝市場の暗黙確率をブレンドして Harville 理論オッズを計算し、build 時点の市場オッズ snapshot と比較します。",
         "meta": {
-          "oddsUpdatedAt": "2026-06-06 17:15:44",
-          "analyzedAt": "2026-06-06T09:02:37.195442+00:00",
+          "oddsUpdatedAt": "2026-06-06 18:15:44",
+          "analyzedAt": "2026-06-06T09:52:37.705046+00:00",
           "horseCount": 16,
           "positiveRows": 0,
           "probabilitySource": "blend:model35_market65"
@@ -23819,8 +23819,8 @@
         "available": false,
         "message": "model score 正規化勝率と単勝市場の暗黙確率をブレンドして Harville 理論オッズを計算し、build 時点の市場オッズ snapshot と比較します。",
         "meta": {
-          "oddsUpdatedAt": "2026-06-06 17:15:45",
-          "analyzedAt": "2026-06-06T09:02:46.282847+00:00",
+          "oddsUpdatedAt": "2026-06-06 18:15:45",
+          "analyzedAt": "2026-06-06T09:52:47.490156+00:00",
           "horseCount": 16,
           "positiveRows": 0,
           "probabilitySource": "blend:model35_market65"
@@ -24391,8 +24391,8 @@
         "available": false,
         "message": "model score 正規化勝率と単勝市場の暗黙確率をブレンドして Harville 理論オッズを計算し、build 時点の市場オッズ snapshot と比較します。",
         "meta": {
-          "oddsUpdatedAt": "2026-06-06 17:15:47",
-          "analyzedAt": "2026-06-06T09:02:55.984181+00:00",
+          "oddsUpdatedAt": "2026-06-06 18:15:47",
+          "analyzedAt": "2026-06-06T09:52:55.394468+00:00",
           "horseCount": 11,
           "positiveRows": 0,
           "probabilitySource": "blend:model35_market65"
@@ -25198,8 +25198,8 @@
         "available": false,
         "message": "model score 正規化勝率と単勝市場の暗黙確率をブレンドして Harville 理論オッズを計算し、build 時点の市場オッズ snapshot と比較します。",
         "meta": {
-          "oddsUpdatedAt": "2026-06-06 17:15:48",
-          "analyzedAt": "2026-06-06T09:03:05.290616+00:00",
+          "oddsUpdatedAt": "2026-06-06 18:15:48",
+          "analyzedAt": "2026-06-06T09:53:03.615175+00:00",
           "horseCount": 16,
           "positiveRows": 0,
           "probabilitySource": "blend:model35_market65"
@@ -26005,8 +26005,8 @@
         "available": false,
         "message": "model score 正規化勝率と単勝市場の暗黙確率をブレンドして Harville 理論オッズを計算し、build 時点の市場オッズ snapshot と比較します。",
         "meta": {
-          "oddsUpdatedAt": "2026-06-06 17:15:49",
-          "analyzedAt": "2026-06-06T09:03:12.372700+00:00",
+          "oddsUpdatedAt": "2026-06-06 18:15:49",
+          "analyzedAt": "2026-06-06T09:53:12.108226+00:00",
           "horseCount": 16,
           "positiveRows": 0,
           "probabilitySource": "blend:model35_market65"
@@ -26906,8 +26906,8 @@
         "available": false,
         "message": "model score 正規化勝率と単勝市場の暗黙確率をブレンドして Harville 理論オッズを計算し、build 時点の市場オッズ snapshot と比較します。",
         "meta": {
-          "oddsUpdatedAt": "2026-06-06 17:15:50",
-          "analyzedAt": "2026-06-06T09:03:20.977377+00:00",
+          "oddsUpdatedAt": "2026-06-06 18:15:50",
+          "analyzedAt": "2026-06-06T09:53:20.198077+00:00",
           "horseCount": 18,
           "positiveRows": 0,
           "probabilitySource": "blend:model35_market65"
@@ -27713,8 +27713,8 @@
         "available": false,
         "message": "model score 正規化勝率と単勝市場の暗黙確率をブレンドして Harville 理論オッズを計算し、build 時点の市場オッズ snapshot と比較します。",
         "meta": {
-          "oddsUpdatedAt": "2026-06-06 17:15:51",
-          "analyzedAt": "2026-06-06T09:03:27.965290+00:00",
+          "oddsUpdatedAt": "2026-06-06 18:15:51",
+          "analyzedAt": "2026-06-06T09:53:27.318865+00:00",
           "horseCount": 16,
           "positiveRows": 0,
           "probabilitySource": "blend:model35_market65"
@@ -28191,8 +28191,8 @@
         "available": false,
         "message": "model score 正規化勝率と単勝市場の暗黙確率をブレンドして Harville 理論オッズを計算し、build 時点の市場オッズ snapshot と比較します。",
         "meta": {
-          "oddsUpdatedAt": "2026-06-06 17:15:52",
-          "analyzedAt": "2026-06-06T09:03:34.696505+00:00",
+          "oddsUpdatedAt": "2026-06-06 18:15:52",
+          "analyzedAt": "2026-06-06T09:53:34.810353+00:00",
           "horseCount": 9,
           "positiveRows": 0,
           "probabilitySource": "blend:model35_market65"
@@ -28998,8 +28998,8 @@
         "available": false,
         "message": "model score 正規化勝率と単勝市場の暗黙確率をブレンドして Harville 理論オッズを計算し、build 時点の市場オッズ snapshot と比較します。",
         "meta": {
-          "oddsUpdatedAt": "2026-06-06 17:15:53",
-          "analyzedAt": "2026-06-06T09:03:42.492558+00:00",
+          "oddsUpdatedAt": "2026-06-06 18:15:53",
+          "analyzedAt": "2026-06-06T09:53:41.504719+00:00",
           "horseCount": 16,
           "positiveRows": 0,
           "probabilitySource": "blend:model35_market65"
@@ -29617,8 +29617,8 @@
         "available": false,
         "message": "model score 正規化勝率と単勝市場の暗黙確率をブレンドして Harville 理論オッズを計算し、build 時点の市場オッズ snapshot と比較します。",
         "meta": {
-          "oddsUpdatedAt": "2026-06-06 17:15:53",
-          "analyzedAt": "2026-06-06T09:03:50.182670+00:00",
+          "oddsUpdatedAt": "2026-06-06 18:15:54",
+          "analyzedAt": "2026-06-06T09:53:49.512694+00:00",
           "horseCount": 12,
           "positiveRows": 0,
           "probabilitySource": "blend:model35_market65"

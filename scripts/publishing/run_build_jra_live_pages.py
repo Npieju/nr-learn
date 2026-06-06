@@ -739,7 +739,7 @@ def build_payload(
       "source_version": payload["metadata"]["sourceVersion"],
         "target_date": target_date,
         "title": payload["metadata"]["title"],
-        "relative_path": f"jra-live/{target_date}/",
+        "relative_path": f"{target_date}/",
         "race_count": payload["metadata"]["raceCount"],
         "row_count": payload["metadata"]["rowCount"],
         "policy_selected_rows": payload["metadata"]["policySelectedRows"],
@@ -812,6 +812,15 @@ def render_live_page(*, page_title: str) -> str:
       letter-spacing: 0.14em;
       text-transform: uppercase;
       font-weight: 700;
+    }
+    .hero-home-link {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      text-decoration: none;
+    }
+    .hero-home-link:hover {
+      color: var(--navy);
     }
     h1 {
       margin: 0;
@@ -1507,7 +1516,7 @@ def render_live_page(*, page_title: str) -> str:
 <body>
   <div class="shell">
     <section class="hero">
-      <p class="eyebrow">GitHub Pages / JRA Live Board</p>
+      <p class="eyebrow"><a class="hero-home-link" href="../">GitHub Pages / JRA Live Board</a></p>
       <h1 id="page-title">__PAGE_TITLE__</h1>
       <p class="hero-meta mono" id="page-meta">loading metadata...</p>
       <p class="hero-note" id="page-note">overview で全体を見てから、開催場とレースへ降りて市場オッズ・推論値・policy 判定を確認できます。</p>
@@ -1563,6 +1572,8 @@ def render_live_page(*, page_title: str) -> str:
             <input id="horse-filter" class="search" type="search" placeholder="馬名または reject reason で絞り込み">
             <label class="toggle"><input id="selected-only" type="checkbox"> selected only</label>
             <label class="toggle"><input id="positive-edge-only" type="checkbox"> positive edge only</label>
+            <button class="ghost-button" id="focused-refresh-button" type="button" data-refresh-focused="current">最新オッズで更新</button>
+            <span class="market-status mono" id="focused-refresh-status">build snapshot</span>
           </div>
           <div class="section-head">
             <div>
@@ -1986,6 +1997,233 @@ def render_live_page(*, page_title: str) -> str:
         out[horseNo] = odd;
       }
       return out;
+    }
+
+    function buildWinPopularityMap(odds) {
+      const rows = Array.isArray(odds?.["単勝"]) ? odds["単勝"] : [];
+      const out = {};
+      for (const row of rows) {
+        const horseNo = normalizeHorseNo(row?.["馬番"]);
+        const popularity = numericValue(row?.["人気"]);
+        if (!horseNo || popularity === null) {
+          continue;
+        }
+        out[horseNo] = popularity;
+      }
+      return out;
+    }
+
+    function resolveRaceRowHorseNo(row) {
+      const horseIdSuffix = String(row?.horse_id || "").replace(/\D/g, "").slice(-2);
+      return normalizeHorseNo(row?.horse_no || row?.gate_no || row?.horseNumber || horseIdSuffix);
+    }
+
+    function clipProbability(value) {
+      const number = numericValue(value);
+      if (number === null) {
+        return null;
+      }
+      return Math.min(Math.max(number, 1e-6), 1 - 1e-6);
+    }
+
+    function summarizeRaceReasons(rows) {
+      const counts = new Map();
+      rows.forEach((row) => {
+        const reason = row.policy_reject_reason_primary ? String(row.policy_reject_reason_primary) : "";
+        if (!reason) {
+          return;
+        }
+        counts.set(reason, (counts.get(reason) || 0) + 1);
+      });
+      return [...counts.entries()]
+        .sort((left, right) => right[1] - left[1] || left[0].localeCompare(right[0], "ja"))
+        .map(([reason, count]) => ({ reason, rows: count }));
+    }
+
+    function recomputeRacePolicyMetrics(race, oddsPayload, raceMeta = {}) {
+      const winOddsMap = buildWinOddsMap(oddsPayload);
+      const popularityMap = buildWinPopularityMap(oddsPayload);
+      const rows = Array.isArray(race?.rowsData) ? race.rowsData.map((row) => ({ ...row })) : [];
+      const entries = Object.entries(winOddsMap);
+      if (!rows.length || !entries.length) {
+        return { updated: false, rows, oddsUpdatedAt: raceMeta?.odds_updated_at || null };
+      }
+
+      const impliedByIndex = new Map();
+      let impliedTotal = 0;
+      rows.forEach((row, index) => {
+        const horseNo = resolveRaceRowHorseNo(row);
+        const odds = numericValue(winOddsMap[horseNo]);
+        const popularity = numericValue(popularityMap[horseNo]);
+        if (odds !== null && odds > 0) {
+          row.odds = odds;
+          const implied = 1 / odds;
+          impliedByIndex.set(index, implied);
+          impliedTotal += implied;
+        }
+        if (popularity !== null) {
+          row.popularity = popularity;
+        }
+      });
+
+      rows.forEach((row, index) => {
+        const strategyKind = String(row.policy_strategy_kind || "").trim().toLowerCase();
+        const score = clipProbability(row.score);
+        const odds = numericValue(row.odds);
+        const marketProb = impliedTotal > 0 && impliedByIndex.has(index) ? impliedByIndex.get(index) / impliedTotal : 0.0;
+        const blendWeight = numericValue(row.policy_blend_weight) ?? 1.0;
+        const minOdds = numericValue(row.policy_odds_min);
+        const maxOdds = numericValue(row.policy_odds_max);
+        const minProb = numericValue(row.policy_min_prob);
+        const minEdge = numericValue(row.policy_min_edge);
+        const fractionalKelly = numericValue(row.policy_fractional_kelly) ?? 0.5;
+        const maxFraction = numericValue(row.policy_max_fraction) ?? 0.05;
+        row.policy_market_prob = marketProb;
+        row.expected_value = score !== null && odds !== null ? score * odds : null;
+        row.policy_prob = score !== null ? clipProbability((blendWeight * score) + ((1.0 - blendWeight) * marketProb)) : null;
+        row.policy_expected_value = row.policy_prob !== null && odds !== null ? row.policy_prob * odds : null;
+        row.policy_edge = row.policy_expected_value !== null ? row.policy_expected_value - 1.0 : null;
+        row.policy_selected = false;
+        row.policy_selection_rank = null;
+        row.policy_weight = 0.0;
+        row.policy_selected_strategy_kind = null;
+
+        const rejectReasons = [];
+        const validMetric = row.policy_prob !== null && odds !== null;
+        if (!validMetric) {
+          rejectReasons.push("missing_prob_or_odds");
+        }
+        if (validMetric && minOdds !== null && odds <= minOdds) {
+          rejectReasons.push("odds_at_or_below_min");
+        }
+        if (validMetric && maxOdds !== null && odds > maxOdds) {
+          rejectReasons.push("odds_above_max");
+        }
+        if (validMetric && minProb !== null && row.policy_prob < minProb) {
+          rejectReasons.push("prob_below_min_prob");
+        }
+        if (strategyKind === "kelly" && validMetric) {
+          if (minEdge !== null && (row.policy_edge ?? -Infinity) < minEdge) {
+            rejectReasons.push("edge_below_min_edge");
+          }
+          const b = odds - 1.0;
+          row.__policy_raw_kelly = b !== 0 ? (((b * row.policy_prob) - (1.0 - row.policy_prob)) / b) : null;
+          row.__policy_fractional_kelly = fractionalKelly;
+          row.__policy_max_fraction = maxFraction;
+          if (!(numericValue(row.__policy_raw_kelly) > 0.0)) {
+            rejectReasons.push("nonpositive_kelly");
+          }
+        }
+        row.policy_reject_reason_primary = rejectReasons[0] || null;
+        row.policy_reject_reasons = rejectReasons.length ? rejectReasons.join("|") : null;
+      });
+
+      const strategyKind = String(rows[0]?.policy_strategy_kind || "").trim().toLowerCase();
+      if (strategyKind === "kelly") {
+        const eligible = rows.filter((row) => !row.policy_reject_reason_primary);
+        if (eligible.length) {
+          eligible.sort((left, right) => {
+            const edgeGap = (numericValue(right.policy_edge) ?? -Infinity) - (numericValue(left.policy_edge) ?? -Infinity);
+            if (edgeGap !== 0) {
+              return edgeGap;
+            }
+            return (numericValue(right.policy_prob) ?? -Infinity) - (numericValue(left.policy_prob) ?? -Infinity);
+          });
+          const winner = eligible[0];
+          winner.policy_selected = true;
+          winner.policy_selection_rank = 1;
+          winner.policy_selected_strategy_kind = strategyKind;
+          winner.policy_weight = Math.min(
+            Math.max((numericValue(winner.__policy_raw_kelly) ?? 0.0) * (numericValue(winner.__policy_fractional_kelly) ?? 0.5), 0.0),
+            numericValue(winner.__policy_max_fraction) ?? 0.05,
+          );
+          eligible.slice(1).forEach((row) => {
+            row.policy_reject_reason_primary = row.policy_reject_reason_primary || "not_top_edge_candidate";
+            row.policy_reject_reasons = row.policy_reject_reasons
+              ? `${row.policy_reject_reasons}|not_top_edge_candidate`
+              : "not_top_edge_candidate";
+          });
+        }
+      }
+
+      rows.forEach((row) => {
+        delete row.__policy_raw_kelly;
+        delete row.__policy_fractional_kelly;
+        delete row.__policy_max_fraction;
+      });
+
+      return {
+        updated: true,
+        rows,
+        oddsUpdatedAt: raceMeta?.odds_updated_at || null,
+      };
+    }
+
+    function applyLiveOddsRefreshToRace(race, analyzeData) {
+      const oddsPayload = analyzeData && typeof analyzeData.odds === "object" ? analyzeData.odds : {};
+      const raceMeta = analyzeData && typeof analyzeData.race === "object" ? analyzeData.race : {};
+      const refreshed = recomputeRacePolicyMetrics(race, oddsPayload, raceMeta);
+      if (!refreshed.updated) {
+        return false;
+      }
+      race.rowsData = refreshed.rows;
+      race.selectedRows = refreshed.rows.filter((row) => Boolean(row.policy_selected)).length;
+      race.positiveEdgeRows = refreshed.rows.filter((row) => (numericValue(row.policy_edge) ?? 0) > 0).length;
+      const topScoreRow = [...refreshed.rows].sort((left, right) => (numericValue(right.score) ?? -Infinity) - (numericValue(left.score) ?? -Infinity))[0] || null;
+      const topRawEvRow = [...refreshed.rows].sort((left, right) => (numericValue(right.expected_value) ?? -Infinity) - (numericValue(left.expected_value) ?? -Infinity))[0] || null;
+      const topPolicyEvRow = [...refreshed.rows].sort((left, right) => (numericValue(right.policy_expected_value) ?? -Infinity) - (numericValue(left.policy_expected_value) ?? -Infinity))[0] || null;
+      race.topScoreHorse = topScoreRow?.horse_name || null;
+      race.topScore = numericValue(topScoreRow?.score);
+      race.topRawEvHorse = topRawEvRow?.horse_name || null;
+      race.topRawEv = numericValue(topRawEvRow?.expected_value);
+      race.topPolicyEvHorse = topPolicyEvRow?.horse_name || null;
+      race.topPolicyEv = numericValue(topPolicyEvRow?.policy_expected_value);
+      race.topReasons = summarizeRaceReasons(refreshed.rows).slice(0, 3);
+      race.blocker = race.topReasons[0]?.reason || null;
+      if (refreshed.oddsUpdatedAt) {
+        state.data.metadata.oddsOfficialDatetimeMax = refreshed.oddsUpdatedAt;
+      }
+      return true;
+    }
+
+    function syncOverviewAfterRaceUpdate(race) {
+      const overviewRow = state.data.dayOverview.find((item) => item.raceId === race.raceId);
+      if (overviewRow) {
+        overviewRow.selectedRows = race.selectedRows;
+        overviewRow.positiveEdgeRows = race.positiveEdgeRows;
+        overviewRow.blocker = race.blocker;
+        overviewRow.topScoreHorse = race.topScoreHorse;
+        overviewRow.topScore = race.topScore;
+        overviewRow.topRawEvHorse = race.topRawEvHorse;
+        overviewRow.topRawEv = race.topRawEv;
+        overviewRow.topPolicyEvHorse = race.topPolicyEvHorse;
+        overviewRow.topPolicyEv = race.topPolicyEv;
+        overviewRow.topReasons = race.topReasons;
+      }
+      const venue = state.data.venues.find((item) => item.venueCode === race.venueCode);
+      if (venue) {
+        venue.selectedRows = state.data.races
+          .filter((item) => item.venueCode === race.venueCode)
+          .reduce((sum, item) => sum + (item.selectedRows || 0), 0);
+      }
+      state.data.metadata.policySelectedRows = state.data.races.reduce((sum, item) => sum + (item.selectedRows || 0), 0);
+    }
+
+    function updateFocusedRefreshStatus(race) {
+      const button = document.getElementById("focused-refresh-button");
+      const status = document.getElementById("focused-refresh-status");
+      const refreshError = race?.liveHarvilleStatus?.state === "error" ? race.liveHarvilleStatus.message : null;
+      if (button instanceof HTMLButtonElement) {
+        button.disabled = !race || state.activeOddsRaceId === race.raceId;
+        button.textContent = state.activeOddsRaceId === race?.raceId ? "更新中..." : "最新オッズで更新";
+      }
+      if (status) {
+        status.textContent = state.activeOddsRaceId === race?.raceId
+          ? "updating live odds..."
+          : (refreshError
+            ? "live refresh failed"
+            : (race?.liveHarville?.meta?.snapshotSource === "live-refresh" ? "live refreshed" : "build snapshot"));
+      }
     }
 
     function getPermutations(items) {
@@ -2438,8 +2676,11 @@ def render_live_page(*, page_title: str) -> str:
       state.activeOddsRaceId = race.raceId;
       race.liveHarvilleStatus = { state: "loading", message: null };
       renderHarvilleLoading("latest odds refresh running...");
+      updateFocusedRefreshStatus(race);
       try {
         const analyzeData = await fetchRaceAnalyzePayload(race.raceId, { forceRefresh: true });
+        applyLiveOddsRefreshToRace(race, analyzeData);
+        syncOverviewAfterRaceUpdate(race);
         const liveHarville = buildLiveHarvillePayload(race, analyzeData);
         if (liveHarville.available) {
           race.liveHarville = liveHarville;
@@ -2451,7 +2692,7 @@ def render_live_page(*, page_title: str) -> str:
         race.liveHarvilleStatus = { state: "error", message: normalizeOddsRefreshError(error) };
       } finally {
         state.activeOddsRaceId = null;
-        renderHarvilleSnapshot(currentRace());
+        renderRace();
       }
     }
 
@@ -2914,6 +3155,7 @@ def render_live_page(*, page_title: str) -> str:
 
     function renderTables(race) {
       const rows = filteredRows(race);
+      updateFocusedRefreshStatus(race);
       document.getElementById("focused-table-wrap").innerHTML = tableHtml(focusedColumnDefs(), rows, state.focusedSort, "focused");
       document.getElementById("raw-table-wrap").innerHTML = tableHtml(rawColumnDefs(), rows, state.rawSort, "raw");
     }
@@ -2998,6 +3240,10 @@ def render_live_page(*, page_title: str) -> str:
           return;
         }
         if (target.getAttribute("data-refresh-harville") === "current") {
+          refreshHarvilleOdds(currentRace());
+          return;
+        }
+        if (target.getAttribute("data-refresh-focused") === "current") {
           refreshHarvilleOdds(currentRace());
           return;
         }
@@ -3092,29 +3338,42 @@ def render_live_page(*, page_title: str) -> str:
     return template.replace("__PAGE_TITLE__", page_title)
 
 
-def render_root_page(*, manifests: list[dict[str, Any]]) -> str:
-    cards = []
-    for manifest in manifests:
-        cards.append(
-            """
-            <a class="card" href="{relative_path}">
-              <p class="card-eyebrow">{target_date}</p>
-              <h2>{title}</h2>
-              <p class="card-copy mono">version={source_version}</p>
-              <p class="card-copy">races={race_count} / rows={row_count} / policy_selected={policy_selected_rows}</p>
-              <p class="card-copy mono">{odds_official_datetime_max}</p>
-            </a>
-            """.format(
-                relative_path=manifest.get("relative_path", "#"),
-                target_date=manifest.get("target_date", "-"),
-                title=manifest.get("title", "JRA Live Viewer"),
-                source_version=manifest.get("source_version", "-"),
-                race_count=manifest.get("race_count", "-"),
-                row_count=manifest.get("row_count", "-"),
-                policy_selected_rows=manifest.get("policy_selected_rows", "-"),
-                odds_official_datetime_max=manifest.get("odds_official_datetime_max", "odds timestamp unavailable"),
-            )
-        )
+def _prefixed_relative_path(prefix: str, relative_path: str) -> str:
+  clean_prefix = str(prefix or "").strip("/")
+  clean_relative = str(relative_path or "").lstrip("/")
+  if clean_prefix and clean_relative:
+    return f"{clean_prefix}/{clean_relative}"
+  if clean_relative:
+    return clean_relative
+  if clean_prefix:
+    return f"{clean_prefix}/"
+  return "#"
+
+
+def render_root_page(*, manifests: list[dict[str, Any]], href_prefix: str = "") -> str:
+  cards = []
+  for manifest in manifests:
+    relative_path = _prefixed_relative_path(href_prefix, str(manifest.get("relative_path") or "#"))
+    cards.append(
+      """
+      <a class="card" href="{relative_path}">
+        <p class="card-eyebrow">{target_date}</p>
+        <h2>{title}</h2>
+        <p class="card-copy mono">version={source_version}</p>
+        <p class="card-copy">races={race_count} / rows={row_count} / policy_selected={policy_selected_rows}</p>
+        <p class="card-copy mono">{odds_official_datetime_max}</p>
+      </a>
+      """.format(
+        relative_path=relative_path,
+        target_date=manifest.get("target_date", "-"),
+        title=manifest.get("title", "JRA Live Viewer"),
+        source_version=manifest.get("source_version", "-"),
+        race_count=manifest.get("race_count", "-"),
+        row_count=manifest.get("row_count", "-"),
+        policy_selected_rows=manifest.get("policy_selected_rows", "-"),
+        odds_official_datetime_max=manifest.get("odds_official_datetime_max", "odds timestamp unavailable"),
+      )
+    )
     return """<!doctype html>
 <html lang="ja">
 <head>
@@ -3295,7 +3554,7 @@ def main() -> int:
             write_text_file(latest_dir / "index.html", render_redirect_page(relative_target=f"../{target_date}/"))
             write_text_file(output_dir / ".nojekyll", "")
             manifests = collect_site_manifests(output_dir)
-            write_text_file(output_dir / "index.html", render_root_page(manifests=manifests))
+            write_text_file(output_dir / "index.html", render_root_page(manifests=manifests, href_prefix="jra-live"))
             write_text_file(output_dir / "jra-live" / "index.html", render_root_page(manifests=manifests))
         progress.update(message=f"static pages written path={artifact_display_path(date_dir, workspace_root=ROOT)}")
 
