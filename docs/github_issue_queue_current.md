@@ -20,7 +20,7 @@
 ### `#160` JRA architecture comparison under leak-safe odds repricing
 
 - role: current JRA architecture research and comparison umbrella
-- status: open, research/data-gap audit completed; child experiments pending
+- status: open, research/data-gap audit completed; CatBoost strength/softmax control narrowed to `temp=0.85`; higher-cost child experiments pending
 - source-of-truth: GitHub issue `#160`
 - current artifacts:
   - [../artifacts/reports/jra_architecture_research_issue160.json](../artifacts/reports/jra_architecture_research_issue160.json)
@@ -49,14 +49,20 @@
 ### `#159` JRA race-level probability architecture
 
 - role: current JRA predictive architecture priority
-- status: open, current probability contract failure reproduced
+- status: open, probability contract failure reproduced; calibrated ranking softmax control narrowed to `temp=0.85` keep-candidate pending review
 - source-of-truth: GitHub issue `#159`
-- current artifact: [../artifacts/reports/race_probability_audit_20260531_jra_live.json](../artifacts/reports/race_probability_audit_20260531_jra_live.json)
+- current artifacts:
+  - [../artifacts/reports/race_probability_audit_20260531_jra_live.json](../artifacts/reports/race_probability_audit_20260531_jra_live.json)
+  - [../artifacts/reports/evaluation_summary_catboost_fundamental_strength_no_market_model_issue159_norm_compare_full_v1_20250901_20251231_wf_full_nested.json](../artifacts/reports/evaluation_summary_catboost_fundamental_strength_no_market_model_issue159_norm_compare_full_v1_20250901_20251231_wf_full_nested.json)
+  - [../artifacts/reports/evaluation_summary_catboost_fundamental_strength_no_market_model_issue159_softmax_temp085_compare_full_v1_20250901_20251231_wf_full_nested.json](../artifacts/reports/evaluation_summary_catboost_fundamental_strength_no_market_model_issue159_softmax_temp085_compare_full_v1_20250901_20251231_wf_full_nested.json)
+  - [../artifacts/reports/evaluation_wf_progress_catboost_fundamental_strength_no_market_model_issue159_softmax_temp085_compare_full_v1_20250901_20251231_wf_full_nested.json](../artifacts/reports/evaluation_wf_progress_catboost_fundamental_strength_no_market_model_issue159_softmax_temp085_compare_full_v1_20250901_20251231_wf_full_nested.json)
 - current meaning:
   - current 2026-05-31 `score` sums average `0.8489` per race and violate the sum-to-one contract in 24/24 races
   - current `policy_prob` sums average `0.8791` and also violate the contract in 24/24 races; market probability alone sums to one
   - independent binary classification plus row-wise calibration is not accepted as the default architecture without a race-level probability closure and calibration justification
   - compare binary-plus-normalization, race softmax/conditional multinomial, and ranking/latent-strength plus calibrated softmax before selecting the fundamental artifact consumed by `#158`
+  - calibrated ranking softmax `temp=1.0` was a no-op against `normalize_score_sum`; `temp=0.7` improved full nested proxy ROI but degraded probability quality, and current low-complexity control is `temp=0.85`
+  - on the 2025-09-01..2025-12-31 `wf_full_nested` window, `temp=0.85` improved `wf_nested_test_roi_weighted` from `0.7541` to `0.7848` and `ev_top1_roi` from `1.0400` to `1.0480`, while AUC/logloss remained worse than the normalize baseline
   - race winner log loss, race Brier score, calibration, and sum-to-one validity precede downstream ROI comparison
 
 ### `#158` JRA fundamental inference / odds repricing split
