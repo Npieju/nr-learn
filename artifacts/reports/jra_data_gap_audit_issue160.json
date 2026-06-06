@@ -1,6 +1,6 @@
 {
   "issue": 160,
-  "status": "gaps_identified",
+  "status": "gaps_identified_non_blocking_proxy_approved",
   "current_data": {
     "historical_primary": {
       "date_range": "1986 through 2021-07",
@@ -27,10 +27,12 @@
       "missing_for_research": "durable repeated snapshots per race and explicit scheduled post/bet cutoff provenance"
     }
   },
-  "blocking_gap": {
+  "market_proxy_gap": {
     "name": "historical_pre_bet_odds_snapshots",
-    "impact": "Without timestamped pre-bet snapshots, formal EV-policy ROI can accidentally use prices unavailable at the simulated decision time.",
-    "required_action": "Start durable JRA odds snapshot capture now and investigate a licensed historical source with observation timestamps."
+    "severity": "non_blocking_for_candidate_comparison",
+    "impact": "Historical odds are informative as a common market proxy, but proxy-market ROI may overstate or understate executable live ROI because the decision-time price is unknown.",
+    "approved_fallback": "Use historical odds unchanged for common-policy architecture comparison and label the result proxy_market_roi.",
+    "required_parallel_action": "Start durable JRA odds snapshot capture and estimate cutoff-to-final price movement prospectively."
   },
   "high_value_feature_gaps": [
     {
@@ -88,8 +90,9 @@
   ],
   "next_actions": [
     "Implement append-only JRA odds snapshots keyed by race, runner, official timestamp, fetch timestamp, and scheduled post time.",
-    "Freeze one common as-of repricing dataset before comparing architectures.",
+    "Freeze the existing historical odds as a common proxy repricing dataset so architecture comparison can proceed now.",
     "Implement candidate B and C as separate experiment issues, with candidate A as the control.",
-    "Do not run a formal ROI promotion gate until the historical or prospectively captured odds snapshot contract is satisfied."
+    "Report proxy_market_roi separately from asof_market_roi and require a conservative execution haircut for promotion decisions until timestamped coverage is representative.",
+    "After prospective snapshots accumulate, compare no adjustment, cutoff haircut, segmented haircut, and quantile price-movement models."
   ]
 }

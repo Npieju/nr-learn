@@ -26,10 +26,11 @@
   - [../artifacts/reports/jra_architecture_research_issue160.json](../artifacts/reports/jra_architecture_research_issue160.json)
   - [../artifacts/reports/jra_data_gap_audit_issue160.json](../artifacts/reports/jra_data_gap_audit_issue160.json)
 - current meaning:
-  - top1 flat-bet ROI is diagnostic only; operational comparison must join the same pre-bet odds snapshot after market-free inference and optimize EV/edge policy inside each fold
-  - historical JRA odds currently lack observation timestamps, so they cannot establish pre-bet availability for formal policy ROI
+  - top1 flat-bet ROI is diagnostic only; operational comparison joins the same historical odds proxy, or the same as-of snapshot when available, after market-free inference and optimizes EV/edge policy inside each fold
+  - historical JRA odds lack observation timestamps but are approved as a common market proxy; architecture/policy comparisons proceed now with the metric labeled `proxy_market_roi`
+  - `proxy_market_roi` is not treated as an unbiased executable ROI estimate; timestamped coverage later adds `asof_market_roi` and supports cutoff-to-final odds adjustment
   - compare a CatBoost strength/softmax control, race-conditional tabular softmax, and a DeepSets race-context model before considering a higher-cost Set Transformer
-  - first data priority is append-only timestamped JRA odds snapshots with explicit bet cutoff and scheduled post provenance
+  - data work proceeds in parallel: append-only timestamped snapshots support global/segmented haircut and quantile models for cutoff-to-final odds movement, but do not block the first architecture comparison
 
 ### `#156` JRA market-odds architecture isolation
 

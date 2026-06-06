@@ -86,9 +86,13 @@
       "odds and liquidity bands",
       "feasible nested walk-forward folds"
     ],
-    "policy_rule": "For every candidate, join the same as-of odds snapshot after inference; compute normalized market probability, model expected return, model-minus-market edge, selection, and uncertainty-aware fractional stake.",
+    "policy_rule": "For every candidate, join the same market-price surface after inference; use historical result odds as a common proxy when timestamped snapshots are unavailable, and use as-of snapshots when available. Then compute normalized market probability, model expected return, model-minus-market edge, selection, and uncertainty-aware fractional stake.",
     "selection_tuning": "Tune EV, edge, odds, and stake parameters only inside each training/validation fold. Never tune them on the held-out replay window.",
-    "top1_flat_bet_status": "diagnostic_not_operational"
+    "top1_flat_bet_status": "diagnostic_not_operational",
+    "roi_labels": {
+      "proxy_market_roi": "Historical odds without an observation timestamp. Valid for common-policy candidate comparison, but not an unbiased estimate of executable live ROI.",
+      "asof_market_roi": "Odds observed no later than the simulated betting cutoff. Preferred operational estimate when coverage exists."
+    }
   },
   "odds_provenance_contract": {
     "required_fields": [
@@ -103,7 +107,29 @@
     ],
     "valid_snapshot_rule": "odds_official_datetime <= bet_cutoff_at < scheduled_post_at",
     "join_rule": "For each simulated decision, use only the latest valid snapshot at or before bet_cutoff_at.",
-    "current_limitation": "Historical JRA result/odds tables contain odds without an observation timestamp, so they cannot prove pre-bet availability and are not sufficient for formal live-policy ROI.",
+    "current_limitation": "Historical JRA result/odds tables contain odds without an observation timestamp. They remain usable as a common final-price proxy for architecture and policy comparison, but their ROI must be labeled proxy_market_roi and discounted as an execution estimate.",
+    "fallback_proxy_rule": "When no timestamped snapshot exists, use the historical odds unchanged for the primary common-policy comparison. Do not block model evaluation, but do not label the result as as-of or executable ROI.",
+    "future_price_adjustment": {
+      "target": "log(final_odds / cutoff_odds)",
+      "inputs": [
+        "cutoff minutes",
+        "current odds and implied probability",
+        "field size",
+        "race class",
+        "track, surface, and distance",
+        "current popularity rank",
+        "market concentration and overround",
+        "recent odds movement when multiple snapshots exist"
+      ],
+      "preferred_output": "Conditional distribution or quantiles rather than only a point forecast.",
+      "policy_use": "Price bets with a conservative final-odds quantile or an EV lower confidence bound; fit only on prior races and validate forward.",
+      "baseline_adjustments": [
+        "no adjustment",
+        "global haircut by cutoff",
+        "odds-band and popularity-band haircut",
+        "quantile regression adjustment"
+      ]
+    },
     "recommended_cutoffs": [
       "T-10 minutes",
       "T-5 minutes",
