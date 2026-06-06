@@ -17,6 +17,28 @@
 
 ## Open Issues
 
+### `#156` JRA market-odds architecture isolation
+
+- role: current JRA architecture priority
+- status: open, audit complete and controlled challenger design pending
+- source-of-truth: GitHub issue `#156`
+- baseline tag: `jra-market-aware-baseline-20260606`
+- current meaning:
+  - persisted win CatBoost uses both `odds` and `popularity`; feature importance is approximately `70.9%` and `19.1%`, so direct market columns account for about 90% of the current win-model importance
+  - ROI and alpha components also use `odds` in both feature input and target construction, while value composition and runtime policy inject market probability again
+  - next experiment must separate predictive probability from decision pricing instead of removing all market information indiscriminately
+  - first formal matrix is frozen baseline vs market-free predictive model with current policy blend vs market-free predictive model with odds used only for EV/edge/Kelly after inference
+
+### `#157` explicit JRA formal ROI promotion threshold
+
+- role: JRA gate-contract corrective separated from model architecture
+- status: open
+- source-of-truth: GitHub issue `#157`
+- current meaning:
+  - `r20260530_favonly_composite_budget_current_model` returned `decision=promote` with `formal_benchmark_weighted_roi=0.7892733973` because `min_formal_weighted_roi=null`
+  - a JRA candidate must not be promotable with a missing formal ROI threshold
+  - the threshold value remains a human-review surface, but null-threshold promotion should be blocked
+
 ### `#120` local Nankan strict provenance trust gate
 
 - role: current NAR root blocker
