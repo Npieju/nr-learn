@@ -1519,17 +1519,23 @@ def render_live_page(*, page_title: str) -> str:
       }
       .harville-filter-options {
         display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(28px, max-content));
-        gap: 6px;
+        gap: 4px;
         align-items: start;
         justify-content: start;
       }
-      .harville-filter-chip {
-        display: inline-flex;
-        flex-direction: column;
+      .harville-filter-number-row,
+      .harville-filter-checkbox-row {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(28px, max-content));
+        gap: 6px;
         align-items: center;
         justify-content: start;
-        gap: 4px;
+      }
+      .harville-filter-chip,
+      .harville-filter-checkbox {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
         min-width: 28px;
         padding: 4px 3px;
         border-radius: 12px;
@@ -1543,7 +1549,7 @@ def render_live_page(*, page_title: str) -> str:
         font-variant-numeric: tabular-nums;
         font-weight: 700;
       }
-      .harville-filter-chip input {
+      .harville-filter-checkbox input {
         margin: 0;
       }
       .harville-overview-table {
@@ -2195,7 +2201,7 @@ def render_live_page(*, page_title: str) -> str:
         return "-";
       }
       if (upper !== null && upper > lower) {
-        return `${formatOddsNumber(lower)}-${formatOddsNumber(upper)}倍`;
+        return `${formatOddsNumber(lower)} - ${formatOddsNumber(upper)}倍`;
       }
       return formatOddsText(lower);
     }
@@ -3069,10 +3075,10 @@ def render_live_page(*, page_title: str) -> str:
       }).join("");
       const excludeOptions = getHarvilleExcludeOptions(race);
       document.getElementById("harville-exclude-filters").innerHTML = excludeOptions.length
-        ? excludeOptions.map((item) => {
+        ? `<div class="harville-filter-number-row">${excludeOptions.map((item) => `<span class="harville-filter-chip" title="${escapeHtml(item.horseName || item.horseNo)}"><span class="harville-filter-chip-text">${escapeHtml(item.horseNo)}</span></span>`).join("")}</div><div class="harville-filter-checkbox-row">${excludeOptions.map((item) => {
           const checked = excludedHorses.includes(item.horseNo) ? " checked" : "";
-          return `<label class="harville-filter-chip" title="${escapeHtml(item.horseName || item.horseNo)}"><span class="harville-filter-chip-text">${escapeHtml(item.horseNo)}</span><input type="checkbox" data-harville-exclude="${escapeHtml(item.horseNo)}"${checked}></label>`;
-        }).join("")
+          return `<label class="harville-filter-checkbox" title="${escapeHtml(item.horseName || item.horseNo)}"><input aria-label="${escapeHtml(item.horseNo)} ${escapeHtml(item.horseName || '')}" type="checkbox" data-harville-exclude="${escapeHtml(item.horseNo)}"${checked}></label>`;
+        }).join("")}</div>`
         : '<span class="market-empty">消し馬フィルタを作るための馬番がまだありません。</span>';
       const longOddsToggle = document.getElementById("harville-ignore-long-odds");
       if (longOddsToggle instanceof HTMLInputElement) {

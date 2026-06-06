@@ -108,11 +108,13 @@ class BuildJraLivePagesTest(unittest.TestCase):
         self.assertIn('id="harville-ignore-long-odds"', html)
         self.assertIn('id="harville-exclude-filters"', html)
         self.assertIn('>消し馬<', html)
-        self.assertIn('class="harville-filter-chip-text"', html)
+        self.assertIn('class="harville-filter-number-row"', html)
+        self.assertIn('class="harville-filter-checkbox-row"', html)
         self.assertIn('function harvilleOverviewTableHtml', html)
         self.assertIn('>◎<', html)
         self.assertIn('>◯<', html)
         self.assertIn('>大穴<', html)
+        self.assertIn('${formatOddsNumber(lower)} - ${formatOddsNumber(upper)}倍', html)
 
 
 if __name__ == "__main__":
