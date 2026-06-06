@@ -59,6 +59,19 @@ reduced smoke の summary 同値を確認するときは、次を使う。
 
 `output_files` と `run_context` の artifact suffix / manifest path は標準で無視する。
 
+prediction CSV の列が race-level winner probability として妥当か確認するときは、次を使う。
+
+```bash
+/workspaces/nr-learn/.venv/bin/python scripts/run_race_probability_audit.py \
+  --predictions-file artifacts/predictions/predictions_20260531_jra_live.csv \
+  --output artifacts/reports/race_probability_audit_20260531_jra_live.json
+```
+
+- 既定では `score`、`policy_prob`、`policy_market_prob` の存在する列を監査する。
+- `probability_contract_ok=true` には、全値が有限な `[0,1]` で、各 race の合計が tolerance 内で 1 になることを要求する。
+- gate で違反を exit code 1 にしたい場合は `--require-contract` を付ける。
+- sum-to-one は必要条件であって calibration の十分条件ではない。正規化しただけの score を自動的に calibrated probability とは扱わない。
+
 ## 2. Git 管理
 
 Git の運用方針そのものは [development_flow.md](development_flow.md) を正本とし、ここでは日常作業で実際に使う入口だけをまとめる。

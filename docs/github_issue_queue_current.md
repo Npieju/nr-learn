@@ -19,7 +19,7 @@
 
 ### `#156` JRA market-odds architecture isolation
 
-- role: current JRA architecture priority
+- role: JRA market-free input/target boundary
 - status: open, architecture boundary approved and market-free predictive challenger pending
 - source-of-truth: GitHub issue `#156`
 - baseline tag: `jra-market-aware-baseline-20260606`
@@ -28,7 +28,20 @@
   - ROI and alpha components also use `odds` in both feature input and target construction, while value composition and runtime policy inject market probability again
   - architecture decision is to exclude market odds and market-derived popularity from predictive inputs and targets
   - market odds remain in the post-inference pricing/execution layer for EV, edge, liquidity bounds, final selection, and stake sizing
-  - first formal challenger is a market-free fundamental win-probability model evaluated against the frozen baseline under the same dataset and temporal splits
+  - predictive architecture selection and probability semantics are delegated to `#159`; `#156` owns the market-free data/target boundary
+
+### `#159` JRA race-level probability architecture
+
+- role: current JRA predictive architecture priority
+- status: open, current probability contract failure reproduced
+- source-of-truth: GitHub issue `#159`
+- current artifact: [../artifacts/reports/race_probability_audit_20260531_jra_live.json](../artifacts/reports/race_probability_audit_20260531_jra_live.json)
+- current meaning:
+  - current 2026-05-31 `score` sums average `0.8489` per race and violate the sum-to-one contract in 24/24 races
+  - current `policy_prob` sums average `0.8791` and also violate the contract in 24/24 races; market probability alone sums to one
+  - independent binary classification plus row-wise calibration is not accepted as the default architecture without a race-level probability closure and calibration justification
+  - compare binary-plus-normalization, race softmax/conditional multinomial, and ranking/latent-strength plus calibrated softmax before selecting the fundamental artifact consumed by `#158`
+  - race winner log loss, race Brier score, calibration, and sum-to-one validity precede downstream ROI comparison
 
 ### `#158` JRA fundamental inference / odds repricing split
 
@@ -39,6 +52,7 @@
   - expensive feature construction and fundamental probability inference should run once per race-card/model revision
   - changing parimutuel odds must be handled by a lightweight repricing command that joins a fresh odds snapshot and recomputes only market probability, EV, edge, selection, and stake
   - the fundamental artifact must remain unchanged when only odds change, while repriced artifacts record model provenance and odds snapshot provenance separately
+  - repricing input must first pass the race-level probability contract defined by `#159`
   - Pages publication should consume the latest repriced artifact without forcing model inference
 
 ### `#157` explicit JRA formal ROI promotion threshold
