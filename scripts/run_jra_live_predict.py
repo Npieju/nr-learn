@@ -17,6 +17,9 @@ from racing_ml.serving.jra_live_predict import run_jra_live_predict
 from racing_ml.version import get_source_version
 
 
+NO_MODEL_ARTIFACT_SUFFIX = "__NO_MODEL_ARTIFACT_SUFFIX__"
+
+
 def log_progress(message: str) -> None:
     now = time.strftime("%H:%M:%S")
     print(f"[jra-live cli {now}] {message}", flush=True)
@@ -35,6 +38,7 @@ def main() -> int:
     parser.add_argument("--race-id", action="append", default=None)
     parser.add_argument("--headline-contains", default=None)
     parser.add_argument("--limit", type=int, default=None)
+    parser.add_argument("--model-artifact-suffix", default=None)
     parser.add_argument("--output-file-suffix", default=None)
     parser.add_argument("--refresh", action="store_true")
     args = parser.parse_args()
@@ -58,10 +62,16 @@ def main() -> int:
             default_data_config=args.data_config or "configs/data.yaml",
             default_feature_config=args.feature_config or "configs/features.yaml",
         )
+        explicit_no_model_artifact_suffix = args.model_artifact_suffix == NO_MODEL_ARTIFACT_SUFFIX
+        profile_default_suffix = None
+        if resolved_profile is not None:
+            profile_default_suffix = MODEL_RUN_PROFILES[resolved_profile].default_model_artifact_suffix
+        resolved_model_artifact_suffix = None if explicit_no_model_artifact_suffix else (args.model_artifact_suffix or profile_default_suffix)
         progress.start(
             message=(
                 f"starting profile={resolved_profile or 'custom'} config={config_path} data_config={data_config_path} "
-                f"feature_config={feature_config_path} race_date={args.race_date}"
+                f"feature_config={feature_config_path} race_date={args.race_date} "
+                f"model_artifact_suffix={resolved_model_artifact_suffix if not explicit_no_model_artifact_suffix else 'none'}"
             )
         )
         summary = run_jra_live_predict(
@@ -71,6 +81,7 @@ def main() -> int:
             crawl_config_path=args.crawl_config,
             race_date=args.race_date,
             profile_name=resolved_profile,
+            model_artifact_suffix=resolved_model_artifact_suffix,
             race_ids=args.race_id,
             headline_contains=args.headline_contains,
             limit=args.limit,

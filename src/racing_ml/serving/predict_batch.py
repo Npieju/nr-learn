@@ -357,6 +357,7 @@ def run_predict_from_frame(
             "prediction_file": _display_path(csv_path, workspace_root),
             "chart_file": _display_path(png_path, workspace_root),
             "summary_file": _display_path(summary_path, workspace_root),
+            "model_artifact_suffix": str(model_artifact_suffix or "") or None,
             "score_source": score_source_name,
             "score_source_model_config": _display_path(active_model_config_path, workspace_root),
             "policy_name": policy_name,

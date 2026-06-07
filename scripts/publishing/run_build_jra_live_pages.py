@@ -877,6 +877,7 @@ def build_payload(
             "summaryFile": artifact_display_path(summary_path, workspace_root=ROOT),
             "liveSummaryFile": artifact_display_path(live_summary_path, workspace_root=ROOT) if live_summary_path else None,
             "profile": summary_payload.get("profile"),
+              "modelArtifactSuffix": summary_payload.get("model_artifact_suffix") or (live_summary_payload.get("model_artifact_suffix") if isinstance(live_summary_payload, dict) else None),
             "scoreSource": summary_payload.get("score_source"),
             "scoreSourceModelConfig": summary_payload.get("score_source_model_config"),
             "policyName": summary_payload.get("policy_name"),
@@ -906,6 +907,8 @@ def build_payload(
         "policy_selected_rows": payload["metadata"]["policySelectedRows"],
         "odds_official_datetime_max": payload["metadata"]["oddsOfficialDatetimeMax"],
         "profile": payload["metadata"]["profile"],
+          "model_artifact_suffix": payload["metadata"]["modelArtifactSuffix"],
+          "score_source_model_config": payload["metadata"]["scoreSourceModelConfig"],
         "built_at": payload["metadata"]["generatedAt"],
     }
     return payload, site_manifest
@@ -3131,17 +3134,33 @@ def render_live_page(*, page_title: str) -> str:
         .sort((left, right) => horsePairSort(left.horseNo, right.horseNo));
     }
 
-    function buildHarvilleOverviewRows(race, rowsByMarket) {
-      const horses = collectHarvilleHorseOptions(race, rowsByMarket);
-      const markets = availableHarvilleMarkets(rowsByMarket || {});
+    function buildHarvilleOverviewRows(race, rowsByMarket, winCompareRows) {
+      const horses = collectHarvilleHorseOptions(race, rowsByMarket || {});
+      const markets = [
+        ...availableHarvilleMarkets(rowsByMarket || {}),
+        ...(Array.isArray(winCompareRows) && winCompareRows.length ? [{ key: "win_compare", label: "単勝" }] : []),
+      ];
+      const winCompareByHorseNo = new Map(
+        (Array.isArray(winCompareRows) ? winCompareRows : [])
+          .map((row) => [normalizeHorseNo(row?.horse_no_a), row])
+          .filter(([horseNo]) => horseNo)
+      );
       return horses.map((horse) => {
         const metrics = {};
         let bestEdge = null;
         markets.forEach((market) => {
-          const marketRows = Array.isArray(rowsByMarket?.[market.key]) ? rowsByMarket[market.key] : [];
-          const involvingHorse = marketRows.filter((row) => harvilleRowHorseNumbers(row).includes(horse.horseNo));
-          const actualHm = harmonicMean(involvingHorse.map((row) => row?.market_odds));
-          const harvilleHm = harmonicMean(involvingHorse.map((row) => row?.harville_odds));
+          let actualHm = null;
+          let harvilleHm = null;
+          if (market.key === "win_compare") {
+            const row = winCompareByHorseNo.get(horse.horseNo) || null;
+            actualHm = numericValue(row?.market_odds);
+            harvilleHm = numericValue(row?.model_fair_odds ?? row?.harville_odds);
+          } else {
+            const marketRows = Array.isArray(rowsByMarket?.[market.key]) ? rowsByMarket[market.key] : [];
+            const involvingHorse = marketRows.filter((row) => harvilleRowHorseNumbers(row).includes(horse.horseNo));
+            actualHm = harmonicMean(involvingHorse.map((row) => row?.market_odds));
+            harvilleHm = harmonicMean(involvingHorse.map((row) => row?.harville_odds));
+          }
           const edgeRatio = actualHm !== null && harvilleHm !== null && harvilleHm > 0 ? actualHm / harvilleHm : null;
           metrics[market.key] = {
             actual: actualHm,
@@ -3162,9 +3181,12 @@ def render_live_page(*, page_title: str) -> str:
       });
     }
 
-    function harvilleOverviewTableHtml(race, rowsByMarket) {
-      const markets = availableHarvilleMarkets(rowsByMarket || {});
-      const rows = buildHarvilleOverviewRows(race, rowsByMarket);
+    function harvilleOverviewTableHtml(race, rowsByMarket, winCompareRows) {
+      const markets = [
+        ...availableHarvilleMarkets(rowsByMarket || {}),
+        ...(Array.isArray(winCompareRows) && winCompareRows.length ? [{ key: "win_compare", label: "単勝" }] : []),
+      ];
+      const rows = buildHarvilleOverviewRows(race, rowsByMarket, winCompareRows);
       if (!markets.length || !rows.length) {
         return '<div class="market-empty">overview 用の Harville データがまだありません。</div>';
       }
@@ -3331,6 +3353,7 @@ def render_live_page(*, page_title: str) -> str:
       const exhaustiveOverviewRows = filteredHarvilleRows(flattenHarvilleRows(harville.rowsByMarket || {}), selectedAnchors, state.harvilleExcludedHorses, ignoreLongOdds);
       const filteredMarketRows = filteredHarvilleRows(harville.rowsByMarket?.[activeMarket] || [], selectedAnchors, state.harvilleExcludedHorses, ignoreLongOdds);
       const filteredWinCompareRows = filteredHarvilleRows(harville.winCompareRows || [], [], state.harvilleExcludedHorses, ignoreLongOdds);
+      const filteredOverviewWinCompareRows = filteredHarvilleRows(harville.winCompareRows || [], [], state.harvilleExcludedHorses, false);
       const filteredOverviewRowsByMarket = Object.fromEntries(
         availableHarvilleMarkets(harville.rowsByMarket || {}).map((market) => [
           market.key,
@@ -3338,7 +3361,7 @@ def render_live_page(*, page_title: str) -> str:
         ])
       );
       document.getElementById("harville-summary-wrap").innerHTML = activeMarket === "overview"
-        ? harvilleOverviewTableHtml(race, filteredOverviewRowsByMarket)
+        ? harvilleOverviewTableHtml(race, filteredOverviewRowsByMarket, filteredOverviewWinCompareRows)
         : (activeMarket === "win_compare"
           ? winCompareTableHtml(filteredWinCompareRows, state.harvilleSort)
           : harvilleDetailTableHtml(activeMarket, filteredMarketRows, selectedAnchors, state.harvilleSort));
@@ -4055,12 +4078,20 @@ def render_root_page(*, manifests: list[dict[str, Any]], href_prefix: str = "") 
   cards = []
   for manifest in manifests:
     relative_path = _prefixed_relative_path(href_prefix, str(manifest.get("relative_path") or "#"))
+    profile_label = manifest.get("profile") or "profile unknown"
+    model_config = str(manifest.get("score_source_model_config") or "").strip()
+    model_artifact_suffix = str(manifest.get("model_artifact_suffix") or "").strip()
+    model_label = Path(model_config).name if model_config else "model config unknown"
+    lineage_label = f"artifact={model_artifact_suffix}" if model_artifact_suffix else "artifact=latest"
     cards.append(
       """
       <a class="card" href="{relative_path}">
         <p class="card-eyebrow">{target_date}</p>
         <h2>{title}</h2>
         <p class="card-copy mono">version={source_version}</p>
+        <p class="card-copy mono">profile={profile_label}</p>
+        <p class="card-copy mono">model={model_label}</p>
+        <p class="card-copy mono">{lineage_label}</p>
         <p class="card-copy">races={race_count} / rows={row_count} / policy_selected={policy_selected_rows}</p>
         <p class="card-copy mono">{odds_official_datetime_max}</p>
       </a>
@@ -4069,6 +4100,9 @@ def render_root_page(*, manifests: list[dict[str, Any]], href_prefix: str = "") 
         target_date=manifest.get("target_date", "-"),
         title=manifest.get("title", "JRA Live Viewer"),
         source_version=manifest.get("source_version", "-"),
+        profile_label=profile_label,
+        model_label=model_label,
+        lineage_label=lineage_label,
         race_count=manifest.get("race_count", "-"),
         row_count=manifest.get("row_count", "-"),
         policy_selected_rows=manifest.get("policy_selected_rows", "-"),

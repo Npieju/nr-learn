@@ -217,6 +217,8 @@ def _build_handoff_command(args: argparse.Namespace) -> list[str]:
         command.extend(["--headline-contains", args.headline_contains])
     if args.limit is not None:
         command.extend(["--limit", str(args.limit)])
+    if args.model_artifact_suffix:
+        command.extend(["--model-artifact-suffix", args.model_artifact_suffix])
     if args.wait_for_ready:
         command.append("--wait-for-ready")
     if args.max_wait_seconds > 0:
@@ -291,6 +293,7 @@ def main() -> int:
     parser.add_argument("--race-date", required=True)
     parser.add_argument("--headline-contains", default=None)
     parser.add_argument("--profile", default=DEFAULT_PROFILE)
+    parser.add_argument("--model-artifact-suffix", default=None)
     parser.add_argument("--limit", type=int, default=None)
     parser.add_argument("--history-lag-days", type=int, default=1)
     parser.add_argument("--wait-for-ready", action="store_true")
@@ -334,6 +337,7 @@ def main() -> int:
         "race_date": args.race_date,
         "mode": args.mode,
         "odds_refresh": bool(args.odds_refresh),
+        "model_artifact_suffix": args.model_artifact_suffix,
         "dry_run": bool(args.dry_run),
         "started_at": utc_now_iso(),
         "handoff": {},

@@ -880,6 +880,7 @@ def run_jra_live_predict(
     crawl_config_path: str | Path,
     race_date: str,
     profile_name: str | None = None,
+    model_artifact_suffix: str | None = None,
     race_ids: list[str] | None = None,
     headline_contains: str | None = None,
     limit: int | None = None,
@@ -1025,6 +1026,7 @@ def run_jra_live_predict(
         frame=featured_frame,
         race_date=race_date,
         profile_name=profile_name,
+        model_artifact_suffix=model_artifact_suffix,
         output_file_suffix=effective_output_file_suffix,
     )
     prediction_path = workspace_root / str(prediction_summary["prediction_file"])
@@ -1048,6 +1050,7 @@ def run_jra_live_predict(
         "source_version": get_source_version(),
         "target_date": race_date,
         "profile": profile_name,
+        "model_artifact_suffix": prediction_summary.get("model_artifact_suffix"),
         "prediction_file": prediction_summary["prediction_file"],
         "prediction_summary_file": prediction_summary["summary_file"],
         "live_report_file": display_path(report_path, workspace_root),
@@ -1077,6 +1080,7 @@ def run_jra_live_predict(
         "policy_diagnostics": policy_diagnostics,
         "runner_history_coverage": runner_history_coverage,
         "race_list_report": race_list_report,
+        "score_source_model_config": prediction_summary.get("score_source_model_config"),
     }
     write_json(live_summary_path, live_summary)
     progress.complete(message=f"completed predictions={prediction_summary['prediction_file']}")

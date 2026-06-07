@@ -72,6 +72,9 @@ class BuildJraLivePagesTest(unittest.TestCase):
                 "row_count": 357,
                 "policy_selected_rows": 0,
                 "odds_official_datetime_max": "2026-06-06 17:15:53",
+                "profile": "current_recommended_serving_baseline_r20260325_2025_latest",
+                "model_artifact_suffix": "r20260325_current_recommended_serving_2025_latest_benchmark_refresh",
+                "score_source_model_config": "configs/model_catboost_value_stack_lgbm_roi_high_coverage_tune_roi012_liquidity_regime_hybrid_june_strict_serving.yaml",
                 "relative_path": "2026-06-07/",
             },
             {
@@ -82,6 +85,9 @@ class BuildJraLivePagesTest(unittest.TestCase):
                 "row_count": 341,
                 "policy_selected_rows": 1,
                 "odds_official_datetime_max": "2026-05-30 17:09:00",
+                "profile": "current_recommended_serving_favonly_composite_budget_revision_scoped_2025_latest",
+                "model_artifact_suffix": None,
+                "score_source_model_config": "configs/model_catboost_value_stack_lgbm_roi_high_coverage_tune_roi012_liquidity_regime_hybrid_june_strict_serving_support_preserving_prob_favonly_composite_budget_revision_scoped.yaml",
                 "relative_path": "jra-live/2026-05-31/",
             },
         ]
@@ -92,6 +98,10 @@ class BuildJraLivePagesTest(unittest.TestCase):
         self.assertNotIn('href="jra-live/jra-live/2026-06-07/"', root_html)
         self.assertNotIn('href="jra-live/jra-live/2026-05-31/"', root_html)
         self.assertEqual(root_html.count('class="card"'), 2)
+        self.assertIn('profile=current_recommended_serving_baseline_r20260325_2025_latest', root_html)
+        self.assertIn('artifact=r20260325_current_recommended_serving_2025_latest_benchmark_refresh', root_html)
+        self.assertIn('model=model_catboost_value_stack_lgbm_roi_high_coverage_tune_roi012_liquidity_regime_hybrid_june_strict_serving.yaml', root_html)
+        self.assertIn('artifact=latest', root_html)
 
         jra_live_html = pages_script.render_root_page(manifests=manifests)
         self.assertIn('href="2026-06-07/"', jra_live_html)
@@ -114,6 +124,9 @@ class BuildJraLivePagesTest(unittest.TestCase):
         self.assertNotIn('grid-auto-flow: column;', html)
         self.assertIn('grid-template-columns: repeat(${excludeOptions.length}, minmax(28px, max-content));', html)
         self.assertIn('function harvilleOverviewTableHtml', html)
+        self.assertIn('const filteredOverviewWinCompareRows = filteredHarvilleRows(harville.winCompareRows || [], [], state.harvilleExcludedHorses, false);', html)
+        self.assertIn('label: "単勝"', html)
+        self.assertIn('? harvilleOverviewTableHtml(race, filteredOverviewRowsByMarket, filteredOverviewWinCompareRows)', html)
         self.assertIn('>◎<', html)
         self.assertIn('>◯<', html)
         self.assertIn('>大穴<', html)

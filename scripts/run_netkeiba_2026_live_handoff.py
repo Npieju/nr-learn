@@ -91,6 +91,7 @@ def _build_manifest(
     race_card_max_date: str | None,
     live_exit_code: int | None = None,
     live_command: list[str] | None = None,
+    model_artifact_suffix: str | None = None,
     live_prediction_file: str | None = None,
     live_report_file: str | None = None,
     error: str | None = None,
@@ -120,6 +121,7 @@ def _build_manifest(
         "race_card_max_date": race_card_max_date,
         "live_exit_code": live_exit_code,
         "live_command": live_command,
+        "model_artifact_suffix": model_artifact_suffix,
         "live_prediction_file": live_prediction_file,
         "live_report_file": live_report_file,
         "snapshot_readiness": snapshot_payload.get("readiness") if isinstance(snapshot_payload, dict) else {},
@@ -143,6 +145,7 @@ def _write_readiness_manifest(
     race_result_max_date: pd.Timestamp | None,
     race_card_max_date: pd.Timestamp | None,
     live_command: list[str],
+    model_artifact_suffix: str | None,
     snapshot_exit: int,
     race_targets_completed: bool,
     snapshot_consistent: bool,
@@ -161,6 +164,7 @@ def _write_readiness_manifest(
         race_result_max_date=str(race_result_max_date.date()) if race_result_max_date is not None else None,
         race_card_max_date=str(race_card_max_date.date()) if race_card_max_date is not None else None,
         live_command=live_command,
+        model_artifact_suffix=model_artifact_suffix,
         error=(
             f"reason={reason} "
             f"snapshot_exit={snapshot_exit} race_targets_completed={race_targets_completed} "
@@ -204,6 +208,7 @@ def main() -> int:
     parser.add_argument("--live-script", default=DEFAULT_LIVE_SCRIPT)
     parser.add_argument("--wrapper-manifest-output", default=DEFAULT_WRAPPER_MANIFEST)
     parser.add_argument("--profile", default=DEFAULT_PROFILE)
+    parser.add_argument("--model-artifact-suffix", default=None)
     parser.add_argument("--race-date", required=True)
     parser.add_argument("--headline-contains", default=None)
     parser.add_argument("--limit", type=int, default=None)
@@ -239,6 +244,8 @@ def main() -> int:
             live_command.extend(["--headline-contains", args.headline_contains])
         if args.limit is not None:
             live_command.extend(["--limit", str(args.limit)])
+        if args.model_artifact_suffix:
+            live_command.extend(["--model-artifact-suffix", args.model_artifact_suffix])
         if args.refresh_live_crawl:
             live_command.append("--refresh")
 
@@ -298,6 +305,7 @@ def main() -> int:
                 race_result_max_date=race_result_max_date,
                 race_card_max_date=race_card_max_date,
                 live_command=live_command,
+                model_artifact_suffix=args.model_artifact_suffix,
                 snapshot_exit=snapshot_exit,
                 race_targets_completed=race_targets_completed,
                 snapshot_consistent=snapshot_consistent,
@@ -331,6 +339,7 @@ def main() -> int:
                     race_card_max_date=str(race_card_max_date.date()) if race_card_max_date is not None else None,
                     live_exit_code=live_exit,
                     live_command=live_command,
+                    model_artifact_suffix=args.model_artifact_suffix,
                     live_prediction_file=prediction_file,
                     live_report_file=report_file,
                 )
@@ -361,6 +370,7 @@ def main() -> int:
                     race_result_max_date=race_result_max_date,
                     race_card_max_date=race_card_max_date,
                     live_command=live_command,
+                    model_artifact_suffix=args.model_artifact_suffix,
                     snapshot_exit=snapshot_exit,
                     race_targets_completed=race_targets_completed,
                     snapshot_consistent=snapshot_consistent,
