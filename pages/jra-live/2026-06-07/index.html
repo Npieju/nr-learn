@@ -1293,6 +1293,20 @@
       return formatOddsText(lower);
     }
 
+    function buildHarvilleOverviewMarkets(rowsByMarket, winCompareRows) {
+      const markets = [...availableHarvilleMarkets(rowsByMarket || {})];
+      if (!Array.isArray(winCompareRows) || !winCompareRows.length) {
+        return markets;
+      }
+      const winCompareMarket = { key: "win_compare", label: "単勝" };
+      const quinellaIndex = markets.findIndex((market) => market.key === "quinella");
+      if (quinellaIndex >= 0) {
+        markets.splice(quinellaIndex, 0, winCompareMarket);
+        return markets;
+      }
+      return [winCompareMarket, ...markets];
+    }
+
     function harmonicMean(values) {
       const numeric = (Array.isArray(values) ? values : [])
         .map((item) => numericValue(item))
@@ -2132,15 +2146,48 @@
         .sort((left, right) => horsePairSort(left.horseNo, right.horseNo));
     }
 
+    function formatHarvilleHorseOptionLabel(item) {
+      if (!item) {
+        return "";
+      }
+      const horseNo = normalizeHorseNo(item.horseNo);
+      const horseName = normalizeHorseName(item.horseName);
+      return [horseNo, horseName].filter(Boolean).join(" ") || horseNo || horseName || "";
+    }
+
+    function buildHarvilleHorseNameMap(race, marketKey) {
+      const horseNameMap = new Map();
+      for (const option of getHarvilleExcludeOptions(race)) {
+        if (option.horseNo && option.horseName && !horseNameMap.has(option.horseNo)) {
+          horseNameMap.set(option.horseNo, option.horseName);
+        }
+      }
+      for (const option of getHarvilleAnchorOptions(race, marketKey, 0)) {
+        if (option.horseNo && option.horseName && !horseNameMap.has(option.horseNo)) {
+          horseNameMap.set(option.horseNo, option.horseName);
+        }
+      }
+      for (const option of getHarvilleAnchorOptions(race, marketKey, 1)) {
+        if (option.horseNo && option.horseName && !horseNameMap.has(option.horseNo)) {
+          horseNameMap.set(option.horseNo, option.horseName);
+        }
+      }
+      return horseNameMap;
+    }
+
     function renderHarvilleAnchorControls(race, anchors, marketKey) {
       const selectedAnchors = Array.isArray(anchors) ? anchors : [];
       const excludedHorses = Array.isArray(state.harvilleExcludedHorses) ? state.harvilleExcludedHorses : [];
       const maxAnchors = 2;
       const labels = getHarvilleAnchorLabels(marketKey);
+      const horseNameMap = buildHarvilleHorseNameMap(race, marketKey);
+      const selectedAnchorLabels = selectedAnchors
+        .map((horseNo) => formatHarvilleHorseOptionLabel({ horseNo, horseName: horseNameMap.get(horseNo) }))
+        .filter(Boolean);
       const anchorMeta = marketKey === "win_compare"
         ? (excludedHorses.length ? `消し馬: ${excludedHorses.join(" / ")} / 軸馬フィルタは multi-market タブで使えます。` : "単勝比較タブでは消し馬フィルタだけ有効です。")
-        : (selectedAnchors.length
-          ? `${selectedAnchors.join(" / ")} を表示中。未指定に戻すと全表示です。`
+        : (selectedAnchorLabels.length
+          ? `${selectedAnchorLabels.join(" / ")} を表示中。未指定に戻すと全表示です。`
           : `未指定で全表示。最大${maxAnchors}頭まで指定できます。`);
       document.getElementById("harville-anchor-meta").textContent = anchorMeta;
       document.getElementById("harville-anchor-selects").innerHTML = marketKey === "win_compare" ? "" : Array.from({ length: maxAnchors }, (_, index) => {
@@ -2155,7 +2202,7 @@
           ...options.map((item) => {
             const disabled = otherSelected.has(item.horseNo) ? ' disabled' : '';
             const selected = item.horseNo === selectedValue ? ' selected' : '';
-            return `<option value="${escapeHtml(item.horseNo)}"${selected}${disabled}>${escapeHtml(item.horseNo)}</option>`;
+            return `<option value="${escapeHtml(item.horseNo)}"${selected}${disabled}>${escapeHtml(formatHarvilleHorseOptionLabel(item))}</option>`;
           }),
         ].join("");
         return `<div class="harville-anchor-select"><label for="harville-anchor-select-${index + 1}">${escapeHtml(labels[index] || `軸馬${index + 1}`)}</label><select id="harville-anchor-select-${index + 1}" data-harville-anchor-select="${index}">${optionHtml}</select></div>`;
@@ -2219,10 +2266,7 @@
 
     function buildHarvilleOverviewRows(race, rowsByMarket, winCompareRows) {
       const horses = collectHarvilleHorseOptions(race, rowsByMarket || {});
-      const markets = [
-        ...availableHarvilleMarkets(rowsByMarket || {}),
-        ...(Array.isArray(winCompareRows) && winCompareRows.length ? [{ key: "win_compare", label: "単勝" }] : []),
-      ];
+      const markets = buildHarvilleOverviewMarkets(rowsByMarket, winCompareRows);
       const winCompareByHorseNo = new Map(
         (Array.isArray(winCompareRows) ? winCompareRows : [])
           .map((row) => [normalizeHorseNo(row?.horse_no_a), row])
@@ -2265,10 +2309,7 @@
     }
 
     function harvilleOverviewTableHtml(race, rowsByMarket, winCompareRows) {
-      const markets = [
-        ...availableHarvilleMarkets(rowsByMarket || {}),
-        ...(Array.isArray(winCompareRows) && winCompareRows.length ? [{ key: "win_compare", label: "単勝" }] : []),
-      ];
+      const markets = buildHarvilleOverviewMarkets(rowsByMarket, winCompareRows);
       const rows = buildHarvilleOverviewRows(race, rowsByMarket, winCompareRows);
       if (!markets.length || !rows.length) {
         return '<div class="market-empty">overview 用の Harville データがまだありません。</div>';

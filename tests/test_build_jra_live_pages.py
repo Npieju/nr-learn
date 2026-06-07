@@ -124,6 +124,8 @@ class BuildJraLivePagesTest(unittest.TestCase):
         self.assertNotIn('grid-auto-flow: column;', html)
         self.assertIn('grid-template-columns: repeat(${excludeOptions.length}, minmax(28px, max-content));', html)
         self.assertIn('function harvilleOverviewTableHtml', html)
+        self.assertIn('const quinellaIndex = markets.findIndex((market) => market.key === "quinella");', html)
+        self.assertIn('markets.splice(quinellaIndex, 0, winCompareMarket);', html)
         self.assertIn('const filteredOverviewWinCompareRows = filteredHarvilleRows(harville.winCompareRows || [], [], state.harvilleExcludedHorses, false);', html)
         self.assertIn('filteredHarvilleRows(harville.rowsByMarket?.[market.key] || [], selectedAnchors, state.harvilleExcludedHorses, false)', html)
         self.assertIn('label: "単勝"', html)
