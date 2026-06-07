@@ -1557,7 +1557,9 @@ def render_live_page(*, page_title: str) -> str:
         margin: 0;
       }
       .harville-overview-table {
-        min-width: 920px;
+        table-layout: auto;
+        width: max-content;
+        min-width: 1180px;
       }
       .harville-overview-table th,
       .harville-overview-table td {
@@ -1567,10 +1569,13 @@ def render_live_page(*, page_title: str) -> str:
       .harville-overview-table th:first-child,
       .harville-overview-table td:first-child {
         text-align: left;
+        min-width: 148px;
+        width: 148px;
         position: sticky;
         left: 0;
         z-index: 1;
         background: #f8fbfd;
+        box-shadow: 8px 0 12px rgba(15, 31, 58, 0.06);
       }
       .harville-overview-table thead th:first-child {
         z-index: 3;

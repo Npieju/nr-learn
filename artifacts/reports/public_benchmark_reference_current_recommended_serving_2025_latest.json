@@ -1,0 +1,76 @@
+{
+  "started_at": "2026-06-07T05:07:02Z",
+  "finished_at": "2026-06-07T05:07:02Z",
+  "status": "completed",
+  "reference_kind": "public_benchmark_reference",
+  "reference": "current_recommended_serving_2025_latest",
+  "revision": "r20260325_current_recommended_serving_2025_latest_benchmark_refresh",
+  "universe": "jra",
+  "source_scope": "jra_only",
+  "public_doc": "docs/public_benchmark_snapshot.md",
+  "read_order": [
+    "public_benchmark_reference",
+    "promotion_gate",
+    "revision_gate",
+    "evaluation_manifest",
+    "evaluation_summary"
+  ],
+  "current_phase": "public_benchmark_reference_ready",
+  "recommended_action": "use_as_right_reference",
+  "artifacts": {
+    "reference_manifest": "artifacts/reports/public_benchmark_reference_current_recommended_serving_2025_latest.json",
+    "promotion_manifest": "artifacts/reports/promotion_gate_r20260325_current_recommended_serving_2025_latest_benchmark_refresh.json",
+    "revision_manifest": "artifacts/reports/revision_gate_r20260325_current_recommended_serving_2025_latest_benchmark_refresh.json",
+    "evaluation_manifest": "artifacts/reports/evaluation_manifest_catboost_value_stack_lgbm_roi_high_coverage_tune_roi012_liquidity_regime_hybrid_model_r20260325_current_recommended_serving_2025_latest_benchmark_refresh.json",
+    "evaluation_summary": "artifacts/reports/evaluation_summary_catboost_value_stack_lgbm_roi_high_coverage_tune_roi012_liquidity_regime_hybrid_model_r20260325_current_recommended_serving_2025_latest_benchmark_refresh.json",
+    "benchmark_model": "artifacts/models/catboost_value_stack_lgbm_roi_high_coverage_tune_roi012_liquidity_regime_hybrid_model_r20260325_current_recommended_serving_2025_latest_benchmark_refresh.joblib",
+    "benchmark_train_report": "artifacts/reports/train_metrics_catboost_value_stack_lgbm_roi_high_coverage_tune_roi012_liquidity_regime_hybrid_r20260325_current_recommended_serving_2025_latest_benchmark_refresh.json",
+    "benchmark_model_manifest": "artifacts/models/catboost_value_stack_lgbm_roi_high_coverage_tune_roi012_liquidity_regime_hybrid_model.manifest_r20260325_current_recommended_serving_2025_latest_benchmark_refresh.json"
+  },
+  "metrics": {
+    "decision": "promote",
+    "status": "pass",
+    "stability_assessment": "representative",
+    "auc": 0.8400959298075428,
+    "top1_roi": 0.8070328660078143,
+    "ev_top1_roi": 0.5568030337853367,
+    "nested_wf_weighted_test_roi": null,
+    "nested_wf_bets_total": 544,
+    "formal_benchmark_weighted_roi": null,
+    "formal_benchmark_feasible_folds": 5
+  },
+  "blocker_summary": {
+    "promotion_status": "pass",
+    "promotion_decision": "promote",
+    "blocking_reasons": [],
+    "warnings": [],
+    "stability_assessment": "representative",
+    "is_ready": true
+  },
+  "promotion_summary": {
+    "decision": "promote",
+    "status": "pass",
+    "blocking_reasons": [],
+    "warnings": []
+  },
+  "evaluation_summary": {
+    "profile": "current_recommended_serving_2025_latest",
+    "config": "configs/model_catboost_value_stack_lgbm_roi_high_coverage_tune_roi012_liquidity_regime_hybrid_june_strict_serving.yaml",
+    "data_config": "configs/data_2025_latest.yaml",
+    "feature_config": "configs/features_catboost_rich_high_coverage_diag.yaml",
+    "stability_assessment": "representative"
+  },
+  "revision_summary": {
+    "decision": "promote",
+    "status": "pass",
+    "profile": "current_recommended_serving_2025_latest",
+    "train_artifact_suffix": "r20260325_current_recommended_serving_2025_latest_benchmark_refresh",
+    "train_model": "artifacts/models/catboost_value_stack_lgbm_roi_high_coverage_tune_roi012_liquidity_regime_hybrid_model_r20260325_current_recommended_serving_2025_latest_benchmark_refresh.joblib",
+    "train_manifest": "artifacts/models/catboost_value_stack_lgbm_roi_high_coverage_tune_roi012_liquidity_regime_hybrid_model.manifest_r20260325_current_recommended_serving_2025_latest_benchmark_refresh.json"
+  },
+  "highlights": [
+    "public benchmark promotion decision is promote",
+    "evaluation stability assessment is representative",
+    "next operator action: use_as_right_reference"
+  ]
+}

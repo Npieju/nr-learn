@@ -17,10 +17,12 @@ SRC = ROOT / "src"
 if str(SRC) not in sys.path:
     sys.path.append(str(SRC))
 
-from racing_ml.common.artifacts import display_path as artifact_display_path
+from racing_ml.common.artifacts import append_suffix_to_file_name, display_path as artifact_display_path
 from racing_ml.common.artifacts import ensure_output_file_path as artifact_ensure_output_file_path
 from racing_ml.common.artifacts import read_json
+from racing_ml.common.artifacts import resolve_output_artifacts
 from racing_ml.common.artifacts import utc_now_iso, write_json
+from racing_ml.common.config import load_yaml
 from racing_ml.common.model_profiles import MODEL_RUN_PROFILES, format_model_run_profiles, resolve_model_run_profile
 from racing_ml.common.progress import Heartbeat, ProgressBar
 
@@ -676,6 +678,7 @@ def _build_manifest_payload(
     promotion_output: Path,
     manifest_output: Path,
     executed_steps: list[dict[str, object]],
+    training_artifacts: dict[str, object] | None = None,
     promotion_min_formal_weighted_roi: float | None = None,
     promotion_report: dict[str, object] | None = None,
     challenger_equivalence: dict[str, object] | None = None,
@@ -727,6 +730,9 @@ def _build_manifest_payload(
             "evaluation_manifest": "artifacts/reports/evaluation_manifest.json",
             "evaluation_summary": "artifacts/reports/evaluation_summary.json",
             "revision_manifest": artifact_display_path(manifest_output, workspace_root=ROOT),
+            "train_model": (training_artifacts or {}).get("model"),
+            "train_report": (training_artifacts or {}).get("report"),
+            "train_manifest": (training_artifacts or {}).get("manifest"),
         },
     }
     if error_code is not None:
@@ -768,6 +774,7 @@ def _build_running_manifest_payload(
     promotion_output: Path,
     manifest_output: Path,
     executed_steps: list[dict[str, object]],
+    training_artifacts: dict[str, object] | None = None,
     promotion_min_formal_weighted_roi: float | None = None,
     challenger_equivalence: dict[str, object] | None = None,
 ) -> dict[str, object]:
@@ -798,6 +805,7 @@ def _build_running_manifest_payload(
         promotion_output=promotion_output,
         manifest_output=manifest_output,
         executed_steps=executed_steps,
+        training_artifacts=training_artifacts,
         promotion_report=None,
         challenger_equivalence=challenger_equivalence,
         recommended_action="wait_for_revision_gate_completion",
@@ -880,6 +888,26 @@ def main() -> int:
         train_artifact_suffix = str(args.train_artifact_suffix or revision_slug).strip()
         if not train_artifact_suffix:
             raise ValueError("train artifact suffix must not be empty")
+        model_cfg = load_yaml(ROOT / config_path)
+        train_output_cfg = dict(model_cfg.get("output", {}))
+        train_output_cfg["model_file"] = append_suffix_to_file_name(
+            str(train_output_cfg.get("model_file", "baseline_model.joblib")),
+            train_artifact_suffix,
+        )
+        train_output_cfg["report_file"] = append_suffix_to_file_name(
+            str(train_output_cfg.get("report_file", "train_metrics.json")),
+            train_artifact_suffix,
+        )
+        train_output_cfg["manifest_file"] = append_suffix_to_file_name(
+            str(train_output_cfg.get("manifest_file", train_output_cfg.get("model_file", "baseline_model.joblib"))),
+            train_artifact_suffix,
+        )
+        resolved_train_output_artifacts = resolve_output_artifacts(train_output_cfg)
+        training_artifacts = {
+            "model": artifact_display_path(resolved_train_output_artifacts.model_path, workspace_root=ROOT),
+            "report": artifact_display_path(resolved_train_output_artifacts.report_path, workspace_root=ROOT),
+            "manifest": artifact_display_path(resolved_train_output_artifacts.manifest_path, workspace_root=ROOT),
+        }
 
         report_dir = ROOT / "artifacts" / "reports"
         promotion_output = _resolve_path(args.promotion_output) if args.promotion_output else report_dir / f"promotion_gate_{revision_slug}.json"
@@ -1232,6 +1260,7 @@ def main() -> int:
             promotion_output=promotion_output,
             manifest_output=manifest_output,
             executed_steps=executed_steps,
+            training_artifacts=training_artifacts,
             challenger_equivalence=None,
         )
         running_manifest_payload["artifacts"]["run_log"] = artifact_display_path(log_path, workspace_root=ROOT)
@@ -1667,6 +1696,7 @@ def main() -> int:
             promotion_output=promotion_output,
             manifest_output=manifest_output,
             executed_steps=executed_steps,
+            training_artifacts=training_artifacts,
             promotion_report=promotion_report,
             challenger_equivalence=challenger_equivalence_report,
         )

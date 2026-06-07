@@ -13,7 +13,9 @@ if str(SRC) not in sys.path:
 
 from racing_ml.common.artifacts import display_path as artifact_display_path
 from racing_ml.common.artifacts import ensure_output_file_path as artifact_ensure_output_file_path
+from racing_ml.common.artifacts import append_suffix_to_file_name, resolve_output_artifacts
 from racing_ml.common.artifacts import read_json, utc_now_iso, write_json
+from racing_ml.common.config import load_yaml
 from racing_ml.common.progress import Heartbeat, ProgressBar
 
 
@@ -150,6 +152,46 @@ def _highlights(
     return highlights
 
 
+def _resolve_training_artifacts_from_revision(revision_payload: dict[str, object]) -> dict[str, object]:
+    revision_artifacts = revision_payload.get("artifacts")
+    if isinstance(revision_artifacts, dict):
+        train_model = revision_artifacts.get("train_model")
+        train_report = revision_artifacts.get("train_report")
+        train_manifest = revision_artifacts.get("train_manifest")
+        if train_model or train_report or train_manifest:
+            return {
+                "model": train_model,
+                "report": train_report,
+                "manifest": train_manifest,
+            }
+
+    config_path = revision_payload.get("config")
+    train_artifact_suffix = revision_payload.get("train_artifact_suffix")
+    if not isinstance(config_path, str) or not config_path.strip() or not isinstance(train_artifact_suffix, str) or not train_artifact_suffix.strip():
+        return {"model": None, "report": None, "manifest": None}
+
+    model_cfg = load_yaml(_resolve_path(config_path))
+    output_cfg = dict(model_cfg.get("output", {}))
+    output_cfg["model_file"] = append_suffix_to_file_name(
+        str(output_cfg.get("model_file", "baseline_model.joblib")),
+        train_artifact_suffix,
+    )
+    output_cfg["report_file"] = append_suffix_to_file_name(
+        str(output_cfg.get("report_file", "train_metrics.json")),
+        train_artifact_suffix,
+    )
+    output_cfg["manifest_file"] = append_suffix_to_file_name(
+        str(output_cfg.get("manifest_file", output_cfg.get("model_file", "baseline_model.joblib"))),
+        train_artifact_suffix,
+    )
+    artifacts = resolve_output_artifacts(output_cfg)
+    return {
+        "model": artifact_display_path(artifacts.model_path, workspace_root=ROOT),
+        "report": artifact_display_path(artifacts.report_path, workspace_root=ROOT),
+        "manifest": artifact_display_path(artifacts.manifest_path, workspace_root=ROOT),
+    }
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--reference", default=DEFAULT_REFERENCE)
@@ -180,6 +222,7 @@ def main() -> int:
             evaluation_manifest_payload = _read_required_payload(evaluation_manifest_path, label="evaluation manifest")
             evaluation_summary_payload = _read_required_payload(evaluation_summary_path, label="evaluation summary")
         progress.update(message="benchmark reference inputs loaded")
+        training_artifacts = _resolve_training_artifacts_from_revision(revision_payload)
         metrics = _extract_metric(evaluation_summary_payload, promotion_payload)
         recommended_action = _recommended_action(
             promotion_payload=promotion_payload,
@@ -209,6 +252,9 @@ def main() -> int:
                 "revision_manifest": artifact_display_path(revision_path, workspace_root=ROOT),
                 "evaluation_manifest": artifact_display_path(evaluation_manifest_path, workspace_root=ROOT),
                 "evaluation_summary": artifact_display_path(evaluation_summary_path, workspace_root=ROOT),
+                "benchmark_model": training_artifacts.get("model"),
+                "benchmark_train_report": training_artifacts.get("report"),
+                "benchmark_model_manifest": training_artifacts.get("manifest"),
             },
             "metrics": metrics,
             "blocker_summary": _blocker_summary(
@@ -232,6 +278,9 @@ def main() -> int:
                 "decision": revision_payload.get("decision"),
                 "status": revision_payload.get("status"),
                 "profile": revision_payload.get("profile"),
+                "train_artifact_suffix": revision_payload.get("train_artifact_suffix"),
+                "train_model": training_artifacts.get("model"),
+                "train_manifest": training_artifacts.get("manifest"),
             },
             "highlights": _highlights(
                 metrics=metrics,

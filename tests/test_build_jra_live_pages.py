@@ -126,6 +126,8 @@ class BuildJraLivePagesTest(unittest.TestCase):
         self.assertIn('function harvilleOverviewTableHtml', html)
         self.assertIn('const quinellaIndex = markets.findIndex((market) => market.key === "quinella");', html)
         self.assertIn('markets.splice(quinellaIndex, 0, winCompareMarket);', html)
+        self.assertIn('table-layout: auto;', html)
+        self.assertIn('min-width: 148px;', html)
         self.assertIn('const filteredOverviewWinCompareRows = filteredHarvilleRows(harville.winCompareRows || [], [], state.harvilleExcludedHorses, false);', html)
         self.assertIn('filteredHarvilleRows(harville.rowsByMarket?.[market.key] || [], selectedAnchors, state.harvilleExcludedHorses, false)', html)
         self.assertIn('label: "単勝"', html)

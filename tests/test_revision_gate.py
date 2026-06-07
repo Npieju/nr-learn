@@ -236,6 +236,48 @@ class RevisionGateRunningManifestTest(unittest.TestCase):
             self.assertEqual(overwritten["current_phase"], "train")
             self.assertEqual(overwritten["recommended_action"], "wait_for_revision_gate_completion")
 
+    def test_running_manifest_includes_training_artifacts_when_provided(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmp = Path(tmpdir)
+            manifest_output = tmp / "revision_gate_r20260331_sample.json"
+            wf_summary_output = tmp / "wf_summary.json"
+            promotion_output = tmp / "promotion_gate.json"
+
+            running_payload = _build_running_manifest_payload(
+                revision_slug="r20260331_sample",
+                started_at="2026-03-31T00:00:00Z",
+                resolved_profile=None,
+                config_path="configs/model.yaml",
+                data_config_path="configs/data.yaml",
+                feature_config_path="configs/features.yaml",
+                train_artifact_suffix="r20260331_sample",
+                skip_train=False,
+                train_max_train_rows=None,
+                train_max_valid_rows=None,
+                evaluate_model_artifact_suffix=None,
+                evaluate_max_rows=120000,
+                evaluate_pre_feature_max_rows=None,
+                evaluate_start_date=None,
+                evaluate_end_date=None,
+                evaluate_wf_mode="fast",
+                evaluate_wf_scheme="nested",
+                wf_summary_output=wf_summary_output,
+                promotion_min_feasible_folds=1,
+                promotion_output=promotion_output,
+                manifest_output=manifest_output,
+                executed_steps=[],
+                training_artifacts={
+                    "model": "artifacts/models/example_model.joblib",
+                    "report": "artifacts/reports/train_metrics_example.json",
+                    "manifest": "artifacts/models/example_model.manifest.json",
+                },
+                challenger_equivalence=None,
+            )
+
+            self.assertEqual(running_payload["artifacts"]["train_model"], "artifacts/models/example_model.joblib")
+            self.assertEqual(running_payload["artifacts"]["train_report"], "artifacts/reports/train_metrics_example.json")
+            self.assertEqual(running_payload["artifacts"]["train_manifest"], "artifacts/models/example_model.manifest.json")
+
     def test_dry_run_propagates_no_model_artifact_suffix_to_evaluate_and_wf(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             tmp = Path(tmpdir)
