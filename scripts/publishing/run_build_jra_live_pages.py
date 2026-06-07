@@ -1695,6 +1695,11 @@ def render_live_page(*, page_title: str) -> str:
         font-size: 10px;
         color: var(--muted);
       }
+      .harville-overview-value {
+        min-width: 72px;
+        text-align: center;
+        font-variant-numeric: tabular-nums;
+      }
       .harville-overview-cell-positive {
         color: #0a6c4a;
         font-weight: 700;
@@ -2310,6 +2315,14 @@ def render_live_page(*, page_title: str) -> str:
       return `${formatOddsNumber(number)}倍`;
     }
 
+    function formatOverviewOddsText(value) {
+      const number = numericValue(value);
+      if (number === null) {
+        return "-";
+      }
+      return formatOddsNumber(number);
+    }
+
     function formatMarketOddsText(row) {
       const lower = numericValue(row?.market_odds);
       const upper = numericValue(row?.market_odds_max);
@@ -2364,6 +2377,18 @@ def render_live_page(*, page_title: str) -> str:
         return "-";
       }
       return `${(number * 100).toFixed(1)}%`;
+    }
+
+    function formatDisplayTimestamp(value) {
+      const text = String(value ?? "").trim();
+      if (!text) {
+        return "-";
+      }
+      const matched = text.match(/^(\d{4}-\d{2}-\d{2})[T\s](\d{2}):(\d{2})(?::\d{2})?(?:\.\d+)?(?:Z|[+-]\d{2}:?\d{2})?$/);
+      if (matched) {
+        return `${matched[1]} ${matched[2]}:${matched[3]}`;
+      }
+      return text;
     }
 
     function buildRaceUrl(race) {
@@ -3352,9 +3377,18 @@ def render_live_page(*, page_title: str) -> str:
           const metric = row.metrics?.[market.key] || {};
           const actual = metric.actual;
           const harville = metric.harville;
-          const positiveClass = actual !== null && harville !== null && actual > harville ? ' harville-overview-cell-positive' : '';
-          const actualCell = `<td class="${actual === null ? 'harville-overview-cell-muted' : positiveClass.trim()}">${escapeHtml(formatOddsText(actual))}</td>`;
-          const harvilleCell = `<td class="${harville === null ? 'harville-overview-cell-muted' : ''}">${escapeHtml(formatOddsText(harville))}</td>`;
+          const actualClasses = ["harville-overview-value"];
+          const harvilleClasses = ["harville-overview-value"];
+          if (actual === null) {
+            actualClasses.push("harville-overview-cell-muted");
+          } else if (harville !== null && actual > harville) {
+            actualClasses.push("harville-overview-cell-positive");
+          }
+          if (harville === null) {
+            harvilleClasses.push("harville-overview-cell-muted");
+          }
+          const actualCell = `<td class="${actualClasses.join(" ")}">${escapeHtml(formatOverviewOddsText(actual))}</td>`;
+          const harvilleCell = `<td class="${harvilleClasses.join(" ")}">${escapeHtml(formatOverviewOddsText(harville))}</td>`;
           return `${actualCell}${harvilleCell}`;
         }).join("");
         return `<tr><td>${escapeHtml(row.label || row.horseNo)}</td>${metricCells}</tr>`;
@@ -3489,8 +3523,8 @@ def render_live_page(*, page_title: str) -> str:
         ? `${activeMarket === "overview" ? "各馬が絡む馬券について、券種ごとに実オッズと Harville の harmonic mean を並べます。" : (activeMarket === "win_compare" ? "モデル score をそのまま単勝と比較し、倍率と上振れを確認します。" : (harville.message || "model score を race 内で正規化した勝率から Harville 理論オッズを計算し、市場オッズがどれだけ上振れているかを見ます。"))} Live refresh note: ${refreshError}`
         : (activeMarket === "overview" ? "各馬が絡む馬券について、券種ごとに実オッズと Harville の harmonic mean を並べます。" : (activeMarket === "win_compare" ? "モデル score をそのまま単勝と比較し、倍率と上振れを確認します。" : (harville.message || "model score を race 内で正規化した勝率から Harville 理論オッズを計算し、市場オッズがどれだけ上振れているかを見ます。")));
       document.getElementById("harville-meta").textContent = [
-        harville?.meta?.oddsUpdatedAt ? `odds ${harville.meta.oddsUpdatedAt}` : null,
-        harville?.meta?.analyzedAt ? `analyzed ${harville.meta.analyzedAt}` : null,
+        harville?.meta?.oddsUpdatedAt ? `odds ${formatDisplayTimestamp(harville.meta.oddsUpdatedAt)}` : null,
+        harville?.meta?.analyzedAt ? `analyzed ${formatDisplayTimestamp(harville.meta.analyzedAt)}` : null,
         harville?.meta?.horseCount ? `horses ${harville.meta.horseCount}` : null,
         harville?.meta?.positiveRows !== undefined ? `positive rows ${harville.meta.positiveRows}` : null,
         refreshError ? `live refresh ${refreshError}` : null,
@@ -3869,18 +3903,18 @@ def render_live_page(*, page_title: str) -> str:
       const meta = state.data.metadata;
       const diag = state.data.policyDiagnostics || {};
       const metaBits = [
-        meta.generatedAt ? `build ${meta.generatedAt}` : null,
+        meta.generatedAt ? `build ${formatDisplayTimestamp(meta.generatedAt)}` : null,
         meta.targetDate,
         `${meta.raceCount ?? "-"} races`,
         `${meta.rowCount ?? "-"} rows`,
         `policy ${meta.policySelectedRows ?? "-"}`,
-        meta.oddsOfficialDatetimeMax ? `odds ${meta.oddsOfficialDatetimeMax}` : null,
+        meta.oddsOfficialDatetimeMax ? `odds ${formatDisplayTimestamp(meta.oddsOfficialDatetimeMax)}` : null,
       ].filter(Boolean);
       document.getElementById("page-meta").textContent = metaBits.join(" / ");
       document.getElementById("page-note").textContent = diag.likely_blocker_reason
         ? `主 blocker は ${diag.likely_blocker_reason}。開催別 overview からレースへ降りて市場オッズ・推論値・policy 判定を確認できます。`
         : "開催別 overview からレースへ降りて市場オッズ・推論値・policy 判定を確認できます。";
-      document.getElementById("footer-meta").textContent = `version=${meta.sourceVersion || "-"} | source=${meta.predictionFile} | summary=${meta.summaryFile} | built=${meta.generatedAt}`;
+      document.getElementById("footer-meta").textContent = `version=${meta.sourceVersion || "-"} | source=${meta.predictionFile} | summary=${meta.summaryFile} | built=${formatDisplayTimestamp(meta.generatedAt)}`;
     }
 
     function renderOverview() {
@@ -4240,6 +4274,9 @@ def render_root_page(*, manifests: list[dict[str, Any]], href_prefix: str = "") 
     model_label = Path(model_config).name if model_config else "model config unknown"
     lineage_label = f"artifact={model_artifact_suffix}" if model_artifact_suffix else "artifact=latest"
     built_at = str(manifest.get("built_at") or "build timestamp unavailable")
+    built_at_display = built_at if built_at == "build timestamp unavailable" else built_at.replace("T", " ")[:16]
+    odds_timestamp = str(manifest.get("odds_official_datetime_max") or "odds timestamp unavailable")
+    odds_timestamp_display = odds_timestamp if odds_timestamp == "odds timestamp unavailable" else odds_timestamp[:16]
     cards.append(
       """
       <a class="card" href="{relative_path}">
@@ -4249,7 +4286,7 @@ def render_root_page(*, manifests: list[dict[str, Any]], href_prefix: str = "") 
         <p class="card-copy mono">profile={profile_label}</p>
         <p class="card-copy mono">model={model_label}</p>
         <p class="card-copy mono">{lineage_label}</p>
-        <p class="card-copy mono">built={built_at}</p>
+        <p class="card-copy mono">built={built_at_display}</p>
         <p class="card-copy">races={race_count} / rows={row_count} / policy_selected={policy_selected_rows}</p>
         <p class="card-copy mono">{odds_official_datetime_max}</p>
       </a>
@@ -4261,11 +4298,11 @@ def render_root_page(*, manifests: list[dict[str, Any]], href_prefix: str = "") 
         profile_label=profile_label,
         model_label=model_label,
         lineage_label=lineage_label,
-        built_at=built_at,
+        built_at_display=built_at_display,
         race_count=manifest.get("race_count", "-"),
         row_count=manifest.get("row_count", "-"),
         policy_selected_rows=manifest.get("policy_selected_rows", "-"),
-        odds_official_datetime_max=manifest.get("odds_official_datetime_max", "odds timestamp unavailable"),
+        odds_official_datetime_max=odds_timestamp_display,
       )
     )
   return """<!doctype html>
