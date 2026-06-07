@@ -2843,6 +2843,7 @@
       const meta = state.data.metadata;
       const diag = state.data.policyDiagnostics || {};
       const metaBits = [
+        meta.generatedAt ? `build ${meta.generatedAt}` : null,
         meta.targetDate,
         `${meta.raceCount ?? "-"} races`,
         `${meta.rowCount ?? "-"} rows`,

@@ -10,5 +10,5 @@
   "profile": "current_recommended_serving_2025_latest",
   "model_artifact_suffix": null,
   "score_source_model_config": "configs/model_catboost_value_stack_lgbm_roi_high_coverage_tune_roi012_liquidity_regime_hybrid_june_strict_serving.yaml",
-  "built_at": "2026-06-07T05:30:32+0000"
+  "built_at": "2026-06-07T05:46:52+0000"
 }

@@ -76,6 +76,7 @@ class BuildJraLivePagesTest(unittest.TestCase):
                 "profile": "current_recommended_serving_baseline_r20260325_2025_latest",
                 "model_artifact_suffix": "r20260325_current_recommended_serving_2025_latest_benchmark_refresh",
                 "score_source_model_config": "configs/model_catboost_value_stack_lgbm_roi_high_coverage_tune_roi012_liquidity_regime_hybrid_june_strict_serving.yaml",
+                "built_at": "2026-06-07T05:30:32+0000",
                 "relative_path": "2026-06-07/",
             },
             {
@@ -89,6 +90,7 @@ class BuildJraLivePagesTest(unittest.TestCase):
                 "profile": "current_recommended_serving_favonly_composite_budget_revision_scoped_2025_latest",
                 "model_artifact_suffix": None,
                 "score_source_model_config": "configs/model_catboost_value_stack_lgbm_roi_high_coverage_tune_roi012_liquidity_regime_hybrid_june_strict_serving_support_preserving_prob_favonly_composite_budget_revision_scoped.yaml",
+                "built_at": "2026-05-31T05:28:10+0000",
                 "relative_path": "jra-live/2026-05-31/",
             },
         ]
@@ -102,6 +104,7 @@ class BuildJraLivePagesTest(unittest.TestCase):
         self.assertIn('profile=current_recommended_serving_baseline_r20260325_2025_latest', root_html)
         self.assertIn('artifact=r20260325_current_recommended_serving_2025_latest_benchmark_refresh', root_html)
         self.assertIn('model=model_catboost_value_stack_lgbm_roi_high_coverage_tune_roi012_liquidity_regime_hybrid_june_strict_serving.yaml', root_html)
+        self.assertIn('built=2026-06-07T05:30:32+0000', root_html)
         self.assertIn('artifact=latest', root_html)
 
         jra_live_html = pages_script.render_root_page(manifests=manifests)
@@ -119,6 +122,7 @@ class BuildJraLivePagesTest(unittest.TestCase):
         self.assertIn('id="harville-ignore-long-odds"', html)
         self.assertIn('id="harville-exclude-filters"', html)
         self.assertIn('>消し馬<', html)
+        self.assertIn('meta.generatedAt ? `build ${meta.generatedAt}` : null,', html)
         self.assertIn('.harville-anchor-select {', html)
         self.assertIn('min-width: 0;\n      }\n      .harville-filter-stack {', html)
         self.assertIn('class="harville-filter-grid"', html)

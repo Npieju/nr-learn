@@ -3869,6 +3869,7 @@ def render_live_page(*, page_title: str) -> str:
       const meta = state.data.metadata;
       const diag = state.data.policyDiagnostics || {};
       const metaBits = [
+        meta.generatedAt ? `build ${meta.generatedAt}` : null,
         meta.targetDate,
         `${meta.raceCount ?? "-"} races`,
         `${meta.rowCount ?? "-"} rows`,
@@ -4238,6 +4239,7 @@ def render_root_page(*, manifests: list[dict[str, Any]], href_prefix: str = "") 
     model_artifact_suffix = str(manifest.get("model_artifact_suffix") or "").strip()
     model_label = Path(model_config).name if model_config else "model config unknown"
     lineage_label = f"artifact={model_artifact_suffix}" if model_artifact_suffix else "artifact=latest"
+    built_at = str(manifest.get("built_at") or "build timestamp unavailable")
     cards.append(
       """
       <a class="card" href="{relative_path}">
@@ -4247,6 +4249,7 @@ def render_root_page(*, manifests: list[dict[str, Any]], href_prefix: str = "") 
         <p class="card-copy mono">profile={profile_label}</p>
         <p class="card-copy mono">model={model_label}</p>
         <p class="card-copy mono">{lineage_label}</p>
+        <p class="card-copy mono">built={built_at}</p>
         <p class="card-copy">races={race_count} / rows={row_count} / policy_selected={policy_selected_rows}</p>
         <p class="card-copy mono">{odds_official_datetime_max}</p>
       </a>
@@ -4258,6 +4261,7 @@ def render_root_page(*, manifests: list[dict[str, Any]], href_prefix: str = "") 
         profile_label=profile_label,
         model_label=model_label,
         lineage_label=lineage_label,
+        built_at=built_at,
         race_count=manifest.get("race_count", "-"),
         row_count=manifest.get("row_count", "-"),
         policy_selected_rows=manifest.get("policy_selected_rows", "-"),
