@@ -661,7 +661,9 @@ def _harmonic_mean(values: list[Any]) -> float | None:
 def _build_overview_source_rows(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
   return [
     {
+      "marketKey": str(row.get("marketKey") or "").strip(),
       "market_odds": _safe_float(row.get("market_odds")),
+      "market_odds_max": _safe_float(row.get("market_odds_max")),
       "harville_odds": _safe_float(row.get("harville_odds")),
       "horse_no_a": _normalize_horse_no(row.get("horse_no_a")),
       "horse_no_b": _normalize_horse_no(row.get("horse_no_b")),
@@ -709,15 +711,28 @@ def _build_harville_overview_rows(
       actual = _safe_float(win_row.get("market_odds")) if isinstance(win_row, dict) else None
       harville = _safe_float(win_row.get("model_fair_odds") or win_row.get("harville_odds")) if isinstance(win_row, dict) else None
       edge_ratio = actual / harville if actual is not None and harville is not None and harville > 0 else None
-      metrics["win_compare"] = {"actual": actual, "harville": harville, "edgeRatio": edge_ratio}
+      metrics["win_compare"] = {
+        "actual": actual,
+        "actualLower": actual,
+        "actualUpper": actual,
+        "harville": harville,
+        "edgeRatio": edge_ratio,
+      }
       if edge_ratio is not None:
         best_edge = edge_ratio
     for config in markets:
       market_rows = [row for row in rows_by_market.get(config["key"], []) if horse["horseNo"] in _harville_row_horse_numbers(row)]
       actual = _harmonic_mean([row.get("market_odds") for row in market_rows])
+      actual_upper = _harmonic_mean([row.get("market_odds_max") or row.get("market_odds") for row in market_rows])
       harville = _harmonic_mean([row.get("harville_odds") for row in market_rows])
       edge_ratio = actual / harville if actual is not None and harville is not None and harville > 0 else None
-      metrics[config["key"]] = {"actual": actual, "harville": harville, "edgeRatio": edge_ratio}
+      metrics[config["key"]] = {
+        "actual": actual,
+        "actualLower": actual,
+        "actualUpper": actual_upper,
+        "harville": harville,
+        "edgeRatio": edge_ratio,
+      }
       if edge_ratio is not None and (best_edge is None or edge_ratio > best_edge):
         best_edge = edge_ratio
     overview_rows.append(
@@ -1671,6 +1686,7 @@ def render_live_page(*, page_title: str) -> str:
       }
       .harville-overview-table th,
       .harville-overview-table td {
+        padding: 6px 5px;
         text-align: center;
         white-space: nowrap;
       }
@@ -1689,14 +1705,15 @@ def render_live_page(*, page_title: str) -> str:
         background: #eef4f8;
       }
       .harville-overview-market {
-        min-width: 92px;
+        width: 1%;
       }
       .harville-overview-subhead {
         font-size: 10px;
         color: var(--muted);
+        width: 1%;
       }
       .harville-overview-value {
-        min-width: 72px;
+        width: 1%;
         text-align: center;
         font-variant-numeric: tabular-nums;
       }
@@ -2321,6 +2338,18 @@ def render_live_page(*, page_title: str) -> str:
         return "-";
       }
       return formatOddsNumber(number);
+    }
+
+    function formatOverviewActualOdds(metric, marketKey) {
+      const lower = numericValue(metric?.actualLower ?? metric?.actual);
+      const upper = numericValue(metric?.actualUpper ?? metric?.actual);
+      if (lower === null) {
+        return "-";
+      }
+      if (marketKey === "wide" && upper !== null && upper > lower) {
+        return `${formatOddsNumber(lower)} - ${formatOddsNumber(upper)}`;
+      }
+      return formatOverviewOddsText(lower);
     }
 
     function formatMarketOddsText(row) {
@@ -3331,20 +3360,25 @@ def render_live_page(*, page_title: str) -> str:
         let bestEdge = null;
         markets.forEach((market) => {
           let actualHm = null;
+          let actualUpperHm = null;
           let harvilleHm = null;
           if (market.key === "win_compare") {
             const row = winCompareByHorseNo.get(horse.horseNo) || null;
             actualHm = numericValue(row?.market_odds);
+            actualUpperHm = actualHm;
             harvilleHm = numericValue(row?.model_fair_odds ?? row?.harville_odds);
           } else {
             const marketRows = Array.isArray(rowsByMarket?.[market.key]) ? rowsByMarket[market.key] : [];
             const involvingHorse = marketRows.filter((row) => harvilleRowHorseNumbers(row).includes(horse.horseNo));
             actualHm = harmonicMean(involvingHorse.map((row) => row?.market_odds));
+            actualUpperHm = harmonicMean(involvingHorse.map((row) => row?.market_odds_max ?? row?.market_odds));
             harvilleHm = harmonicMean(involvingHorse.map((row) => row?.harville_odds));
           }
           const edgeRatio = actualHm !== null && harvilleHm !== null && harvilleHm > 0 ? actualHm / harvilleHm : null;
           metrics[market.key] = {
             actual: actualHm,
+            actualLower: actualHm,
+            actualUpper: actualUpperHm,
             harville: harvilleHm,
             edgeRatio,
           };
@@ -3387,7 +3421,7 @@ def render_live_page(*, page_title: str) -> str:
           if (harville === null) {
             harvilleClasses.push("harville-overview-cell-muted");
           }
-          const actualCell = `<td class="${actualClasses.join(" ")}">${escapeHtml(formatOverviewOddsText(actual))}</td>`;
+          const actualCell = `<td class="${actualClasses.join(" ")}">${escapeHtml(formatOverviewActualOdds(metric, market.key))}</td>`;
           const harvilleCell = `<td class="${harvilleClasses.join(" ")}">${escapeHtml(formatOverviewOddsText(harville))}</td>`;
           return `${actualCell}${harvilleCell}`;
         }).join("");

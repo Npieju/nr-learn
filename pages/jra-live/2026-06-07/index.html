@@ -645,6 +645,7 @@
       }
       .harville-overview-table th,
       .harville-overview-table td {
+        padding: 6px 5px;
         text-align: center;
         white-space: nowrap;
       }
@@ -663,14 +664,15 @@
         background: #eef4f8;
       }
       .harville-overview-market {
-        min-width: 92px;
+        width: 1%;
       }
       .harville-overview-subhead {
         font-size: 10px;
         color: var(--muted);
+        width: 1%;
       }
       .harville-overview-value {
-        min-width: 72px;
+        width: 1%;
         text-align: center;
         font-variant-numeric: tabular-nums;
       }
@@ -1295,6 +1297,18 @@
         return "-";
       }
       return formatOddsNumber(number);
+    }
+
+    function formatOverviewActualOdds(metric, marketKey) {
+      const lower = numericValue(metric?.actualLower ?? metric?.actual);
+      const upper = numericValue(metric?.actualUpper ?? metric?.actual);
+      if (lower === null) {
+        return "-";
+      }
+      if (marketKey === "wide" && upper !== null && upper > lower) {
+        return `${formatOddsNumber(lower)} - ${formatOddsNumber(upper)}`;
+      }
+      return formatOverviewOddsText(lower);
     }
 
     function formatMarketOddsText(row) {
@@ -2305,20 +2319,25 @@
         let bestEdge = null;
         markets.forEach((market) => {
           let actualHm = null;
+          let actualUpperHm = null;
           let harvilleHm = null;
           if (market.key === "win_compare") {
             const row = winCompareByHorseNo.get(horse.horseNo) || null;
             actualHm = numericValue(row?.market_odds);
+            actualUpperHm = actualHm;
             harvilleHm = numericValue(row?.model_fair_odds ?? row?.harville_odds);
           } else {
             const marketRows = Array.isArray(rowsByMarket?.[market.key]) ? rowsByMarket[market.key] : [];
             const involvingHorse = marketRows.filter((row) => harvilleRowHorseNumbers(row).includes(horse.horseNo));
             actualHm = harmonicMean(involvingHorse.map((row) => row?.market_odds));
+            actualUpperHm = harmonicMean(involvingHorse.map((row) => row?.market_odds_max ?? row?.market_odds));
             harvilleHm = harmonicMean(involvingHorse.map((row) => row?.harville_odds));
           }
           const edgeRatio = actualHm !== null && harvilleHm !== null && harvilleHm > 0 ? actualHm / harvilleHm : null;
           metrics[market.key] = {
             actual: actualHm,
+            actualLower: actualHm,
+            actualUpper: actualUpperHm,
             harville: harvilleHm,
             edgeRatio,
           };
@@ -2361,7 +2380,7 @@
           if (harville === null) {
             harvilleClasses.push("harville-overview-cell-muted");
           }
-          const actualCell = `<td class="${actualClasses.join(" ")}">${escapeHtml(formatOverviewOddsText(actual))}</td>`;
+          const actualCell = `<td class="${actualClasses.join(" ")}">${escapeHtml(formatOverviewActualOdds(metric, market.key))}</td>`;
           const harvilleCell = `<td class="${harvilleClasses.join(" ")}">${escapeHtml(formatOverviewOddsText(harville))}</td>`;
           return `${actualCell}${harvilleCell}`;
         }).join("");

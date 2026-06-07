@@ -124,10 +124,12 @@ class BuildJraLivePagesTest(unittest.TestCase):
         self.assertIn('id="harville-exclude-filters"', html)
         self.assertIn('>消し馬<', html)
         self.assertIn('function formatOverviewOddsText(value) {', html)
+        self.assertIn('function formatOverviewActualOdds(metric, marketKey) {', html)
         self.assertIn('function formatDisplayTimestamp(value) {', html)
         self.assertIn('.harville-overview-value {', html)
+        self.assertIn('width: 1%;', html)
         self.assertIn('const actualClasses = ["harville-overview-value"];', html)
-        self.assertIn('formatOverviewOddsText(actual)', html)
+        self.assertIn('formatOverviewActualOdds(metric, market.key)', html)
         self.assertIn('meta.generatedAt ? `build ${formatDisplayTimestamp(meta.generatedAt)}` : null,', html)
         self.assertIn('harville?.meta?.analyzedAt ? `analyzed ${formatDisplayTimestamp(harville.meta.analyzedAt)}` : null,', html)
         self.assertIn('.harville-anchor-select {', html)
@@ -189,6 +191,36 @@ class BuildJraLivePagesTest(unittest.TestCase):
         self.assertEqual(next(item["rows"] for item in payload["marketOptions"] if item["key"] == "trifecta"), len(trifecta_rows))
         horse_three = next(item for item in payload["overviewRows"] if item["horseNo"] == "3")
         self.assertIsNotNone(horse_three["metrics"]["trifecta"]["actual"])
+
+    def test_build_harville_overview_rows_keeps_wide_actual_range(self) -> None:
+        race_frame = pages_script.pd.DataFrame(
+            [
+                {"gate_no": 1, "horse_name": "Horse 1"},
+                {"gate_no": 2, "horse_name": "Horse 2"},
+            ]
+        )
+
+        overview_rows = pages_script._build_harville_overview_rows(
+            race_frame=race_frame,
+            rows_by_market={
+                "wide": [
+                    {
+                        "marketKey": "wide",
+                        "market_odds": 45.6,
+                        "market_odds_max": 74.2,
+                        "harville_odds": 51.3,
+                        "horse_no_a": "1",
+                        "horse_no_b": "2",
+                    }
+                ]
+            },
+            win_compare_rows=[],
+        )
+
+        horse_one = next(item for item in overview_rows if item["horseNo"] == "1")
+        self.assertEqual(horse_one["metrics"]["wide"]["actual"], 45.6)
+        self.assertEqual(horse_one["metrics"]["wide"]["actualLower"], 45.6)
+        self.assertEqual(horse_one["metrics"]["wide"]["actualUpper"], 74.2)
 
 
 if __name__ == "__main__":
