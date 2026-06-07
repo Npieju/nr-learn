@@ -152,12 +152,52 @@ class BuildJraLivePagesTest(unittest.TestCase):
         self.assertIn('const filteredOverviewWinCompareRows = filteredHarvilleRows(harville.winCompareRows || [], [], state.harvilleExcludedHorses, false);', html)
         self.assertIn('const overviewSourceRowsByMarket = harville.overviewRowsByMarket || harville.rowsByMarket || {};', html)
         self.assertIn('filteredHarvilleRows(overviewSourceRowsByMarket?.[market.key] || [], selectedAnchors, state.harvilleExcludedHorses, false)', html)
+        self.assertIn('function refreshRaceRecommendationMarks(race) {', html)
+        self.assertIn('refreshRaceRecommendationMarks(race);', html)
         self.assertIn('label: "単勝"', html)
         self.assertIn('? harvilleOverviewTableHtml(race, filteredOverviewRowsByMarket, filteredOverviewWinCompareRows)', html)
         self.assertIn('>◎<', html)
         self.assertIn('>◯<', html)
         self.assertIn('>大穴<', html)
         self.assertIn('${formatOddsNumber(lower)} - ${formatOddsNumber(upper)}倍', html)
+
+    def test_build_harville_overview_rows_uses_combined_odds_for_multi_ticket_markets(self) -> None:
+        race_frame = pages_script.pd.DataFrame(
+            [
+                {"gate_no": 1, "horse_name": "Horse 1"},
+                {"gate_no": 2, "horse_name": "Horse 2"},
+                {"gate_no": 3, "horse_name": "Horse 3"},
+            ]
+        )
+
+        overview_rows = pages_script._build_harville_overview_rows(
+            race_frame=race_frame,
+            rows_by_market={
+                "quinella": [
+                    {
+                        "marketKey": "quinella",
+                        "market_odds": 10.0,
+                        "market_odds_max": 10.0,
+                        "harville_odds": 8.0,
+                        "horse_no_a": "1",
+                        "horse_no_b": "2",
+                    },
+                    {
+                        "marketKey": "quinella",
+                        "market_odds": 20.0,
+                        "market_odds_max": 20.0,
+                        "harville_odds": 16.0,
+                        "horse_no_a": "1",
+                        "horse_no_b": "3",
+                    },
+                ]
+            },
+            win_compare_rows=[],
+        )
+
+        horse_one = next(item for item in overview_rows if item["horseNo"] == "1")
+        self.assertAlmostEqual(horse_one["metrics"]["quinella"]["actual"], 1.0 / (0.1 + 0.05))
+        self.assertAlmostEqual(horse_one["metrics"]["quinella"]["harville"], 1.0 / ((1.0 / 8.0) + (1.0 / 16.0)))
 
     def test_build_harville_payload_for_race_separates_detail_limit_and_overview_source(self) -> None:
         race_frame = pages_script.pd.DataFrame(

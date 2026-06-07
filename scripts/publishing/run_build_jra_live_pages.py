@@ -648,14 +648,14 @@ def _harville_row_horse_numbers(row: dict[str, Any]) -> list[str]:
   ]
 
 
-def _harmonic_mean(values: list[Any]) -> float | None:
+def _combined_odds(values: list[Any]) -> float | None:
   numeric = [value for value in (_safe_float(item) for item in values) if value is not None and value > 0]
   if not numeric:
     return None
   denominator = sum(1.0 / value for value in numeric)
   if denominator <= 0:
     return None
-  return len(numeric) / denominator
+  return 1.0 / denominator
 
 
 def _build_overview_source_rows(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -722,9 +722,9 @@ def _build_harville_overview_rows(
         best_edge = edge_ratio
     for config in markets:
       market_rows = [row for row in rows_by_market.get(config["key"], []) if horse["horseNo"] in _harville_row_horse_numbers(row)]
-      actual = _harmonic_mean([row.get("market_odds") for row in market_rows])
-      actual_upper = _harmonic_mean([row.get("market_odds_max") or row.get("market_odds") for row in market_rows])
-      harville = _harmonic_mean([row.get("harville_odds") for row in market_rows])
+      actual = _combined_odds([row.get("market_odds") for row in market_rows])
+      actual_upper = _combined_odds([row.get("market_odds_max") or row.get("market_odds") for row in market_rows])
+      harville = _combined_odds([row.get("harville_odds") for row in market_rows])
       edge_ratio = actual / harville if actual is not None and harville is not None and harville > 0 else None
       metrics[config["key"]] = {
         "actual": actual,
@@ -2382,7 +2382,7 @@ def render_live_page(*, page_title: str) -> str:
       return [winCompareMarket, ...markets];
     }
 
-    function harmonicMean(values) {
+    function combinedOdds(values) {
       const numeric = (Array.isArray(values) ? values : [])
         .map((item) => numericValue(item))
         .filter((item) => item !== null && item > 0);
@@ -2393,7 +2393,7 @@ def render_live_page(*, page_title: str) -> str:
       if (!(denominator > 0)) {
         return null;
       }
-      return numeric.length / denominator;
+      return 1 / denominator;
     }
 
     function formatEdgePercent(value) {
@@ -2901,6 +2901,7 @@ def render_live_page(*, page_title: str) -> str:
       race.topPolicyEv = numericValue(topPolicyEvRow?.policy_expected_value);
       race.topReasons = summarizeRaceReasons(refreshed.rows).slice(0, 3);
       race.blocker = race.topReasons[0]?.reason || null;
+      refreshRaceRecommendationMarks(race);
       if (refreshed.oddsUpdatedAt) {
         state.data.metadata.oddsOfficialDatetimeMax = refreshed.oddsUpdatedAt;
       }
@@ -3410,9 +3411,9 @@ def render_live_page(*, page_title: str) -> str:
           } else {
             const marketRows = Array.isArray(rowsByMarket?.[market.key]) ? rowsByMarket[market.key] : [];
             const involvingHorse = marketRows.filter((row) => harvilleRowHorseNumbers(row).includes(horse.horseNo));
-            actualHm = harmonicMean(involvingHorse.map((row) => row?.market_odds));
-            actualUpperHm = harmonicMean(involvingHorse.map((row) => row?.market_odds_max ?? row?.market_odds));
-            harvilleHm = harmonicMean(involvingHorse.map((row) => row?.harville_odds));
+            actualHm = combinedOdds(involvingHorse.map((row) => row?.market_odds));
+            actualUpperHm = combinedOdds(involvingHorse.map((row) => row?.market_odds_max ?? row?.market_odds));
+            harvilleHm = combinedOdds(involvingHorse.map((row) => row?.harville_odds));
           }
           const edgeRatio = actualHm !== null && harvilleHm !== null && harvilleHm > 0 ? actualHm / harvilleHm : null;
           metrics[market.key] = {
@@ -3669,6 +3670,48 @@ def render_live_page(*, page_title: str) -> str:
       return result;
     }
 
+    function applyRecommendationMarks(rows) {
+      const scoreStrength = scoreStrengthMap(rows, "score");
+      const rawEvStrength = scoreStrengthMap(rows, "expected_value");
+      const policyEvStrength = scoreStrengthMap(rows, "policy_expected_value");
+      rows.forEach((row, index) => {
+        row.recommendation_mark = "";
+        const selectedBoost = row.policy_selected ? 0.1 : 0.0;
+        row.recommendation_score = (
+          0.50 * (policyEvStrength.get(index) || 0) +
+          0.25 * (scoreStrength.get(index) || 0) +
+          0.15 * (rawEvStrength.get(index) || 0) +
+          selectedBoost
+        );
+      });
+      const ranked = [...rows].sort((left, right) => {
+        const byScore = (numericValue(right.recommendation_score) ?? -1) - (numericValue(left.recommendation_score) ?? -1);
+        if (byScore !== 0) return byScore;
+        const byPolicyEv = (numericValue(right.policy_expected_value) ?? -1) - (numericValue(left.policy_expected_value) ?? -1);
+        if (byPolicyEv !== 0) return byPolicyEv;
+        return (numericValue(right.score) ?? -1) - (numericValue(left.score) ?? -1);
+      });
+      ["◎", "◯", "▲", "★"].forEach((mark, index) => {
+        if (ranked[index]) {
+          ranked[index].recommendation_mark = mark;
+        }
+      });
+      let lowAssigned = 0;
+      const lowTarget = rows.length >= 12 ? 2 : 1;
+      [...ranked].reverse().forEach((row) => {
+        if (lowAssigned >= lowTarget || row.recommendation_mark) {
+          return;
+        }
+        const recommendationScore = numericValue(row.recommendation_score) ?? 0;
+        const policyEv = numericValue(row.policy_expected_value) ?? 0;
+        if (recommendationScore <= 0.24 || policyEv < 0.72) {
+          row.recommendation_mark = "消";
+          lowAssigned += 1;
+        }
+      });
+      return rows;
+    }
+
     function orderedMarkedRows(rows) {
       return [...rows]
         .filter((row) => ["◎", "◯", "▲", "★"].includes(row.recommendation_mark))
@@ -3712,43 +3755,7 @@ def render_live_page(*, page_title: str) -> str:
 
     function decorateRace(race) {
       const rows = race.rowsData.map((row) => ({ ...row, recommendation_mark: "", recommendation_reason: "" }));
-      const scoreStrength = scoreStrengthMap(rows, "score");
-      const rawEvStrength = scoreStrengthMap(rows, "expected_value");
-      const policyEvStrength = scoreStrengthMap(rows, "policy_expected_value");
-      rows.forEach((row, index) => {
-        const selectedBoost = row.policy_selected ? 0.1 : 0.0;
-        row.recommendation_score = (
-          0.50 * (policyEvStrength.get(index) || 0) +
-          0.25 * (scoreStrength.get(index) || 0) +
-          0.15 * (rawEvStrength.get(index) || 0) +
-          selectedBoost
-        );
-      });
-      const ranked = [...rows].sort((left, right) => {
-        const byScore = (numericValue(right.recommendation_score) ?? -1) - (numericValue(left.recommendation_score) ?? -1);
-        if (byScore !== 0) return byScore;
-        const byPolicyEv = (numericValue(right.policy_expected_value) ?? -1) - (numericValue(left.policy_expected_value) ?? -1);
-        if (byPolicyEv !== 0) return byPolicyEv;
-        return (numericValue(right.score) ?? -1) - (numericValue(left.score) ?? -1);
-      });
-      ["◎", "◯", "▲", "★"].forEach((mark, index) => {
-        if (ranked[index]) {
-          ranked[index].recommendation_mark = mark;
-        }
-      });
-      let lowAssigned = 0;
-      const lowTarget = rows.length >= 12 ? 2 : 1;
-      [...ranked].reverse().forEach((row) => {
-        if (lowAssigned >= lowTarget || row.recommendation_mark) {
-          return;
-        }
-        const recommendationScore = numericValue(row.recommendation_score) ?? 0;
-        const policyEv = numericValue(row.policy_expected_value) ?? 0;
-        if (recommendationScore <= 0.24 || policyEv < 0.72) {
-          row.recommendation_mark = "消";
-          lowAssigned += 1;
-        }
-      });
+      applyRecommendationMarks(rows);
       rows.forEach((row) => {
         row.recommendation_reason = buildRecommendationReason(row);
       });
@@ -3798,6 +3805,23 @@ def render_live_page(*, page_title: str) -> str:
         ? dismissed.map((row) => `${row.recommendation_mark}${row.horse_name}`).join(" / ")
         : "消印なし";
       race.raceCommentary = commentary.join(" ");
+      race.topMarkedHorse = marked[0]?.horse_name || null;
+      race.topMarkedLabel = marked[0]?.recommendation_mark || null;
+      return race;
+    }
+
+    function refreshRaceRecommendationMarks(race) {
+      const rows = race.rowsData.map((row) => ({ ...row }));
+      applyRecommendationMarks(rows);
+      const marked = orderedMarkedRows(rows);
+      const dismissed = rows.filter((row) => row.recommendation_mark === "消");
+      race.rowsData = rows;
+      race.recommendationSummary = marked.length
+        ? marked.map((row) => `${row.recommendation_mark}${row.horse_name}`).join(" / ")
+        : "印なし";
+      race.dismissSummary = dismissed.length
+        ? dismissed.map((row) => `${row.recommendation_mark}${row.horse_name}`).join(" / ")
+        : "消印なし";
       race.topMarkedHorse = marked[0]?.horse_name || null;
       race.topMarkedLabel = marked[0]?.recommendation_mark || null;
       return race;

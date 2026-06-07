@@ -1341,7 +1341,7 @@
       return [winCompareMarket, ...markets];
     }
 
-    function harmonicMean(values) {
+    function combinedOdds(values) {
       const numeric = (Array.isArray(values) ? values : [])
         .map((item) => numericValue(item))
         .filter((item) => item !== null && item > 0);
@@ -1352,7 +1352,7 @@
       if (!(denominator > 0)) {
         return null;
       }
-      return numeric.length / denominator;
+      return 1 / denominator;
     }
 
     function formatEdgePercent(value) {
@@ -1860,6 +1860,7 @@
       race.topPolicyEv = numericValue(topPolicyEvRow?.policy_expected_value);
       race.topReasons = summarizeRaceReasons(refreshed.rows).slice(0, 3);
       race.blocker = race.topReasons[0]?.reason || null;
+      refreshRaceRecommendationMarks(race);
       if (refreshed.oddsUpdatedAt) {
         state.data.metadata.oddsOfficialDatetimeMax = refreshed.oddsUpdatedAt;
       }
@@ -2369,9 +2370,9 @@
           } else {
             const marketRows = Array.isArray(rowsByMarket?.[market.key]) ? rowsByMarket[market.key] : [];
             const involvingHorse = marketRows.filter((row) => harvilleRowHorseNumbers(row).includes(horse.horseNo));
-            actualHm = harmonicMean(involvingHorse.map((row) => row?.market_odds));
-            actualUpperHm = harmonicMean(involvingHorse.map((row) => row?.market_odds_max ?? row?.market_odds));
-            harvilleHm = harmonicMean(involvingHorse.map((row) => row?.harville_odds));
+            actualHm = combinedOdds(involvingHorse.map((row) => row?.market_odds));
+            actualUpperHm = combinedOdds(involvingHorse.map((row) => row?.market_odds_max ?? row?.market_odds));
+            harvilleHm = combinedOdds(involvingHorse.map((row) => row?.harville_odds));
           }
           const edgeRatio = actualHm !== null && harvilleHm !== null && harvilleHm > 0 ? actualHm / harvilleHm : null;
           metrics[market.key] = {
@@ -2628,6 +2629,48 @@
       return result;
     }
 
+    function applyRecommendationMarks(rows) {
+      const scoreStrength = scoreStrengthMap(rows, "score");
+      const rawEvStrength = scoreStrengthMap(rows, "expected_value");
+      const policyEvStrength = scoreStrengthMap(rows, "policy_expected_value");
+      rows.forEach((row, index) => {
+        row.recommendation_mark = "";
+        const selectedBoost = row.policy_selected ? 0.1 : 0.0;
+        row.recommendation_score = (
+          0.50 * (policyEvStrength.get(index) || 0) +
+          0.25 * (scoreStrength.get(index) || 0) +
+          0.15 * (rawEvStrength.get(index) || 0) +
+          selectedBoost
+        );
+      });
+      const ranked = [...rows].sort((left, right) => {
+        const byScore = (numericValue(right.recommendation_score) ?? -1) - (numericValue(left.recommendation_score) ?? -1);
+        if (byScore !== 0) return byScore;
+        const byPolicyEv = (numericValue(right.policy_expected_value) ?? -1) - (numericValue(left.policy_expected_value) ?? -1);
+        if (byPolicyEv !== 0) return byPolicyEv;
+        return (numericValue(right.score) ?? -1) - (numericValue(left.score) ?? -1);
+      });
+      ["◎", "◯", "▲", "★"].forEach((mark, index) => {
+        if (ranked[index]) {
+          ranked[index].recommendation_mark = mark;
+        }
+      });
+      let lowAssigned = 0;
+      const lowTarget = rows.length >= 12 ? 2 : 1;
+      [...ranked].reverse().forEach((row) => {
+        if (lowAssigned >= lowTarget || row.recommendation_mark) {
+          return;
+        }
+        const recommendationScore = numericValue(row.recommendation_score) ?? 0;
+        const policyEv = numericValue(row.policy_expected_value) ?? 0;
+        if (recommendationScore <= 0.24 || policyEv < 0.72) {
+          row.recommendation_mark = "消";
+          lowAssigned += 1;
+        }
+      });
+      return rows;
+    }
+
     function orderedMarkedRows(rows) {
       return [...rows]
         .filter((row) => ["◎", "◯", "▲", "★"].includes(row.recommendation_mark))
@@ -2671,43 +2714,7 @@
 
     function decorateRace(race) {
       const rows = race.rowsData.map((row) => ({ ...row, recommendation_mark: "", recommendation_reason: "" }));
-      const scoreStrength = scoreStrengthMap(rows, "score");
-      const rawEvStrength = scoreStrengthMap(rows, "expected_value");
-      const policyEvStrength = scoreStrengthMap(rows, "policy_expected_value");
-      rows.forEach((row, index) => {
-        const selectedBoost = row.policy_selected ? 0.1 : 0.0;
-        row.recommendation_score = (
-          0.50 * (policyEvStrength.get(index) || 0) +
-          0.25 * (scoreStrength.get(index) || 0) +
-          0.15 * (rawEvStrength.get(index) || 0) +
-          selectedBoost
-        );
-      });
-      const ranked = [...rows].sort((left, right) => {
-        const byScore = (numericValue(right.recommendation_score) ?? -1) - (numericValue(left.recommendation_score) ?? -1);
-        if (byScore !== 0) return byScore;
-        const byPolicyEv = (numericValue(right.policy_expected_value) ?? -1) - (numericValue(left.policy_expected_value) ?? -1);
-        if (byPolicyEv !== 0) return byPolicyEv;
-        return (numericValue(right.score) ?? -1) - (numericValue(left.score) ?? -1);
-      });
-      ["◎", "◯", "▲", "★"].forEach((mark, index) => {
-        if (ranked[index]) {
-          ranked[index].recommendation_mark = mark;
-        }
-      });
-      let lowAssigned = 0;
-      const lowTarget = rows.length >= 12 ? 2 : 1;
-      [...ranked].reverse().forEach((row) => {
-        if (lowAssigned >= lowTarget || row.recommendation_mark) {
-          return;
-        }
-        const recommendationScore = numericValue(row.recommendation_score) ?? 0;
-        const policyEv = numericValue(row.policy_expected_value) ?? 0;
-        if (recommendationScore <= 0.24 || policyEv < 0.72) {
-          row.recommendation_mark = "消";
-          lowAssigned += 1;
-        }
-      });
+      applyRecommendationMarks(rows);
       rows.forEach((row) => {
         row.recommendation_reason = buildRecommendationReason(row);
       });
@@ -2757,6 +2764,23 @@
         ? dismissed.map((row) => `${row.recommendation_mark}${row.horse_name}`).join(" / ")
         : "消印なし";
       race.raceCommentary = commentary.join(" ");
+      race.topMarkedHorse = marked[0]?.horse_name || null;
+      race.topMarkedLabel = marked[0]?.recommendation_mark || null;
+      return race;
+    }
+
+    function refreshRaceRecommendationMarks(race) {
+      const rows = race.rowsData.map((row) => ({ ...row }));
+      applyRecommendationMarks(rows);
+      const marked = orderedMarkedRows(rows);
+      const dismissed = rows.filter((row) => row.recommendation_mark === "消");
+      race.rowsData = rows;
+      race.recommendationSummary = marked.length
+        ? marked.map((row) => `${row.recommendation_mark}${row.horse_name}`).join(" / ")
+        : "印なし";
+      race.dismissSummary = dismissed.length
+        ? dismissed.map((row) => `${row.recommendation_mark}${row.horse_name}`).join(" / ")
+        : "消印なし";
       race.topMarkedHorse = marked[0]?.horse_name || null;
       race.topMarkedLabel = marked[0]?.recommendation_mark || null;
       return race;
