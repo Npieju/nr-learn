@@ -1690,8 +1690,7 @@ def render_live_page(*, page_title: str) -> str:
         text-align: center;
         white-space: nowrap;
       }
-      .harville-overview-table th:first-child,
-      .harville-overview-table td:first-child {
+      .harville-overview-table tbody td:first-child {
         text-align: left;
         min-width: 128px;
         position: sticky;
@@ -1700,9 +1699,14 @@ def render_live_page(*, page_title: str) -> str:
         background: #f8fbfd;
         box-shadow: 8px 0 12px rgba(15, 31, 58, 0.06);
       }
-      .harville-overview-table thead th:first-child {
+      .harville-overview-table thead tr:first-child th:first-child {
+        text-align: left;
+        min-width: 128px;
+        position: sticky;
+        left: 0;
         z-index: 3;
         background: #eef4f8;
+        box-shadow: 8px 0 12px rgba(15, 31, 58, 0.06);
       }
       .harville-overview-market {
         width: 1%;
