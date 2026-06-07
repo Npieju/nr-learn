@@ -2217,17 +2217,33 @@
         .sort((left, right) => horsePairSort(left.horseNo, right.horseNo));
     }
 
-    function buildHarvilleOverviewRows(race, rowsByMarket) {
-      const horses = collectHarvilleHorseOptions(race, rowsByMarket);
-      const markets = availableHarvilleMarkets(rowsByMarket || {});
+    function buildHarvilleOverviewRows(race, rowsByMarket, winCompareRows) {
+      const horses = collectHarvilleHorseOptions(race, rowsByMarket || {});
+      const markets = [
+        ...availableHarvilleMarkets(rowsByMarket || {}),
+        ...(Array.isArray(winCompareRows) && winCompareRows.length ? [{ key: "win_compare", label: "単勝" }] : []),
+      ];
+      const winCompareByHorseNo = new Map(
+        (Array.isArray(winCompareRows) ? winCompareRows : [])
+          .map((row) => [normalizeHorseNo(row?.horse_no_a), row])
+          .filter(([horseNo]) => horseNo)
+      );
       return horses.map((horse) => {
         const metrics = {};
         let bestEdge = null;
         markets.forEach((market) => {
-          const marketRows = Array.isArray(rowsByMarket?.[market.key]) ? rowsByMarket[market.key] : [];
-          const involvingHorse = marketRows.filter((row) => harvilleRowHorseNumbers(row).includes(horse.horseNo));
-          const actualHm = harmonicMean(involvingHorse.map((row) => row?.market_odds));
-          const harvilleHm = harmonicMean(involvingHorse.map((row) => row?.harville_odds));
+          let actualHm = null;
+          let harvilleHm = null;
+          if (market.key === "win_compare") {
+            const row = winCompareByHorseNo.get(horse.horseNo) || null;
+            actualHm = numericValue(row?.market_odds);
+            harvilleHm = numericValue(row?.model_fair_odds ?? row?.harville_odds);
+          } else {
+            const marketRows = Array.isArray(rowsByMarket?.[market.key]) ? rowsByMarket[market.key] : [];
+            const involvingHorse = marketRows.filter((row) => harvilleRowHorseNumbers(row).includes(horse.horseNo));
+            actualHm = harmonicMean(involvingHorse.map((row) => row?.market_odds));
+            harvilleHm = harmonicMean(involvingHorse.map((row) => row?.harville_odds));
+          }
           const edgeRatio = actualHm !== null && harvilleHm !== null && harvilleHm > 0 ? actualHm / harvilleHm : null;
           metrics[market.key] = {
             actual: actualHm,
@@ -2248,9 +2264,12 @@
       });
     }
 
-    function harvilleOverviewTableHtml(race, rowsByMarket) {
-      const markets = availableHarvilleMarkets(rowsByMarket || {});
-      const rows = buildHarvilleOverviewRows(race, rowsByMarket);
+    function harvilleOverviewTableHtml(race, rowsByMarket, winCompareRows) {
+      const markets = [
+        ...availableHarvilleMarkets(rowsByMarket || {}),
+        ...(Array.isArray(winCompareRows) && winCompareRows.length ? [{ key: "win_compare", label: "単勝" }] : []),
+      ];
+      const rows = buildHarvilleOverviewRows(race, rowsByMarket, winCompareRows);
       if (!markets.length || !rows.length) {
         return '<div class="market-empty">overview 用の Harville データがまだありません。</div>';
       }
@@ -2417,14 +2436,15 @@
       const exhaustiveOverviewRows = filteredHarvilleRows(flattenHarvilleRows(harville.rowsByMarket || {}), selectedAnchors, state.harvilleExcludedHorses, ignoreLongOdds);
       const filteredMarketRows = filteredHarvilleRows(harville.rowsByMarket?.[activeMarket] || [], selectedAnchors, state.harvilleExcludedHorses, ignoreLongOdds);
       const filteredWinCompareRows = filteredHarvilleRows(harville.winCompareRows || [], [], state.harvilleExcludedHorses, ignoreLongOdds);
+      const filteredOverviewWinCompareRows = filteredHarvilleRows(harville.winCompareRows || [], [], state.harvilleExcludedHorses, false);
       const filteredOverviewRowsByMarket = Object.fromEntries(
         availableHarvilleMarkets(harville.rowsByMarket || {}).map((market) => [
           market.key,
-          filteredHarvilleRows(harville.rowsByMarket?.[market.key] || [], selectedAnchors, state.harvilleExcludedHorses, ignoreLongOdds),
+          filteredHarvilleRows(harville.rowsByMarket?.[market.key] || [], selectedAnchors, state.harvilleExcludedHorses, false),
         ])
       );
       document.getElementById("harville-summary-wrap").innerHTML = activeMarket === "overview"
-        ? harvilleOverviewTableHtml(race, filteredOverviewRowsByMarket)
+        ? harvilleOverviewTableHtml(race, filteredOverviewRowsByMarket, filteredOverviewWinCompareRows)
         : (activeMarket === "win_compare"
           ? winCompareTableHtml(filteredWinCompareRows, state.harvilleSort)
           : harvilleDetailTableHtml(activeMarket, filteredMarketRows, selectedAnchors, state.harvilleSort));

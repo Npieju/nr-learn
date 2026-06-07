@@ -3357,7 +3357,7 @@ def render_live_page(*, page_title: str) -> str:
       const filteredOverviewRowsByMarket = Object.fromEntries(
         availableHarvilleMarkets(harville.rowsByMarket || {}).map((market) => [
           market.key,
-          filteredHarvilleRows(harville.rowsByMarket?.[market.key] || [], selectedAnchors, state.harvilleExcludedHorses, ignoreLongOdds),
+          filteredHarvilleRows(harville.rowsByMarket?.[market.key] || [], selectedAnchors, state.harvilleExcludedHorses, false),
         ])
       );
       document.getElementById("harville-summary-wrap").innerHTML = activeMarket === "overview"
