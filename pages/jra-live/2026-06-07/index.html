@@ -642,7 +642,6 @@
       .harville-overview-table {
         table-layout: auto;
         width: max-content;
-        min-width: 1180px;
       }
       .harville-overview-table th,
       .harville-overview-table td {
@@ -652,8 +651,7 @@
       .harville-overview-table th:first-child,
       .harville-overview-table td:first-child {
         text-align: left;
-        min-width: 148px;
-        width: 148px;
+        min-width: 128px;
         position: sticky;
         left: 0;
         z-index: 1;
@@ -2313,9 +2311,11 @@
       });
     }
 
-    function harvilleOverviewTableHtml(race, rowsByMarket, winCompareRows) {
+    function harvilleOverviewTableHtml(race, rowsByMarket, winCompareRows, precomputedOverviewRows = null) {
       const markets = buildHarvilleOverviewMarkets(rowsByMarket, winCompareRows);
-      const rows = buildHarvilleOverviewRows(race, rowsByMarket, winCompareRows);
+      const rows = Array.isArray(precomputedOverviewRows) && precomputedOverviewRows.length
+        ? precomputedOverviewRows
+        : buildHarvilleOverviewRows(race, rowsByMarket, winCompareRows);
       if (!markets.length || !rows.length) {
         return '<div class="market-empty">overview 用の Harville データがまだありません。</div>';
       }
@@ -2479,14 +2479,14 @@
         : "";
       const ignoreLongOdds = Boolean(state.harvilleIgnoreLongOdds);
       const filteredSummaryRows = filteredHarvilleRows(harville.summaryRows || [], selectedAnchors, state.harvilleExcludedHorses, ignoreLongOdds);
-      const exhaustiveOverviewRows = filteredHarvilleRows(flattenHarvilleRows(harville.rowsByMarket || {}), selectedAnchors, state.harvilleExcludedHorses, ignoreLongOdds);
       const filteredMarketRows = filteredHarvilleRows(harville.rowsByMarket?.[activeMarket] || [], selectedAnchors, state.harvilleExcludedHorses, ignoreLongOdds);
       const filteredWinCompareRows = filteredHarvilleRows(harville.winCompareRows || [], [], state.harvilleExcludedHorses, ignoreLongOdds);
       const filteredOverviewWinCompareRows = filteredHarvilleRows(harville.winCompareRows || [], [], state.harvilleExcludedHorses, false);
+      const overviewSourceRowsByMarket = harville.overviewRowsByMarket || harville.rowsByMarket || {};
       const filteredOverviewRowsByMarket = Object.fromEntries(
-        availableHarvilleMarkets(harville.rowsByMarket || {}).map((market) => [
+        availableHarvilleMarkets(overviewSourceRowsByMarket).map((market) => [
           market.key,
-          filteredHarvilleRows(harville.rowsByMarket?.[market.key] || [], selectedAnchors, state.harvilleExcludedHorses, false),
+          filteredHarvilleRows(overviewSourceRowsByMarket?.[market.key] || [], selectedAnchors, state.harvilleExcludedHorses, false),
         ])
       );
       document.getElementById("harville-summary-wrap").innerHTML = activeMarket === "overview"

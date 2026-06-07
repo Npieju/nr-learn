@@ -636,6 +636,102 @@ def _build_win_compare_rows(
   )
 
 
+def _harville_row_horse_numbers(row: dict[str, Any]) -> list[str]:
+  return [
+    horse_no
+    for horse_no in [
+      _normalize_horse_no(row.get("horse_no_a")),
+      _normalize_horse_no(row.get("horse_no_b")),
+      _normalize_horse_no(row.get("horse_no_c")),
+    ]
+    if horse_no
+  ]
+
+
+def _harmonic_mean(values: list[Any]) -> float | None:
+  numeric = [value for value in (_safe_float(item) for item in values) if value is not None and value > 0]
+  if not numeric:
+    return None
+  denominator = sum(1.0 / value for value in numeric)
+  if denominator <= 0:
+    return None
+  return len(numeric) / denominator
+
+
+def _build_overview_source_rows(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+  return [
+    {
+      "market_odds": _safe_float(row.get("market_odds")),
+      "harville_odds": _safe_float(row.get("harville_odds")),
+      "horse_no_a": _normalize_horse_no(row.get("horse_no_a")),
+      "horse_no_b": _normalize_horse_no(row.get("horse_no_b")),
+      "horse_no_c": _normalize_horse_no(row.get("horse_no_c")),
+    }
+    for row in rows
+  ]
+
+
+def _build_harville_overview_rows(
+  *,
+  race_frame: pd.DataFrame,
+  rows_by_market: dict[str, list[dict[str, Any]]],
+  win_compare_rows: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+  horses: list[dict[str, str]] = []
+  seen: set[str] = set()
+  for _, row in race_frame.iterrows():
+    horse_no = _resolve_overview_horse_no(row)
+    if not horse_no or horse_no in seen:
+      continue
+    seen.add(horse_no)
+    horses.append({"horseNo": horse_no, "horseName": str(row.get("horse_name") or "").strip()})
+  for market_rows in rows_by_market.values():
+    for row in market_rows:
+      for horse_no in _harville_row_horse_numbers(row):
+        if horse_no in seen:
+          continue
+        seen.add(horse_no)
+        horses.append({"horseNo": horse_no, "horseName": ""})
+  horses.sort(key=lambda item: _horse_sort_key(item["horseNo"]))
+
+  win_compare_by_horse_no = {
+    _normalize_horse_no(row.get("horse_no_a")): row
+    for row in win_compare_rows
+    if _normalize_horse_no(row.get("horse_no_a"))
+  }
+  markets = [config for config in HARVILLE_MARKET_OPTIONS if rows_by_market.get(config["key"])]
+  overview_rows: list[dict[str, Any]] = []
+  for horse in horses:
+    metrics: dict[str, dict[str, float | None]] = {}
+    best_edge: float | None = None
+    if win_compare_rows:
+      win_row = win_compare_by_horse_no.get(horse["horseNo"])
+      actual = _safe_float(win_row.get("market_odds")) if isinstance(win_row, dict) else None
+      harville = _safe_float(win_row.get("model_fair_odds") or win_row.get("harville_odds")) if isinstance(win_row, dict) else None
+      edge_ratio = actual / harville if actual is not None and harville is not None and harville > 0 else None
+      metrics["win_compare"] = {"actual": actual, "harville": harville, "edgeRatio": edge_ratio}
+      if edge_ratio is not None:
+        best_edge = edge_ratio
+    for config in markets:
+      market_rows = [row for row in rows_by_market.get(config["key"], []) if horse["horseNo"] in _harville_row_horse_numbers(row)]
+      actual = _harmonic_mean([row.get("market_odds") for row in market_rows])
+      harville = _harmonic_mean([row.get("harville_odds") for row in market_rows])
+      edge_ratio = actual / harville if actual is not None and harville is not None and harville > 0 else None
+      metrics[config["key"]] = {"actual": actual, "harville": harville, "edgeRatio": edge_ratio}
+      if edge_ratio is not None and (best_edge is None or edge_ratio > best_edge):
+        best_edge = edge_ratio
+    overview_rows.append(
+      {
+        "horseNo": horse["horseNo"],
+        "horseName": horse["horseName"],
+        "label": f"{horse['horseNo']} {horse['horseName']}".strip(),
+        "metrics": metrics,
+        "bestEdge": best_edge,
+      }
+    )
+  return overview_rows
+
+
 def _build_harville_payload_for_race(race_frame: pd.DataFrame, race_id: str) -> dict[str, Any]:
   try:
     analyze_payload = _fetch_race_analyze_payload(race_id)
@@ -678,21 +774,32 @@ def _build_harville_payload_for_race(race_frame: pd.DataFrame, race_id: str) -> 
     market_probability_map=market_probability_map,
   )
 
+  full_rows_by_market: dict[str, list[dict[str, Any]]] = {}
   rows_by_market: dict[str, list[dict[str, Any]]] = {}
+  overview_rows_by_market: dict[str, list[dict[str, Any]]] = {}
   for config in HARVILLE_MARKET_OPTIONS:
-    rows_by_market[config["key"]] = _build_harville_rows_for_market(
+    full_rows = _build_harville_rows_for_market(
       config=config,
       actual_rows=odds_payload.get(config["odds_key"], []) if isinstance(odds_payload.get(config["odds_key"]), list) else [],
       horse_name_map=horse_name_map,
       horse_numbers=horse_numbers,
       win_odds_map=win_odds_map,
       win_probability_map=win_probability_map,
-    )[:HARVILLE_DETAIL_LIMIT]
+    )
+    full_rows_by_market[config["key"]] = full_rows
+    rows_by_market[config["key"]] = full_rows[:HARVILLE_DETAIL_LIMIT]
+    overview_rows_by_market[config["key"]] = _build_overview_source_rows(full_rows)
+
+  overview_rows = _build_harville_overview_rows(
+    race_frame=race_frame,
+    rows_by_market=full_rows_by_market,
+    win_compare_rows=win_compare_rows,
+  )
 
   summary_candidates: list[dict[str, Any]] = []
   for config in HARVILLE_MARKET_OPTIONS:
     key = config["key"]
-    positive_rows = [row for row in rows_by_market.get(key, []) if (_safe_float(row.get("edge")) or 0) > 0]
+    positive_rows = [row for row in full_rows_by_market.get(key, []) if (_safe_float(row.get("edge")) or 0) > 0]
     summary_candidates.extend(positive_rows[:HARVILLE_SUMMARY_PER_MARKET_LIMIT])
   summary_rows = sorted(
     summary_candidates,
@@ -702,9 +809,9 @@ def _build_harville_payload_for_race(race_frame: pd.DataFrame, race_id: str) -> 
     ),
   )[:HARVILLE_SUMMARY_LIMIT]
   market_options = [
-    {"key": config["key"], "label": config["label"], "rows": len(rows_by_market.get(config["key"], []))}
+    {"key": config["key"], "label": config["label"], "rows": len(full_rows_by_market.get(config["key"], []))}
     for config in HARVILLE_MARKET_OPTIONS
-    if rows_by_market.get(config["key"])
+    if full_rows_by_market.get(config["key"])
   ]
   race_meta = analyze_payload.get("race") if isinstance(analyze_payload.get("race"), dict) else {}
   return {
@@ -719,6 +826,8 @@ def _build_harville_payload_for_race(race_frame: pd.DataFrame, race_id: str) -> 
     },
     "marketOptions": market_options,
     "winCompareRows": win_compare_rows[:HARVILLE_DETAIL_LIMIT],
+    "overviewRows": overview_rows,
+    "overviewRowsByMarket": overview_rows_by_market,
     "summaryRows": summary_rows,
     "rowsByMarket": rows_by_market,
   }
@@ -1559,7 +1668,6 @@ def render_live_page(*, page_title: str) -> str:
       .harville-overview-table {
         table-layout: auto;
         width: max-content;
-        min-width: 1180px;
       }
       .harville-overview-table th,
       .harville-overview-table td {
@@ -1569,8 +1677,7 @@ def render_live_page(*, page_title: str) -> str:
       .harville-overview-table th:first-child,
       .harville-overview-table td:first-child {
         text-align: left;
-        min-width: 148px;
-        width: 148px;
+        min-width: 128px;
         position: sticky;
         left: 0;
         z-index: 1;
@@ -3230,9 +3337,11 @@ def render_live_page(*, page_title: str) -> str:
       });
     }
 
-    function harvilleOverviewTableHtml(race, rowsByMarket, winCompareRows) {
+    function harvilleOverviewTableHtml(race, rowsByMarket, winCompareRows, precomputedOverviewRows = null) {
       const markets = buildHarvilleOverviewMarkets(rowsByMarket, winCompareRows);
-      const rows = buildHarvilleOverviewRows(race, rowsByMarket, winCompareRows);
+      const rows = Array.isArray(precomputedOverviewRows) && precomputedOverviewRows.length
+        ? precomputedOverviewRows
+        : buildHarvilleOverviewRows(race, rowsByMarket, winCompareRows);
       if (!markets.length || !rows.length) {
         return '<div class="market-empty">overview 用の Harville データがまだありません。</div>';
       }
@@ -3396,14 +3505,14 @@ def render_live_page(*, page_title: str) -> str:
         : "";
       const ignoreLongOdds = Boolean(state.harvilleIgnoreLongOdds);
       const filteredSummaryRows = filteredHarvilleRows(harville.summaryRows || [], selectedAnchors, state.harvilleExcludedHorses, ignoreLongOdds);
-      const exhaustiveOverviewRows = filteredHarvilleRows(flattenHarvilleRows(harville.rowsByMarket || {}), selectedAnchors, state.harvilleExcludedHorses, ignoreLongOdds);
       const filteredMarketRows = filteredHarvilleRows(harville.rowsByMarket?.[activeMarket] || [], selectedAnchors, state.harvilleExcludedHorses, ignoreLongOdds);
       const filteredWinCompareRows = filteredHarvilleRows(harville.winCompareRows || [], [], state.harvilleExcludedHorses, ignoreLongOdds);
       const filteredOverviewWinCompareRows = filteredHarvilleRows(harville.winCompareRows || [], [], state.harvilleExcludedHorses, false);
+      const overviewSourceRowsByMarket = harville.overviewRowsByMarket || harville.rowsByMarket || {};
       const filteredOverviewRowsByMarket = Object.fromEntries(
-        availableHarvilleMarkets(harville.rowsByMarket || {}).map((market) => [
+        availableHarvilleMarkets(overviewSourceRowsByMarket).map((market) => [
           market.key,
-          filteredHarvilleRows(harville.rowsByMarket?.[market.key] || [], selectedAnchors, state.harvilleExcludedHorses, false),
+          filteredHarvilleRows(overviewSourceRowsByMarket?.[market.key] || [], selectedAnchors, state.harvilleExcludedHorses, false),
         ])
       );
       document.getElementById("harville-summary-wrap").innerHTML = activeMarket === "overview"

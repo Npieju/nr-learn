@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib.util
+from itertools import permutations
 from pathlib import Path
 import sys
 import unittest
@@ -127,15 +128,56 @@ class BuildJraLivePagesTest(unittest.TestCase):
         self.assertIn('const quinellaIndex = markets.findIndex((market) => market.key === "quinella");', html)
         self.assertIn('markets.splice(quinellaIndex, 0, winCompareMarket);', html)
         self.assertIn('table-layout: auto;', html)
-        self.assertIn('min-width: 148px;', html)
+        self.assertIn('min-width: 128px;', html)
+        self.assertNotIn('min-width: 1180px;', html)
         self.assertIn('const filteredOverviewWinCompareRows = filteredHarvilleRows(harville.winCompareRows || [], [], state.harvilleExcludedHorses, false);', html)
-        self.assertIn('filteredHarvilleRows(harville.rowsByMarket?.[market.key] || [], selectedAnchors, state.harvilleExcludedHorses, false)', html)
+        self.assertIn('const overviewSourceRowsByMarket = harville.overviewRowsByMarket || harville.rowsByMarket || {};', html)
+        self.assertIn('filteredHarvilleRows(overviewSourceRowsByMarket?.[market.key] || [], selectedAnchors, state.harvilleExcludedHorses, false)', html)
         self.assertIn('label: "単勝"', html)
         self.assertIn('? harvilleOverviewTableHtml(race, filteredOverviewRowsByMarket, filteredOverviewWinCompareRows)', html)
         self.assertIn('>◎<', html)
         self.assertIn('>◯<', html)
         self.assertIn('>大穴<', html)
         self.assertIn('${formatOddsNumber(lower)} - ${formatOddsNumber(upper)}倍', html)
+
+    def test_build_harville_payload_for_race_separates_detail_limit_and_overview_source(self) -> None:
+        race_frame = pages_script.pd.DataFrame(
+            [
+                {"gate_no": horse_no, "horse_name": f"Horse {horse_no}", "score": 1.0 / 7, "expected_value": 1.0}
+                for horse_no in range(1, 8)
+            ]
+        )
+        trifecta_rows = [
+            {"組み合わせ": f"{a}-{b}-{c}", "オッズ": f"{1000 + index * 10:.1f}"}
+            for index, (a, b, c) in enumerate(permutations(range(1, 8), 3), start=1)
+        ]
+        analyze_payload = {
+            "entries": [
+                {"馬番": str(horse_no), "馬名": f"Horse {horse_no}"}
+                for horse_no in range(1, 8)
+            ],
+            "odds": {
+                "単勝": [
+                    {"馬番": str(horse_no), "オッズ": f"{horse_no + 1}.0", "人気": horse_no}
+                    for horse_no in range(1, 8)
+                ],
+                "三連単": trifecta_rows,
+            },
+            "race": {"odds_updated_at": "2026-06-07 12:00:00", "analyzed_at": "2026-06-07T12:00:00+00:00"},
+        }
+
+        original_fetch = pages_script._fetch_race_analyze_payload
+        try:
+            pages_script._fetch_race_analyze_payload = lambda race_id: analyze_payload
+            payload = pages_script._build_harville_payload_for_race(race_frame, "202605030211")
+        finally:
+            pages_script._fetch_race_analyze_payload = original_fetch
+
+        self.assertEqual(len(payload["rowsByMarket"]["trifecta"]), pages_script.HARVILLE_DETAIL_LIMIT)
+        self.assertEqual(len(payload["overviewRowsByMarket"]["trifecta"]), len(trifecta_rows))
+        self.assertEqual(next(item["rows"] for item in payload["marketOptions"] if item["key"] == "trifecta"), len(trifecta_rows))
+        horse_three = next(item for item in payload["overviewRows"] if item["horseNo"] == "3")
+        self.assertIsNotNone(horse_three["metrics"]["trifecta"]["actual"])
 
 
 if __name__ == "__main__":
