@@ -56,11 +56,36 @@ MODEL_RUN_PROFILES: dict[str, ModelRunProfile] = {
         data_config="configs/data.yaml",
         feature_config="configs/features_jra_fundamental_no_market.yaml",
     ),
+    "jra_fundamental_strength_no_market_querysoftmax": ModelRunProfile(
+        description="Market-free JRA race-group control that keeps the current feature pipeline but swaps the ranker objective to QuerySoftMax for direct race-choice training.",
+        model_config="configs/model_catboost_fundamental_strength_no_market_querysoftmax.yaml",
+        data_config="configs/data.yaml",
+        feature_config="configs/features_jra_fundamental_no_market.yaml",
+    ),
+    "jra_fundamental_strength_no_market_calibrated_norm": ModelRunProfile(
+        description="Market-free JRA ranking control with isotonic calibration and race-sum normalization for issue #159 probability-contract comparison.",
+        model_config="configs/model_catboost_fundamental_strength_no_market_calibrated.yaml",
+        data_config="configs/data.yaml",
+        feature_config="configs/features_jra_fundamental_no_market.yaml",
+    ),
+    "jra_fundamental_strength_no_market_softmax_temp085": ModelRunProfile(
+        description="Market-free JRA ranking control with isotonic calibration and race softmax temperature 0.85 for issue #159 probability-contract comparison.",
+        model_config="configs/model_catboost_fundamental_strength_no_market_softmax_temp085_calibrated.yaml",
+        data_config="configs/data.yaml",
+        feature_config="configs/features_jra_fundamental_no_market.yaml",
+    ),
     "current_recommended_serving": ModelRunProfile(
         description="Simplified serving default that matches mainline behavior across validated actual-date checks.",
         model_config="configs/model_catboost_value_stack_lgbm_roi_high_coverage_tune_roi012_liquidity_regime_hybrid_june_strict_serving.yaml",
         data_config="configs/data.yaml",
         feature_config="configs/features_catboost_rich_high_coverage_diag.yaml",
+    ),
+    "current_recommended_serving_baseline_r20260325": ModelRunProfile(
+        description="Version-pinned operational baseline path that preserves the formal r20260325 current recommended serving artifact lineage for replay and live comparison.",
+        model_config="configs/model_catboost_value_stack_lgbm_roi_high_coverage_tune_roi012_liquidity_regime_hybrid_june_strict_serving.yaml",
+        data_config="configs/data.yaml",
+        feature_config="configs/features_catboost_rich_high_coverage_diag.yaml",
+        default_model_artifact_suffix="r20260325_current_recommended_serving_2025_latest_benchmark_refresh",
     ),
     "current_recommended_serving_alpha_sidecar_race_norm": ModelRunProfile(
         description="Bounded Stage 4 candidate that keeps the serving baseline path and adds race-normalized alpha as a positive-only sidecar.",

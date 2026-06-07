@@ -247,7 +247,17 @@ def _summarize_formal_benchmark(folds: list[dict[str, Any]]) -> dict[str, Any]:
 
 def _formal_weighted_roi_check(*, formal_benchmark: dict[str, Any], min_weighted_roi: float | None) -> tuple[dict[str, Any] | None, str | None]:
     if min_weighted_roi is None:
-        return None, None
+        return (
+            _build_check(
+                "formal_benchmark_min_weighted_roi",
+                False,
+                {
+                    "min_formal_weighted_roi": None,
+                    "observed_formal_weighted_roi": formal_benchmark.get("weighted_roi"),
+                },
+            ),
+            "Formal benchmark weighted ROI threshold is required for promotion",
+        )
 
     weighted_roi_raw = formal_benchmark.get("weighted_roi")
     try:

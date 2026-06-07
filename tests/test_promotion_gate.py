@@ -57,6 +57,19 @@ class PromotionGateFormalBenchmarkTest(unittest.TestCase):
         self.assertAlmostEqual(check["observed_formal_weighted_roi"], 0.7234044858597899)
         self.assertIn("below threshold", error or "")
 
+    def test_formal_weighted_roi_check_blocks_missing_threshold(self) -> None:
+        check, error = _formal_weighted_roi_check(
+            formal_benchmark={"weighted_roi": 0.789273397269418},
+            min_weighted_roi=None,
+        )
+
+        assert check is not None
+        self.assertFalse(check["ok"])
+        self.assertEqual(check["name"], "formal_benchmark_min_weighted_roi")
+        self.assertIsNone(check["min_formal_weighted_roi"])
+        self.assertAlmostEqual(check["observed_formal_weighted_roi"], 0.789273397269418)
+        self.assertIn("threshold is required", error or "")
+
     def test_formal_weighted_roi_check_passes_above_threshold(self) -> None:
         check, error = _formal_weighted_roi_check(
             formal_benchmark={"weighted_roi": 4.324481148818757},

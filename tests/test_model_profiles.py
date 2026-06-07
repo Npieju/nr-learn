@@ -32,6 +32,32 @@ class ModelProfilesTest(unittest.TestCase):
         self.assertEqual(data_config, "configs/data_local_nankan_pre_race_ready.yaml")
         self.assertEqual(feature_config, "configs/features_local_baseline.yaml")
 
+    def test_jra_fundamental_strength_softmax_temp085_profile_resolves(self) -> None:
+        profile_name, model_config, data_config, feature_config = resolve_model_run_profile(
+            "jra_fundamental_strength_no_market_softmax_temp085_2025_latest",
+            default_model_config="configs/model.yaml",
+            default_data_config="configs/data.yaml",
+            default_feature_config="configs/features.yaml",
+        )
+
+        self.assertEqual(profile_name, "jra_fundamental_strength_no_market_softmax_temp085_2025_latest")
+        self.assertEqual(model_config, "configs/model_catboost_fundamental_strength_no_market_softmax_temp085_calibrated.yaml")
+        self.assertEqual(data_config, "configs/data_2025_latest.yaml")
+        self.assertEqual(feature_config, "configs/features_jra_fundamental_no_market.yaml")
+
+    def test_jra_fundamental_strength_querysoftmax_profile_resolves(self) -> None:
+        profile_name, model_config, data_config, feature_config = resolve_model_run_profile(
+            "jra_fundamental_strength_no_market_querysoftmax_2025_latest",
+            default_model_config="configs/model.yaml",
+            default_data_config="configs/data.yaml",
+            default_feature_config="configs/features.yaml",
+        )
+
+        self.assertEqual(profile_name, "jra_fundamental_strength_no_market_querysoftmax_2025_latest")
+        self.assertEqual(model_config, "configs/model_catboost_fundamental_strength_no_market_querysoftmax.yaml")
+        self.assertEqual(data_config, "configs/data_2025_latest.yaml")
+        self.assertEqual(feature_config, "configs/features_jra_fundamental_no_market.yaml")
+
     def test_support_preserving_probability_profile_resolves(self) -> None:
         profile_name, model_config, data_config, feature_config = resolve_model_run_profile(
             "current_recommended_serving_support_preserving_prob_race_norm",
