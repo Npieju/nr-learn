@@ -2726,6 +2726,38 @@ def render_live_page(*, page_title: str) -> str:
         .map(([reason, count]) => ({ reason, rows: count }));
     }
 
+    function assignDescendingRank(rows, valueKey, rankKey, tieBreakerKeys = []) {
+      rows.forEach((row) => {
+        row[rankKey] = null;
+      });
+      const ranked = rows
+        .map((row) => ({ row, value: numericValue(row?.[valueKey]) }))
+        .filter((item) => item.value !== null)
+        .sort((left, right) => {
+          const valueGap = (right.value ?? -Infinity) - (left.value ?? -Infinity);
+          if (valueGap !== 0) {
+            return valueGap;
+          }
+          for (const key of tieBreakerKeys) {
+            const leftValue = numericValue(left.row?.[key]);
+            const rightValue = numericValue(right.row?.[key]);
+            const keyGap = (rightValue ?? -Infinity) - (leftValue ?? -Infinity);
+            if (keyGap !== 0) {
+              return keyGap;
+            }
+          }
+          return horsePairSort(resolveRaceRowHorseNo(left.row), resolveRaceRowHorseNo(right.row));
+        });
+      ranked.forEach((item, index) => {
+        item.row[rankKey] = index + 1;
+      });
+    }
+
+    function recomputeOddsDependentRaceFields(rows) {
+      assignDescendingRank(rows, "expected_value", "ev_rank", ["score", "odds"]);
+      return rows;
+    }
+
     function recomputeRacePolicyMetrics(race, oddsPayload, raceMeta = {}) {
       const winOddsMap = buildWinOddsMap(oddsPayload);
       const popularityMap = buildWinPopularityMap(oddsPayload);
@@ -2838,6 +2870,8 @@ def render_live_page(*, page_title: str) -> str:
         delete row.__policy_max_fraction;
       });
 
+      recomputeOddsDependentRaceFields(rows);
+
       return {
         updated: true,
         rows,
@@ -2870,6 +2904,8 @@ def render_live_page(*, page_title: str) -> str:
       if (refreshed.oddsUpdatedAt) {
         state.data.metadata.oddsOfficialDatetimeMax = refreshed.oddsUpdatedAt;
       }
+      state.data.metadata.policySelectedRows = state.data.races
+        .reduce((sum, item) => sum + (item.selectedRows || 0), 0);
       return true;
     }
 
